@@ -9,7 +9,7 @@ This is the test contract for complex-events-engine. The gate that runs it is in
 ## The four rules
 
 1. **Time only ever breaks hangs.** A test advances **event time** through the playback clock; it never sleeps to let time pass. A wait waits for a **state** (a channel receive, a counter, a done hook), with a generous cap that fails loudly and names the state it was waiting for. `time.Sleep` in a test is banned outside the one wait helper.
-2. **Measure the component, never the machine.** Count what the engine did (events processed, matches emitted, state entries held) and assert on the count. Performance lives in benchmarks: the minimum of N runs, compared with ≥ 10× tripwires in the gate; strict budgets in a separate timing tier.
+2. **Measure the component, never the machine.** Count what the engine did (events processed, matches emitted, state entries held) and assert on the count. Performance lives in benchmarks: the minimum of N runs, compared with ≥ 10× tripwires in the gate; strict budgets live in the benchmark rows at T4 + nightly (ADR-0010 §8) and the T2 `allocgate` (ADR-0015 §2) — there is no other timing tier.
 3. **Each test owns its world.** Its own runtime, its own `t.TempDir()`, its own listener on port 0, no package globals. Tests that can run in parallel call `t.Parallel()`; a test that cannot says why.
 4. **Every run has a ceiling and reports everything.** Each gate step has a timeout, each test that waits has a deadline through its `context.Context`, and the gate runs every step to completion and shows every failure in one summary. A run that selects zero tests fails.
 
@@ -17,7 +17,7 @@ This is the test contract for complex-events-engine. The gate that runs it is in
 
 | Layer | What it proves | Shape |
 |---|---|---|
-| **Conformance suite** | The semantics of every construct: patterns, absence, `within`, partitions, windows, joins, output rate limiting | Golden cases: an input event sequence with event times → the exact output events, in order. Each semantic counter-example from a plan check becomes a case. Informed by Siddhi's observed behaviour where sensible. 100 % pass, from the first operator on. |
+| **Conformance suite** | The semantics of every construct: patterns, absence, `within`, partitions, windows, output rate limiting (joins are Phase 2 — not in this suite until then) | Golden cases: an input event sequence with event times → the exact output events, in order. Each semantic counter-example from a plan check becomes a case. Informed by Siddhi's observed behaviour where sensible. 100 % pass, from the first operator on. |
 | **Deterministic replay** | The same events and the same rules give the same output in the same order, every run | A recorded stream replayed through playback mode, its output compared byte-for-byte with the recorded output. |
 | **Rule unit tests** | A rule author's rule does what they meant | Given events → expect events, as table-driven Go tests and through the CLI runner (O6). |
 | **Package unit tests** | A pure rule in its owning package | Plain Go tests against the real package. |
@@ -45,4 +45,4 @@ Fixtures are synthetic: generated agent traffic, scripted event streams, stub en
 
 ---
 
-**Last updated:** 2026-10-31
+**Last updated:** 2026-11-01

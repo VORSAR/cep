@@ -17,7 +17,9 @@ The toolchain, the gate, and the code rules every change follows. The process th
 
 ## The gate
 
-The gate is a **registry**, not a script: every check is one row (id, CI job, tiers, blocking or advisory, timeout, coverage rule, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge.
+> The gate's full mechanism catalog — architecture analyzers with planted-failure proofs, suppression liveness, freshness checks, hostility rules — is [ADR-0015](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md); the assurance strategy is [qa-strategy.md](qa-strategy.md).
+
+The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge.
 
 **The four rules the gate enforces:**
 1. **Collect-all.** A failing step never stops the run. Every step runs to completion; a skip is recorded with its reason, never as green.
@@ -25,17 +27,17 @@ The gate is a **registry**, not a script: every check is one row (id, CI job, ti
 3. **Zero is a failure.** A step that covers zero files or zero tests fails. (`go test -run` with a misspelt pattern runs nothing and exits 0; the gate turns that into a failure.)
 4. **The exit code is the verdict**, and the summary is the table. The run prints `job | step | verdict | time | reason`, then `GATE PASSED` or `GATE FAILED`, then `exit: <code>`.
 
-| Tier | Command | When | Covers at least *(proposed)* |
+| Tier | Command | When | Covers at least *(intent sketch — **the registry is the tier map**; per-instrument tiers are ADR-0015 §2's table, which wins on any difference)* |
 |------|---------|------|------------------------------|
-| T0 | pre-commit hook | each `git commit` | staged files: format (auto-fix), fast lint |
-| T1 | pre-push hook | each push | parity; format check, lint, suppressions, posture guards |
-| T2 | `make check` | a lane says "done" | T1 + build, `go vet`, the linter, unit tests, the conformance suite |
+| T0 | pre-commit hook | each `git commit` | parity first (it runs first at **every** tier), then staged files: format (auto-fix, exact-path re-stage), the landed T0 analyzers (ADR-0015 §3.1) |
+| T1 | pre-push hook | each push | format check, lint, suppressions, posture guards |
+| T2 | `make check` | a lane says "done" | T1 + build, `go vet`, the linter, unit tests, the conformance suite, the coverage floor |
 | T3 | `make combine-check` | before pushing an integration branch | T2 + the race detector, deterministic-replay checks, the slow suites, the demo scenario |
-| T4 | `make strict-gate` == `make ci` == CI | each PR, main, each tag | everything, incl. the vulnerability scan and the dependency licence check (Apache-2-compatible only) |
+| T4 | `make strict-gate` == `make ci` == CI | each PR, main, each tag | everything, incl. the grammar differential, the planted proofs, the vulnerability scan and the dependency licence check (Apache-2-compatible only) |
 
 **Reading a run.** CI shows the same table as the summary of one **`strict-gate`** check, which is the one check to read. A job that did not report (cancelled, timed out, crashed) is a failure, never an absence of failures. A run on `main` is never cancelled.
 
-**Hooks** live in version control (`.githooks/`), activated once per clone with `git config core.hooksPath .githooks`. A missing required tool blocks the commit. `--no-verify` is not used: the hook is a convenience, the real net is T4.
+**Hooks** live in version control (`.githooks/`), activated once per clone with `git config core.hooksPath .githooks`. A missing required tool blocks the commit. `--no-verify` is not used — that is policy, not mechanism: the hook is technically bypassable, which is why it is a convenience and the real net is CI + the owner's merge (ADR-0015 §3.1; the sprint model's "a hook is never bypassed" states the same policy).
 
 ---
 
@@ -59,16 +61,16 @@ These follow from decided objectives; each names its source.
 Every lint suppression in first-party code is **accountable**, checked by the gate. The metadata rides on the same line as the directive:
 
 ```go
-//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant"
-//nolint:errcheck // TEMP reason="close error surfaced by S4's sink rework" issue=#42
-//nolint:revive // TEMP reason="exported name kept for one release" expiry=2027-03-01
+//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant" ref=ADR-0015#2 sprint=S1
+//nolint:errcheck // TEMP reason="close error surfaced by S4's sink rework" issue=#42 sprint=S4
+//nolint:revive // TEMP reason="exported name kept for one release" expiry=2027-03-01 sprint=S5
 ```
 
-Rules: the linter name is mandatory (no bare `//nolint`); exactly one of PERMANENT or TEMP; a `reason="…"` of at least 12 characters; TEMP carries `expiry=YYYY-MM-DD` (fails once past) or `issue=<#id|url>`; a suppression for a linter that is not enabled is dead and fails. Fix the code first; suppress only a genuine, documented necessity, never to quiet the gate.
+Rules: the linter name is mandatory (no bare `//nolint`; golangci's `nolintlint` with require-specific + require-explanation is the first net); exactly one of PERMANENT or TEMP; a `reason="…"` of at least 12 characters; **PERMANENT carries `ref=<ADR-nnnn or docs path#anchor>` resolving to a recorded decision — the checker verifies the target exists** (a permanent exception must trace to a decision, never to convenience); TEMP carries `expiry=YYYY-MM-DD` (fails once past) or `issue=<#id|url>`; every suppression carries `sprint=S<n>` (the sprint that introduced it); a suppression for a linter that is not enabled is dead and fails. The gate summary prints `suppressions: N (+Δ this diff)`. The same grammar governs every allowlist file (ADR-0015 §3.10). Fix the code first; suppress only a genuine, documented necessity, never to quiet the gate.
 
 ## TODO policy
 
-A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// TODO(ramith): …`, `// TODO(#42): …`. A bare `// TODO` is not allowed.
+A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// TODO(ramith): …`, `// TODO(#42): …`. A bare `// TODO` is not allowed. The same rule covers the synonym family `FIXME`/`HACK`/`XXX`; a named sprint must be ≤ current + 2, and a marker naming a closed sprint fails T4 (ADR-0015 §2 `todocheck`).
 
 ---
 
@@ -86,4 +88,4 @@ A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// T
 
 ---
 
-**Last updated:** 2026-10-31
+**Last updated:** 2026-11-01 (aligned with ADR-0015's revision after the foundation adversarial review)
