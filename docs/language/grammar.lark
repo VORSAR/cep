@@ -105,7 +105,8 @@ rate_clause: "output" "first" "every" duration_or_param
 // expect: one or more given sections (multi-stream injection), a then section
 // that may be empty ("then nothing" = defeat path), null literals allowed.
 expect_block: given_sec+ then_sec
-given_sec: "given" cname "[" [record ("," record)*] "]"
+given_sec: "given" cname "[" [record ("," record)*] "]" -> given_stream
+         | "given" "table" cname "[" [record ("," record)*] "]" -> given_table
 then_sec: "then" cname "[" [record ("," record)*] "]"
 record: "{" field ("," field)* "}"
 field: cname ":" field_value

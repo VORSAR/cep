@@ -33,10 +33,12 @@ rule AgentKillSwitch
   within ${kill_window}
   after match skip past last
   late events drop
-  expect given AgentActions [ {agentId: 'a1', sessionId: 's1', action: 'read', resource: 'vault', ts: timestamp '2026-01-01T10:00:00Z'},
+  expect given table SensitiveResources [ {resource: 'vault'} ]
+         given AgentActions [ {agentId: 'a1', sessionId: 's1', action: 'read', resource: 'vault', ts: timestamp '2026-01-01T10:00:00Z'},
                               {agentId: 'a1', sessionId: 's1', action: 'send', resource: 'vault', destination: null, ts: timestamp '2026-01-01T10:03:00Z'} ]
          then AgentKillSwitch [ {agentId: 'a1', sessionId: 's1', reason: 'sensitive-read-then-unapproved-egress', ts: timestamp '2026-01-01T10:05:00Z'} ]
-  expect given AgentActions [ {agentId: 'a2', sessionId: 's2', action: 'read', resource: 'vault', ts: timestamp '2026-01-01T10:00:00Z'},
+  expect given table SensitiveResources [ {resource: 'vault'} ]
+         given AgentActions [ {agentId: 'a2', sessionId: 's2', action: 'read', resource: 'vault', ts: timestamp '2026-01-01T10:00:00Z'},
                               {agentId: 'a2', sessionId: 's2', action: 'send', resource: 'vault', destination: null, ts: timestamp '2026-01-01T10:03:00Z'} ]
          given HumanApprovals [ {agentId: 'a2', sessionId: 's2', approvedAction: 'send', ts: timestamp '2026-01-01T10:02:00Z'} ]
          then AgentKillSwitch [ ]

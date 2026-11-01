@@ -124,7 +124,7 @@ Every pattern anchors on **at least one positive step** — a pure absence ("no 
 | term | `has_ci has_cs` | whole-token match |
 | substring | `contains_ci contains_cs starts_with_* ends_with_*` | literal substring/prefix/suffix |
 | keyword-set | `has_any_* has_all_* contains_any_* contains_all_*` | any/all of a list, `${param}`, or one-column table |
-| regex (safe) | `matches_*` (whole field), `contains_match_*` (anywhere) | RE2 class; backrefs/lookaround = `E-REGEX-001`; write patterns in raw `'''…'''` strings |
+| regex (safe) | `matches_*` (whole field), `contains_match_*` (anywhere) | RE2 class; backrefs/lookaround = `E-REGEX-001`; write patterns in raw `'''…'''` strings. **`_ci` on a regex operator means the regex engine's own case-folding (RE2 `(?i)`), defined as distinct from the text operators' simple fold; `_cs` compiles the pattern exactly** *(v0.1 rev 2)* |
 | raw | `raw(attr) <op> …` | bypass normalization for this operand |
 
 ```
@@ -171,7 +171,7 @@ from Prompts[text has_any_ci('ignore previous', 'disregard instructions')
 
 **6.7 Rate limiting.** `output first every D`: after an emission at `t_out`, outputs with `t ≤ t_out + D` are suppressed (ties included), per partition key (global per rule when unpartitioned).
 
-**6.8 `expect` blocks** run under playback: the given events (one or more `given` sections, one per input stream) are injected with their timestamps; an attribute omitted from a given record is **null**; `null` may also be written explicitly. The rule's outputs must match the then-list in order; **a then-record checks only the attributes it names** (omitted attributes are unasserted); an **empty then-list asserts that nothing fires** — the defeat path (see the flagship's second expect). Failure is `E-EXP-001`. *Note:* keep examples small and deterministic; an `expect` is a safety net, not a burden — rules shipped in packs must carry one.
+**6.8 `expect` blocks** run under playback in a fresh sandbox per block: tables start empty, and `given table <Name> [ {row}, … ]` sections seed them before any event is injected *(v0.1 rev 2 — without this, no table-dependent rule could carry a runnable expect)*; the given events (one or more `given` sections, one per input stream) are injected with their timestamps; an attribute omitted from a given record is **null**; `null` may also be written explicitly. The rule's outputs must match the then-list in order; **a then-record checks only the attributes it names** (omitted attributes are unasserted); an **empty then-list asserts that nothing fires** — the defeat path (see the flagship's second expect). Failure is `E-EXP-001`. *Note:* keep examples small and deterministic; an `expect` is a safety net, not a burden — rules shipped in packs must carry one.
 
 ## 7. Diagnostics
 
@@ -252,5 +252,6 @@ Aggregates beyond `count` (sum, avg, `distinctCount`, …) are **reserved** for 
 ## Appendix E. Change log
 
 - v0.1 draft (2026-10-31): initial MVP surface; adversarially reviewed semantics; grammar machine-checked.
+- v0.1 rev 2 (2026-11-01, pre-release; owner-approved at architecture ratification): expect blocks gain `given table <Name> [rows]` seeding (playback logs gain a table-load record); regex `_ci` defined as RE2 folding, distinct from the simple fold of text operators. Grammar re-verified.
 - v0.1 rev 1 (2026-11-01, pre-release): owner reversal — keywords are lowercase-only; non-lowercase keyword spellings are E-KW-002, reserved-in-any-case retained. Verified: full corpus + probes.
 - v0.1 (2026-11-01): L6 red-team round closed — case-insensitive keywords implemented; `for` reserved; raw triple-quoted strings; `not in` null semantics pinned; duration/typing/graph/function-catalog static rules added; expect blocks grew multi-given, empty-then and null; corpus corrected (9 valid / 23 invalid files); **frozen as v0.1**.
