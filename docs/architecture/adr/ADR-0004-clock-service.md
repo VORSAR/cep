@@ -1,0 +1,63 @@
+# ADR-0004: One clock service — per-STREAM watermark registry, per-instance construct clocks, punctuations, one Advance path
+
+## Status
+Accepted (owner, 2026-11-01 — conditions in ADR-0015/qa-strategy.md); **revised 2026-11-01** after architect review F2/F3 and pre-mortem RC-1 (the original per-instance `Observe` could not express SEMANTICS §2.1's per-stream admission watermarks, had no punctuation input, and gave quiet keys no way to advance — the flagship absence on a gone-quiet agent could never fire in live mode).
+
+## Context
+SEMANTICS §2.1 (as pinned): a stream's **admission watermark** is per-stream — `max(event time seen on that stream) − d` — identical in live and playback. A rule instance's **construct clock** is the clamped-monotonic min over its *input streams' contributions*, where contribution = `max(admission wm, idle floor [live], virtual floor [playback])`, **per stream**. Derived streams carry **punctuations**, never recomputed watermarks. At each clock advance the engine must perform events → completions/timers → discards, in that order (SEMANTICS §6.4). A key that receives no events must still see its streams' clocks move (that is the whole point of absence detection). Every behavior here has an executable oracle in `docs/language/checks/` (40 checks) plus the pre-mortem's mandated new case.
+
+## Decision
+
+1. **Ownership split (the F2/F3 fix).** Watermark state lives at TWO levels with distinct owners:
+   - **Per-stream level, owned by ingest** (`internal/clock.StreamRegistry`, one per app): for each *source* stream — admission watermark, idle deadline, and (playback) the per-stream virtual floor `virtual_now − d_s`. For each *derived* stream — reserved: **v0.1 rules cannot consume derived streams** (owner decision 2026-11-01, see §6), so no derived-stream watermark is merged in v0.1; the registry slot exists for metrics only. The registry is written only by the ingest goroutine (live) or the playback driver; shards read it never — advances are *delivered*, see (3).
+   - **Per-instance level, owned by the shard** (`internal/clock.Instance`, one per rule×key): the construct clock (clamped monotonic), the ordered release buffer, and this instance's timer entries.
+
+2. **Interfaces (normative):**
+   ```go
+   // internal/clock/registry.go — written by ingest/playback ONLY.
+   type StreamRegistry struct { /* per-stream: admissionWM, idleFloor, virtualFloor, punctuation */ }
+   func (r *StreamRegistry) ObserveEvent(sid int, ts int64) (streamLate bool, advance WMAdvance)
+   func (r *StreamRegistry) ObserveIdle(sid int) WMAdvance              // live idleness tick
+   func (r *StreamRegistry) ObservePunctuation(sid int, w int64) WMAdvance // derived streams
+   func (r *StreamRegistry) ObserveVirtual(now int64) []WMAdvance       // playback: raises EVERY stream's virtual floor to now − d_s
+   // WMAdvance is a value: {StreamID int; Contribution int64}. Zero value = no advance.
+
+   // internal/clock/instance.go — used by the owning shard ONLY.
+   type Instance struct { /* inputs []StreamID, contributions []int64, clock int64, buffer, timers */ }
+   func (in *Instance) Buffer(e event.Event)                    // admitted event, awaiting release
+   func (in *Instance) ApplyAdvance(a WMAdvance) (newClock int64, advanced bool)
+   func (in *Instance) Advance(cb AdvanceCallbacks)             // runs the one ordered sequence at the current clock
+   func (in *Instance) Schedule(due int64, k TimerKind, ref uint64)
+
+   type AdvanceCallbacks struct {
+       OnEvents  func(batch []event.Event)   // (a) released ≤ clock, (Ts, StreamID, Seq) order, as ONE chunk
+       OnTimers  func(fires []Timer)         // (b) due ≤ clock, due order: completions, absence resolutions,
+                                             //     cron closes, delay dues, TTL purges
+       OnDiscard func(overrun []uint64)      // (c) within-overrun partials — NEVER a pending completion
+   }
+   ```
+   `Advance` is the **only** place the (a)(b)(c) order exists; no operator re-implements any part of it. Pending completions (all positives matched, absence windows still open) are exempt from (c) by construction: they are represented as timers, not as within-bounded partials (SEMANTICS §6.3 pin).
+
+3. **Delivery of advances to quiet keys (the RC-1 fix).** When the registry produces a `WMAdvance` for stream `s`, the runtime enqueues a **control message** `CtlAdvance{s, contribution}` into *every shard's* mailbox (shards are few — GOMAXPROCS-order — so fan-out is O(shards), not O(keys)). Each shard applies it to every resident instance that lists `s` as an input: `ApplyAdvance` then `Advance` if the clock moved. A key with zero traffic therefore still fires its absence at the right event time, and TTL purges still happen. Ordering guarantee: control messages and events share the mailbox, so an instance never sees an advance out of order with the events the same source sent before it.
+
+4. **Strictness pins (pre-mortem RC-1 list):** an event is stream-late iff `ts < admissionWM` strictly (an equal timestamp is admitted). Playback virtual floors are per stream, exactly `virtual_now − d_s` — never one shared floor. Live idleness: an idle stream is **excluded from the min** until its next event arrives (equivalently: its contribution is +∞ while idle) — this is precisely the reference executor's `run_pattern_multi` live-mode rule, and the clamped-monotonic construct clock guarantees no retreat when the stream resumes behind the min. The conformance ports of the harness's `2.1 ·` checks are the binding arithmetic.
+
+5. **Timers:** per-shard facade `clock.Timers` (binary heap today; hierarchical timing wheel behind the same facade when a benchmark shows the heap is a measured cliff — perf study §4, [fits later]). Timer firing happens only inside `Advance` step (b); live wall time NEVER fires engine timers directly — wall time only produces idle ticks into the registry. **One TTL timer per instance, scheduled at instance birth, re-armed on activity — a conformance case asserts exactly one, the anti-Siddhi-purge-bug test (verified defect in `PartitionRuntimeImpl.initPartition`).**
+
+6. **Derived streams (owner decision 2026-11-01 — consistency review B4, pre-mortem RC8.2 dispositioned):** a rule instance that finishes `Advance` at clock W hands the runtime its emitted batch; the runtime routes it to **sinks and tables only**. **v0.1 REJECTS a rule that consumes a derived stream** at validation (the error code is assigned in the spec rev-3 batch at S1's plan check; ARCHITECTURE §8 states the restriction). Why: a partitioned producer has many instances advancing independently; per-instance `ObservePunctuation(derivedSid, W)` with a "latest received" merge is a **max over instances** — a slower instance's later-but-legitimate emissions land behind the punctuation and are silently dropped construct-late downstream, violating SEMANTICS §2.1's "an event on a derived stream is never behind that stream's watermark by construction". The correct merge is a **min over the live instance set** (a dynamic set with birth/TTL-purge rules). That design is recorded here as the Phase-2 direction and is NOT built in v0.1; `ObservePunctuation` stays in the interface, unused by routing, so the Phase-2 change is additive. At least one derived-stream conformance case lands with the Phase-2 feature, never before the min-merge exists.
+
+7. Operators receive time only via callback arguments; `import "time"` remains gate-forbidden in operator packages, with **exactly one named exception** (consistency review B1): `internal/window/cron.go` may import `time` for `time.LoadLocation`/`time.Date`/`time.Time` boundary arithmetic over the embedded tzdata (ADR-0014 §6) — **wall-clock reads (`time.Now` family) stay banned there too**; `clockcheck` enforces both halves and ships a fixture for the exception (ADR-0015 §2).
+
+## Alternatives considered
+- Per-instance observation (the original draft) — **rejected, proven wrong**: quiet keys stall; see review F2/F3, pre-mortem RC-1.
+- Shards polling the registry — rejected: polling either burns CPU or adds latency; delivered advances keep the mailbox as the single ordering domain.
+- Global broadcast per event (not per advance) — rejected: advances coalesce naturally (a wm only moves forward); per-event fan-out is O(events × shards) for nothing.
+
+## Consequences
+- Positive: SEMANTICS §2 has exactly two owners with a one-way handoff; quiet-key behavior is structurally guaranteed and tested; timers/purges ride the same ordered path.
+- Negative: control messages interleave with data in mailboxes — the shard loop handles two message kinds (acceptable; one switch).
+
+## Implementation notes for coding agents
+- Port the harness checks named `2.1 ·` (incl. RT-01 empty-stream and the clamped-monotonic/idle-resume case) BEFORE implementing; add the pre-mortem's mandated case: two keys, live driver, shards ≥ 2, one key quiet after its anchor — assert the absence FIRES and assert its fire TIME (not just presence) and the TTL purge time for the quiet key.
+- **Advance delivery is FIFO, full stop (round-2 N2):** advances ride the shard mailbox in enqueue order with no coalescing in v0.1 — a slot/replacement scheme could let a punctuation overtake the derived events it must follow (SEMANTICS §2.1 violation = silently dropped delayed events). The only permitted optimization, later and measured-first (ADR-0010 discipline): collapsing an advance into an ADJACENT tail message for the same stream. `CtlDrain` (ADR-0012) rides the same FIFO, which is what makes it compose with pending advances.
+- All times int64 UTC ms; no `time.Time` anywhere in `internal/clock`.

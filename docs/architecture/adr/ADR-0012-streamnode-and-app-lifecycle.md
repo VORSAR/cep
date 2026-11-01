@@ -1,0 +1,34 @@
+# ADR-0012: StreamNode (the junction, adapted) and the multi-app runtime lifecycle
+
+## Status
+Accepted (owner, 2026-11-01 — conditions in ADR-0015/qa-strategy.md; added 2026-11-01; closes architect review F4's undesigned derived-stream re-ingestion and F13's foreclosed multi-app requirement; adapts siddhi-core's StreamJunction and SiddhiManager lessons — study §3/§9/§11).
+
+## Context
+Streams need one first-class home: multiple rules consume one stream; a rule's output stream may feed other rules (DAG, single producer — SPEC §3.3 as fixed in the L6 round) and/or sinks; sources publish into declared streams. Siddhi's StreamJunction proves the concept; its depth-first-on-caller-thread delivery contradicts our per-key serial model and is rejected. Roadmap FA1 lists **multiple apps per runtime** as core; the original baseline's bare ints foreclosed it (F13).
+
+## Decision
+1. **`plan.StreamNode`** — one per declared or derived stream per app: `{AppID, StreamID, Schema, TimeClause|nil, Producer (source-binding | ruleID), Consumers []ConsumerRef, SinkBindings []SinkRef, Punctuates bool}`. The planner builds the full stream graph, validates DAG/single-producer/source-xor-derived (E-GRAPH-001/002/003), **and rejects any rule that consumes a derived stream — v0.1 restriction, owner decision 2026-11-01 (ADR-0004 §6; the code is assigned in the spec rev-3 batch at S1's plan check): a derived stream's `Consumers` list may hold sinks and tables only** — and hands the **router** a compiled routing table: `StreamKey → [(ruleID, keyExpr, shardFn)] + [sinkQueueIDs]`. All fan-out knowledge lives here; shards and operators know nothing about consumers.
+2. **Identity (the F13 fix):** every runtime-internal id is scoped — `AppID` (dense int per deployed app) + per-app `StreamID`/`RuleID` ints; the composite `StreamKey{App, Stream}` is what routing tables key on. `cep.Runtime` holds N independent apps: separate models, stream graphs, registries, instances; **no cross-app streams in v0.1** (an app's rules may reference only its own streams; cross-app wiring = the host program moving events through the public API, or Phase-5 features).
+3. **Lifecycle (Siddhi's ordering adopted; its sleeps rejected):**
+   - `Deploy(src) (AppHandle, error)`: parse → validate → plan → expect-sandbox (ADR-0005 §4; **one fresh ephemeral sandbox per expect block** — tables start empty, `given table` rows seeded via table-load records prepended to the block's log, through the internal load path, never the public `Table` API: the sandbox never runs `Start` — SPEC §6.8 rev 2, consistency review B2) → **register** (inactive).
+   - `AppHandle.Start(ctx)`: connect sinks (retry) → load/connect tables → start shard delivery for the app's instances → start sources LAST.
+   - `AppHandle.Stop(ctx)`: stop sources FIRST → inject a **drain barrier**: advance every app stream's contribution to the max observed event time (not +∞ — pending absence timers whose deadlines haven't been reached are NOT fired early; they are simply left unfired, honestly dropped with a counted `drained_pending` metric) → wait for **quiescence as a fixpoint** (round-2 N7): all shard mailboxes empty ∧ all outboxes handed off ∧ all sink queues flushed — re-checked after each round because barrier-fired completions re-ingest derived events; the fixpoint terminates because the stream DAG has finite depth and the barrier adds no new event times. All bounded by `ctx`'s deadline → detach. No sleeps anywhere; every wait is on a state with a deadline (testing.md rule 1 applied to production code).
+   - `Undeploy` = Stop + unregister; `Runtime.Close(ctx)` = Stop all apps in reverse deploy order, then stop shards.
+   - Crash-consistency note: MVP has no snapshots; Stop is graceful-or-nothing, and the docs say so (roadmap honesty line).
+4. **Ingest façade:** `AppHandle.Input(stream string) (cep.InputHandler, error)` — the programmatic feed (Siddhi's InputHandler analog); same path as sources (schema check, flags, Seq, registry, route). Used by the inmemory source, tests, and embedders.
+5. **Tables — public API and write concurrency (review F15):** `AppHandle.Table(name) (cep.Table, error)` with `Upsert(fill func(cepio.RowWriter) error)`, `Delete(key any)`, `Load(fills []func(cepio.RowWriter) error)` — the same RowWriter boundary (round-2 N3; cold path, conversion cost irrelevant) — the programmatic MVP path (SPEC §4.3). Internally a table is an immutable map behind an atomic pointer: writers (the table API, serialized through one lightweight mutex on the write path — writes are rare) build the next version and swap (`internal/table`'s `sync`/`sync/atomic` use is a named, fixture-enforced puritycheck exception — ADR-0015 §2); readers (expr `in`-nodes on shards) load the pointer once per event evaluation — the lock-free snapshot-per-event SEMANTICS §4 requires, with zero reader coordination. `Walk` covers the current version (snapshot seam).
+6. Fault isolation at delivery (Siddhi's sync-mode fault propagation rejected): each consumer's delivery is independent; a panic inside one rule's processing is recovered at the shard boundary, converted to a per-rule event error (counted), and never skips other consumers' deliveries.
+
+## Alternatives considered
+- Depth-first synchronous junction (Siddhi sync mode) — rejected: couples latency of all consumers, breaks per-key isolation, fault-propagation hazard (study §10).
+- Global stream namespace across apps — rejected: deployment isolation is the point of multi-app; cross-app coupling invites config-order bugs.
+- Firing pending absences at Stop (wm→+∞ like playback end) — rejected for live Stop: a shutdown must not fabricate detections; playback end keeps +∞ semantics (a log END is evidence of absence; a process stop is not).
+
+## Consequences
+- Positive: fan-out/re-ingestion has one owner; multi-app is structural; shutdown is deterministic and sleep-free; the public lifecycle API is five methods.
+- Negative: AppID threading touches every internal id — cheap now (F13 caught it pre-code), costly later; done now.
+
+## Implementation notes for coding agents
+- Routing table entries are precompiled at Start: key `Expr` (ADR-0011) + shard hash fn; the router is the ONLY writer to shard mailboxes and sink queues (ADR-0006 §5).
+- Drain barrier implementation: a `CtlDrain{appID, upTo}` control message per shard; shards ack via the outbox; Stop waits on acks with ctx deadline.
+- `cep.InputHandler.Send(ev T) error` (generics over the builder's struct mapping) and `SendRow(fill func(cepio.RowWriter) error) error` (the same public value boundary as sources — round-2 N3; internal/event.Value never crosses the facade); both return backpressure errors rather than blocking past ctx.
