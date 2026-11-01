@@ -33,7 +33,7 @@ Everything runs in one process. There is no server, no cluster, no external stor
 
 ## 2a. The layer model (normative)
 
-The engine is a **strictly layered architecture**. A package lives in exactly one layer; a package MUST import only packages in layers **below** its own, plus the named same-layer edges in §3's exception table (L4: `cep → parser`, `cep → playback` for the Deploy pipeline and its expect sandbox, and `io → cep` — built-in connectors consume only the public facade; L2: `expr → text, table`, `pattern`/`window → expr` interface-only). The import-DAG gate check enforces layers and exception table together, mechanically.
+The engine is a **strictly layered architecture**. A package lives in exactly one layer; a package MUST import only packages in layers **below** its own, plus the named same-layer edges in §3's exception table (L4: `cep → parser`, `cep → playback` for the Deploy pipeline and its expect sandbox, `cep → io` — the facade's API uses the connector contracts — and `io/* → cep, io` — each built-in connector is its own sub-package consuming only the public facade and contracts; **amended 2026-11-02 by owner decision: the former `io → cep` edge plus `cep`'s use of `cepio.RowWriter` formed a Go import cycle**; L2: `expr → text, table`, `pattern`/`window → expr` interface-only). The import-DAG gate check enforces layers and exception table together, mechanically.
 
 ```mermaid
 graph TB
@@ -41,7 +41,7 @@ graph TB
         CEPD["cmd/cepd (runner)"]; CEPCLI["cmd/cep (validate/test/fmt)"]
     end
     subgraph "L4 — Boundary (front-ends and back-ends)"
-        PUB["cep (public facade)"]; RULEPKG["rule (Go builder)"]; IOPKG["io — cepio (SPI + built-ins)"]; PARSE["internal/parser"]; PLAYBACK["internal/playback"]
+        PUB["cep (public facade)"]; RULEPKG["rule (Go builder)"]; IOPKG["io — cepio (connector contracts only)"]; IOBUILT["io/http, io/stdin, io/inmemory, io/smtp, io/log, io/jsonmap, io/textmap (built-ins)"]; PARSE["internal/parser"]; PLAYBACK["internal/playback"]
     end
     subgraph "L3 — Orchestration"
         RUNTIME["internal/runtime (shards, lifecycle)"]; PLANPKG["internal/plan"]; VALIDATE["internal/validate"]
@@ -58,7 +58,7 @@ graph TB
     CEPD --> PUB; CEPCLI --> PUB
     PUB --> RUNTIME; PUB --> PARSE; PUB --> VALIDATE; PUB --> PLAYBACK
     RULEPKG --> MODEL; PARSE --> MODEL
-    IOPKG --> PUB
+    PUB --> IOPKG; IOBUILT --> PUB; IOBUILT --> IOPKG
     PLAYBACK --> RUNTIME; VALIDATE --> WINDOW; VALIDATE --> EXPR
     PATTERN --> EXPR; WINDOW --> EXPR; EXPR --> TEXT; EXPR --> TABLE
     RUNTIME --> PLANPKG; RUNTIME --> CLOCK; RUNTIME --> PART
@@ -87,7 +87,7 @@ graph TB
 
 1. An import that violates the layer table (gate: importcheck).
 2. Time read outside `internal/clock` handles (gate: lint allowlist).
-3. A goroutine outside `internal/runtime` (which owns ingest/router), `io` or `cmd/*` (gate: `puritycheck`, **module-wide** — ADR-0015 §2; the one goroutine allowlist, stated once).
+3. A goroutine outside `internal/runtime` (which owns ingest/router, shards and the sink flushers), the built-in connector packages `io/*` (their own I/O only — e.g. an HTTP listener) or `cmd/*` (gate: `puritycheck`, **module-wide** — ADR-0015 §2; the one goroutine allowlist, stated once).
 4. Package-level mutable state (gate: `globalscheck` with const-like defined in the analyzer — ADR-0015 §2; DEVELOPMENT.md).
 5. An operator reaching around `clock.Instance` to compute a watermark, deadline or ordering itself — even correctly.
 6. A type exported from `internal/*` solely so another package can poke its fields: define the seam interface instead.
@@ -105,12 +105,13 @@ Module path: `github.com/vorsar/complex-events-engine`. One Go module at the rep
 ```
 cep.go, runtime.go, event.go, errors.go   package cep        — public embeddable API
 rule/                                     package rule       — public generics rule-builder API
-io/                                       package io (cepio) — public Source/Sink/Mapper SPI + built-ins
+io/                                       package io (cepio) — the public connector contracts ONLY: Source/Sink/Mapper/RowWriter/EmitFunc/OutEvent/Mode + the batch-close signal (a leaf: imports no module package)
+io/http, io/stdin, io/inmemory, io/smtp, io/log, io/jsonmap, io/textmap   one package per built-in connector; each imports cep + io only (owner decision 2026-11-02 — breaks the cep↔io cycle)
 cmd/cepd/                                 the binary runner (rule files + config per ADR-0008 §5); serves /metrics (Prometheus text) + /healthz (round-2 F16)
 cmd/cep/                                  the CLI: validate / test / fmt
 internal/event/                           canonical event + schema (value union, flags, seq)
 internal/model/                           the rule-model IR (single source of truth, ADR-0003)
-internal/parser/                          lexer, goyacc grammar (cep.y), AST, AST→model lowering, and the canonical printer (SPEC §9 formatter; round-trip law parse→print→parse; drives `cep fmt`; lands with the parser sprint — round-2 F10)
+internal/parser/                          lexer, goyacc grammar (cep.y), AST, AST→model lowering, and the canonical printer (SPEC §9 formatter; round-trip law parse→print→parse; drives `cep fmt`; *placement amended at the approved Phase-1 decomposition, 2026-11-02:* the lexer keeps comments as positioned trivia in sprint S2.1, and the printer + `cep fmt` land in sprint S6.2 — round-2 F10)
 internal/validate/                        static checks; the error catalog as a data table
 internal/plan/                            model → executable graph (operators wired per rule)
 internal/clock/                           watermarks: admission/contribution, punctuations, timers (ADR-0004)
@@ -123,8 +124,8 @@ internal/text/                            normalization (x/text), tokenizer, Aho
 internal/table/                           in-memory keyed tables, snapshot-per-event reads
 internal/playback/                        virtual clock, merged-log format, expect runner (ADR-0005)
 internal/metrics/                         counters + Prometheus text exposition (no client lib)
-conformance/                              the golden suite + corpus runner (test-only package)
-bench/                                    benchmark suite + scenario generators (ADR-0010 §8)
+conformance/                              the golden suite + corpus runner (test-only package; the expect sandbox it drives lives in internal/playback; its place in the layer model is settled at sprint S1.1's plan check)
+bench/                                    benchmark suite + scenario generators (ADR-0010 §8; layer placement settled at sprint S1.1's plan check)
 gallery/                                  the attack gallery: runnable rule apps + playback logs + expects (roadmap exit criterion 5; conformance executes them)
 demo/                                     the kill-switch demo kit: compose file, traffic generator, stub IAM, mail catcher (exit criterion 1; trailing sprint — round-2 F17)
 docs/language/                            the frozen spec (already exists; grammar.lark is normative)
@@ -153,7 +154,8 @@ api/exports.golden                        the hand-written public-export law fil
    | any `internal/*` → `metrics` | counters are L0 data (round-2 F16) |
    | `cep → parser` (L4 same-layer) | the Deploy pipeline's front end (§2a; consistency review S4 — the edge was named in §2a but missing here) |
    | `cep → playback` (L4 same-layer) | the Deploy pipeline's expect sandbox (ADR-0005 §4) |
-   | `io → cep` (L4 same-layer) | built-in connectors consume only the public facade (round-3 R4) |
+   | `cep → io` (L4 same-layer) | the facade's API (`Table.Upsert`, `InputHandler.SendRow`, source/sink registration) is written in the connector contracts' types; `io` is a leaf, so no cycle (owner decision 2026-11-02 — replaces the former `io → cep` row, which with this edge formed an import cycle) |
+   | `io/* → cep`, `io/* → io` (L4 same-layer) | each built-in connector sub-package consumes only the public facade and the contracts (round-3 R4's intent, kept) |
 6. `internal/runtime` imports `clock`, `partition`, `plan` and the operator packages; it is the only package that owns goroutines besides `io` and `playback`.
 7. Public packages (`cep`, `rule`, `io`) never appear in an `internal/*` import list — the engine never imports its own facade.
 8. No package anywhere imports `cmd/*`.
@@ -311,16 +313,16 @@ Sibling-repo adapters (decision #10) implement exactly the three Phase-1 interfa
 
 - N shards (default `GOMAXPROCS`), each one goroutine, each owning a disjoint set of partition keys (hash routing). **Within a key everything is serial** — no locks in operator code, no shared mutable state between shards.
 - Operator packages are **pure libraries**: they own no goroutines, do no I/O, and read time only from `internal/clock` handles passed in (DEVELOPMENT.md: no wall clock in engine logic).
-- Goroutines exist only in: `internal/runtime` (shards + the ingest/router), `io` (source readers, sink flushers), and `cmd/*` (the `/metrics`+`/healthz` HTTP listener in `cepd` — L5, public-API consumer); `internal/playback` owns none — playback is single-threaded by design. This is the one allowlist `puritycheck` enforces module-wide (ADR-0015 §2; consistency review S6 unified the three divergent statements). Shards never block (bounded work, outbox handoff); only ingest/router blocks, and only toward sources.
+- Goroutines exist only in: `internal/runtime` (shards + the ingest/router + the sink flushers — moved here from `io` by the 2026-11-02 `io` split, ADR-0008 §2), the built-in connector packages `io/*` (source readers and other connector I/O), and `cmd/*` (the `/metrics`+`/healthz` HTTP listener in `cepd` — L5, public-API consumer); `internal/playback` owns none — playback is single-threaded by design. This is the one allowlist `puritycheck` enforces module-wide (ADR-0015 §2; consistency review S6 unified the three divergent statements). Shards never block (bounded work, outbox handoff); only ingest/router blocks, and only toward sources.
 - **Playback mode MUST be bit-deterministic:** one thread, events fed in merged-log order, the virtual clock advancing as SEMANTICS §2.1 defines; equal inputs ⇒ byte-identical outputs, asserted by the replay layer of the test contract.
 - **Live mode** uses the same operator code; nondeterminism is confined to (a) arrival interleaving across shards and (b) idleness timing — both only affect *when*, and construct-late drops are counted (SEMANTICS §2.1's scoped guarantee).
 
-## 7. Where each SEMANTICS section is implemented (traceability — a gate check asserts this table's files exist)
+## 7. Where each SEMANTICS section is implemented (traceability — a gate check asserts this table's files exist, switched on at the release close-out sprint S12, when every package has been built; ADR-0015 §2 docsync)
 
 | SEMANTICS | Package | Proven by |
 |---|---|---|
 | §1 data model, null | `internal/event`, `internal/validate` (E-NULL lints) | conformance: null cases |
-| §2 clocks, watermarks, idleness, order | `internal/clock` | conformance: RT-01/RT-09/RT-10 ports of `docs/language/checks/` |
+| §2 clocks, watermarks, idleness, order | `internal/clock` | conformance: RT-01/RT-10 ports of `docs/language/checks/` (sprint S4.1, with clock-level unit tests in S3.1); *RT-09 deferred to Phase 2 — it needs a rule consuming a derived stream, which v0.1 rejects (annotated 2026-11-02)* |
 | §5 text matching | `internal/text` (+ `internal/expr` operator nodes) | conformance: term/substring/set/regex/fold cases |
 | §2.5/§5.10 expressions, typing, functions | `internal/expr` | validator E-TYPE/E-FN tests; Appendix F registry diff |
 | §6 patterns | `internal/pattern` | conformance: kill-switch composite + boundary cases |
