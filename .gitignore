@@ -1,4 +1,44 @@
-.claude/settings.local.json
-.DS_Store
+# --- Go (engine) ---
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+go.work
+go.work.sum
+
+# --- Python (spec tooling: grammar checks, probes) ---
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+
+# --- Secrets and local env (never in the repo; ground rule 20) ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Claude Code: machine-local settings only (project skills/agents ARE committed) ---
+.claude/settings.local.json
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Editors ---
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Scratch ---
+*.log
+tmp/
+scratch/
