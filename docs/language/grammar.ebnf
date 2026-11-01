@@ -1,0 +1,125 @@
+(* CEP rule language v0.1 — human-oriented EBNF (ISO 14977 style).
+   KEYWORDS ARE LOWERCASE-ONLY (SPEC §2.1, owner reversal 2026-11-01); identifiers
+   may not spell a keyword in ANY letter case (E-KW-001/E-KW-002).
+   NORMATIVE, and kept equivalent to grammar.lark (machine-checked: LALR
+   conflict-free, Earley-ambiguity-clean against examples/, rejects invalid/).
+   Terminals in double quotes; { } repetition; [ ] option; | alternation. *)
+
+program        = pragma, { statement } ;
+pragma         = "language", pragma-id, ";" ;              (* language cep/0.1; *)
+
+statement      = param-decl | stream-decl | table-decl | rule-decl ;
+
+(* ----- parameters ------------------------------------------------------- *)
+param-decl     = "param", name, type, "=", signed-literal, ";" ;
+
+(* ----- declarations ----------------------------------------------------- *)
+stream-decl    = { annotation }, "stream", name, "(", attr-list, ")",
+                 [ time-clause ], ";" ;
+table-decl     = "table", name, "(", attr-list, ")",
+                 "primary", "key", "(", name, { ",", name }, ")", ";" ;
+attr-list      = attr, { ",", attr } ;
+attr           = name, type, [ "optional" ] ;
+type           = "string" | "int" | "float" | "bool"
+               | "timestamp" | "duration" | "object" ;
+time-clause    = "time", name, "watermark", wm-strategy, [ idle-clause ]
+               | "time", "arrival", [ idle-clause ] ;
+wm-strategy    = "bounded", duration | "ascending" ;
+idle-clause    = "idle", "after", duration ;
+annotation     = "@", name, "(", ann-item, { ",", ann-item }, ")" ;
+ann-item       = name, "=", ( literal | param-ref ) | annotation ;
+
+(* ----- rules: fixed clause order ---------------------------------------- *)
+rule-decl      = "rule", name, intent-clause, [ partition-clause ], body,
+                 { extra }, select-clause, [ rate-clause ],
+                 "insert", "into", name, ";" ;
+intent-clause  = "intent", string ;
+partition-clause = "partition", "by", part-key, { ",", part-key },
+                   "ttl", duration-or-param ;
+part-key       = name, "of", name ;
+extra          = "expect", expect-block | "todo", string ;
+
+body           = pattern-body | windowed-body | plain-body ;
+
+pattern-body   = "from", restart, pos-elem, { chain-elem },
+                 "within", duration-or-param, after-match, late-clause ;
+restart        = "every" | "once" ;
+chain-elem     = "->", pos-elem
+               | "and", "not", source, "for", duration-or-param ;
+pos-elem       = step | "(", step, "and", step, ")" ;
+step           = name, "=", source ;
+source         = name, [ "[", expr, "]" ] ;
+
+windowed-body  = "from", source, "window", window-kind, emit-clause, late-clause ;
+window-kind    = "sort", "(", number, ",", name, ",", ( "asc" | "desc" ), ")"
+               | "cron", "(", string, ",", string, ")"      (* expr, IANA tz *)
+               | "delay", "(", duration-or-param, ")"
+               | "batch", "(", ")" ;
+emit-clause    = "emit", "on", ( "close" | "change" | "due" | "batch", "end" ) ;
+
+plain-body     = "from", source ;
+
+after-match    = "after", "match", "skip", "past", "last" ;
+late-clause    = "late", "events", ( "drop" | "allow", duration-or-param ) ;
+select-clause  = "select", sel-item, { ",", sel-item } ;
+sel-item       = expr, [ "as", name ] ;
+rate-clause    = "output", "first", "every", duration-or-param ;
+
+expect-block   = given-sec, { given-sec }, then-sec ;
+given-sec      = "given", name, "[", [ record, { ",", record } ], "]" ;
+then-sec       = "then", name, "[", [ record, { ",", record } ], "]" ;
+record         = "{", field, { ",", field }, "}" ;
+field          = name, ":", ( signed-literal | "null" ) ;
+
+(* ----- expressions (SQL verbatim; precedence low to high) --------------- *)
+expr           = or-expr ;
+or-expr        = [ or-expr, "or" ], and-expr ;
+and-expr       = [ and-expr, "and" ], not-expr ;
+not-expr       = "not", not-expr | membership ;
+membership     = comparison, [ ( "in" | "not", "in" ), name ] ;
+comparison     = sum, cmp-op, sum
+               | sum, "is", [ "not" ], "null"
+               | text-match
+               | sum ;
+text-match     = sum, text-op, text-operand
+               | sum, set-op, "(", set-operand, ")"
+               | sum, regex-op, text-operand ;
+text-operand   = string | param-ref ;
+set-operand    = string, { ",", string } | param-ref | name ;
+sum            = [ sum, ( "+" | "-" ) ], term ;
+term           = [ term, ( "*" | "/" | "%" ) ], atom ;
+atom           = literal | param-ref | func-call | attr-ref
+               | "raw", "(", attr-ref, ")" | "-", atom | "(", expr, ")" ;
+func-call      = [ name, ":" ], name, "(", [ expr, { ",", expr } ], ")" ;
+attr-ref       = name, [ ".", name ] ;
+cmp-op         = "==" | "!=" | ">=" | "<=" | ">" | "<" ;
+text-op        = "has_ci" | "has_cs" | "contains_ci" | "contains_cs"
+               | "starts_with_ci" | "starts_with_cs"
+               | "ends_with_ci" | "ends_with_cs" ;
+set-op         = "has_any_ci" | "has_any_cs" | "has_all_ci" | "has_all_cs"
+               | "contains_any_ci" | "contains_any_cs"
+               | "contains_all_ci" | "contains_all_cs" ;
+regex-op       = "matches_ci" | "matches_cs"
+               | "contains_match_ci" | "contains_match_cs" ;
+
+(* ----- literals ---------------------------------------------------------- *)
+literal        = string | number | duration | "true" | "false"
+               | "timestamp", string ;
+signed-literal = literal | "-", number ;
+duration       = number, dur-unit, { number, dur-unit } ;
+  (* lexically a number; STATIC rule E-DUR-002 requires integer counts with
+     strictly descending, distinct units *)
+dur-unit       = "ms" | "sec" | "min" | "hour" | "day" | "week" ;
+duration-or-param = duration | param-ref ;
+param-ref      = "${", identifier, "}" ;
+name           = identifier | "`", any-but-backtick, "`" ;
+
+(* pragma-id: lowercase name, "/", digits ".", digits (e.g. cep/0.1).
+   identifier: [A-Za-z_][A-Za-z0-9_]*, excluding every reserved word IN ANY
+   LETTER CASE (the reserved list is normative in SPEC Appendix B and encoded
+   case-insensitively in grammar.lark's NAME terminal); backticked names use
+   letters, digits, "_", "-", ".", spaces only. string: single- or
+   double-quoted with the SPEC 2.4 escape set, ONE line; triple-quoted
+   strings may span lines and are RAW (no escapes). number: decimal with
+   optional fraction/exponent. Comments: "--" to end of line, block
+   comments; a leading UTF-8 BOM is ignored. *)

@@ -1,0 +1,9 @@
+-- expect: E-SYN-003 (`in` takes a table name, not a literal list; use has_any_* or a table)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule InList
+  intent 'x'
+  from S[a in ('x', 'y')]
+  select a
+  insert into T;

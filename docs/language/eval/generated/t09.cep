@@ -1,0 +1,22 @@
+-- constructs: pattern every absence for-bound within after-match late-events
+--             partition
+language cep/0.1;
+
+stream Orders (orderId string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Payments (orderId string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream UnpaidOrderAlerts (orderId string, ts timestamp);
+
+rule OrderWithoutPayment
+  intent 'An order placed with no payment event within 30 minutes.'
+  partition by orderId of Orders, orderId of Payments ttl 1 hour
+  from every placed = Orders
+   and not Payments[orderId == placed.orderId] for 30 min
+  within 30 min
+  after match skip past last
+  late events drop
+  select placed.orderId
+  insert into UnpaidOrderAlerts;

@@ -1,0 +1,21 @@
+-- constructs: three-step-chain followed-by cross-step-references gallery-shape
+language cep/0.1;
+
+stream ToolCalls (sessionId string, tool string, visibility string, ts timestamp)
+  time ts watermark bounded 1 min idle after 2 min;
+
+stream FlowAlerts (sessionId string, ts timestamp, evidence object);
+
+rule CrossVisibilityFlow
+  intent 'Within one session: a public read, then a private read, then a public write.'
+  partition by sessionId of ToolCalls ttl 1 hour
+  from every a = ToolCalls[tool == 'get_issue' and visibility == 'public']
+    -> b = ToolCalls[tool == 'file_read' and visibility == 'private'
+                     and sessionId == a.sessionId]
+    -> c = ToolCalls[tool == 'create_pull_request' and visibility == 'public'
+                     and sessionId == a.sessionId]
+  within 10 min
+  after match skip past last
+  late events drop
+  select a.sessionId, chain(a, b, c) as evidence
+  insert into FlowAlerts;

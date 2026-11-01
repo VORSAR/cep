@@ -1,0 +1,3 @@
+-- expect: E-KW-001 (reserved words are excluded from identifiers in ANY letter case)
+language cep/0.1;
+stream SeleCT (a string, ts timestamp) time ts watermark bounded 1 min;

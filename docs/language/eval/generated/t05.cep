@@ -1,0 +1,16 @@
+-- constructs: pragma sort-window emit-on-change changelog partition
+language cep/0.1;
+
+stream Latencies (region string, endpoint string, millis float, ts timestamp)
+  time ts watermark bounded 2 min;
+
+stream SlowestEndpoints (region string, endpoint string, millis float, ts timestamp);
+
+rule SlowestThree
+  intent 'Keep the three slowest endpoints per region by latency.'
+  partition by region of Latencies ttl 1 day
+  from Latencies window sort(3, millis, desc)
+  emit on change
+  late events drop
+  select region, endpoint, millis
+  insert into SlowestEndpoints;

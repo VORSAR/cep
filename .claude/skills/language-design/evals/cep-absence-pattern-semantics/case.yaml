@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: cep-absence-pattern-semantics
+expected_outcome: |
+  Claude reads or creates DESIGN.md, writes semantics before syntax (time model, watermark, lateness,
+  emission, absence firing rule on watermark), designs keyword-led syntax with named captures and a
+  mandatory time bound on absence and mandatory lateness/emission clauses, produces a Lark grammar and
+  example corpus, runs scripts/grammar_check.py, and records the novelty ledger. It does not argue
+  against building the language and does not use positional pattern variables or regex surface.

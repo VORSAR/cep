@@ -1,0 +1,10 @@
+-- expect: E-STR-001 (single-quoted strings are one line; use triple quotes for multiline)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule BrokenString
+  intent 'this intent
+          spans two lines in single quotes'
+  from S[a == 'x']
+  select a
+  insert into T;

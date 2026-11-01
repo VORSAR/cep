@@ -1,0 +1,212 @@
+// Machine-checkable grammar for the CEP rule language, v0.1 (MVP surface).
+// Normative companion: grammar.ebnf (kept equivalent; lexical breadth the EBNF
+// narrows — e.g. duration counts — is narrowed by STATIC rules, named inline).
+// Checked by grammar_check.py: LALR build must be conflict-free; every file in
+// examples/ must parse; every file in invalid/ must fail.
+// Keywords are RESERVED and LOWERCASE-ONLY (SPEC §2.1; owner reversal 2026-11-01).
+// Identifiers are case-sensitive but may not spell a keyword in ANY letter case
+// (backtick-quote instead, E-KW-001); an uppercase/mixed-case keyword spelling is
+// its own crisp error (E-KW-002: "keywords are lowercase"), never a valid name.
+
+start: pragma statement*
+
+pragma: "language" PRAGMA_ID ";"
+
+statement: param_decl
+         | stream_decl
+         | table_decl
+         | rule_decl
+
+// ---------------------------------------------------------------- params
+
+param_decl: "param" cname type "=" signed_literal ";"
+
+// ---------------------------------------------------------------- declarations
+
+stream_decl: annotation* "stream" cname "(" attr_list ")" time_clause? ";"
+table_decl: "table" cname "(" attr_list ")" "primary" "key" "(" name_list ")" ";"
+
+attr_list: attr ("," attr)*
+attr: cname type opt_marker?
+opt_marker: "optional"
+type: "string" -> t_string
+    | "int" -> t_int
+    | "float" -> t_float
+    | "bool" -> t_bool
+    | "timestamp" -> t_timestamp
+    | "duration" -> t_duration
+    | "object" -> t_object
+
+time_clause: "time" cname "watermark" wm_strategy idle_clause?
+           | "time" "arrival" idle_clause?
+wm_strategy: "bounded" duration -> wm_bounded
+           | "ascending" -> wm_ascending
+idle_clause: "idle" "after" duration
+
+annotation: "@" cname "(" ann_item ("," ann_item)* ")"
+ann_item: cname "=" ann_value
+        | annotation
+ann_value: literal | param_ref
+
+// ---------------------------------------------------------------- rules
+// Fixed clause order: intent, partition, body, expect/todo, select, rate, insert.
+// Partition is grammatically optional; static rule E-PART-001 requires it on every
+// stateful rule (patterns, windows).
+
+rule_decl: "rule" cname intent_clause partition_clause? body extra* select_clause rate_clause? "insert" "into" cname ";"
+
+intent_clause: "intent" STRING
+partition_clause: "partition" "by" part_key ("," part_key)* "ttl" duration_or_param
+part_key: cname "of" cname
+
+extra: "expect" expect_block -> expect_clause
+     | "todo" STRING -> todo_clause
+
+body: "from" restart first_elem chain_elem* "within" duration_or_param after_match late_clause -> pattern_body
+    | "from" source window_clause emit_clause late_clause -> windowed_body
+    | "from" source -> plain_body
+
+// pattern bodies: mandatory restart marker, within, after-match, late events;
+// at least one positive step (a pure-absence pattern is E-PAT-005)
+restart: "every" -> every
+       | "once" -> once
+first_elem: pos_elem
+chain_elem: "->" pos_elem -> followed_by
+          | "and" "not" source "for" duration_or_param -> absence
+pos_elem: step
+        | "(" step "and" step ")" -> and_group
+step: cname "=" source
+source: cname filter?
+filter: "[" expr "]"
+
+// windowed bodies: mandatory window, emit, late events (mode×kind legality: E-EMIT-002)
+window_clause: "window" window_kind
+window_kind: "sort" "(" number "," cname "," sort_dir ")" -> w_sort
+           | "cron" "(" STRING "," STRING ")" -> w_cron
+           | "delay" "(" duration_or_param ")" -> w_delay
+           | "batch" "(" ")" -> w_batch
+sort_dir: "asc" -> asc
+        | "desc" -> desc
+emit_clause: "emit" "on" emit_mode
+emit_mode: "close" -> emit_on_close
+         | "change" -> emit_on_change
+         | "due" -> emit_on_due
+         | "batch" "end" -> emit_on_batch_end
+
+after_match: "after" "match" "skip" "past" "last"
+late_clause: "late" "events" late_policy
+late_policy: "drop" -> late_drop
+           | "allow" duration_or_param -> late_allow
+
+select_clause: "select" sel_item ("," sel_item)*
+sel_item: expr ("as" cname)?
+rate_clause: "output" "first" "every" duration_or_param
+
+// expect: one or more given sections (multi-stream injection), a then section
+// that may be empty ("then nothing" = defeat path), null literals allowed.
+expect_block: given_sec+ then_sec
+given_sec: "given" cname "[" [record ("," record)*] "]"
+then_sec: "then" cname "[" [record ("," record)*] "]"
+record: "{" field ("," field)* "}"
+field: cname ":" field_value
+field_value: signed_literal
+           | "null" -> null_lit
+
+// ---------------------------------------------------------------- expressions (SQL-style)
+
+?expr: or_expr
+?or_expr: or_expr "or" and_expr -> or_op
+        | and_expr
+?and_expr: and_expr "and" not_expr -> and_op
+         | not_expr
+?not_expr: "not" not_expr -> not_op
+         | membership
+?membership: comparison "in" cname -> in_table
+           | comparison "not" "in" cname -> not_in_table
+           | comparison
+?comparison: sum CMP sum -> cmp
+           | sum "is" "null" -> is_null
+           | sum "is" "not" "null" -> is_not_null
+           | text_match
+           | sum
+text_match: sum TEXT_OP text_operand -> text_op
+          | sum SET_OP "(" set_operand ")" -> set_op
+          | sum REGEX_OP text_operand -> regex_op
+text_operand: STRING | param_ref
+set_operand: STRING ("," STRING)* -> set_list
+           | param_ref
+           | cname
+?sum: sum PLUS_MINUS term -> arith
+    | term
+?term: term MUL_DIV atom -> arith
+     | atom
+?atom: literal
+     | param_ref
+     | func_call
+     | attr_ref
+     | "raw" "(" attr_ref ")" -> raw_wrap
+     | "-" atom -> neg
+     | "(" expr ")"
+func_call: cname ":" cname "(" arg_list? ")" -> ns_call
+         | cname "(" arg_list? ")" -> call
+arg_list: expr ("," expr)*
+attr_ref: cname "." cname -> qualified
+        | cname -> bare
+
+param_ref: PARAM_REF
+?duration_or_param: duration | param_ref
+
+// ---------------------------------------------------------------- literals
+
+?literal: STRING
+        | number
+        | duration
+        | "true" -> true_lit
+        | "false" -> false_lit
+        | "timestamp" STRING -> ts_lit
+?signed_literal: literal
+               | "-" number -> neg_lit
+number: NUMBER
+// Lexically a duration takes NUMBER counts; static rule E-DUR-002 requires
+// integer counts with strictly descending, distinct units (grammar.ebnf states
+// the narrowed form).
+duration: dur_part+
+dur_part: NUMBER DUR_UNIT
+
+cname: NAME | BACKTICKED
+name_list: cname ("," cname)*
+
+// ---------------------------------------------------------------- terminals
+
+PRAGMA_ID: /[a-z][a-z0-9_]*\/[0-9]+\.[0-9]+/
+DUR_UNIT: "ms" | "sec" | "min" | "hour" | "day" | "week"
+TEXT_OP: "has_ci" | "has_cs" | "contains_ci" | "contains_cs"
+       | "starts_with_ci" | "starts_with_cs" | "ends_with_ci" | "ends_with_cs"
+SET_OP: "has_any_ci" | "has_any_cs" | "has_all_ci" | "has_all_cs"
+      | "contains_any_ci" | "contains_any_cs" | "contains_all_ci" | "contains_all_cs"
+REGEX_OP: "matches_ci" | "matches_cs" | "contains_match_ci" | "contains_match_cs"
+CMP: "==" | "!=" | ">=" | "<=" | ">" | "<"
+PLUS_MINUS: "+" | "-"
+MUL_DIV: "*" | "/" | "%"
+PARAM_REF: /\$\{[A-Za-z_][A-Za-z0-9_]*\}/
+NUMBER: /[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/
+// NAME cannot lex as any reserved word in ANY letter case — keywords are
+// lowercase-only, and other casings are reserved too so `FROM`/`Select` are
+// neither keywords nor identifiers (they land as E-KW-002 parse errors). This lookahead list IS the normative
+// reserved-word list (SPEC Appendix B mirrors it). `coalesce`, `chain`,
+// `minimum`, `maximum` and other FUNCTIONS are deliberately not reserved.
+NAME: /(?!(?i:language|param|stream|table|rule|intent|partition|by|of|ttl|from|every|once|within|for|after|match|skip|past|last|late|events|drop|allow|route|to|select|as|output|first|insert|into|window|sort|cron|delay|batch|emit|on|close|change|due|end|time|arrival|watermark|bounded|ascending|punctuated|idle|primary|key|optional|expect|given|then|todo|and|or|not|in|is|null|true|false|raw|timestamp|string|int|float|bool|duration|object|asc|desc|ms|sec|min|hour|day|week|has_ci|has_cs|contains_ci|contains_cs|starts_with_ci|starts_with_cs|ends_with_ci|ends_with_cs|has_any_ci|has_any_cs|has_all_ci|has_all_cs|contains_any_ci|contains_any_cs|contains_all_ci|contains_all_cs|matches_ci|matches_cs|contains_match_ci|contains_match_cs|group|having|order|limit|offset|join|trigger|aggregation|sequence|session|tumbling|hopping|sliding|processing)\b)[A-Za-z_][A-Za-z0-9_]*/
+// Backticked identifiers: letters/digits/underscore/hyphen/dot/space only —
+// no operators, newlines, backslashes or `${` lookalikes (SPEC §2.3).
+BACKTICKED: /`[A-Za-z_][A-Za-z0-9_\-. ]*`/
+STRING: /'''(.|\n)*?'''/ | /"""(.|\n)*?"""/
+      | /'([^'\\\n]|\\.)*'/ | /"([^"\\\n]|\\.)*"/
+
+LINE_COMMENT: /--[^\n]*/
+BLOCK_COMMENT: /\/\*(.|\n)*?\*\//
+BOM: "﻿"
+%ignore BOM
+%ignore LINE_COMMENT
+%ignore BLOCK_COMMENT
+%import common.WS
+%ignore WS

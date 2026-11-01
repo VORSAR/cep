@@ -1,0 +1,13 @@
+-- expect: E-PAT-003 (every pattern starts with `every` or `once`)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule NoMarker
+  intent 'x'
+  partition by a of S ttl 1 hour
+  from e1 = S[a == 'x'] -> e2 = S[a == 'y']
+  within 5 min
+  after match skip past last
+  late events drop
+  select e1.a
+  insert into T;

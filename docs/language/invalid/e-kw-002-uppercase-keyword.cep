@@ -1,0 +1,9 @@
+-- expect: E-KW-002 (keywords are lowercase: write `rule`, `from`, `select`)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+RULE X
+  INTENT 'x'
+  FROM S[a == 'x']
+  SELECT a
+  INSERT INTO T;

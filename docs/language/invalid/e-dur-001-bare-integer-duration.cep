@@ -1,0 +1,13 @@
+-- expect: E-DUR-001 (durations carry units: `5 min`, never `5`)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule BareDuration
+  intent 'x'
+  partition by a of S ttl 1 hour
+  from every e1 = S[a == 'x'] -> e2 = S[a == 'y']
+  within 5
+  after match skip past last
+  late events drop
+  select e1.a
+  insert into T;

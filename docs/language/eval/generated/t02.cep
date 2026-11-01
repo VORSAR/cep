@@ -1,0 +1,15 @@
+-- constructs: pragma plain-rule table membership coalesce null-handling
+language cep/0.1;
+
+stream Commands (deviceId string optional, command string, ts timestamp)
+  time ts watermark bounded 2 min;
+
+table AllowedDevices (deviceId string) primary key (deviceId);
+
+stream CommandAlerts (deviceId string, command string, ts timestamp);
+
+rule UnknownDeviceCommand
+  intent 'A command event from a device not present in the allowed-devices table.'
+  from Commands[coalesce(deviceId, 'unknown') not in AllowedDevices]
+  select coalesce(deviceId, 'unknown') as deviceId, command
+  insert into CommandAlerts;

@@ -1,0 +1,18 @@
+-- constructs: params param-defaults backtick-stream-name plain-rule rate-limit
+language cep/0.1;
+
+param risk_threshold float = 75.0;
+param env_label string = 'production';
+param alert_interval duration = 10 min;
+
+stream `agent-events` (agentId string, risk float, env string, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream RiskAlerts (agentId string, risk float, ts timestamp);
+
+rule HighRiskInEnvironment
+  intent 'Scaled risk exceeds the configured threshold for an agent in the configured environment.'
+  from `agent-events`[risk * 100 > ${risk_threshold} and env == ${env_label}]
+  select agentId, risk
+  output first every ${alert_interval}
+  insert into RiskAlerts;

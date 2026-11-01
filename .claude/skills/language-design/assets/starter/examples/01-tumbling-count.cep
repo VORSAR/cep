@@ -1,0 +1,8 @@
+-- large transfers
+query LargeTransfers from Transfers partition by account_id
+  where amount > 10000 and country <> 'LK'
+  window tumbling 5m
+  late events: drop
+  emit on watermark
+  select account_id, count() as n, sum(amount) as total
+  into LargeTransferAlerts;

@@ -1,0 +1,24 @@
+-- constructs: text-operators term substring keyword-set regex raw plain-rule
+--             rate-limit-unpartitioned param-list invisibles-flag
+language cep/0.1;
+
+param risk_terms string = 'ignore previous, disregard instructions';
+
+stream Prompts (sessionId string, text string optional, text_invisibles bool,
+                ts timestamp)
+  time ts watermark bounded 30 sec;
+
+stream FlaggedPrompts (sessionId string, why string, ts timestamp);
+
+rule SuspiciousPromptText
+  intent 'Flag prompt text that trips deterministic inspection operators.'
+  from Prompts[text has_ci 'override'
+               or text contains_cs '/etc/passwd'
+               or text has_any_ci(${risk_terms})
+               or text contains_any_ci('exfiltrate', 'base64 -d')
+               or text contains_match_ci '''wire\s+transfer'''
+               or raw(text) contains_cs '​'
+               or text_invisibles == true]
+  select sessionId, 'text-inspection' as why
+  output first every 1 min
+  insert into FlaggedPrompts;

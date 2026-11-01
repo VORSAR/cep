@@ -1,0 +1,8 @@
+-- expect: E-INT-001 (every rule must state its intent)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule NoIntent
+  from S[a == 'x']
+  select a
+  insert into T;

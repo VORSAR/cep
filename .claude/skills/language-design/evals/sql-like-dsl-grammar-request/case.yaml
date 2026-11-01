@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: sql-like-dsl-grammar-request
+expected_outcome: |
+  Claude does not jump straight to EBNF. It establishes the design record (audiences, target, unit),
+  states explicit assumptions for anything missing, pins down the time/lateness/emission semantics,
+  then delivers an EBNF plus a Lark grammar, in canonical keyword-led form with SQL-verbatim
+  expressions and typed duration literals, and explains "LLM-friendly" as explicit hazards plus
+  familiar surface rather than terseness.

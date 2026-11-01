@@ -1,0 +1,13 @@
+-- expect: E-TTL-001 (every partition block states its idle-key TTL)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule NoTtl
+  intent 'x'
+  partition by a of S
+  from every e1 = S[a == 'x'] -> e2 = S[a == 'y']
+  within 5 min
+  after match skip past last
+  late events drop
+  select e1.a
+  insert into T;

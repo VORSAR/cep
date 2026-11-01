@@ -1,0 +1,2 @@
+-- expect: E-PRAG-001 (the version pragma is the first statement of every file)
+param x string = 'v';

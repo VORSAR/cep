@@ -1,0 +1,11 @@
+-- expect: E-EMIT-001 (every window rule states its emit mode)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule NoEmit
+  intent 'x'
+  partition by a of S ttl 2 hour
+  from S window sort(2, a, desc)
+  late events drop
+  select a
+  insert into T;

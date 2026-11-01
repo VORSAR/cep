@@ -1,0 +1,21 @@
+-- constructs: pattern once and-group within after-match late-events chain
+--             partition
+language cep/0.1;
+
+stream ConfigChanges (host string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Restarts (host string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream HostChangeAlerts (host string, evidence object, ts timestamp);
+
+rule ConfigChangeWithRestart
+  intent 'A configuration change and a service restart occurring together in either order within 5 minutes, at most once per host.'
+  partition by host of ConfigChanges, host of Restarts ttl 1 day
+  from once (chg = ConfigChanges and rst = Restarts)
+  within 5 min
+  after match skip past last
+  late events drop
+  select chg.host, chain(chg, rst) as evidence
+  insert into HostChangeAlerts;

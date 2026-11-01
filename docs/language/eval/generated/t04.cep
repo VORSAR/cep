@@ -1,0 +1,16 @@
+-- constructs: pragma cron-window emit-on-close late-allow count partition
+language cep/0.1;
+
+stream Errors (service string, ts timestamp)
+  time ts watermark bounded 2 min;
+
+stream HourlyErrorDigest (service string, errors int, ts timestamp);
+
+rule HourlyErrors
+  intent 'One error-count digest per service per Berlin hour.'
+  partition by service of Errors ttl 3 hour
+  from Errors window cron('0 * * * *', 'Europe/Berlin')
+  emit on close
+  late events allow 5 min
+  select service, count() as errors
+  insert into HourlyErrorDigest;

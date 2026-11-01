@@ -1,0 +1,12 @@
+-- expect: E-WIN-001 (cron windows name an explicit IANA timezone)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule NoTz
+  intent 'x'
+  partition by a of S ttl 2 day
+  from S window cron('0 0 * * *')
+  emit on close
+  late events drop
+  select a
+  insert into T;

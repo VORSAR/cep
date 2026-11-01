@@ -1,0 +1,9 @@
+-- expect: E-TXT-001 (text operators carry their case mode: has_ci / has_cs)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule UnsuffixedHas
+  intent 'x'
+  from S[a has 'secret']
+  select a
+  insert into T;

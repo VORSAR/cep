@@ -1,0 +1,9 @@
+-- expect: E-SYN-004 (projection is explicit: name every select item)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule SelectStar
+  intent 'x'
+  from S[a == 'x']
+  select *
+  insert into T;

@@ -1,0 +1,16 @@
+-- constructs: pragma delay-window emit-on-due re-timing partition
+language cep/0.1;
+
+stream Confirmations (merchantId string, orderId string, ts timestamp)
+  time ts watermark bounded 2 min;
+
+stream DelayedConfirmations (merchantId string, orderId string, ts timestamp);
+
+rule DelayedConfirmation
+  intent 'Re-emit each payment confirmation fifteen minutes after it occurred.'
+  partition by merchantId of Confirmations ttl 1 hour
+  from Confirmations window delay(15 min)
+  emit on due
+  late events drop
+  select merchantId, orderId
+  insert into DelayedConfirmations;

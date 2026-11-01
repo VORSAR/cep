@@ -1,0 +1,12 @@
+-- expect: E-LATE-001 (patterns and windows state a late-events policy)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule NoLate
+  intent 'x'
+  partition by a of S ttl 1 hour
+  from every e1 = S[a == 'x'] -> e2 = S[a == 'y']
+  within 5 min
+  after match skip past last
+  select e1.a
+  insert into T;

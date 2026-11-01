@@ -1,0 +1,47 @@
+-- constructs: pragma param stream table sink pattern every followed-by absence
+--             within after-match late-events select chain rate-limit expect
+--             coalesce-nullable-membership defeat-path-expect
+language cep/0.1;
+
+param kill_window duration = 5 min;
+param IAM_WEBHOOK string = 'http://localhost:9000/iam-hook';
+
+stream AgentActions (agentId string, sessionId string, action string,
+                     resource string, destination string optional, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream HumanApprovals (agentId string, sessionId string, approvedAction string,
+                       ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+table SensitiveResources (resource string) primary key (resource);
+table ApprovedDestinations (destination string) primary key (destination);
+
+@sink(type = 'http', url = ${IAM_WEBHOOK}, @map(type = 'json'))
+stream AgentKillSwitch (agentId string, sessionId string,
+                        reason string, evidence object, ts timestamp);
+
+rule AgentKillSwitch
+  intent '''Sensitive read, then unapproved egress within 5 minutes,
+            with no human approval in between: disable the agent.'''
+  partition by agentId of AgentActions, agentId of HumanApprovals ttl 15 min
+  from every read = AgentActions[action == 'read'
+                                 and resource in SensitiveResources]
+    -> egress = AgentActions[sessionId == read.sessionId
+                             and coalesce(destination, 'unknown') not in ApprovedDestinations]
+   and not HumanApprovals[sessionId == read.sessionId] for ${kill_window}
+  within ${kill_window}
+  after match skip past last
+  late events drop
+  expect given AgentActions [ {agentId: 'a1', sessionId: 's1', action: 'read', resource: 'vault', ts: timestamp '2026-01-01T10:00:00Z'},
+                              {agentId: 'a1', sessionId: 's1', action: 'send', resource: 'vault', destination: null, ts: timestamp '2026-01-01T10:03:00Z'} ]
+         then AgentKillSwitch [ {agentId: 'a1', sessionId: 's1', reason: 'sensitive-read-then-unapproved-egress', ts: timestamp '2026-01-01T10:05:00Z'} ]
+  expect given AgentActions [ {agentId: 'a2', sessionId: 's2', action: 'read', resource: 'vault', ts: timestamp '2026-01-01T10:00:00Z'},
+                              {agentId: 'a2', sessionId: 's2', action: 'send', resource: 'vault', destination: null, ts: timestamp '2026-01-01T10:03:00Z'} ]
+         given HumanApprovals [ {agentId: 'a2', sessionId: 's2', approvedAction: 'send', ts: timestamp '2026-01-01T10:02:00Z'} ]
+         then AgentKillSwitch [ ]
+  select read.agentId, read.sessionId,
+         'sensitive-read-then-unapproved-egress' as reason,
+         chain(read, egress) as evidence
+  output first every 10 min
+  insert into AgentKillSwitch;

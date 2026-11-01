@@ -1,0 +1,29 @@
+-- constructs: pattern every followed-by absence table-membership keyword-quoting
+--             chain rate-limit partition
+language cep/0.1;
+
+stream Queries (analyst string, `table` string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Exports (analyst string, rows int, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Approvals (analyst string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+table SensitiveTables (name string) primary key (name);
+
+stream ExfiltrationAlerts (analyst string, evidence object, ts timestamp);
+
+rule SensitiveQueryThenBulkExport
+  intent 'A sensitive-table query followed by a bulk export with no manager approval for 10 minutes, all within 10 minutes.'
+  partition by analyst of Queries, analyst of Exports, analyst of Approvals ttl 1 hour
+  from every q = Queries[`table` in SensitiveTables]
+    -> x = Exports[rows > 1000]
+   and not Approvals[analyst == q.analyst] for 10 min
+  within 10 min
+  after match skip past last
+  late events drop
+  select q.analyst, chain(q, x) as evidence
+  output first every 30 min
+  insert into ExfiltrationAlerts;

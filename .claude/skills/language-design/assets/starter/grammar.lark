@@ -1,0 +1,25 @@
+start: stmt+
+stmt: query ";"
+query: "query" NAME "from" NAME partition? where? window late emit select "into" NAME
+partition: "partition" "by" NAME
+where: "where" expr
+window: "window" ("tumbling" DUR | "hopping" DUR "every" DUR | "session" "gap" DUR)
+late: "late" "events" ":" ("drop" | "allow" DUR | "route" "to" NAME)
+emit: "emit" ("on" "watermark" | "every" DUR | "on" "each" "event")
+select: "select" item ("," item)*
+item: expr ("as" NAME)?
+?expr: expr "or" andexpr | andexpr
+?andexpr: andexpr "and" cmp | cmp
+?cmp: sum (CMPOP sum)?
+?sum: sum ("+"|"-") term | term
+?term: term ("*"|"/") atom | atom
+?atom: NUMBER | STRING | NAME "(" [expr ("," expr)*] ")" | NAME | "(" expr ")"
+CMPOP: ">=" | "<=" | "<>" | "=" | ">" | "<"
+DUR: /[0-9]+(ms|s|m|h|d)/
+NAME: /[A-Za-z_][A-Za-z0-9_]*/
+STRING: /'[^']*'/
+NUMBER: /[0-9]+(\.[0-9]+)?/
+COMMENT: /--[^\n]*/
+%ignore COMMENT
+%import common.WS
+%ignore WS

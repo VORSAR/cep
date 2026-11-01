@@ -1,0 +1,16 @@
+-- constructs: sort-window emit-on-change changelog desc
+language cep/0.1;
+
+stream RiskScores (agentId string, score float, ts timestamp)
+  time ts watermark bounded 30 sec idle after 1 min;
+
+stream TopRisky (agentId string, score float, ts timestamp);
+
+rule TopRiskyAgents
+  intent 'Keep the two highest risk scores per agent; emit every change.'
+  partition by agentId of RiskScores ttl 2 hour
+  from RiskScores window sort(2, score, desc)
+  emit on change
+  late events drop
+  select agentId, score
+  insert into TopRisky;

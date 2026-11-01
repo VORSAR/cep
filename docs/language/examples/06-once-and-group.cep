@@ -1,0 +1,21 @@
+-- constructs: once-marker and-group arithmetic is-null whole-field-regex raw-regex-string
+language cep/0.1;
+
+stream Deploys (svc string, version string optional, ts timestamp)
+  time ts watermark bounded 1 min idle after 2 min;
+
+stream Healthchecks (svc string, ok bool, ts timestamp)
+  time ts watermark bounded 1 min idle after 2 min;
+
+stream RolloutAlerts (svc string, ts timestamp);
+
+rule BadRollout
+  intent 'A deploy and a failing healthcheck together, once per service instance.'
+  partition by svc of Deploys, svc of Healthchecks ttl 1 hour
+  from once (d = Deploys[version is not null and version matches_cs '''v[0-9]+\.[0-9]+''']
+             and h = Healthchecks[ok == false])
+  within 15 min
+  after match skip past last
+  late events drop
+  select d.svc
+  insert into RolloutAlerts;

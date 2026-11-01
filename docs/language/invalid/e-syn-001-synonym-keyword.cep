@@ -1,0 +1,13 @@
+-- expect: E-SYN-001 (no synonyms: the sequence connector is '->', not 'followed by')
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule SynonymConnector
+  intent 'x'
+  partition by a of S ttl 1 hour
+  from every e1 = S[a == 'x'] followed by e2 = S[a == 'y']
+  within 5 min
+  after match skip past last
+  late events drop
+  select e1.a
+  insert into T;

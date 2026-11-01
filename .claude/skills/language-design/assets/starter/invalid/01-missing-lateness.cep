@@ -1,0 +1,2 @@
+-- expect: E-LATE-001
+query X from T window tumbling 5m emit on watermark select a into Y;

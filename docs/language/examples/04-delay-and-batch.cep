@@ -1,0 +1,29 @@
+-- constructs: delay-window emit-on-due batch-window emit-on-batch-end two-rules
+language cep/0.1;
+
+stream Notifications (userId string, body string, ts timestamp)
+  time ts watermark bounded 1 min idle after 2 min;
+
+stream LoadedRecords (source string, recId string, ts timestamp)
+  time ts watermark bounded 1 min idle after 2 min;
+
+stream DelayedNotifications (userId string, body string, ts timestamp);
+stream LoadSummaries (source string, n int, ts timestamp);
+
+rule DebounceNotifications
+  intent 'Re-time every notification ten minutes later.'
+  partition by userId of Notifications ttl 1 hour
+  from Notifications window delay(10 min)
+  emit on due
+  late events drop
+  select userId, body
+  insert into DelayedNotifications;
+
+rule SummarizeLoads
+  intent 'One summary event per delivery batch, per ingest source.'
+  partition by source of LoadedRecords ttl 1 hour
+  from LoadedRecords window batch()
+  emit on batch end
+  late events drop
+  select source, count() as n
+  insert into LoadSummaries;

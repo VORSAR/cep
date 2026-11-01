@@ -1,0 +1,15 @@
+-- constructs: pragma plain-rule raw invisibles-flag
+language cep/0.1;
+
+stream Prompts (sessionId string, text string optional, text_invisibles bool,
+                ts timestamp)
+  time ts watermark bounded 30 sec;
+
+stream InvisibleTextAlerts (sessionId string, why string, ts timestamp);
+
+rule InvisibleCharacters
+  intent 'Flag prompts carrying invisible Unicode characters or a raw zero-width space.'
+  from Prompts[text_invisibles == true
+               or raw(text) contains_cs '​']
+  select sessionId, 'invisible-characters' as why
+  insert into InvisibleTextAlerts;

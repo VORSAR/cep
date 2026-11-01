@@ -1,0 +1,16 @@
+-- constructs: window-batch emit-on-batch-end count partition late-events
+language cep/0.1;
+
+stream LogRecords (recId string, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream BatchSummaries (recId string, records int, ts timestamp);
+
+rule LogBatchSummary
+  intent 'One summary event with a record count per source delivery batch of log records.'
+  partition by recId of LogRecords ttl 1 hour
+  from LogRecords window batch()
+  emit on batch end
+  late events drop
+  select recId, count() as records
+  insert into BatchSummaries;

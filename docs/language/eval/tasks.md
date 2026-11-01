@@ -1,0 +1,20 @@
+# L5 evaluation — held-out generation tasks
+
+Pre-registered 2026-10-31, before any generation. Protocol: evaluation-harness §1 — generator receives ONLY [SPEC.md](../SPEC.md), [grammar.ebnf](../grammar.ebnf), [errors.md](../errors.md), and K=3 tagged examples ([01](../examples/01-agent-kill-switch.cep) pattern, [02](../examples/02-cron-digest.cep) window, [05](../examples/05-text-operators.cep) text). Output: one complete `.cep` file per task. Grading: parse via `grammar_check`; static audit against errors.md **[static]** rules; one repair round (diagnostic fed back verbatim) for failures. Targets: parse ≥ 97%, static ≥ 90%, repair ≥ 95% of remainder.
+
+| ID | Stratum | Intent (given to the generator verbatim) |
+|---|---|---|
+| T01 | filter+text+param | Flag chat messages whose text contains any of a configurable list of phishing phrases (case-insensitive) or matches a crypto-wallet address pattern like `bc1` followed by 25–39 alphanumerics (case-sensitive). Streams: ChatMessages(userId string, text string, ts timestamp). One alert per user at most every 5 minutes. |
+| T02 | filter+membership | Alert when a command event arrives from a device not present in the AllowedDevices table. Streams: Commands(deviceId string (may be missing), command string, ts timestamp); table AllowedDevices(deviceId). Treat a missing deviceId as the text 'unknown'. |
+| T03 | filter+raw/invisibles | Flag prompts that carry invisible Unicode characters, or whose raw (un-normalized) text contains a zero-width space escape `​`. Streams: Prompts(sessionId string, text string (may be missing), text_invisibles bool, ts timestamp). |
+| T04 | window-cron | Produce an hourly per-service error digest in the Europe/Berlin timezone, tolerating events up to 5 minutes late, counting errors. Streams: Errors(service string, ts timestamp). |
+| T05 | window-sort | Keep the three slowest endpoints per region by latency and emit on every change. Streams: Latencies(region string, endpoint string, millis float, ts timestamp). |
+| T06 | window-delay | Re-emit payment confirmations 15 minutes later, per merchant. Streams: Confirmations(merchantId string, orderId string, ts timestamp). |
+| T07 | window-batch | Emit one summary event (with a count) per source delivery batch of log records. Streams: LogRecords(recId string, ts timestamp). |
+| T08 | pattern-sequence | Per user: a badge-in at the office followed within 10 minutes by a VPN login from a different country → alert with both events as evidence. Streams: BadgeIns(userId string, country string, ts timestamp); VpnLogins(userId string, country string, ts timestamp). Alert for every occurrence. |
+| T09 | pattern-absence | Per order: an order placed with no payment event within 30 minutes → alert. Streams: Orders(orderId string, ts timestamp); Payments(orderId string, ts timestamp). Every order is watched. |
+| T10 | pattern-and-group+once | Per host, at most once: a configuration change and a service restart occurring together (either order) within 5 minutes → alert. Streams: ConfigChanges(host string, ts timestamp); Restarts(host string, ts timestamp). |
+| T11 | pattern-equal-bounds | Per analyst: a sensitive-table query followed by a bulk export, with no manager approval for 10 minutes, all within 10 minutes → alert carrying the chain of events; suppress repeat alerts for 30 minutes. Streams: Queries(analyst string, table string, ts timestamp); Exports(analyst string, rows int, ts timestamp); Approvals(analyst string, ts timestamp); table SensitiveTables(name). |
+| T12 | params+quoting | A rule over a stream named `agent-events` (hyphen in the name) with attributes (agentId string, risk float, env string, ts timestamp): alert when risk times 100 exceeds a configurable float threshold and env equals a configurable string label; suppress repeats per a configurable duration. All three tunables are parameters with defaults. |
+
+Strata: 3 filter/text (T01–T03), 4 windows one per kind (T04–T07), 4 patterns (T08–T11), 1 params/quoting (T12).

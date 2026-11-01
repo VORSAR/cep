@@ -1,0 +1,24 @@
+-- constructs: pattern every followed-by cross-step-reference within after-match
+--             late-events chain partition
+language cep/0.1;
+
+stream BadgeIns (userId string, country string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream VpnLogins (userId string, country string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream BadgeVpnAlerts (userId string, badgeCountry string, vpnCountry string,
+                       evidence object, ts timestamp);
+
+rule BadgeThenForeignVpn
+  intent 'A badge-in at the office followed within 10 minutes by a VPN login from a different country.'
+  partition by userId of BadgeIns, userId of VpnLogins ttl 30 min
+  from every badge = BadgeIns
+    -> vpn = VpnLogins[country != badge.country]
+  within 10 min
+  after match skip past last
+  late events drop
+  select badge.userId, badge.country as badgeCountry, vpn.country as vpnCountry,
+         chain(badge, vpn) as evidence
+  insert into BadgeVpnAlerts;

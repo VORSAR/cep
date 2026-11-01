@@ -1,0 +1,14 @@
+-- expect: E-PAT-004 (an absence requires its bound: `for <duration>`)
+language cep/0.1;
+stream S (a string, ts timestamp) time ts watermark bounded 1 min;
+stream R (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule AbsenceNoBound
+  intent 'x'
+  partition by a of S, a of R ttl 1 hour
+  from every e1 = S[a == 'x'] and not R[a == e1.a]
+  within 5 min
+  after match skip past last
+  late events drop
+  select e1.a
+  insert into T;

@@ -1,0 +1,18 @@
+-- constructs: pragma param plain-rule keyword-set regex partition rate-limit
+language cep/0.1;
+
+param phish_phrases string = 'verify your account, reset your password, confirm your wallet';
+
+stream ChatMessages (userId string, text string, ts timestamp)
+  time ts watermark bounded 2 min;
+
+stream PhishingAlerts (userId string, why string, ts timestamp);
+
+rule PhishingText
+  intent 'Flag chat messages containing a configured phishing phrase or a bc1 crypto-wallet address.'
+  partition by userId of ChatMessages ttl 1 hour
+  from ChatMessages[text contains_any_ci(${phish_phrases})
+                    or text contains_match_cs 'bc1[0-9A-Za-z]{25,39}']
+  select userId, 'phishing-text' as why
+  output first every 5 min
+  insert into PhishingAlerts;

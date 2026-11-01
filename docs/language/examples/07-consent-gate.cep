@@ -1,0 +1,17 @@
+-- constructs: plain-rule table-membership not-in coalesce single-event gallery-shape
+language cep/0.1;
+
+stream ConsentGrants (tenantId string, appId string optional, grantedBy string,
+                      ts timestamp)
+  time ts watermark bounded 1 min;
+
+table RegisteredApps (appId string) primary key (appId);
+
+stream ConsentAlerts (tenantId string, appId string, ts timestamp);
+
+rule UnknownAppConsent
+  intent 'A consent grant to an app identity not in the registered-apps table.'
+  from ConsentGrants[coalesce(appId, 'missing') not in RegisteredApps]
+  select tenantId, coalesce(appId, 'missing') as appId
+  output first every 5 min
+  insert into ConsentAlerts;

@@ -1,0 +1,10 @@
+-- expect: E-RES-001 (group by is reserved in cep/0.1)
+language cep/0.1;
+stream S (a string, n int, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, total int, ts timestamp);
+rule SqlHabit
+  intent 'x'
+  from S[n > 0]
+  group by a
+  select a, sum(n) as total
+  insert into T;

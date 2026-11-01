@@ -1,0 +1,13 @@
+-- expect: E-PAT-005 (a pattern needs at least one positive step; anchor the absence or use a cron window)
+language cep/0.1;
+stream R (a string, ts timestamp) time ts watermark bounded 1 min;
+stream T (a string, ts timestamp);
+rule HeartbeatOnly
+  intent 'x'
+  partition by a of R ttl 1 hour
+  from every and not R[a == 'hb'] for 5 min
+  within 5 min
+  after match skip past last
+  late events drop
+  select 'gone-dark' as a
+  insert into T;
