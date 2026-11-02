@@ -25,5 +25,10 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "TID", "BLE", "S602", "S604", "S
 "signal.SIG_IGN".msg = "never ignore a signal: an ignored SIGCHLD reports a failed child as exit 0"
 
 [lint.per-file-ignores]
-"gate/wait.py" = ["TID251"]
-"gate/scaffold.py" = ["BLE001"]
+"gate/wait.py" = ["TID251"]                              # the one wait helper may sleep (testing.md rule 1)
+"gate/runner/tests/test_sigchld.py" = ["TID251"]         # sets SIG_IGN on purpose to prove the false-green fix
+"gate/scaffold.py" = ["BLE001"]                          # main's catch-all → exit 2
+"gate/run.py" = ["BLE001"]                               # main's catch-all → exit 2
+"gate/runner/main.py" = ["BLE001"]                       # main's catch-all → exit 2
+"gate/bootstrap.py" = ["BLE001"]                         # main's catch-all → exit 2
+"gate/toolchain/install.py" = ["BLE001"]                 # main's catch-all → exit 2
