@@ -56,6 +56,8 @@ class HappyPath(InstallTest):
         Member("demo/doc/copy", "h", link="demo/doc/readme"),  # a hard link to an earlier member
         Member("demo/doc/sibling", "l", link="../bin/demo"),  # a target with `..` that stays inside
         Member("demo/lib/sub/deep.txt", data=b"deep\n"),
+        Member("demo/late/f", data=b"late\n"),
+        Member("demo/late", "d", mode=0o750),  # a directory named only after its child made it on demand
         Member("demo/dangling", "l", link="no/such/target"),  # a target that never exists
         Member("demo/Þfoo.go", data=b"go\n"),  # the go archive's non-ASCII names
     ]
@@ -76,6 +78,8 @@ class HappyPath(InstallTest):
             "doc/copy": ("f", 0o444, support.sha256(b"read me\n")),
             "doc/readme": ("f", 0o444, support.sha256(b"read me\n")),
             "doc/sibling": ("l", "../bin/demo"),
+            "late": ("d", 0o550),
+            "late/f": ("f", 0o444, support.sha256(b"late\n")),
             "lib": ("d", 0o555),
             "lib/sub": ("d", 0o555),
             "lib/sub/deep.txt": ("f", 0o444, support.sha256(b"deep\n")),
@@ -367,6 +371,7 @@ class Rejections(InstallTest):
             "an empty name component": ([Member("demo//x")], "demo//x", odd_component),
             "a dot name component": ([Member("demo/./x")], "demo/./x", odd_component),
             "a newline in a name": ([Member("demo/a\nb")], "demo/a\nb", "a newline in the name"),
+            "a name that is not UTF-8": ([Member("demo/\udcffbad")], "demo/\udcffbad", "a name that is not UTF-8"),
             "a member forging the stamp": ([Member("demo/.complete")], "demo/.complete", "forge the installer's stamp"),
         }
 
@@ -385,6 +390,22 @@ class Rejections(InstallTest):
                 before.pop("cache", None)
                 self.assertEqual(after, before)
                 self.assertFalse(os.path.lexists(home))
+
+    def test_names_that_fold_together_are_refused_where_the_filesystem_folds_them(self):
+        # The Linux Pythons hold such pairs (census.md section 3), harmless on the case-sensitive
+        # filesystem they install on. Where names fold, the second must never overwrite the first.
+        home = self.pin([Member("demo/Ab", data=b"first\n"), Member("demo/aB", data=b"second\n")])
+        probe = os.path.join(self.world, "CaseProbe")
+        with open(probe, "wb"):
+            pass
+        folds = os.path.exists(probe.replace("CaseProbe", "caseprobe"))
+        code, lines = self.run_main("install")
+        if folds:
+            self.assert_refused(code, lines, repr("demo/aB"), "it collides with an earlier member")
+            self.assertFalse(os.path.lexists(home))
+        else:
+            self.assertEqual(code, 0, lines)
+            self.assertEqual(sorted(os.listdir(home)), [".complete", "Ab", "aB"])
 
     def test_a_refused_archive_can_be_followed_by_a_good_one(self):
         # The refusal leaves the cache clean enough that the next install simply works.
@@ -415,6 +436,23 @@ class Race(InstallTest):
         self.assertEqual(os.listdir(self.cache), [os.path.basename(home)])  # no tmp.*, no dl.*
         self.assertEqual(sorted(os.listdir(home)), [".complete", "bin"])  # nothing nested inside
         self.assertEqual(sorted(os.listdir(os.path.join(home, "bin"))), ["demo", "l"])
+
+    def test_a_writable_winner_is_not_nested_into(self):
+        # C24. A read-only winner refuses a nesting move by itself, so this winner is writable: shutil.move
+        # would succeed here, putting the loser's tree inside the winner's.
+        home = self.pin([Member("demo/bin/demo")])
+        digest = support.sha256_of(self.archive)
+
+        def fetch(url, sink):
+            install._fetch(url, sink)
+            os.makedirs(home)
+            with open(os.path.join(home, ".complete"), "w", encoding="ascii") as f:
+                f.write(f"{digest}\n")
+
+        code, lines = self.run_main("install", fetch=fetch)
+        self.assertEqual((code, lines), (0, ["demo 1.0: present"]))
+        self.assertEqual(os.listdir(self.cache), [os.path.basename(home)])
+        self.assertEqual(os.listdir(home), [".complete"])
 
     def test_every_errno_a_lost_race_can_raise_counts_as_lost(self):
         # macOS raises EACCES for a read-only loser, Linux ENOTEMPTY or EEXIST.

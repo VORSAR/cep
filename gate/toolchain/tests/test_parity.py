@@ -12,6 +12,7 @@ import os
 import select
 import shutil
 import signal
+import subprocess
 import sys
 import unittest
 
@@ -152,6 +153,7 @@ class NotInstalled(ParityTest):
     def test_a_manifest_pinning_another_archive_finds_no_directory(self):
         # Plan check case 13: the key holds the version and digest, so the old cache does not satisfy it.
         tool = self.tool()
+        self.assertEqual(self.check(tool), [])
         self.assertEqual(
             self.check(dataclasses.replace(tool, archive_sha256="cd" * 32)), ["go: not installed: run make tools"]
         )
@@ -309,19 +311,42 @@ class VersionCheck(ParityTest):
 
     def test_a_hung_version_is_killed_and_named(self):
         tool = self.tool(source=script("import signal\nsignal.pause()"))
-        reasons = parity._check(
-            [tool], self.cache, self.env, full_tree=False, version_cap_s=0.2, grace_s=support.CHILD_CAP_S
-        )
+        timing = parity.Timing(cap_s=0.2, grace_s=support.CHILD_CAP_S)
+        reasons = parity._check([tool], self.cache, self.env, full_tree=False, timing=timing)
         self.assertEqual(reasons, [f"go: version: no answer within 0.2s: {RECOVER}"])
 
     def test_a_hung_version_that_ignores_term_is_killed(self):
+        # A real cap could fire before the fixture has installed its handler (a new file's first launch
+        # takes about 0.4 s on macOS), and then KILL is never needed. So the cap here is a fake: it fires
+        # only after the fixture reports that TERM is ignored, and the grace ends with the fixture alive.
+        # The FIFO is open both ways, so the read blocks for the byte and never sees end-of-file.
+        fifo = os.path.join(self.world, "ready")
+        os.mkfifo(fifo)
+        ready = os.open(fifo, os.O_RDWR)
+        self.addCleanup(os.close, ready)
         tool = self.tool(
             source=script(
-                "import signal\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nwhile True:\n    signal.pause()"
+                "import os, signal\n"
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                f"os.write(os.open({fifo!r}, os.O_WRONLY), b'r')\n"
+                "while True:\n"
+                "    signal.pause()"
             )
         )
-        reasons = parity._check([tool], self.cache, self.env, full_tree=False, version_cap_s=0.2, grace_s=0.2)
-        self.assertEqual(reasons, [f"go: version: no answer within 0.2s: {RECOVER}"])
+        waits: list[float] = []
+
+        def wait(proc, timeout):
+            if not waits:
+                self.assertEqual(os.read(ready, 1), b"r")
+            else:
+                self.assertIsNone(proc.poll())  # the witness: TERM has gone and the fixture is still alive
+            waits.append(timeout)
+            raise subprocess.TimeoutExpired(proc.args, timeout)
+
+        timing = parity.Timing(cap_s=7, grace_s=11, wait=wait)
+        reasons = parity._check([tool], self.cache, self.env, full_tree=False, timing=timing)
+        self.assertEqual(reasons, [f"go: version: no answer within 7s: {RECOVER}"])
+        self.assertEqual(waits, [7, 11])
 
 
 class NothingOutlivesTheProbe(ParityTest):

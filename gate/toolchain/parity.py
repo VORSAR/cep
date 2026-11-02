@@ -10,14 +10,25 @@ import shutil
 import signal
 import subprocess
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 
 from gate.toolchain import manifest
 from gate.toolchain.manifest import Tool
 
-VERSION_CAP_S = 60  # breaks a hang only: a version line takes milliseconds
-GRACE_S = 5
 RECOVER = "run make clean-tools tools"
+
+
+@dataclass(frozen=True)
+class Timing:
+    """How long a version probe may run. Time only breaks a hang: a version line takes milliseconds.
+
+    `wait` is the one place a probe waits, injected by tests so that a cap fires only after a witness.
+    """
+
+    cap_s: float = 60
+    grace_s: float = 5
+    wait: Callable[[subprocess.Popen, float], int] = subprocess.Popen.wait
 
 
 def check(tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: bool) -> list[str]:
@@ -28,12 +39,10 @@ def check(tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: b
     exec_sha256 entry → (only if full_tree, i.e. T2 and above) tree_sha256. Never runs a binary that
     lies outside the cache.
     """
-    return _check(tools, cache, env, full_tree=full_tree, version_cap_s=VERSION_CAP_S, grace_s=GRACE_S)
+    return _check(tools, cache, env, full_tree=full_tree, timing=Timing())
 
 
-def _check(
-    tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: bool, version_cap_s: float, grace_s: float
-) -> list[str]:
+def _check(tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: bool, timing: Timing) -> list[str]:
     goos, goarch = manifest.platform_key().split("-")
     reasons = []
     with tempfile.TemporaryDirectory(prefix="gate-parity-") as scratch:
@@ -45,7 +54,7 @@ def _check(
             want = tool.version_line.replace("{goos}", goos).replace("{goarch}", goarch)
             reason = (
                 _path_failure(tool, home, env)
-                or _version_failure(tool, home, want, env, scratch, version_cap_s, grace_s)
+                or _version_failure(tool, home, want, env, scratch, timing)
                 or _hash_failure(tool, home)
                 or (_tree_failure(tool, home) if full_tree else None)
             )
@@ -75,9 +84,7 @@ def _signal_group(pgid: int, sig: signal.Signals) -> None:
         os.killpg(pgid, sig)
 
 
-def _run(
-    argv: list[str], cwd: str, env: Mapping[str, str], scratch: str, cap_s: float, grace_s: float
-) -> tuple[int | None, bytes]:
+def _run(argv: list[str], cwd: str, env: Mapping[str, str], scratch: str, timing: Timing) -> tuple[int | None, bytes]:
     """Run one command in its own process group, output to files; return (exit code or None if hung, stdout)."""
     stdout = os.path.join(scratch, "stdout")
     with open(stdout, "wb") as out, open(os.path.join(scratch, "stderr"), "wb") as err:
@@ -86,11 +93,11 @@ def _run(
         )
     code: int | None = None
     try:
-        code = proc.wait(timeout=cap_s)
+        code = timing.wait(proc, timing.cap_s)
     except subprocess.TimeoutExpired:
         _signal_group(proc.pid, signal.SIGTERM)
         with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.wait(timeout=grace_s)
+            timing.wait(proc, timing.grace_s)
     _signal_group(proc.pid, signal.SIGKILL)  # nothing a probe started may outlive it
     proc.wait()
     with open(stdout, "rb") as f:
@@ -98,15 +105,15 @@ def _run(
 
 
 def _version_failure(
-    tool: Tool, home: str, want: str, env: Mapping[str, str], scratch: str, cap_s: float, grace_s: float
+    tool: Tool, home: str, want: str, env: Mapping[str, str], scratch: str, timing: Timing
 ) -> str | None:
     argv = [os.path.join(home, tool.version_argv[0]), *tool.version_argv[1:]]
     try:
-        code, stdout = _run(argv, home, env, scratch, cap_s, grace_s)
+        code, stdout = _run(argv, home, env, scratch, timing)
     except OSError as e:
         return f"{tool.name}: version: could not run {argv[0]}: {e.strerror}: {RECOVER}"
     if code is None:
-        return f"{tool.name}: version: no answer within {cap_s}s: {RECOVER}"
+        return f"{tool.name}: version: no answer within {timing.cap_s}s: {RECOVER}"
     got = stdout.split(b"\n", 1)[0].decode("utf-8", errors="replace")
     if code == 0 and got == want:
         return None
