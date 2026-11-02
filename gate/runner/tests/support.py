@@ -22,7 +22,7 @@ CEILING_S = 240
 PLATFORMS = {("darwin", "arm64"): "darwin-arm64", ("linux", "x86_64"): "linux-amd64"}
 RUN_ID = "20261102T000000Z-abc123"
 COMMIT = "0" * 40
-HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS")
 
 
 def fix(*actions: object) -> list[str]:
@@ -42,8 +42,8 @@ def tool_bin(name: str) -> str:
 
 
 def base_env() -> dict[str, str]:
-    """A world-owned environment: nothing of the caller's git config or location leaks into a test."""
-    env = {k: v for k, v in os.environ.items() if k not in HIDDEN}
+    """A world-owned environment: no git config or location of the caller's, and none of an outer gate run's row."""
+    env = {k: v for k, v in os.environ.items() if k not in HIDDEN and not k.startswith("GATE_")}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
     return env
 
