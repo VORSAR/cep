@@ -1,0 +1,84 @@
+"""What the row wrappers share (design note §5; plan check S3).
+
+A wrapper's children stay in the wrapper's process group, so the runner's watchdog reaches them: a new session here
+would let a child outlive its row. Their output goes to files in GATE_ROW_DIR, and stdin is /dev/null. Every wrapper
+prints exactly one GATE_COVERED line, counted from the tool's own work and never from its input list.
+"""
+
+import concurrent.futures
+import os
+import signal
+import subprocess
+import sys
+from collections.abc import Sequence
+
+from gate.runner import workers
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SHIM = os.path.join(REPO, "gate", "runner", "pyshim.py")
+SHIM_FLAGS = ("-I", "-B", "-X", "dev", "-W", "error")
+
+
+def start() -> str:
+    """Every wrapper's first line. An ignored SIGCHLD survives exec, and it turns a failed tool into exit 0."""
+    signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+    return os.environ["GATE_ROW_DIR"]
+
+
+def read_list(path: str) -> list[bytes]:
+    """files.nul: each entry ends in a NUL."""
+    with open(path, "rb") as f:
+        return [item for item in f.read().split(b"\0") if item]
+
+
+def show(path: bytes) -> str:
+    return path.decode("utf-8", errors="replace")
+
+
+def run_tool(argv: Sequence[str | bytes], stdout: str, stderr: str) -> int:
+    with open(stdout, "wb") as out, open(stderr, "wb") as err:
+        return subprocess.run(list(argv), stdin=subprocess.DEVNULL, stdout=out, stderr=err).returncode
+
+
+def read_text(path: str) -> str:
+    with open(path, "rb") as f:
+        return f.read().decode("utf-8", errors="replace")
+
+
+def covered(count: int) -> None:
+    print(f"GATE_COVERED {count}", flush=True)
+
+
+def _module_name(path: str) -> str:
+    return path.removesuffix(".py").replace("/", ".")
+
+
+def _run_module(python: str, path: str, out_dir: str) -> str:
+    """Run one test module in its own process through the shim; give the problem, or "" if it passed.
+
+    A pass needs the shim's own report as well as exit 0: a module can end the process with exit 0 before any test.
+    """
+    name = _module_name(path)
+    out = os.path.join(out_dir, f"{name}.stdout")
+    code = run_tool([python, *SHIM_FLAGS, SHIM, os.getcwd(), name], out, os.path.join(out_dir, f"{name}.stderr"))
+    said = [line for line in read_text(out).splitlines() if line.startswith(f"pyshim: {name}: ")]
+    if code == 0 and said and said[-1].startswith(f"pyshim: {name}: passed "):
+        return ""
+    return said[-1] if said else f"exit {code}, and the shim made no report"
+
+
+def run_modules(python: str, paths: Sequence[str], row_dir: str) -> tuple[int, list[str]]:
+    """Run each module in its own process: (modules that passed, one line per module that did not)."""
+    out_dir = os.path.join(row_dir, "py")
+    os.makedirs(out_dir, exist_ok=True)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers.parse(os.environ)) as pool:
+        problems = list(pool.map(lambda p: _run_module(python, p, out_dir), paths))
+    failed = [f"{path}: {problem}" for path, problem in zip(paths, problems, strict=True) if problem]
+    return len(paths) - len(failed), sorted(failed)
+
+
+def finish(failures: Sequence[str]) -> int:
+    for line in failures:
+        print(f"failed: {line}")
+    sys.stdout.flush()
+    return 1 if failures else 0
