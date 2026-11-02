@@ -96,11 +96,11 @@ graph TB
 
 *A fix that cannot meet the bar in its sprint is not merged with a TODO; it goes back to the plan check (sprint model: finish or revert).*
 
-*Rules 5–8 are review-only — no analyzer can see them. The full review-only residue (seven items, these four among them; *an eighth, the gate's Python having no coverage floor, added 2026-11-02 by owner decision*) is recorded in ADR-0015 §3.6 and was accepted knowingly by the owner (2026-11-01).*
+*Rules 5–8 are review-only — no analyzer can see them. The full review-only residue (seven items, these four among them; *an eighth (the gate's Python has no coverage floor) and a ninth (unpinned git, make and bootstrap Python), both added 2026-11-02 by owner decision*) is recorded in ADR-0015 §3.6 and was accepted knowingly by the owner (2026-11-01).*
 
 ## 3. Repository and package layout (normative — ADR-0001)
 
-Module path: `github.com/vorsar/complex-events-engine`. One Go module at the repo root. Go version pinned in `go.mod` (`go` + `toolchain` lines) per DEVELOPMENT.md.
+Module path: `github.com/vorsar/complex-events-engine` *(amended 2026-11-02, owner decision: **`github.com/vorsar/cep`**; the repository is `VORSAR/cep`; ADR-0001 §1)*. One Go module at the repo root. Go version pinned in `go.mod` (`go` + `toolchain` lines) per DEVELOPMENT.md.
 
 ```
 cep.go, runtime.go, event.go, errors.go   package cep        — public embeddable API
@@ -163,6 +163,18 @@ api/exports.golden                        the hand-written public-export law fil
 ## 4. The canonical event (normative)
 
 Defined in `internal/event`; the public `cep.Event` is a thin view over it.
+
+> *Amended 2026-11-02 (owner decision at S1.1a-1's design review, option "(b+)"; the definitions below are kept as ratified, and this note overrides them).* Two zero values silently looked like real data, so they are closed:
+> 1. **`Type`:** `TInvalid` is the zero `Type` (an unset slot; never a declared type, never a null; nulls keep their declared type), so `TString` = 1 … `TObject` = 7.
+> 2. **`Schema`:** its fields are **private**, built only by `NewSchema(stream, attrs, timeAttr)` and read through `Stream()`, `NumAttrs()`, `Attr(i)` and `TimeAttr()`, with `ArrivalTime = -1` for `time arrival`. `NewSchema` rejects:
+>    - an empty stream name;
+>    - zero attributes;
+>    - an empty or duplicate (case-sensitive) attribute name;
+>    - an invalid attribute type;
+>    - an out-of-range time index;
+>    - a non-timestamp time attribute (also a coded deploy error in S1.2's spec rev 3).
+>
+> The exact surface is [s1-1a-gate-design.md §1](../sprints/s1-1a-gate-design.md). `Type` numbers are never encoded: S1.2's canonical encoding writes type names.
 
 ```go
 // internal/event/event.go
