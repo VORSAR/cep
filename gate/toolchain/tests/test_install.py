@@ -256,95 +256,130 @@ class Download(InstallTest):
 class Rejections(InstallTest):
     """QA counter-example 15 and design note §3 step 4: one fixture per rejection rule."""
 
-    def rejected_archives(self, outside: str) -> dict[str, tuple[list[Member], str]]:
-        """Name -> (the hostile members, the member the refusal must name)."""
-        hard = Member("demo/h", "h", link="demo/later")
+    def rejected_archives(self, outside: str) -> dict[str, tuple[list[Member], str, str]]:
+        """Name -> (the hostile members, the member the refusal must name, the rule that must refuse it).
+
+        The rule is pinned because rules overlap: `/abs` is outside strip as well, and a test that only
+        saw "refused" would pass with the absolute-path rule deleted.
+        """
+        absolute = "an absolute path"
+        dot_dot = "a `..` component"
+        outside_strip = "it is outside demo/"
+        escapes = "its target escapes the tree"
+        unusable = "an unusable link target"
+        via_symlink = "its path passes through a symlink"
+        again = "a member of this name was already extracted"
+        not_earlier = "its hard link target is not an earlier regular file"
+        special = "a device, FIFO or other special file"
+        not_a_directory = "the tree root is not a directory"
+        odd_component = "an empty or `.` component"
+        sub = [Member("demo/sub", "d"), Member("demo/d", "l", link="sub")]
         return {
-            "an absolute path": ([Member("/abs")], "/abs"),
-            "an absolute path under strip": ([Member("/demo/x")], "/demo/x"),
-            "a .. component": ([Member("demo/../escaped")], "demo/../escaped"),
-            "a leading ..": ([Member("../escaped")], "../escaped"),
-            "a .. that climbs back into strip": ([Member("demo/a/../../demo/x")], "demo/a/../../demo/x"),
-            "a member outside strip": ([Member("other/x")], "other/x"),
-            "a sibling sharing strip's letters": ([Member("demoX/x")], "demoX/x"),
-            "a directory outside strip": ([Member("other", "d")], "other"),
-            "a symlink with an absolute target": ([Member("demo/l", "l", link="/tmp")], "demo/l"),
-            "a symlink escaping by ..": ([Member("demo/l", "l", link="../../x")], "demo/l"),
-            "a symlink to the tree's parent": ([Member("demo/l", "l", link="..")], "demo/l"),
-            "a deep symlink escaping": ([Member("demo/a/b/l", "l", link="../../../x")], "demo/a/b/l"),
-            "a symlink with an empty target": ([Member("demo/l", "l", link="")], "demo/l"),
-            "a symlink with a newline in its target": ([Member("demo/l", "l", link="a\nb")], "demo/l"),
+            "an absolute path": ([Member("/abs")], "/abs", absolute),
+            "an absolute path under strip": ([Member("/demo/x")], "/demo/x", absolute),
+            "a .. component": ([Member("demo/../escaped")], "demo/../escaped", dot_dot),
+            "a leading ..": ([Member("../escaped")], "../escaped", dot_dot),
+            "a .. climbing back into strip": ([Member("demo/a/../../demo/x")], "demo/a/../../demo/x", dot_dot),
+            "a member outside strip": ([Member("other/x")], "other/x", outside_strip),
+            "a sibling sharing strip's letters": ([Member("demoX/x")], "demoX/x", outside_strip),
+            "a directory outside strip": ([Member("other", "d")], "other", outside_strip),
+            "a symlink with an absolute target": ([Member("demo/l", "l", link="/tmp")], "demo/l", escapes),
+            "a symlink escaping by ..": ([Member("demo/l", "l", link="../../x")], "demo/l", escapes),
+            "a symlink to the tree's parent": ([Member("demo/l", "l", link="..")], "demo/l", escapes),
+            "a deep symlink escaping": ([Member("demo/a/b/l", "l", link="../../../x")], "demo/a/b/l", escapes),
+            "a symlink with an empty target": ([Member("demo/l", "l", link="")], "demo/l", unusable),
+            "a symlink with a newline in its target": ([Member("demo/l", "l", link="a\nb")], "demo/l", unusable),
             "an escaping symlink then a file through it": (
                 [Member("demo/d", "l", link=outside), Member("demo/d/f")],
                 "demo/d",
+                escapes,
             ),
-            "an inside symlink then a file through it": (
-                [Member("demo/sub", "d"), Member("demo/d", "l", link="sub"), Member("demo/d/f")],
-                "demo/d/f",
-            ),
+            "an inside symlink then a file through it": ([*sub, Member("demo/d/f")], "demo/d/f", via_symlink),
             "an inside symlink then a directory through it": (
-                [Member("demo/sub", "d"), Member("demo/d", "l", link="sub"), Member("demo/d/e/f", "d")],
+                [*sub, Member("demo/d/e/f", "d")],
                 "demo/d/e/f",
+                via_symlink,
             ),
             "an inside symlink then a symlink through it": (
-                [Member("demo/sub", "d"), Member("demo/d", "l", link="sub"), Member("demo/d/l", "l", link="x")],
+                [*sub, Member("demo/d/l", "l", link="x")],
                 "demo/d/l",
+                via_symlink,
             ),
             "an inside symlink then a hard link through it": (
-                [
-                    Member("demo/f"),
-                    Member("demo/sub", "d"),
-                    Member("demo/d", "l", link="sub"),
-                    Member("demo/d/h", "h", link="demo/f"),
-                ],
+                [Member("demo/f"), *sub, Member("demo/d/h", "h", link="demo/f")],
                 "demo/d/h",
+                via_symlink,
             ),
             "a symlink then a file over it": (
                 [Member("demo/t"), Member("demo/l", "l", link="t"), Member("demo/l", data=b"through")],
                 "demo/l",
+                again,
             ),
             "a chain of inside links that resolves outside": (
                 [Member("demo/a/up", "l", link=".."), Member("demo/esc", "l", link="a/up/..")],
                 "demo/esc",
+                "it resolves outside the tree",
             ),
-            "a hard link to a later member": ([hard, Member("demo/later")], "demo/h"),
-            "a hard link to nothing": ([Member("demo/h", "h", link="demo/absent")], "demo/h"),
-            "a hard link outside strip": ([Member("demo/h", "h", link="other/x")], "demo/h"),
-            "a hard link to an absolute path": ([Member("demo/h", "h", link="/etc/hosts")], "demo/h"),
-            "a hard link with a .. component": ([Member("demo/h", "h", link="demo/../../x")], "demo/h"),
+            "a hard link to a later member": (
+                [Member("demo/h", "h", link="demo/later"), Member("demo/later")],
+                "demo/h",
+                not_earlier,
+            ),
+            "a hard link to nothing": ([Member("demo/h", "h", link="demo/absent")], "demo/h", not_earlier),
+            "a hard link outside strip": (
+                [Member("demo/h", "h", link="other/x")],
+                "demo/h",
+                "its hard link target is outside demo/",
+            ),
+            "a hard link to an absolute path": (
+                [Member("demo/h", "h", link="/etc/hosts")],
+                "demo/h",
+                f"its hard link target has {absolute}",
+            ),
+            "a hard link with a .. component": (
+                [Member("demo/h", "h", link="demo/../../x")],
+                "demo/h",
+                f"its hard link target has {dot_dot}",
+            ),
             "a hard link to a symlink": (
                 [Member("demo/f"), Member("demo/l", "l", link="f"), Member("demo/h", "h", link="demo/l")],
                 "demo/h",
+                not_earlier,
             ),
             "a hard link to a directory": (
                 [Member("demo/sub", "d"), Member("demo/h", "h", link="demo/sub")],
                 "demo/h",
+                not_earlier,
             ),
-            "a FIFO": ([Member("demo/p", "fifo")], "demo/p"),
-            "a character device": ([Member("demo/c", "chr")], "demo/c"),
-            "a block device": ([Member("demo/b", "blk")], "demo/b"),
-            "a duplicate member": ([Member("demo/f"), Member("demo/f", data=b"again")], "demo/f"),
-            "a directory over a file": ([Member("demo/f"), Member("demo/f", "d")], "demo/f"),
-            "a file over a directory": ([Member("demo/d", "d"), Member("demo/d")], "demo/d"),
-            "a member below a file": ([Member("demo/f"), Member("demo/f/g")], "demo/f/g"),
-            "a root member that is a file": ([Member("demo")], "demo"),
-            "a root member that is a symlink": ([Member("demo", "l", link="/tmp")], "demo"),
-            "an empty name component": ([Member("demo//x")], "demo//x"),
-            "a dot name component": ([Member("demo/./x")], "demo/./x"),
-            "a newline in a name": ([Member("demo/a\nb")], "demo/a\nb"),
-            "a member forging the stamp": ([Member("demo/.complete")], "demo/.complete"),
+            "a FIFO": ([Member("demo/p", "fifo")], "demo/p", special),
+            "a character device": ([Member("demo/c", "chr")], "demo/c", special),
+            "a block device": ([Member("demo/b", "blk")], "demo/b", special),
+            "a duplicate member": ([Member("demo/f"), Member("demo/f", data=b"again")], "demo/f", again),
+            "a directory over a file": ([Member("demo/f"), Member("demo/f", "d")], "demo/f", again),
+            "a file over a directory": ([Member("demo/d", "d"), Member("demo/d")], "demo/d", again),
+            "a member below a file": (
+                [Member("demo/f"), Member("demo/f/g")],
+                "demo/f/g",
+                "its path passes through a file",
+            ),
+            "a root member that is a file": ([Member("demo")], "demo", not_a_directory),
+            "a root member that is a symlink": ([Member("demo", "l", link="/tmp")], "demo", not_a_directory),
+            "an empty name component": ([Member("demo//x")], "demo//x", odd_component),
+            "a dot name component": ([Member("demo/./x")], "demo/./x", odd_component),
+            "a newline in a name": ([Member("demo/a\nb")], "demo/a\nb", "a newline in the name"),
+            "a member forging the stamp": ([Member("demo/.complete")], "demo/.complete", "forge the installer's stamp"),
         }
 
     def test_each_hostile_archive_is_refused_with_nothing_written_outside(self):
         outside = os.path.join(self.world, "outside")
         os.makedirs(outside)
-        for name, (members, named) in self.rejected_archives(outside).items():
+        for name, (members, named, rule) in self.rejected_archives(outside).items():
             with self.subTest(name):
                 # A good member first, so the extractor is at work when it meets the bad one.
                 home = self.pin([Member("demo/ok"), *members])
                 before = support.snapshot(self.world)
                 code, lines = self.run_main("install")
-                self.assert_refused(code, lines, repr(named))
+                self.assert_refused(code, lines, repr(named), rule)
                 after = support.snapshot(self.world)
                 after.pop("cache", None)
                 before.pop("cache", None)
