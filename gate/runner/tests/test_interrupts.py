@@ -40,7 +40,7 @@ class Signals(support.GateTest):
 
     def test_a_row_ignoring_term_dies_when_the_grace_period_ends(self):
         w = self.witness("start")
-        h = self.start([self.row("x", "term", w.path, "block")])
+        h = self.start([self.row("x", "term", w.path)])
         w.started(1)
         h.runner.post_signal(signal.SIGINT)
         w.more(1)  # the row saw TERM and carried on
@@ -54,7 +54,7 @@ class Signals(support.GateTest):
     def test_a_second_signal_kills_at_once(self):
         # design-QA counter-example 20: the grace timer is never released.
         w = self.witness("start")
-        h = self.start([self.row("x", "term", w.path, "block")])
+        h = self.start([self.row("x", "term", w.path)])
         w.started(1)
         h.runner.post_signal(signal.SIGINT)
         w.more(1)
@@ -89,7 +89,7 @@ class Signals(support.GateTest):
     def test_interrupt_beats_timeout(self):
         # Slot 2 before slot 3.
         w = self.witness("start")
-        h = self.start([self.row("x", "term", w.path, "block")])
+        h = self.start([self.row("x", "term", w.path)])
         w.started(1)
         self.timers.expect("watchdog:lint/x").fire()
         w.more(1)
@@ -153,7 +153,7 @@ class CeilingBreach(support.GateTest):
 
     def test_a_signal_after_the_ceiling_kills_at_once(self):
         w = self.witness("start")
-        h = self.start([self.row("x", "term", w.path, "block")])
+        h = self.start([self.row("x", "term", w.path)])
         w.started(1)
         self.timers.expect("ceiling").fire()
         w.more(1)
@@ -183,6 +183,31 @@ class RealSignals(support.GateTest):
         self.assertEqual(self.reason("x"), "interrupted")
         self.assertEqual(signal.getsignal(signum), before)
         w.gone()
+
+    def test_a_signal_caught_by_another_thread_still_interrupts(self):
+        # The kernel may hand a process's signal to any thread. The C-level handler then runs there, and the
+        # scheduler, blocked on its queue, would not run the Python-level one until something else woke it: an
+        # interrupt lost until a row ends (architect DA5). Directing the signal at the driver makes that certain.
+        w = self.witness("start")
+        runner = self.runner([self.row("x", "start", w.path, "block")], install_signals=True)
+        lost = []
+
+        def driver():
+            w.started(1)
+            signal.pthread_kill(threading.get_ident(), signal.SIGINT)
+            try:
+                w.gone()
+            except wait.WaitTimeout as e:
+                lost.append(str(e))
+                runner.post_signal(signal.SIGINT)
+                runner.post_signal(signal.SIGINT)
+
+        thread = threading.Thread(target=driver, name="signal-driver", daemon=True)
+        thread.start()
+        runner.run()
+        thread.join()
+        self.assertEqual(lost, [])
+        self.assertEqual(self.reason("x"), "interrupted")
 
     def test_sigint(self):
         self.run_on_main_thread(signal.SIGINT)

@@ -136,7 +136,7 @@ class Exclusive(support.GateTest):
         # The one event that can arrive while an exclusive row runs is its own watchdog. It wakes the scheduler,
         # and the row, ignoring TERM, lives on through its grace period: still running, still alone.
         w = self.witness("start")
-        rows = [self.good("e", "term", w.path, "block", exclusive=True), self.row("after")]
+        rows = [self.good("e", "term", w.path, exclusive=True), self.row("after")]
         h = self.start(rows, workers=8)
         w.started(1)
         self.timers.expect("watchdog:lint/e").fire()

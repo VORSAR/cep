@@ -38,7 +38,7 @@ class Slots(support.GateTest):
 
     def test_slot_3_a_child_ignoring_term_is_killed_after_the_grace_period(self):
         w = self.witness("start")
-        h = self.start([self.row("x", "term", w.path, "block")])
+        h = self.start([self.row("x", "term", w.path)])
         w.started(1)
         self.timers.expect("watchdog:lint/x").fire()
         w.more(1)  # the row saw TERM and carried on: only now does the grace timer's KILL matter
