@@ -1,8 +1,11 @@
 """The real pytests and pyfloor wrappers (design note §5; plan check C10; design-QA counter-example 14)."""
 
 import os
+import signal
 import sys
+from unittest import mock
 
+from gate.runner import rows
 from gate.runner.tests import support
 
 ROWS = os.path.join(support.GATE, "runner", "rows")
@@ -156,10 +159,34 @@ class Pytests(Base):
         self.assertEqual(self.pytests(), "covered 1")
 
 
+class Wrappers(Base):
+    def test_the_watchdog_reaches_a_module_the_wrapper_started(self):
+        # A wrapper's children stay in its process group: in a session of their own they would outlive the row.
+        w = self.witness("start")
+        hold = (
+            f"__import__('os').write(__import__('os').open({w.path!r}, 1), b's')\n        __import__('signal').pause()"
+        )
+        self.track("gate/x/test_a.py", GOOD.replace("self.assertTrue(True)", hold))
+        h = self.start([self.row("pytests", command=wrapper("pytests"), expected_scope=TESTS, job="test")])
+        w.started(1)
+        self.timers.expect("watchdog:test/pytests").fire()
+        h.join()
+        self.assertEqual(self.reason("pytests", "test"), "timeout after 60s")
+        w.gone()
+
+    def test_a_wrapper_starts_with_sigchld_at_its_default(self):
+        # An ignored SIGCHLD survives exec. A real signal handler stands in for it: only this file's sibling may
+        # name the ignore disposition, and any non-default value proves the reset ran.
+        self.addCleanup(signal.signal, signal.SIGCHLD, signal.getsignal(signal.SIGCHLD))
+        signal.signal(signal.SIGCHLD, lambda signum, frame: None)
+        with mock.patch.dict(os.environ, GATE_ROW_DIR=self.root):
+            self.assertEqual(rows.start(), self.root)
+        self.assertEqual(signal.getsignal(signal.SIGCHLD), signal.SIG_DFL)
+
+
 class Pyfloor(Base):
     def pyfloor(self, *paths):
-        rows = [self.row("pyfloor", command=wrapper("pyfloor"), expected_scope=("git", *paths), job="lint")]
-        self.run_rows(rows)
+        self.run_rows([self.row("pyfloor", command=wrapper("pyfloor"), expected_scope=("git", *paths), job="lint")])
         return self.reason("pyfloor")
 
     def test_the_modules_run_under_the_floor(self):
@@ -193,6 +220,5 @@ class Pyfloor(Base):
     def test_the_real_guard_module_passes_under_the_floor(self):
         # The one floor module on this branch: run for real, from the real repository, through the wrapper.
         scope = ("git", "gate/runner/tests/test_run_guard.py")
-        rows = [self.row("pyfloor", command=wrapper("pyfloor"), expected_scope=scope)]
-        self.run_rows(rows, repo=support.REPO)
+        self.run_rows([self.row("pyfloor", command=wrapper("pyfloor"), expected_scope=scope)], repo=support.REPO)
         self.assertEqual(self.reason("pyfloor"), "covered 1")

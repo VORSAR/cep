@@ -47,7 +47,7 @@ class Cli(support.GateTest):
         reg = self.reg()
         for argv, needle in (
             ((), "--tier"),
-            (("--tier", "T9", "--registry", reg), "T9"),
+            (("--tier", "T9", "--registry", reg), "invalid choice"),
             (("--tier", "T2", "--registry", reg, "--nonsense"), "nonsense"),
             (("--tier", "T2", "--registry", reg, "stray"), "stray"),
             (("summarize",), "usage"),

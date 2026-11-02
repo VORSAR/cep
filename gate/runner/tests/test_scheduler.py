@@ -132,6 +132,19 @@ class Exclusive(support.GateTest):
         h.join()
         self.assertLess(h.seq("end", "e"), h.seq("start", "a"))
 
+    def test_nothing_starts_while_an_exclusive_row_dies_slowly(self):
+        # The one event that can arrive while an exclusive row runs is its own watchdog. It wakes the scheduler,
+        # and the row, ignoring TERM, lives on through its grace period: still running, still alone.
+        w = self.witness("start")
+        rows = [self.good("e", "term", w.path, "block", exclusive=True), self.row("after")]
+        h = self.start(rows, workers=8)
+        w.started(1)
+        self.timers.expect("watchdog:lint/e").fire()
+        w.more(1)
+        self.timers.expect("grace:lint/e").fire()
+        h.join()
+        self.assertLess(h.seq("end", "e"), h.seq("start", "after"))
+
     def test_two_exclusive_rows_run_one_at_a_time(self):
         e1, e2 = self.fifo("e1"), self.fifo("e2")
         rows = [self.good("e1", "wait", e1, exclusive=True), self.good("e2", "wait", e2, exclusive=True)]

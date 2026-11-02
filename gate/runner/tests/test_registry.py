@@ -109,17 +109,19 @@ class Refuses(unittest.TestCase):
 
     def test_each_bad_row_exits_at_load(self):
         for name, bad, needle in self.CASES:
-            with self.subTest(name), self.assertRaises(registry.RegistryError) as caught:
-                registry.loads(doc(bad))
-            self.assertIn(needle, str(caught.exception), name)
+            with self.subTest(name):
+                with self.assertRaises(registry.RegistryError) as caught:
+                    registry.loads(doc(bad))
+                self.assertIn(needle, str(caught.exception))
 
     def test_every_field_is_required(self):
         for field in row():
             bad = row()
             del bad[field]
-            with self.subTest(field), self.assertRaises(registry.RegistryError) as caught:
-                registry.loads(doc(bad))
-            self.assertIn(field, str(caught.exception))
+            with self.subTest(field):
+                with self.assertRaises(registry.RegistryError) as caught:
+                    registry.loads(doc(bad))
+                self.assertIn(field, str(caught.exception))
 
     def test_a_duplicate_key_in_a_row(self):
         text = doc(row()).replace('"id": "a"', '"id": "a", "id": "b"')
