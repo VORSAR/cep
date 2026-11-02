@@ -517,6 +517,18 @@ class RealCache(support.ToolchainTest):
     def test_the_installed_tools_pass_every_check_and_their_whole_trees_match(self):
         self.assertEqual(parity.check(self.tools, self.real_cache, self.env, full_tree=True), [])
 
+    def test_a_users_go_env_file_changes_nothing_under_the_cleaned_environment(self):
+        # C25, the Go half, on the real go. GOPROXY=off keeps the witness off the network.
+        go = [tool for tool in self.tools if tool.name == "go"]
+        env_file = os.path.join(self.world, "go.env")
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.write("GOTOOLCHAIN=go1.27.2+auto\nGOFLAGS=-mod=mod\n")
+        planted = {k: v for k, v in self.env.items() if k != "GOTOOLCHAIN"} | {"GOENV": env_file, "GOPROXY": "off"}
+        reasons = parity.check(go, self.real_cache, planted, full_tree=False)
+        self.assertEqual(len(reasons), 1, reasons)  # the witness: a live env file does change what go does
+        self.assertTrue(reasons[0].startswith("go: version:"), reasons)
+        self.assertEqual(parity.check(go, self.real_cache, {**self.env, "GOPROXY": "off"}, full_tree=False), [])
+
     def test_a_flip_in_a_real_copy_is_named_and_the_real_cache_is_unchanged(self):
         # QA counter-example 9 and DQ24: a real copy, never a hard link, and the original re-hashed after.
         go = next(tool for tool in self.tools if tool.name == "go")

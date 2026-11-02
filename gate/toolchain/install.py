@@ -95,7 +95,7 @@ class _Extraction:
                 try:
                     self._member(tf, member)
                 except FileExistsError as e:  # a case-insensitive filesystem folds two names into one
-                    raise _Rejected(member.name, "it collides with an earlier member") from e
+                    raise _Rejected(member.name, "it collides with an earlier member on this filesystem") from e
         self._check_resolved_links()
 
     def _relative(self, name: str) -> str:
@@ -257,7 +257,7 @@ def _install_tool(tool: manifest.Tool, cache: str, home: str, fetch: Fetch, rena
                 extraction.extract(download)
             except _Rejected as e:
                 raise InstallError(
-                    f"{tool.name}: {tool.url}: {e}: this archive is unsafe to install: fix its pin in tools.json"
+                    f"{tool.name}: {tool.url}: {e}: this archive cannot be installed: check its pin in tools.json"
                 ) from e
             with os.fdopen(os.open(os.path.join(tmp, _STAMP), _NEW_FILE, 0o600), "w", encoding="ascii") as stamp:
                 stamp.write(f"{digest}\n")
