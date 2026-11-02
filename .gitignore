@@ -42,3 +42,7 @@ Thumbs.db
 *.log
 tmp/
 scratch/
+
+# --- Gate run output (S1.1a-1) ---
+.gate/
+.ruff_cache/
