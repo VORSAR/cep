@@ -45,7 +45,29 @@ The answers below settle the owner-facing questions; the rest are design inputs 
 12. **The S1.1a-1 and S1.1a-2 cards approved** (as recommended). **G0 passed for S1.1a-1, 2026-11-02.**
 13. **Commit the planning work as four commits on `s1-1a-1/integration`; nothing pushed** (as recommended).
 
-**The design: the owner, YYYY-MM-DD** (after the design note and its review): *pending.*
+**During the design step: the owner, 2026-11-02:**
+- **Module path `github.com/vorsar/cep`; the repository is renamed `VORSAR/cep` with the `gh` CLI; local names `~/.cache/vorsar/cep/tools` and the `VORSAR_CEP_` prefix** (prompted by the owner: "package names should reflect vorsar"). The owner chose the shorter branded path over the recommended "import path + everything outside Go". This reverses brainstorm decision 5 for these names. [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-02--the-vorsar-name-during-s11a-1s-design-step).
+
+- **The repository is renamed `VORSAR/cep`** by the coordinator with `gh` (owner's choice), and verified: public, `protect-main` active, remote updated.
+
+**The design review: the owner, 2026-11-02** (after the architect + the-fool review: 24 issues, 4 blockers, all re-verified by the coordinator; every answer as recommended; [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1)):
+
+1. **(b+):** `TInvalid` is the zero `Type`, and `Schema`'s fields are private behind `NewSchema`.
+2. **The time-attribute-type rule goes to S1.2's spec rev 3** as a coded error.
+3. **The scaffold runs its own wave-1 check list.**
+4. **`make check` installs missing tools first.**
+5. **No inline `# noqa`;** exceptions live only in `ruff.toml`.
+6. **Unpinned residue accepted** (git, make, the bootstrap's system Python); `CGO_ENABLED=0`.
+7. **A focused re-check before G1.**
+8. **The installer's minimum Python is 3.12, verified by a pinned CPython 3.12.16** (asked after QA's review; as recommended).
+
+**Design note v2** (2026-11-02) disposes of every finding of both design reviews (architect 24, QA 36), forwards four with named targets and rejects none. The focused re-check of v2 confirmed 6 of 10 claims and refuted 4; it found 3 new blockers, 11 should-fix and 5 later. All were fixed in **v2.1**, and the blockers and their fixes were re-verified by probe. The reports are [s1-1a-design-architecture.md](../reviews/s1-1a-design-architecture.md), [s1-1a-design-qa.md](../reviews/s1-1a-design-qa.md) and [s1-1a-design-recheck.md](../reviews/s1-1a-design-recheck.md).
+
+**G1: the owner, 2026-11-02** (each answer as recommended):
+
+1. **G1 approved** on design note v2.1. ARCHITECTURE §4 and ADR-0015 §1.1 are annotated.
+2. **Parity re-hashes whole tool trees at T2 and above, and the executables only at T0/T1**, through a pinned `tree_sha256` per tool. This closes the gap of the on-demand Go tools and the Python standard libraries.
+3. **The design work is committed as three commits; nothing is pushed.** (after the design note and its review): *pending.*
 
 ## How it runs (revised after the plan check)
 
@@ -53,7 +75,7 @@ At most two agents at once. The coordinator reviews every gate-code diff and tak
 
 | Step | Slot A | Slot B |
 |---|---|---|
-| Before the lanes | **Coordinator:** the design note `s1-1a-gate-design.md` → design review (architect + the-fool, QA) → owner decisions → **G1**. Then the integration branch's first commit: `go.mod`, `.gitignore`, `tools.json`, `gate/registry.json`, `ruff.toml`, the `internal/event` declaration stub, and **the throwaway runner scaffold** (decision 10). The scaffold is sequential and runs under the system `python3` with Go 1.27.3 checked against `tools.json`. It runs the registry's rows and prints the summary and `exit:` line, and `make check` points at it. | — |
+| Before the lanes | **Coordinator:** the design note `s1-1a-gate-design.md` → design review (architect + the-fool, QA) → owner decisions → **G1**. Then the integration branch's first commit: `go.mod`, `.gitignore`, `tools.json`, `gate/registry.json`, `ruff.toml`, the `internal/event` declaration stub, and **the throwaway runner scaffold** (decision 10). The scaffold is sequential and runs under the system `python3` with Go 1.27.3 checked against `tools.json`. It runs the registry's rows and prints the summary and `exit:` line, and `make check` points at it. *(Superseded 2026-11-02 by the owner's design-review decision 3 and [design note v2.1](s1-1a-gate-design.md) §2/§7: the scaffold runs under the pinned 3.15.2 with its **own** check list, and `registry.json` lands at combine-W1.)* | — |
 | W1 | **Lane A — the runner** (python-engineer): items 3, 4, 7 | **Lane B — the toolchain** (python-engineer): item 2 |
 | Combine W1 | **Coordinator:** cherry-pick; the real runner replaces the scaffold, **which is deleted**; the first real `make check` (T2) | — |
 | W2 | **Lane C — coverage + proofs** (python-engineer): items 6, 8, 9 | **QA — the event tables** (red) → **Lane D — the event kernel** (go-engineer): item 5 |
@@ -93,8 +115,10 @@ Entry (G0)   ☑ card complete and approved (written from the split; approved by
              ☑ dependencies merged: none, first sprint ☑ fits the cap (11.5), lanes ≤ 8 days (inferred)
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-02)
              ☑ test material: making it is an item (QA tables; proofs)
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
+Design (G1)  ☑ architecture + the-fool findings resolved (24 + re-check 19; none rejected)
+             ☑ QA testability findings resolved (36; none rejected)
+             ☑ owner decisions recorded (sprint-plan §5)
+             ☑ ADRs written for lasting decisions (annotations: ARCHITECTURE §3, §4; ADR-0001, ADR-0009, ADR-0015) — G1 passed 2026-11-02
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
              ☐ tests on the real code ☐ every breaker's red test committed
