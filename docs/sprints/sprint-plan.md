@@ -38,14 +38,16 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 
 **How the points are calibrated.** Story points measure **build work** — the code, its tests and its test material — estimated item by item (each item's estimate is in brackets) against two anchors: **`internal/event` = 1 point; the pattern engine's core (partials, absence watchers, completion timers, the skip rules) = 5 points.** The fixed process every sprint carries — plan check, reviews, break-it, fix round, owner's check, and the window sprints' design panels — is not in the points; the 2-week cap holds it. A sprint holds **at most 13 points** of estimated build work; each card shows its item total and its size rounded up to the Fibonacci scale. v2 sized cards by judgment; counted item by item, ten of v2's twenty cards were over 13, so v3 re-cuts them — splitting where a coherent half exists (new ids carry a letter, e.g. S1.1a/S1.1b, so references to v2's ids elsewhere stay valid) and otherwise moving an item to the neighbour it belongs with.
 
-**How to read the numbering.** ADR-0005 §1's stages keep their numbers; a stage that does not fit one sprint is split before entry (sprint model §3): **S1 = S1.1a + S1.1b + S1.2; S2 = S2.1 + S2.2a + S2.2b; S3 = S3.1 + S3.2a + S3.2b + S3.3; S4 = S4.1 + S4.2; S5 = S5.1 + S5.2; S6 = S6.1 + S6.2; S9 = S9.1 + S9.2.** Every ADR reference to a stage means the stage; the cards name the exact sprint. The clock contract freezes at **S3.3's** G5 ("S3's exit", ADR-0005 §1). **Sprint-id grammar** (settled in S1.2, used by `todocheck`, `suppressions` and conformance skips): `S<stage>[.<part>][<letter>][-<n>]` (the `-<n>` suffix only when a plan check applies a card's split line), ordered by this table's row order; "current + 2" means two rows down.
+**How to read the numbering.** ADR-0005 §1's stages keep their numbers; a stage that does not fit one sprint is split before entry (sprint model §3): **S1 = S1.1a + S1.1b + S1.2; S2 = S2.1 + S2.2a + S2.2b; S3 = S3.1 + S3.2a + S3.2b + S3.3; S4 = S4.1 + S4.2; S5 = S5.1 + S5.2; S6 = S6.1 + S6.2; S9 = S9.1 + S9.2.** Every ADR reference to a stage means the stage; the cards name the exact sprint. The clock contract freezes at **S3.3's** G5 ("S3's exit", ADR-0005 §1). **Sprint-id grammar** (settled in S1.2, used by `todocheck`, `suppressions` and conformance skips): `S<stage>[.<part>][<letter>][-<n>]` (the `-<n>` suffix only when a plan check applies a card's split line), ordered by this table's row order; "current + 2" means two rows down. *(Annotated 2026-11-02: S1.1a's plan check applied a split — S1.1a = S1.1a-1 + S1.1a-2 — so S1 = S1.1a-1 + S1.1a-2 + S1.1b + S1.2.)*
 
 **Sequencing principle (owner decision 2026-11-01).** Enablers first (S1.1a–S3.3). Then the **kill-switch vertical**: patterns (S4.1, S4.2) make the flagship fire in playback; connectivity (S5.1) makes it fire live through `cepd`; the Go builder (S6.1) proves DSL/Go parity on it. Breadth follows: the formatter (S6.2), text (S7), windows (S8, S9.1, S9.2), the demo kit and published latency (S10), the attack gallery (S11), the release close-out (S12). **From S6.1 onward every construct ships in both front-ends in the sprint that ships it** (builder surface + a parity twin per example).
 
 | Sprint | Title | SP (items) | Routine | Depends on |
 |---|---|---|---|---|
-| S1.1a | The gate runner, CI, coverage and the event kernel | 13 (12.5) | full | — |
-| S1.1b | The analyzers and the law | 13 (13) | full | S1.1a |
+| ~~S1.1a~~ | ~~The gate runner, CI, coverage and the event kernel~~ *split at its plan check, 2026-11-02 (owner, §5): re-sized for the owner's Python decision to about 15 points → S1.1a-1 + S1.1a-2* | ~~13 (12.5)~~ | full | — |
+| S1.1a-1 | The local gate, coverage and the event kernel | 13 (11.5) | full | — |
+| S1.1a-2 | Hooks and CI | 5 (3.5) | full | S1.1a-1 |
+| S1.1b | The analyzers and the law | 13 (13) | full | S1.1a-2 *(was S1.1a; annotated 2026-11-02)* |
 | S1.2 | The model kernel, the remaining gate rows and spec rev 3 | 13 (11) | full | S1.1b |
 | S2.1 | The parser | 13 (13) | full | S1.2 |
 | S2.2a | The grammar differential and the expression engine | 13 (10.5) | full | S2.1 |
@@ -68,13 +70,15 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | S11 | The attack gallery — seven examples | 13 (12) | lighter | S10 |
 | S12 | Release close-out — docs, whole-engine break-it and `v0.1.0` | 13 (12.5) | full + whole-engine break-it | S11 |
 
-**Forecast (honest, re-forecast at named points).** **23 sprints; about 270 points of estimated build work** (294 in Fibonacci card sizes). At 2–3 weeks wall-clock per sprint for a solo owner, Phase 1 is **46–69 weeks**. Several cards sit well under 13 (S1.2, S2.2a, S5.2, S9.2, S10), so the lower half of the range is plausible but unproven. No velocity has been measured: **re-forecast at S1.2's G5 and at S3.3's G5** from recorded points and durations (sprint model §3). A card the plan check sizes over 13 is split into its own two sprints **before** G0 — never by moving work into a neighbouring card that is already full.
+**Forecast (honest, re-forecast at named points).** **23 sprints; about 270 points of estimated build work** (294 in Fibonacci card sizes). *(Annotated 2026-11-02: S1.1a's plan check split it into S1.1a-1 and S1.1a-2 → **24 sprints, about 272.5 points** (299 in card sizes).)* At 2–3 weeks wall-clock per sprint for a solo owner, Phase 1 is **46–69 weeks**. Several cards sit well under 13 (S1.2, S2.2a, S5.2, S9.2, S10), so the lower half of the range is plausible but unproven. No velocity has been measured: **re-forecast at S1.2's G5 and at S3.3's G5** from recorded points and durations (sprint model §3). A card the plan check sizes over 13 is split into its own two sprints **before** G0 — never by moving work into a neighbouring card that is already full.
 
 **Gate instruments by sprint** (ADR-0015 `lands_in`, mapped onto the split numbering — each lands with its first subject, fixture, `min_wants`, registry row and teeth pin in one commit, and scans the whole module retroactively).
 
 | Sprint | Instruments landing |
 |---|---|
-| S1.1a | registry + **parallel** runner + summary; parity + atomic installer; the `gofmt` and `go vet` rows; hooks; CI (concurrent jobs, cached) + summary fixtures; `gate/proofs/`; **`coverage-inclusion`** — every package tested + the **90%** per-package floor (owner 2026-11-02) |
+| ~~S1.1a~~ | ~~registry + **parallel** runner + summary; parity + atomic installer; the `gofmt` and `go vet` rows; hooks; CI (concurrent jobs, cached) + summary fixtures; `gate/proofs/`; **`coverage-inclusion`** — every package tested + the **90%** per-package floor (owner 2026-11-02)~~ *split 2026-11-02 into the two rows below; the gate's tooling is stdlib Python (owner, §5)* |
+| S1.1a-1 | registry + **parallel** runner + summary (Python, CPython 3.15.2 pinned); the bootstrap installer + parity (every listed executable re-hashed every run); the `gofmt`, `vet` and `unit` rows; the gate's Python checked by `ruff` and `pyfloor` and tested by `pytests`; `gate/proofs/`; **`coverage-inclusion`** at **90%** |
+| S1.1a-2 | hooks (T0 refuses unformatted files; `make check` refuses until hooks are on); CI (concurrent jobs on `ubuntu-latest`, cached; the workflow generated from `registry.json` + `ci-fresh`) + `summarize` and its fixture trees; the required `strict-gate` check |
 | S1.1b | `lawdelta` + `gate/law.json`; registry-lint; `importcheck`; `clockcheck`; `puritycheck`; `globalscheck` (their first subject, `internal/event`, exists from S1.1a); `todocheck` (basic); `testhygiene`; teeth meta-test; `smells`; `suppressions` + the one allowlist grammar |
 | S1.2 | `docsync` (a) one direction; the dependency-allowlist check; the licence check and `govulncheck`; the build-tag law; the weekly canary; the sprint-id grammar, `gate/current-sprint` and the skip / `deferred(P<n>, ref=…)` forms in `todocheck`; `docsync` (d) error-count consistency |
 | S2.1 | `freshness` |
@@ -104,7 +108,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | **Depends on** | — (first sprint; phase entry §9 holds: architecture ratified and review-hardened ✔, decomposition approved ✔) |
 | **In scope** | 1. The Go module `github.com/vorsar/complex-events-engine`: `go.mod` with `go` and `toolchain` lines, `GOTOOLCHAIN=local` [0.5]. · 2. `tools.json` + one installer (`cache/tmp.$$`, atomic `mv` into the hash-keyed path) + the parity step, first at every tier [2]. · 3. `gate/registry.json` (row schema = ADR-0015 §1.1), `gate/run.sh` (POSIX; per-step process groups; TERM-then-KILL watchdogs; one JSON record per step; `summary.md` + `run.json`), collect-all, zero-is-failure, `expected_scope` checked against the live expansion, the `exit:` line; `make check`, `make combine-check`, `make strict-gate`; **parallel by default** (owner 2026-11-02; ADR-0015 §1.1): rows run concurrently up to a worker limit, each starting when its `needs` finish; `exclusive` rows run alone; the summary stays in registry order and prints wall time beside summed step time [4]. · 4. The `gofmt` and `go vet` rows [0.5]. · 5. `.githooks/` (T0, T1) and the CI workflow (actions pinned by SHA; rows grouped into **concurrent jobs** by their `job` field, each restoring the Go module and build cache keyed by `go.sum` + the `tools.json` hash; the summary job `needs: all`, `if: always()`, the only required check) with summary fixture trees [2]. · 6. `gate/proofs/` as a separate Go module, with this sprint's proofs [1.5]. · 7. **`internal/event`**: `Type`, `Attr`, `Schema`, `Value` (null = `Value{Null:true}` keeping the declared `Kind`), `Event`, the total-order comparator `(Ts, StreamID, Seq)` [1]. · 8. **`coverage-inclusion`** (owner 2026-11-02): every `internal/*` and public package has tests (or a reasoned allowlist entry), and ≥ **90%** statement coverage per package from T2's coverprofile, scope per ADR-0015 §2.2 (generated files excluded), no waiver within scope [1]. |
 | **Not in scope** | The architecture analyzers, LAW Δ, registry-lint, suppressions → S1.1b. `internal/model` and spec rev 3 → S1.2. |
-| **Entry criteria** | The standard ones, plus (answered by the owner 2026-11-02, §5): toolchain = the newest stable Go that the pinned golangci-lint supports — exact versions recorded in the plan check on day one; the Go specialist is `.claude/agents/go-engineer.md` with JetBrains' `use-modern-go` skill; every agent `model: inherit`; `main` has force-push and deletion blocked before G0, and the summary check becomes required once this sprint's CI has run (before it merges). Hook wiring is ADR-0015 §3.1's (`core.hooksPath .githooks`). |
+| **Entry criteria** | The standard ones, plus (answered by the owner 2026-11-02, §5): toolchain = the newest stable Go that the pinned golangci-lint supports — exact versions recorded in the plan check on day one; the Go specialist is `.claude/agents/go-engineer.md` with JetBrains' `use-modern-go` skill; every agent `model: inherit`; `main` has force-push and deletion blocked before G0 ✔ (ruleset `protect-main`, 2026-11-02), and the summary check becomes a required status check in that ruleset once this sprint's CI has run (before it merges). Hook wiring is ADR-0015 §3.1's (`core.hooksPath .githooks`). |
 | **Exit criteria** | The done-done block (§13), plus: |
 | | 1. A clean clone runs `make check` to `exit: 0`; CI shows the same rows — **proof:** CI `strict-gate` on the PR and the summary fixture tests classifying every planted tree. |
 | | 2. A tool version that differs from `tools.json` fails before any other step and names the fix — **proof:** the parity proof. |
@@ -114,7 +118,46 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | | 6. A package below 90% statement coverage, and a package with no tests, each turn the gate red naming the package and its number; `internal/event` is at or above 90% — **proof:** two planted proofs + the T2 run. |
 | | 7. The event total order and the null representation are pinned — **proof:** `internal/event` table tests whose expected orderings are written by hand before the code. |
 | **Owner's check** | *By running:* clone fresh, `make check`, read the summary and its timing footer; commit an unformatted file and watch the hook refuse it. *By hand:* add the required check on GitHub once CI has run. |
-| **Split line** | None needed (12.5); if the plan check sizes it over, CI caching and the timing footer move to S1.1b. |
+| **Split line** | None needed (12.5); if the plan check sizes it over, CI caching and the timing footer move to S1.1b. *(Annotated 2026-11-02: this split line could not be used: S1.1b is full, and §3's rule forbids moving work into a full neighbour. The plan check re-sized the card for the owner's Python decision at about 15 points, and the owner split it into its own two sprints: S1.1a-1 and S1.1a-2 below. This card stays as the approved original; the plan check is [s1-1a-plan-check.md](s1-1a-plan-check.md).)* |
+
+#### S1.1a-1 — The local gate, coverage and the event kernel
+
+| | |
+|---|---|
+| **Goal** | A clean clone runs `make check` to `exit: 0` with the pinned toolchain, the parallel registry runner and a deterministic summary; coverage is enforced at 90% on `internal/event`; and every instrument, including the checks on the gate's own Python, is proven able to fail. |
+| **Routine · size** | Full loop, no design panel (owner 2026-11-02) · 13 SP (items 11.5) |
+| **Depends on** | — (first sprint) |
+| **In scope** | All gate tooling is stdlib Python under CPython 3.15.2, pinned (owner 2026-11-02). 1. `go.mod` (`go 1.27.0`, `toolchain go1.27.3`) [0.5]. · 2. `tools.json` (Go 1.27.3, golangci-lint v2.15.0, CPython 3.15.2, ruff 0.17.3; archive and per-executable sha256) + `gate/bootstrap.py` (any Python ≥ 3.9; safe extraction; atomic rename into the shared cache) + parity (the hard stop; every listed executable re-hashed every run) [2.5]. · 3. `gate/registry.json` + the runner `gate/run.py` / `gate/runner/` (parallel, `needs`, `exclusive`, watchdogs over process groups, collect-all, zero-is-failure, live expected scope, records keyed by job, a summary deterministic under an injected clock, the timing footer) + `make check|combine-check|strict-gate|ci` [4]. · 4. The `gofmt`, `vet` and `unit` rows [0.5]. · 5. `internal/event` [1]. · 6. `coverage-inclusion` at 90%, classified from `go test -json` events; no waivers until S1.1b [1]. · 7. The `pytests` row, so the gate runs its own tests [0.5]. · 8. The `ruff` and `pyfloor` rows (the gate's Python formatted and linted; the bootstrap parses at 3.9) [0.5]. · 9. `gate/proofs/`: parity, coverage ×2, `pytests`, `ruff` [1]. A coordinator-built throwaway runner scaffold serves wave 1 and is deleted when the real runner lands (owner 2026-11-02). |
+| **Not in scope** | Hooks and CI → S1.1a-2. The analyzers, LAW Δ, registry-lint, the allowlist grammar → S1.1b. |
+| **Entry criteria** | The standard ones; the plan check answered (owner 2026-11-02); `.claude/agents/python-engineer.md` exists. |
+| **Exit criteria** | The done-done block, plus (numbering kept from S1.1a): |
+| | 1. A clean clone with an empty tool cache runs `make check` to `exit: 0` — **proof:** the coordinator's fresh-clone run, recorded. |
+| | 2. A tool whose version or executable hash differs from `tools.json` fails before any other row starts, naming the fix — **proof:** the parity proof (three separate cases: version, not installed, path). |
+| | 3. Runner behaviour as on the S1.1a card; the summary is byte-identical whatever order rows finish in — **proof:** runner fixture tests (FIFO-held rows, an injected clock, no sleeps). |
+| | 6. A package below 90% and a package with no tests each turn the gate red, naming the package and its number; `internal/event` ≥ 90% — **proof:** two planted proofs + the T2 run. |
+| | 7. The event total order and the null representation are pinned — **proof:** `internal/event` tables written by QA, by hand, red before the code. |
+| | 8. The gate's own tests run in the gate: a test module that is untracked, fails to import, skips everything or holds no test turns `pytests` red — **proof:** the `pytests` proof. |
+| | 9. Unformatted gate Python, and a `time.sleep` outside the wait helper, are red — **proof:** the `ruff` proof. |
+| **Owner's check** | *By running:* clone fresh, `make check`, read the summary and its timing footer. *By reading:* the decisions the coordinator flagged as uncertain (owner 2026-11-02). |
+| **Split line** | None needed (11.5). |
+
+#### S1.1a-2 — Hooks and CI
+
+| | |
+|---|---|
+| **Goal** | Every commit and push runs its tier through the same runner, `make check` refuses to run until the hooks are on, and CI runs the registry's rows as concurrent jobs with one required check. |
+| **Routine · size** | Full loop · 5 SP (items 3.5) |
+| **Depends on** | S1.1a-1 |
+| **In scope** | 1. `.githooks/pre-commit` (T0 over an index snapshot; refuses an unformatted file and prints the fix; SKIP when nothing is staged) and `.githooks/pre-push` (T1 over the pushed tip), both Python; `make setup`; a row that makes `make check` refuse until the hooks are on (CI sets `core.hooksPath`) [1]. · 2. `gate/ci/`, which generates `.github/workflows/gate.yml` from `registry.json` (`ubuntu-latest` per the owner, actions pinned by SHA, concurrent jobs, module and build caches), plus the `ci-fresh` row [1]. · 3. `summarize` (expected rows taken from the registry) + its fixture trees [1]. · 4. The hook proof and the summary proofs [0.5]. |
+| **Not in scope** | The analyzers and LAW Δ → S1.1b. |
+| **Entry criteria** | The standard ones (S1.1a-1 merged). |
+| **Exit criteria** | The done-done block, plus (numbering kept from S1.1a): |
+| | 1. CI shows the same rows as a local `make strict-gate` — **proof:** CI `strict-gate` on the PR, the summary fixture trees, and a diff of the two row lists. |
+| | 4. The parallel saving is measured — **proof:** the PR's CI timing footer, recorded. |
+| | 5. An unformatted Go file is refused at T0, including under `git commit -a` and `git commit <path>` — **proof:** the hook proof. |
+| | 10. `make check` with the hooks off fails, naming `make setup` — **proof:** a proof row. |
+| **Owner's check** | *By running:* commit an unformatted file and watch the refusal; `make check` in a clone without `make setup`. *By hand:* add `strict-gate` as a required status check in `protect-main` once CI has run. |
+| **Split line** | None needed (3.5). |
 
 #### S1.1b — The analyzers and the law
 
@@ -122,7 +165,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 |---|---|
 | **Goal** | Every architectural rule that can be checked from stage 1's code is mechanically red when broken — imports, clock use, goroutines, globals, TODOs, test hygiene, lint smells, suppressions — each analyzer proven able to fail, and every change to the gate's own rules shows in the LAW Δ block. |
 | **Routine · size** | Full loop · 13 SP (items 13) |
-| **Depends on** | S1.1a |
+| **Depends on** | S1.1a *(annotated 2026-11-02: now S1.1a-2, after the split)* |
 | **In scope** | 1. `gate/law.json` + `lawdelta` + the LAW Δ block at the top of the summary (ADR-0015 §1.3) [2]. · 2. registry-lint with its three planted problems and the §2 instrument-id pin [1]. · 3. `importcheck` with `tools/importcheck/rules.json` encoding ARCHITECTURE §3's import lists as **exhaustive** (owner 2026-11-02) and the post-`io`-split edges; the docsync comparison of parsed edges; the edge-count ceiling [2]. · 4. `clockcheck`, incl. a synthetic fixture for the `internal/window/cron.go` exception [1]. · 5. `puritycheck` (module-wide) and `globalscheck` (const-like defined in the analyzer) [2]. · 6. `todocheck` (basic `TODO(owner\|S<n>\|#id)`) and `testhygiene` [1]. · 7. The teeth meta-test (`min_wants` per analyzer) [1]. · 8. golangci-lint strict config (`smells`, `forbidigo`, the §2.1 scope classes) + `nolintlint` [1]. · 9. The `suppressions` checker and the one allowlist grammar under `tools/allowlists/` [2]. Each analyzer ships with its `analysistest` fixture and scans S1.1a's code retroactively on landing. |
 | **Not in scope** | `docsync`, the dependency/licence/vulnerability/build-tag rows and the sprint-id grammar → S1.2. |
 | **Entry criteria** | The standard ones. |
@@ -532,13 +575,13 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 ### Still open for the owner
 
 - *Approval of the v3 recalibration — **done** (2026-11-02); the sprint references in ADR-0005 §1, ADR-0012 §1, ADR-0015 and qa-strategy §4 are updated to v3's ids.*
-- **Owner action:** on GitHub, block force-pushes and deletion of `main`.
+- *Owner action — **done** (2026-11-02, verified via the GitHub API): ruleset `protect-main` is active on the default branch with deletion and force-push (non-fast-forward) blocked and no bypass actors. S1.1a adds the summary job as a required status check to the same ruleset once its CI has run.*
 
 *Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates.*
 
 ### Status
 
-**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).**
+**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).** *(Annotated 2026-11-02: S1.1a's plan check is answered, and S1.1a is split into S1.1a-1 + S1.1a-2 (24 sprints) → next: S1.1a-1's design note and G1.)*
 
 **This line is the single prose status surface for the project.** The README and the roadmap defer to it; everything finer-grained lives in the source and the git log, which are authoritative if they disagree with this.
 
@@ -620,5 +663,25 @@ Round-4 review of ADR-0015 + qa-strategy.md + post-ratification drift: 49 verifi
 
 1. **v3 approved** (recommended, accepted): every card re-estimated item by item against two anchors (`internal/event` = 1 point; the pattern-engine core = 5) with the fixed per-sprint process outside the points; at most 13 points per sprint. Ten of v2's twenty cards were over the cap; v3 has **23 sprints, ~270 points, forecast 46–69 weeks**, re-forecast at S1.2's and S3.3's G5. No item added or removed. Also moved by the first-subject rule: `puritycheck` and `globalscheck` to S1.1b (their first subject, `internal/event`, exists from S1.1a); the full docs for the shipped subset to S12 (so they cover every construct and the gallery).
 2. **Commit and push** (recommended, accepted).
+
+### Owner decisions, 2026-11-02 — S1.1a plan check (G0)
+
+The plan check ([s1-1a-plan-check.md](s1-1a-plan-check.md), v2) was reviewed blind by the architect reviewer (31 findings) and QA (36), all dispositioned there, none rejected. Asked in plain language with pros and cons; recommendation first.
+
+1. **The gate's tooling is stdlib Python, not shell and not Go (≠ R:** a Go runner was recommended). This covers the runner, summary, installer, parity, coverage, hooks and CI generator. A system `python3` (3.9 or newer) only bootstraps the pinned interpreter. The owner's standing preference is Python over shell for every utility script.
+2. **The pinned interpreter is CPython 3.15.2** (owner: "latest and greatest"), the python-build-standalone build of 2026-10-26.
+3. **S1.1a is split into S1.1a-1 and S1.1a-2** (recommended, accepted). Re-sized for Python, it was about 15 points. The card's split line would have overloaded S1.1b, which is full.
+4. **The pre-commit hook refuses an unformatted file and prints the fix** (recommended, accepted). This annotates ADR-0015 §3.1 and DEVELOPMENT.md's T0 row, which said auto-fix.
+5. **At T0 only, a check whose staged scope is empty shows SKIP** (recommended, accepted). Docs-only commits pass; everywhere else, zero is a failure.
+6. **No three-reviewer design panel for S1.1a** (recommended, accepted). The design note gets the architect + the-fool and QA review.
+7. **Build agents write the gate's code; the coordinator reviews it, with a human gate wherever the coordinator is uncertain (≠ R:** the owner's own wording). The recommendation was that the owner read the whole gate diff in place of LAW Δ. This annotates ADR-0015 §1.4 for this sprint.
+8. **A Python build agent, `.claude/agents/python-engineer.md`** (`model: inherit`; recommended, accepted).
+9. **ruff 0.17.3 pinned** (MIT, build-time) to format and lint the gate's Python, with a ban on `time.sleep` outside the wait helper. The gate's Python has no statement-coverage floor, accepted as residue (recommended, accepted; ADR-0015 §3.6, ADR-0009 annotated).
+10. **The coordinator builds a minimal runner before wave 1 (≠ R), as a throwaway scaffold (≠ R).** The recommendations were stand-in checks for wave 1, then a seed that Lane A grows. The scaffold is deleted when Lane A's runner lands.
+11. **Defaults.**
+    - **Accepted as recommended:** Go 1.27.3 and golangci-lint v2.15.0 (in `tools.json` now); `go.mod` says `go 1.27.0`; no coverage waivers until S1.1b; the shared tool cache `~/.cache/complex-events-engine/tools`; run output in a git-ignored `.gate/runs/<run_id>/`; the workflow generated from `registry.json`; platforms darwin-arm64 and linux-amd64.
+    - **Hooks (≠ R):** `make check` refuses to run until the hooks are on; CI turns them on too. The recommendation was `make setup` once.
+    - **CI image (≠ R):** `ubuntu-latest`. The recommendation was a pinned `ubuntu-24.04`. *Consequence, stated:* GitHub moves `latest` on its own schedule, so a CI change can arrive with no commit of ours; the summary records the image version on every run.
+12. **The S1.1a-1 and S1.1a-2 cards approved** (recommended, accepted); S1.1a-1 passed G0.
 
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.

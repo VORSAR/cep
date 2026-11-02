@@ -96,7 +96,7 @@ graph TB
 
 *A fix that cannot meet the bar in its sprint is not merged with a TODO; it goes back to the plan check (sprint model: finish or revert).*
 
-*Rules 5–8 are review-only — no analyzer can see them. The full review-only residue (seven items, these four among them) is recorded in ADR-0015 §3.6 and was accepted knowingly by the owner (2026-11-01).*
+*Rules 5–8 are review-only — no analyzer can see them. The full review-only residue (seven items, these four among them; *an eighth, the gate's Python having no coverage floor, added 2026-11-02 by owner decision*) is recorded in ADR-0015 §3.6 and was accepted knowingly by the owner (2026-11-01).*
 
 ## 3. Repository and package layout (normative — ADR-0001)
 
@@ -129,7 +129,7 @@ bench/                                    benchmark suite + scenario generators 
 gallery/                                  the attack gallery: runnable rule apps + playback logs + expects (roadmap exit criterion 5; conformance executes them)
 demo/                                     the kill-switch demo kit: compose file, traffic generator, stub IAM, mail catcher (exit criterion 1; trailing sprint — round-2 F17)
 docs/language/                            the frozen spec (already exists; grammar.lark is normative)
-gate/                                     registry.json, run.sh, summary logic, law.json, regen-baseline (ADR-0015)
+gate/                                     registry.json, run.sh, summary logic, law.json, regen-baseline (ADR-0015) — annotated 2026-11-02 (owner, S1.1a plan check): the gate's code is stdlib Python run by a pinned CPython — bootstrap.py, run.py, runner/, toolchain/, coverage/, ci/ — not shell
 gate/proofs/                              planted-defect proof fixtures — a SEPARATE Go module, never imported (ADR-0015 §3.4)
 tools/analyzers/                          the gate's go/analysis analyzers + testdata fixtures + teeth_test.go (ADR-0015 §2)
 tools/importcheck/rules.json              the layer law, diffed against this §3 as parsed edges (ADR-0015)
