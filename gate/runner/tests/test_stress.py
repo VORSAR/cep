@@ -40,6 +40,18 @@ class Harness(support.GateTest):
         self.assertEqual(code, 1, out)
         self.assertEqual(out.splitlines()[-1], "stress: 5 tests, 2 below 50/50")
 
+    def test_a_test_below_the_line_shows_why(self):
+        # A count alone cannot be fixed at its root: each failing test's first failure is printed, and every
+        # traceback is kept in the run's file.
+        _, _, out, out_dir = self.harness(f"{PLANTS}.plant_order", runs=4)
+        test = f"{PLANTS}.plant_order.Order.test_needs_first"
+        lines = [line for line in out.splitlines() if line.startswith(f"why {test}: run ")]
+        self.assertEqual(len(lines), 1, out)
+        self.assertIn("AssertionError: [] is not true", lines[0])
+        seed = int(lines[0].split(": run ")[1].split(":")[0])
+        with open(os.path.join(out_dir, f"run-{seed}.json"), "rb") as f:
+            self.assertIn("Traceback", json.loads(f.read())["failures"][test])
+
     def test_a_clean_module_exits_0(self):
         code, counts, out, _ = self.harness(f"{PLANTS}.plant_clean", runs=3)
         self.assertEqual(code, 0, out)
