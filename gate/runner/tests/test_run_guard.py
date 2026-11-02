@@ -48,6 +48,7 @@ class Guard(unittest.TestCase):
     def assertRefused(self, code: int, output: str) -> None:
         self.assertEqual(code, 2, output)
         self.assertEqual(output.splitlines()[-2:], ["GATE FAILED", "exit: 2"], output)
+        self.assertIn("refused:", output)  # the guard's own word: a later crash must not pass for a refusal
         self.assertIn("make tools", output)
         self.assertNotIn("usage:", output)
 
@@ -127,7 +128,15 @@ class Copy(unittest.TestCase):
         code, output = self.run_copy()
         self.assertEqual(code, 2, output)
         self.assertEqual(output.splitlines()[-2:], ["GATE FAILED", "exit: 2"])
+        self.assertIn("refused:", output)
         self.assertIn("make tools", output)
+
+    def test_a_crash_names_no_false_fix(self) -> None:
+        self.stub("raise RuntimeError('planted')\n")
+        code, output = self.run_copy()
+        self.assertEqual(code, 2, output)
+        self.assertIn("planted", output)
+        self.assertNotIn("make tools", output)
 
     def test_no_bytecode_lands_in_the_repository(self) -> None:
         self.stub("def main(argv):\n    return 0\n")

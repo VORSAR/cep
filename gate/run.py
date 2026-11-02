@@ -28,7 +28,10 @@ def pinned_python():
 
 def refusal():
     """Why this interpreter may not give a verdict; empty when it may."""
-    want = pinned_python()
+    try:
+        want = pinned_python()
+    except (OSError, ValueError, KeyError, StopIteration) as e:
+        return f"refused: cannot locate the pinned interpreter: {type(e).__name__}: {e}"
     if os.path.realpath(sys.executable or "") != os.path.realpath(want):
         return f"refused: {sys.executable} is not the pinned {want}"
     if not (sys.flags.isolated and sys.dont_write_bytecode and sys.flags.utf8_mode):
@@ -53,7 +56,7 @@ if __name__ == "__main__":
     try:
         code = main()
     except BaseException as e:
-        print(f"gate/run.py: {type(e).__name__}: {e}: {FIX}")
+        print(f"internal error: {type(e).__name__}: {e}")
         print("GATE FAILED")
         print("exit: 2")
         code = 2
