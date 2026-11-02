@@ -7,7 +7,9 @@ import copy
 import hashlib
 import json
 import os
+import stat
 import sys
+import threading
 import unittest
 
 from gate.toolchain import manifest
@@ -389,6 +391,169 @@ class Digests(support.ToolchainTest):
         os.symlink("d", os.path.join(tree, "e"))
         lines = b"d d -\n" + b"f d/f " + support.sha256(b"x").encode() + b"\n" + b"l e d\n"
         self.assertEqual(manifest.tree_sha256(tree), hashlib.sha256(lines).hexdigest())
+
+
+def serial_tree_sha256(root: str) -> str:
+    """Design note §3's digest, written straight from its text, one file at a time: the oracle.
+
+    It walks in the same order as the serial code the parallel one replaces (a stack of directories, each
+    listed by scandir), so for a broken tree it raises the same first error that code raised.
+    """
+    lines = []
+    pending = [(os.fsencode(root), b"")]
+    while pending:
+        directory, prefix = pending.pop()
+        with os.scandir(directory) as listing:
+            entries = list(listing)
+        for entry in entries:
+            rel = prefix + entry.name
+            if rel == b".complete":
+                continue
+            mode = entry.stat(follow_symlinks=False).st_mode
+            if stat.S_ISLNK(mode):
+                kind, payload = b"l", os.readlink(entry.path)
+            elif stat.S_ISDIR(mode):
+                kind, payload = b"d", b"-"
+                pending.append((entry.path, rel + b"/"))
+            else:
+                with open(entry.path, "rb") as f:
+                    payload = hashlib.sha256(f.read()).hexdigest().encode()
+                kind = b"x" if mode & 0o111 else b"f"
+            lines.append((rel, kind + b" " + rel + b" " + payload + b"\n"))
+    return hashlib.sha256(b"".join(line for _, line in sorted(lines))).hexdigest()
+
+
+class ParallelTree(support.ToolchainTest):
+    """The whole-tree digest hashes across threads (owner, 2026-11-02) and must equal the serial definition."""
+
+    DIRECTORIES = 12
+    FILES_PER_DIRECTORY = 40
+
+    def build(self) -> tuple[str, dict[bytes, bytes]]:
+        """A tree whose walk order is far from bytewise order. Returns it and its lines, keyed by path."""
+        tree = os.path.join(self.world, "tree")
+        lines: dict[bytes, bytes] = {}
+        # "a-b" (0x2d) and "a.b" (0x2e) sort before "a/..." (0x2f): a sort by components would get them wrong.
+        names = [f"d{i:02}" for i in range(self.DIRECTORIES)] + ["a"]
+        for directory in names:
+            os.makedirs(os.path.join(tree, directory))
+            lines[directory.encode()] = f"d {directory} -\n".encode()
+            for i in range(self.FILES_PER_DIRECTORY):
+                rel = f"{directory}/f{i:03}"
+                data = f"{rel}\n".encode() * (1 + 977 * (i % 7))  # 0 B to 57 KiB: some hashes take longer
+                path = os.path.join(tree, rel)
+                with open(path, "wb") as f:
+                    f.write(data)
+                mode = 0o555 if i % 5 == 0 else 0o444
+                os.chmod(path, mode)
+                kind = "x" if mode & 0o111 else "f"
+                lines[rel.encode()] = f"{kind} {rel} {support.sha256(data)}\n".encode()
+        for rel, data in (("a-b", b"dash\n"), ("a.b", b"dot\n"), ("empty", b"")):
+            with open(os.path.join(tree, rel), "wb") as f:
+                f.write(data)
+            lines[rel.encode()] = f"f {rel} {support.sha256(data)}\n".encode()
+        os.symlink("a/f001", os.path.join(tree, "link"))
+        lines[b"link"] = b"l link a/f001\n"
+        return tree, lines
+
+    def by_hand(self, lines: dict[bytes, bytes]) -> str:
+        return hashlib.sha256(b"".join(lines[rel] for rel in sorted(lines))).hexdigest()
+
+    def test_every_worker_count_gives_the_digest_of_the_definition(self):
+        tree, lines = self.build()
+        want = self.by_hand(lines)
+        self.assertEqual(serial_tree_sha256(tree), want)  # the oracle agrees with the hand-built lines
+        self.assertEqual(manifest.tree_sha256(tree), want)
+        for workers in (1, 2, 8, 64):
+            with self.subTest(workers=workers):
+                self.assertEqual(manifest.tree_sha256(tree, workers=workers), want)
+
+    def test_hashes_finishing_out_of_order_never_reach_the_digest(self):
+        # The first file to start is held until every other file is hashed, so completion order is never
+        # walk order. The record of finishes is the witness that it really was held.
+        tree, lines = self.build()
+        files = sum(1 for line in lines.values() if line[:1] in b"fx")
+        cond = threading.Condition()
+        started: list[bytes] = []
+        finished: list[bytes] = []
+
+        def hash_file(path: bytes) -> str:
+            with cond:
+                held = not started
+                started.append(path)
+                if held:
+                    self.assertTrue(cond.wait_for(lambda: len(finished) == files - 1, timeout=support.CHILD_CAP_S))
+            digest = manifest.sha256_file(path)
+            with cond:
+                finished.append(path)
+                cond.notify_all()
+            return digest
+
+        self.assertEqual(manifest._tree_sha256(tree, 8, hash_file), self.by_hand(lines))
+        self.assertEqual(finished[-1], started[0])
+        self.assertNotEqual(started[0], started[-1])
+
+    def make_unreadable(self, tree: str, *rels: str) -> None:
+        for rel in rels:
+            os.chmod(os.path.join(tree, rel), 0o000)
+
+    def assert_same_failure(self, tree: str, **kwargs) -> OSError:
+        """The parallel digest raises exactly what the serial one raises, and returns nothing."""
+        with self.assertRaises(OSError) as serial:
+            serial_tree_sha256(tree)
+        with self.assertRaises(OSError) as parallel:
+            if kwargs:
+                manifest._tree_sha256(tree, 8, **kwargs)
+            else:
+                manifest.tree_sha256(tree, workers=8)
+        got, want = parallel.exception, serial.exception
+        self.assertEqual((type(got), got.errno, got.filename), (type(want), want.errno, want.filename))
+        return got
+
+    def test_an_unreadable_file_raises_what_serial_raises(self):
+        tree, _ = self.build()
+        self.make_unreadable(tree, "d05/f017")
+        error = self.assert_same_failure(tree)
+        self.assertIsInstance(error, PermissionError)
+        self.assertEqual(os.fsdecode(error.filename), os.path.join(tree, "d05/f017"))
+
+    def test_the_first_failure_in_walk_order_wins_whatever_fails_first(self):
+        # Two unreadable files: the one serial names is held until the other has failed.
+        tree, _ = self.build()
+        self.make_unreadable(tree, "d03/f011", "d09/f023")
+        with self.assertRaises(OSError) as serial:
+            serial_tree_sha256(tree)
+        named = serial.exception.filename
+        other = os.fsencode(os.path.join(tree, "d09/f023" if os.fsdecode(named).endswith("d03/f011") else "d03/f011"))
+        cond = threading.Condition()
+        failed: list[bytes] = []
+
+        def hash_file(path: bytes) -> str:
+            if path == named:
+                with cond:
+                    self.assertTrue(cond.wait_for(lambda: other in failed, timeout=support.CHILD_CAP_S))
+            try:
+                return manifest.sha256_file(path)
+            except OSError:
+                with cond:
+                    failed.append(path)
+                    cond.notify_all()
+                raise
+
+        self.assert_same_failure(tree, hash_file=hash_file)
+        self.assertEqual(failed[0], other)  # the witness: the other file really failed first
+
+    def test_a_file_failing_before_an_unreadable_directory_is_the_error(self):
+        # Serial hashes a file as it meets it, and lists a directory only later: the file's error comes first.
+        tree, _ = self.build()
+        self.make_unreadable(tree, "a-b", "d07")
+        error = self.assert_same_failure(tree)
+        self.assertEqual(os.fsdecode(error.filename), os.path.join(tree, "a-b"))
+
+    def test_an_unreadable_directory_alone_raises_what_serial_raises(self):
+        tree, _ = self.build()
+        self.make_unreadable(tree, "d07")
+        self.assert_same_failure(tree)
 
 
 if __name__ == "__main__":

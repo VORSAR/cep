@@ -3,6 +3,7 @@
 Runs under Python 3.12+: the installer imports it before the pinned interpreter exists.
 """
 
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -11,7 +12,7 @@ import re
 import stat
 import sys
 import types
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -211,37 +212,66 @@ def sha256_file(path: str | bytes) -> str:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def tree_sha256(root: str) -> str:
+def _default_workers() -> int:
+    """os.process_cpu_count() where it exists (3.13+); 3.12, the installer's floor, has only os.cpu_count()."""
+    count = getattr(os, "process_cpu_count", os.cpu_count)()
+    return count or 1
+
+
+def tree_sha256(root: str, *, workers: int | None = None) -> str:
     """The digest tools.json pins for an installed tree (design note §3, whole-tree digests).
 
     The sha256 of the lines `<kind> <path> <payload>\\n` for every entry below root except the root's
     `.complete`, sorted bytewise by the whole path. Kind is d, f, x (a file with any execute bit) or l;
     the payload is `-`, the content's sha256 or the link target. Nothing is followed. Paths stay bytes, so
-    every name hashes as stored.
+    every name hashes as stored. File contents are hashed on `workers` threads (owner, 2026-11-02); the
+    digest and any error are those of the serial walk.
     """
-    lines: list[tuple[bytes, bytes]] = []
+    return _tree_sha256(root, _default_workers() if workers is None else workers, sha256_file)
+
+
+def _tree_sha256(root: str, workers: int, hash_file: Callable[[bytes], str]) -> str:
+    """Walk serially, hash in parallel, then assemble the lines in walk order and sort them.
+
+    The serial code hashed each file as the walk met it, so its first error was whichever came first in
+    walk order. Here the walk stops at its first error and only the files met before it are hashed; the
+    results come back in walk order, so a hash error, being earlier, still wins over the walk's error.
+    """
+    lines: list[tuple[bytes, bytes, bytes | None]] = []  # path, kind, payload (None: a file to hash)
+    files: list[bytes] = []
+    walk_error: OSError | None = None
     pending = [(os.fsencode(root), b"")]
-    while pending:
-        directory, prefix = pending.pop()
-        with os.scandir(directory) as listing:
-            entries = list(listing)
-        for entry in entries:
-            rel = prefix + entry.name
-            if rel == b".complete":
-                continue
-            mode = entry.stat(follow_symlinks=False).st_mode
-            if stat.S_ISLNK(mode):
-                kind, payload = b"l", os.readlink(entry.path)
-            elif stat.S_ISDIR(mode):
-                kind, payload = b"d", b"-"
-                pending.append((entry.path, rel + b"/"))
-            elif stat.S_ISREG(mode):
-                kind = b"x" if mode & 0o111 else b"f"
-                payload = sha256_file(entry.path).encode("ascii")
-            else:
-                kind, payload = b"?", b"-"  # no archive holds one, so the digest cannot match
-            lines.append((rel, b"%b %b %b\n" % (kind, rel, payload)))
+    try:
+        while pending:
+            directory, prefix = pending.pop()
+            with os.scandir(directory) as listing:
+                entries = list(listing)
+            for entry in entries:
+                rel = prefix + entry.name
+                if rel == b".complete":
+                    continue
+                mode = entry.stat(follow_symlinks=False).st_mode
+                if stat.S_ISLNK(mode):
+                    lines.append((rel, b"l", os.readlink(entry.path)))
+                elif stat.S_ISDIR(mode):
+                    lines.append((rel, b"d", b"-"))
+                    pending.append((entry.path, rel + b"/"))
+                elif stat.S_ISREG(mode):
+                    lines.append((rel, b"x" if mode & 0o111 else b"f", None))
+                    files.append(entry.path)
+                else:
+                    lines.append((rel, b"?", b"-"))  # no archive holds one, so the digest cannot match
+    except OSError as e:
+        walk_error = e
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        digests = iter(list(pool.map(hash_file, files)))  # in walk order; the first error in it is raised
+    if walk_error is not None:
+        raise walk_error
+    # Each digest goes to its file while both are still in walk order; only then are the lines sorted.
+    filled = [
+        (rel, kind, next(digests).encode("ascii") if payload is None else payload) for rel, kind, payload in lines
+    ]
     digest = hashlib.sha256()
-    for _, line in sorted(lines):
-        digest.update(line)
+    for rel, kind, payload in sorted(filled, key=lambda line: line[0]):
+        digest.update(b"%b %b %b\n" % (kind, rel, payload))
     return digest.hexdigest()
