@@ -8,6 +8,7 @@ line-length = 120
 [per-file-target-version]
 "gate/bootstrap.py" = "py39"
 "gate/toolchain/install.py" = "py312"
+"gate/toolchain/manifest.py" = "py312"
 "gate/run.py" = "py312"
 "gate/runner/pyshim.py" = "py312"
 
