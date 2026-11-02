@@ -29,7 +29,7 @@ def render(lines: Sequence[Line], *, wall_ms: int, summed_ms: int, exit_code: in
     """The whole summary. The last column is not padded, so no line carries trailing spaces."""
     cells = [HEADER, *((x.job, x.step, x.verdict, tenths(x.ms), x.reason) for x in lines)]
     widths = [max(len(row[i]) for row in cells) for i in range(len(HEADER) - 1)]
-    table = [" | ".join([*map(str.ljust, row[:-1], widths), row[-1]]).rstrip() for row in cells]
+    table = [" | ".join([*map(str.ljust, row[:-1], widths, strict=True), row[-1]]).rstrip() for row in cells]
     return "\n".join(
         [
             *table,
