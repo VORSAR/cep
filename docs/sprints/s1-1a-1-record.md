@@ -83,9 +83,62 @@ At most two agents at once. The coordinator reviews every gate-code diff and tak
 
 A lane is done at the scaffold's `make check` in W1, and at the real `make check` from W2 on.
 
+**During the build: the owner, 2026-11-02:**
+- **The whole-tree parity check stays at T2+, and its hashing is parallelised** (as recommended). The measurements behind it:
+  - Lane B measured T2 parity at about 2.7 s, against the design's estimate of about 1 s.
+  - The coordinator's probe: 19,082 files take 5.2 s serial when cold, and 2.7–3.1 s with 8–16 threads.
+  - Lane B makes the change as a follow-up.
+
 ## Measured results
 
 *(filled as lanes land)*
+
+- **Lane B: the toolchain** (`s1-1a-1/lane-b` @ 73046e4, 8 commits). **Re-verified by the coordinator:**
+  - `make check` exits 0;
+  - tests: manifest 32, install 44, bootstrap 18, parity 49, passing under both pinned 3.15.2 and 3.12.16, with 0 skips;
+  - all five installed trees reproduce `tools.json`'s `tree_sha256`, and parity returns `[]` both executables-only and whole-tree;
+  - Apple's `/usr/bin/python3` 3.9.6 is refused with the fix text, `GATE FAILED`, `exit: 2`, and nothing is created;
+  - there is no `time.sleep`, and the shared cache's stamps are unchanged.
+
+  **Lane-reported (not re-run by the coordinator):**
+  - 50/50 per module;
+  - 103 planted defects across 106 test runs, all red: 3 tests initially survived, all fixed in cce5991;
+  - Linux archives reproduced on a case-sensitive disk image;
+  - parity takes about 160 ms at T0/T1 and about 2.7 s at T2+.
+
+  **Design deltas Lane B made**, all stricter than the design, and accepted by the coordinator for review at step 7:
+  - extra extraction rejections (duplicates, empty components, non-UTF-8 names, `.complete` as a member, case collisions, and more);
+  - a chain of in-tree links that resolves outside the tree is rejected;
+  - stricter `tools.json` validation;
+  - `clean-tools` refuses a symlinked cache, or one holding entries no install wrote;
+  - every parity reason names its fix (Lane C's drivers match these strings).
+- **Lane A: the runner** (`s1-1a-1/lane-a` @ 74926e1, 11 commits). **Re-verified by the coordinator:**
+  - `make check` exits 0;
+  - `make runner-check`, the real runner over this repository, passes every row: `wall 14.7s · summed 16.7s · saved 11%`;
+  - 311 tests in 24 modules pass under the pinned 3.15.2 with no skips, and the `run.py` guard's 11 tests pass under 3.12.16;
+  - no `time.sleep` outside `gate/wait.py`, no `noqa`, `SIG_IGN` only in `test_sigchld.py`, no `shell=True`;
+  - only Lane A's own files changed.
+
+  **Lane-reported (not re-run by the coordinator):**
+  - 92 of 92 planted defects turn their tests red;
+  - stress: 311 tests, each 50/50, with 28 CPU hogs, a seeded shuffle and `PYTHONHASHSEED` 0–49.
+  - **One flaky test, root-fixed:** a fixture's TERM handler lost a signal that arrived just before `pause()`; it now uses `sigwait`.
+  - **The same race in the runner itself**, root-fixed: a signal delivered to a worker thread left the scheduler asleep. A `set_wakeup_fd` relay into the event queue now wakes it, an addition to design §4.
+
+  **Its 16 design-silent choices are accepted by the coordinator.** Among them:
+  - the registry shape `{"schema": 1, "rows": [...]}`;
+  - the summary's byte layout;
+  - a WARN row's record still says `"verdict": "fail"`, so S1.1a-2's `summarize` reads `blocking` from the registry;
+  - row directories `rows/<job>/<id>/`;
+  - the `run.py` guard reads `tools.json` itself.
+
+  **A gap in the coordinator's briefs:** the `ruff` row's wrapper had no owner. Lane A builds it as a follow-up.
+- **Follow-ups (both re-verified by the coordinator):**
+  - **Lane A's `ruff` row** (3 commits): 14 tests, and the row PASSes over 70 files in the runner.
+  - **Lane B's parallel tree hashing** (4df962b): the digests are byte-identical to the serial ones and still match `tools.json`. The T2 parity time stays at about 2.5 s: the coordinator measured 2.43–2.54 s whole-tree and 0.17 s executables-only. The floor is the endpoint-security agents' cost per file opened (SentinelOne and Workspace ONE, about 107 µs per open × 19,082 files). **The owner accepted about 2.5 s** (2026-11-02, as recommended).
+- **Combine-W1** (2026-11-02): both lanes were cherry-picked linearly (Lane A 14 commits, Lane B 9), with no conflicts. The switch-over commit adds `gate/registry.json` and the real Makefile targets, adds py312 targets for the modules `pyfloor` runs, and deletes the scaffold.
+  - **The first real `make check`:** parity PASS (5 tools, 3.6 s), gofmt (1 file), vet (1 unit), ruff (74 files), pyfloor (4 modules under 3.12.16), pytests (29 modules); `wall 28.1s · summed 37.5s · saved 25%`; `GATE PASSED`, `exit: 0`.
+  - **Planted defects:** an unformatted Go file and a `time.sleep` in gate Python turned it red (gofmt and ruff FAIL, every other row still ran, `exit: 1`).
 
 ## Test material
 
