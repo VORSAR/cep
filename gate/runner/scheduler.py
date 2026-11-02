@@ -4,6 +4,11 @@ Row ends from worker threads, timer firings and signals all arrive through one S
 decided in one place and an interrupt is never stuck behind a blocking wait. A signal handler only calls put_nowait,
 which SimpleQueue documents as reentrant. Only this thread writes the trace, and it uses its own sequence numbers.
 
+Python runs a signal's handler only in the main thread, and only when that thread runs bytecode. The kernel may
+deliver the signal to a worker thread instead, or just before the scheduler blocks on its queue; either way nothing
+would wake the scheduler. So the C-level handler also writes to a wakeup fd, from whatever thread caught the signal,
+and a relay thread turns each byte into a queue event. Waking up runs the pending handler.
+
 Parity is the built-in first step and the one hard stop. Every other `needs` is ordering only: the dependent row
 runs anyway and names what it misses (plan check S4).
 """
@@ -163,9 +168,23 @@ class Runner:
 
     # The run.
 
+    def _relay_wakeups(self, fd: int) -> None:
+        try:
+            while os.read(fd, 64):
+                self._q.put_nowait(("wake",))
+        finally:
+            os.close(fd)
+
     def run(self) -> Result:
         os.makedirs(self._run_dir, exist_ok=True)
-        previous = {s: signal.signal(s, self._on_signal) for s in SIGNALS} if self._install_signals else {}
+        previous: dict[int, object] = {}
+        wakeup = old_wakeup = -1
+        if self._install_signals:
+            relay, wakeup = os.pipe()
+            os.set_blocking(wakeup, False)
+            old_wakeup = signal.set_wakeup_fd(wakeup, warn_on_full_buffer=False)
+            threading.Thread(target=self._relay_wakeups, args=(relay,), name="gate-signal-relay", daemon=True).start()
+            previous = {s: signal.signal(s, self._on_signal) for s in SIGNALS}
         try:
             self._ceiling = self._arm("ceiling", self.ceiling_s, "ceiling")
             self._start_parity()
@@ -178,6 +197,9 @@ class Runner:
             self._cancel(self._ceiling, self._stop_grace)
             for signum, handler in previous.items():
                 signal.signal(signum, handler)
+            if self._install_signals:
+                signal.set_wakeup_fd(old_wakeup)
+                os.close(wakeup)  # the relay reads end-of-file and stops
         return self._close()
 
     def _handle(self, event: tuple) -> None:
@@ -198,6 +220,8 @@ class Runner:
                 self._on_ceiling()
             case ("stop-grace",):
                 self._kill_all()
+            case ("wake",):
+                pass  # resuming bytecode runs any pending Python-level signal handler, which posts its own event
             case _:
                 raise AssertionError(f"unknown event {event!r}")
 

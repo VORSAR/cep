@@ -10,7 +10,9 @@ Stands in for a real row in the runner's tests. Standalone (run with -I), so it 
     printhex HEX   write raw bytes to stdout
     flood N        write N bytes of invalid UTF-8 to stdout
     status N       the exit status to use when the actions run out
-    term PATH      hold PATH open for writing; on SIGTERM write one byte there and carry on (TERM is not fatal)
+    term PATH      hold PATH open for writing with SIGTERM blocked, write a start byte, then forever: wait for
+                   SIGTERM and write one byte (TERM is not fatal). sigwait on a blocked signal loses none; a
+                   Python-level handler with pause() would, when TERM lands just before the pause() call.
     killself N     send this process signal N
     spawn N ...    start a child in this process group running the next N tokens as actions, and carry on
     needfile PATH  exit 1 naming the file, if it is missing
@@ -28,13 +30,6 @@ import sys
 def _write(fd: int, data: bytes) -> None:
     while data:
         data = data[os.write(fd, data) :]
-
-
-def _term_handler(fd: int):
-    def on_term(signum, frame):
-        os.write(fd, b"T")
-
-    return on_term
 
 
 def run(actions: list[str]) -> int:
@@ -73,9 +68,11 @@ def run(actions: list[str]) -> int:
         elif action == "term":
             path, *actions = actions
             fd = os.open(path, os.O_WRONLY)
-            held.append(fd)
-            signal.signal(signal.SIGTERM, _term_handler(fd))
+            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
             _write(fd, b"s")
+            while True:
+                signal.sigwait({signal.SIGTERM})
+                _write(fd, b"T")
         elif action == "killself":
             value, *actions = actions
             os.kill(os.getpid(), int(value))
