@@ -19,7 +19,9 @@ The toolchain, the gate, and the code rules every change follows. The process th
 
 > The gate's full mechanism catalog — architecture analyzers with planted-failure proofs, suppression liveness, freshness checks, hostility rules — is [ADR-0015](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md); the assurance strategy is [qa-strategy.md](qa-strategy.md).
 
-The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge.
+The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, exclusive, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge.
+
+**Parallel by default** (owner, 2026-11-02): independent rows run at the same time, each starting as soon as the rows it `needs` finish; only rows marked `exclusive` (benchmarks, latency, stress under load) run alone. Go builds and tests run packages in parallel and share one cache; CI runs its jobs concurrently. The summary stays in registry order, so a parallel run reads exactly like a serial one ([ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)).
 
 **The four rules the gate enforces:**
 1. **Collect-all.** A failing step never stops the run. Every step runs to completion; a skip is recorded with its reason, never as green.

@@ -124,8 +124,8 @@ internal/text/                            normalization (x/text), tokenizer, Aho
 internal/table/                           in-memory keyed tables, snapshot-per-event reads
 internal/playback/                        virtual clock, merged-log format, expect runner (ADR-0005)
 internal/metrics/                         counters + Prometheus text exposition (no client lib)
-conformance/                              the golden suite + corpus runner (test-only package; the expect sandbox it drives lives in internal/playback; its place in the layer model is settled at sprint S1.1's plan check)
-bench/                                    benchmark suite + scenario generators (ADR-0010 §8; layer placement settled at sprint S1.1's plan check)
+conformance/                              the golden suite + corpus runner (test-only package; the expect sandbox it drives lives in internal/playback; owner 2026-11-02: imports PUBLIC packages only — it proves the real product path — and nothing imports it)
+bench/                                    benchmark suite + scenario generators (ADR-0010 §8; owner 2026-11-02: may import internal packages to time stages; nothing imports it)
 gallery/                                  the attack gallery: runnable rule apps + playback logs + expects (roadmap exit criterion 5; conformance executes them)
 demo/                                     the kill-switch demo kit: compose file, traffic generator, stub IAM, mail catcher (exit criterion 1; trailing sprint — round-2 F17)
 docs/language/                            the frozen spec (already exists; grammar.lark is normative)
@@ -139,7 +139,7 @@ api/exports.golden                        the hand-written public-export law fil
 .githooks/, Makefile, tools.json          the gate (ADR-0005; DEVELOPMENT.md is the doctrine; ADR-0015 the mechanism catalog)
 ```
 
-**Import rules (MUST; enforced by a gate check):**
+**Import rules (MUST; enforced by a gate check).** *Owner decision 2026-11-02: where a rule below lists the packages a package may import, the list is **exhaustive** — §2a's "any lower layer" is the outer bound, not a licence; a connection not listed here or in the exception table is red, and adding one is a `rules.json` change visible in the LAW Δ block.*
 1. `internal/event` imports nothing from this module. Everything else may import it.
 2. `internal/model` imports only `internal/event`.
 3. `internal/parser` and package `rule` import `internal/model` (both are front-ends; neither imports the other).

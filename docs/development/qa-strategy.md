@@ -46,7 +46,7 @@ Each law reruns conformance scenarios and compares outputs mechanically — no n
 
 - Doc-sync: error catalog ↔ validator table; Appendix F ↔ expr registry; ARCHITECTURE package list ↔ directories; reserved words ↔ kwgen (ADR-0015 §2, per sub-check `lands_in`).
 - API: the hand-written export list (`api/exports.golden`, a law file) + `apidiff` at T4 against merge-base/last-tag (ADR-0015).
-- Coverage: the binary inclusion rule (allowlist-waivable with a recorded reason) + the 85% per-package statement floor, **unwaivable within its stated scope** — `internal/*` + the three public packages, generated files excluded (ADR-0015 §2.2; the old "no waiver path" sentence conflated the two rules).
+- Coverage: the binary inclusion rule (allowlist-waivable with a recorded reason) + the **90%** per-package statement floor *(owner, 2026-11-02: raised from 85%; enforced from sprint S1.1a, the first Go code)*, **unwaivable within its stated scope** — `internal/*` + the public packages (`cep`, `rule`, `io` and the `io/*` built-ins), generated files excluded (ADR-0015 §2.2; the old "no waiver path" sentence conflated the two rules).
 - Dependency allowlist (`tools/deps-allowlist.json`) — an unapproved `go.mod` edit is red.
 - Suppression + allowlist accountability: one grammar (ADR-0015 §3.10), expiry enforcement, liveness, counts + deltas in the summary.
 - Generated-code freshness (parser, keywords) regenerate-and-diff, scratch-dir only.
