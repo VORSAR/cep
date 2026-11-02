@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "tools": [
+    {
+      "command": "python3.15",
+      "name": "python",
+      "path_dir": "bin",
+      "platforms": {
+        "darwin-arm64": {
+          "archive_sha256": "285a6b924713bec9c1cdf442ba5ebfbafbab070060b34d607c30546b758e64a6",
+          "exec_sha256": {
+            "bin/python3.15": "24eb2eac51c73c4e0dd756f84d73783f67b43ac19d2babb5643bdd1bfc8ab82f"
+          },
+          "strip": "python/",
+          "tree_sha256": "81c806fe6e4e0def0c539b0a93b242103252c09084dafe5770504f727b72aa0c",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.15.2%2B20261026-aarch64-apple-darwin-install_only.tar.gz"
+        },
+        "linux-amd64": {
+          "archive_sha256": "08d4ae9024a7cfbd3b70e559241afa2571cd3208d7bd5f96f88e0080dd4092aa",
+          "exec_sha256": {
+            "bin/python3.15": "92cd46cc9c4f7622a8501cf8e0282f5dd384edf3f8111239449e0bd95b8c6849"
+          },
+          "strip": "python/",
+          "tree_sha256": "5537f6815d9f8ecc12bb708390ed466796c34128f8d292561cf0ef9acf093276",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.15.2%2B20261026-x86_64-unknown-linux-gnu-install_only.tar.gz"
+        }
+      },
+      "version": "3.15.2",
+      "version_argv": [
+        "bin/python3.15",
+        "--version"
+      ],
+      "version_line": "Python 3.15.2"
+    },
+    {
+      "command": "python3.12",
+      "name": "python-floor",
+      "path_dir": "bin",
+      "platforms": {
+        "darwin-arm64": {
+          "archive_sha256": "fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e",
+          "exec_sha256": {
+            "bin/python3.12": "c172d5d4e4c0a03d30c7c3cb04d638f667a31fe1f494157f11861c5fd40c8a28"
+          },
+          "strip": "python/",
+          "tree_sha256": "90caa4d42e6ac333ee6da74ca93c37dabbcbfca0703d5ef3f5a137686e5c5e20",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-aarch64-apple-darwin-install_only.tar.gz"
+        },
+        "linux-amd64": {
+          "archive_sha256": "6a79e922e50006b601f29e688407659da1c2b86ebcd4e9c7254cf234be8b89de",
+          "exec_sha256": {
+            "bin/python3.12": "88824fc08d28dc998af64dd55a8dd01366005d517903282a6989b1a3ccd70ded"
+          },
+          "strip": "python/",
+          "tree_sha256": "dec2c7e10c75663e1848d462680f9a6049f06abba3ab02faf6a574da83b35ac6",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-unknown-linux-gnu-install_only.tar.gz"
+        }
+      },
+      "version": "3.12.16",
+      "version_argv": [
+        "bin/python3.12",
+        "--version"
+      ],
+      "version_line": "Python 3.12.16"
+    },
+    {
+      "command": "go",
+      "name": "go",
+      "path_dir": "bin",
+      "platforms": {
+        "darwin-arm64": {
+          "archive_sha256": "dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2",
+          "exec_sha256": {
+            "bin/go": "aa355b078a81158d418079a3f8c776719eb99cc6f527e39ffa3250c66566aafb",
+            "bin/gofmt": "798718e7bde7980be3a0c3649876fea538a56b5195ad32bfb2499aab0c6e2b7c",
+            "pkg/tool/darwin_arm64/asm": "4165876f4b0a389293cd05392c09ef197f36111edf5b6146e870a05dd3c26a90",
+            "pkg/tool/darwin_arm64/cgo": "760acaf7db58f40a72482017209148a55636e62e95bc40f5df446382adf44513",
+            "pkg/tool/darwin_arm64/compile": "4d0bd4c1880e3d575827a72ac66b0f117b31da0aff1fe44f03a54c7ffb3c8ae3",
+            "pkg/tool/darwin_arm64/cover": "0ebf757bd94a933dd64a04612726d3cb2aae28ff3c6f97f9cb61537a404b5fda",
+            "pkg/tool/darwin_arm64/fix": "9d4be7410db959769d80ce8ab973b0fd6d64245312d28ee439f20ce51acbadaf",
+            "pkg/tool/darwin_arm64/link": "9674eaf9854e44afd7331046d14429f914bf9838f48e9ed77793e0686e45d4b2",
+            "pkg/tool/darwin_arm64/preprofile": "16d53ec08b996bbe7744e6085e765c6e773e65afdb6dcf208fd7ae553f3f0b8a",
+            "pkg/tool/darwin_arm64/vet": "505e339103e7bb0d2514ff39decee8647664dc593fcb8bb052e33d39b6a03cf3"
+          },
+          "strip": "go/",
+          "tree_sha256": "ea93207a73c43d7d5275896133611426acbbfcab249e331d93916323c56c1e86",
+          "url": "https://go.dev/dl/go1.27.3.darwin-arm64.tar.gz"
+        },
+        "linux-amd64": {
+          "archive_sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+          "exec_sha256": {
+            "bin/go": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b",
+            "bin/gofmt": "fd464d1c9098a6714d06bd3fcd2a1fedcdd291e710241160ebb663bf99adf2f8",
+            "pkg/tool/linux_amd64/asm": "fdcf20e7e2d9a602979b96ced85e6ba6529551ae23a38edcd80181df4566b7a9",
+            "pkg/tool/linux_amd64/cgo": "9f67e42d7910067eb5857e5321e1d04aaaa2d22b8ff6d8e1c63bb4365b651049",
+            "pkg/tool/linux_amd64/compile": "c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283",
+            "pkg/tool/linux_amd64/cover": "02d4e5525baf6f7ab661430549dc1137321fc9e27b6ba71797123c305355b46d",
+            "pkg/tool/linux_amd64/fix": "ae0e0eafb4e2e03ff53947e4aae5b1985b197bd196fc7bb75022620c9bb629ad",
+            "pkg/tool/linux_amd64/link": "c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe",
+            "pkg/tool/linux_amd64/preprofile": "75cf4cecf37908adab3c352779bbd4b23fb85b352918711e8cf8fba95ca6d969",
+            "pkg/tool/linux_amd64/vet": "4c459358f5fc720f74fc53dd0fc032655e038e2461d8230f1667d0931661ff6c"
+          },
+          "strip": "go/",
+          "tree_sha256": "dc154e7c4b8cfe182c1bfef6f5d2d21f27d0586ffe393156e1e8777182052fd5",
+          "url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz"
+        }
+      },
+      "version": "go1.27.3",
+      "version_argv": [
+        "bin/go",
+        "version"
+      ],
+      "version_line": "go version go1.27.3 {goos}/{goarch}"
+    },
+    {
+      "command": "golangci-lint",
+      "name": "golangci-lint",
+      "path_dir": ".",
+      "platforms": {
+        "darwin-arm64": {
+          "archive_sha256": "d1e409481a8ca846c4bc97e781eb5cb1bd5c23353a0b3977a1cbda1b1b6447d5",
+          "exec_sha256": {
+            "golangci-lint": "71b89744ef6dd92dad9026b70489d1ad660da79ef90dfb5aabe995d916bec8a9"
+          },
+          "strip": "golangci-lint-2.15.0-darwin-arm64/",
+          "tree_sha256": "f08c69f2ebfaf80e7d1699decd2bfc62443a89e47af551b501199d38b6c8cc43",
+          "url": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-darwin-arm64.tar.gz"
+        },
+        "linux-amd64": {
+          "archive_sha256": "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea",
+          "exec_sha256": {
+            "golangci-lint": "d9af4564c05beb2f5e130119aec45e5e89d28e5017d558d3ca382659f2427894"
+          },
+          "strip": "golangci-lint-2.15.0-linux-amd64/",
+          "tree_sha256": "4bda7cfdafdff5851ef797f7bf343d523ebab05098a7df10e7c35571fe9b9a17",
+          "url": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz"
+        }
+      },
+      "version": "v2.15.0",
+      "version_argv": [
+        "golangci-lint",
+        "version"
+      ],
+      "version_line": "golangci-lint has version 2.15.0 built with go1.27.0 from 25c5369a on 2026-10-16T11:03:09Z"
+    },
+    {
+      "command": "ruff",
+      "name": "ruff",
+      "path_dir": ".",
+      "platforms": {
+        "darwin-arm64": {
+          "archive_sha256": "118f7121aa838785672bf612487f755a89108bb5f44e0f3df96c5967a72614f9",
+          "exec_sha256": {
+            "ruff": "b768f3410db7e66d84b634d329b5f54599a7c39012a1eb3aaaa16e73a90587e2"
+          },
+          "strip": "ruff-aarch64-apple-darwin/",
+          "tree_sha256": "b275c168f8a6c538ca5566098edeea9a4990089647f635a296eda36f20e63cb9",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-aarch64-apple-darwin.tar.gz"
+        },
+        "linux-amd64": {
+          "archive_sha256": "2b0890f5a55900af741f133918c2656919bbf18c2ab7741b4ca8403a90e647a9",
+          "exec_sha256": {
+            "ruff": "6761c67c2b307be3905473b165eb5af0fb2f083836b04f9e4a8cdd0caee37833"
+          },
+          "strip": "ruff-x86_64-unknown-linux-gnu/",
+          "tree_sha256": "9079ac526bbd084cb84bde59c4da2cab9b0938d91e54890a2d64397803bc2f3a",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-x86_64-unknown-linux-gnu.tar.gz"
+        }
+      },
+      "version": "0.17.3",
+      "version_argv": [
+        "ruff",
+        "--version"
+      ],
+      "version_line": "ruff 0.17.3"
+    }
+  ]
+}
