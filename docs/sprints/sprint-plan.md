@@ -32,347 +32,404 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 
 **Execution order:** enablers first. The gate and playback mode come before the pattern operators ([roadmap — the slice](../product/02-roadmap.md#everything-required-the-slice-by-feature-area)).
 
-### Phase 1 decomposition — v2, APPROVED by the owner (2026-11-02)
+### Phase 1 decomposition — v3, recalibrated to the 13-point cap (2026-11-02)
 
-> **Status of this section: APPROVED** (owner, 2026-11-02 — §5 "Owner decisions, 2026-11-02 — decomposition approval"); sprint model §9 phase entry 1 holds. Each card still passes its own G0 (plan check reviewed and answered) before its sprint starts. *(Until approval this section read "DRAFT v2 for owner approval"; annotated, not rewritten.)* v1 (2026-11-01) was reviewed blind by the architecture reviewer ([docs/reviews/phase1-decomposition-architecture.md](../reviews/phase1-decomposition-architecture.md), 22 findings) and the QA reviewer ([docs/reviews/phase1-decomposition-qa.md](../reviews/phase1-decomposition-qa.md), 35 findings); every finding is dispositioned in those files. The owner's scoping choices of 2026-11-01 and the six decisions of 2026-11-02 (§5) are applied below.
+> **Status of this section.** v2 was approved by the owner on 2026-11-02. At the owner's request the same day, v3 recalibrates it: every card is re-estimated item by item and no card holds more than 13 points. **v3 changes only how the work is cut into sprints — no item was added or removed** except the two the owner added after v2's approval (coverage at 90% in S1.1, the parallel runner). **v3 is APPROVED** (owner, 2026-11-02 — §5 "Owner decisions, 2026-11-02 — recalibration (v3)"). Each sprint still passes its own G0.
 
-**What changed from v1, in one paragraph.** v1 had 14 sprints and 167 SP. The reviews found real work v1 left out — test material for seven of the nine examples, five shipped constructs nobody tested, six gate pieces with no sprint, a package cycle, and pieces placed before what they depend on — and showed that v1's split lines pushed work into cards that were already full. v2 therefore **splits every card whose fixed content exceeds the cap into its own sprints now**, before entry, as the sprint model requires: **20 sprints, 240 SP**. No new feature was added; the growth is work that was always required and is now visible.
+**How the points are calibrated.** Story points measure **build work** — the code, its tests and its test material — estimated item by item (each item's estimate is in brackets) against two anchors: **`internal/event` = 1 point; the pattern engine's core (partials, absence watchers, completion timers, the skip rules) = 5 points.** The fixed process every sprint carries — plan check, reviews, break-it, fix round, owner's check, and the window sprints' design panels — is not in the points; the 2-week cap holds it. A sprint holds **at most 13 points** of estimated build work; each card shows its item total and its size rounded up to the Fibonacci scale. v2 sized cards by judgment; counted item by item, ten of v2's twenty cards were over 13, so v3 re-cuts them — splitting where a coherent half exists (new ids carry a letter, e.g. S1.1a/S1.1b, so references to v2's ids elsewhere stay valid) and otherwise moving an item to the neighbour it belongs with.
 
-**How to read the numbering.** ADR-0005 §1's stages keep their numbers; a stage that does not fit one sprint is split before entry (sprint model §3): **S1 = S1.1 + S1.2; S2 = S2.1 + S2.2; S3 = S3.1 + S3.2 + S3.3; S4 = S4.1 + S4.2; S5 = S5.1 + S5.2; S6 = S6.1 + S6.2; S9 = S9.1 + S9.2.** Every ADR reference to a stage ("lands with the parser in S2", "S3's exit") means the stage; the cards below name the exact sprint. The clock contract freezes at **S3.3's** G5 ("S3's exit", ADR-0005 §1). **Sprint-id grammar** (settled in S1.2, used by `todocheck`, `suppressions` and conformance skips): `S<stage>[.<part>]`, ordered by this table's row order; "current + 2" means two rows down.
+**How to read the numbering.** ADR-0005 §1's stages keep their numbers; a stage that does not fit one sprint is split before entry (sprint model §3): **S1 = S1.1a + S1.1b + S1.2; S2 = S2.1 + S2.2a + S2.2b; S3 = S3.1 + S3.2a + S3.2b + S3.3; S4 = S4.1 + S4.2; S5 = S5.1 + S5.2; S6 = S6.1 + S6.2; S9 = S9.1 + S9.2.** Every ADR reference to a stage means the stage; the cards name the exact sprint. The clock contract freezes at **S3.3's** G5 ("S3's exit", ADR-0005 §1). **Sprint-id grammar** (settled in S1.2, used by `todocheck`, `suppressions` and conformance skips): `S<stage>[.<part>][<letter>][-<n>]` (the `-<n>` suffix only when a plan check applies a card's split line), ordered by this table's row order; "current + 2" means two rows down.
 
-**Sequencing principle (owner decision 2026-11-01).** Enablers first (S1.1–S3.3). Then the **kill-switch vertical**: patterns (S4.1, S4.2) make the flagship fire in playback; connectivity (S5.1) makes it fire live through `cepd`; the Go builder (S6.1) proves DSL/Go parity on it. Breadth follows: the formatter (S6.2), text (S7), windows (S8, S9.1, S9.2), the demo kit and published latency (S10), the attack gallery (S11), the release close-out (S12). **From S6.1 onward every construct ships in both front-ends in the sprint that ships it** (builder surface + a parity twin per example).
+**Sequencing principle (owner decision 2026-11-01).** Enablers first (S1.1a–S3.3). Then the **kill-switch vertical**: patterns (S4.1, S4.2) make the flagship fire in playback; connectivity (S5.1) makes it fire live through `cepd`; the Go builder (S6.1) proves DSL/Go parity on it. Breadth follows: the formatter (S6.2), text (S7), windows (S8, S9.1, S9.2), the demo kit and published latency (S10), the attack gallery (S11), the release close-out (S12). **From S6.1 onward every construct ships in both front-ends in the sprint that ships it** (builder surface + a parity twin per example).
 
-| Sprint | Title | SP | Routine | Depends on |
+| Sprint | Title | SP (items) | Routine | Depends on |
 |---|---|---|---|---|
-| S1.1 | The gate core and the event kernel | 13 | full | — |
-| S1.2 | The model kernel, the remaining S1 gate rows and spec rev 3 | 13 | full | S1.1 |
-| S2.1 | The parser and the grammar differential | 13 | full | S1.2 |
-| S2.2 | The validator, expression typing and the callable registry | 13 | full | S2.1 |
-| S3.1 | The clock service, tables and the playback format | 13 | full | S2.2 |
-| S3.2 | The runtime core: partitions, shards, routing, live and replay | 13 | full | S3.1 |
-| S3.3 | The Deploy pipeline, rate limiting and the conformance runner — clock freeze | 13 | full | S3.2 |
-| S4.1 | The pattern engine — the kill switch fires in playback | 13 | full | S3.3 |
-| S4.2 | The pattern engine against an independent oracle and the metamorphic laws | 8 | full | S4.1 |
-| S5.1 | HTTP in, webhook out — the kill switch fires live | 13 | full | S4.2 |
-| S5.2 | The other connectors, error logging and observability | 8 | full | S5.1 |
-| S6.1 | The Go builder, DSL/Go parity and the CLI | 13 | full | S5.2 |
-| S6.2 | `cep fmt` and the generated timing comment | 13 | full (language) | S6.1 |
-| S7 | Text operators, incl. live table term lists | 13 | full | S6.2 |
-| S8 | Windows I — sort, batch and `count` | 13 | full, three-reviewer panel | S7 |
-| S9.1 | Windows II — cron | 13 | full, three-reviewer panel | S8 |
-| S9.2 | Windows III — delay | 8 | full, three-reviewer panel | S9.1 |
-| S10 | Demo kit, quickstart, benchmarks and the published latency | 13 | lighter | S9.2 |
-| S11 | The attack gallery — seven examples | 13 | lighter | S10 |
-| S12 | Release close-out — whole-engine break-it and `v0.1.0` | 8 | full + whole-engine break-it | S11 |
+| S1.1a | The gate runner, CI, coverage and the event kernel | 13 (12.5) | full | — |
+| S1.1b | The analyzers and the law | 13 (13) | full | S1.1a |
+| S1.2 | The model kernel, the remaining gate rows and spec rev 3 | 13 (11) | full | S1.1b |
+| S2.1 | The parser | 13 (13) | full | S1.2 |
+| S2.2a | The grammar differential and the expression engine | 13 (10.5) | full | S2.1 |
+| S2.2b | The validator | 13 (11.5) | full | S2.2a |
+| S3.1 | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
+| S3.2a | The replay format and the runtime core | 13 (11.5) | full | S3.1 |
+| S3.2b | One runtime, live and replay — rate limits, errors, arrival time | 13 (12.5) | full | S3.2a |
+| S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b |
+| S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
+| S4.2 | The pattern engine completed and independently proven | 13 (13) | full | S4.1 |
+| S5.1 | HTTP in, webhook out — the kill switch fires live | 13 (11.5) | full | S4.2 |
+| S5.2 | The other connectors, error logging and observability | 13 (9) | full | S5.1 |
+| S6.1 | The Go builder, DSL/Go parity and the CLI | 13 (13) | full | S5.2 |
+| S6.2 | `cep fmt` and the generated timing comment | 13 (12.5) | full (language) | S6.1 |
+| S7 | Text operators, incl. live table term lists | 13 (13) | full | S6.2 |
+| S8 | Windows I — sort, batch and `count` | 13 (12) | full, three-reviewer panel | S7 |
+| S9.1 | Windows II — cron | 13 (12) | full, three-reviewer panel | S8 |
+| S9.2 | Windows III — delay, and the cron/delay builder twins | 8 (6.5) | full, three-reviewer panel | S9.1 |
+| S10 | Demo kit, quickstart, benchmarks and the published latency | 13 (10) | lighter | S9.2 |
+| S11 | The attack gallery — seven examples | 13 (12) | lighter | S10 |
+| S12 | Release close-out — docs, whole-engine break-it and `v0.1.0` | 13 (12.5) | full + whole-engine break-it | S11 |
 
-**Forecast (honest, re-forecast at named points).** 20 sprints, 240 SP. At 2–3 weeks wall-clock per sprint for a solo owner, Phase 1 is **40–60 weeks**; the 8-SP sprints should run shorter, so the lower half is plausible but unproven. No velocity has been measured: **re-forecast at S1.2's G5 and at S3.3's G5** from recorded points and durations (sprint model §3), and at any further split. Any 13-SP card the plan check sizes over the cap is split into its own two sprints (Sn.a / Sn.b) **before** G0 — never by moving work into a neighbouring card.
+**Forecast (honest, re-forecast at named points).** **23 sprints; about 270 points of estimated build work** (294 in Fibonacci card sizes). At 2–3 weeks wall-clock per sprint for a solo owner, Phase 1 is **46–69 weeks**. Several cards sit well under 13 (S1.2, S2.2a, S5.2, S9.2, S10), so the lower half of the range is plausible but unproven. No velocity has been measured: **re-forecast at S1.2's G5 and at S3.3's G5** from recorded points and durations (sprint model §3). A card the plan check sizes over 13 is split into its own two sprints **before** G0 — never by moving work into a neighbouring card that is already full.
 
 **Gate instruments by sprint** (ADR-0015 `lands_in`, mapped onto the split numbering — each lands with its first subject, fixture, `min_wants`, registry row and teeth pin in one commit, and scans the whole module retroactively).
 
 | Sprint | Instruments landing |
 |---|---|
-| S1.1 | registry + runner + summary + `lawdelta`; parity + atomic installer; registry-lint; `importcheck`; `clockcheck`; `todocheck` (basic `TODO(owner\|S<n>\|#id)`); `smells`; `suppressions` + the one allowlist grammar; `testhygiene` (S1.1 already writes tests); teeth meta-test; hooks; CI + summary fixtures; `docsync` (a) one direction |
-| S1.2 | the dependency-allowlist check (ADR-0009 §1); the licence check and `govulncheck` (T4); the build-tag law (ADR-0015 §3.4); the weekly canary (advisory, aging); the sprint-id grammar, a machine-readable current-sprint marker (`gate/current-sprint`, a law path) and the skip / `deferred(P<n>, ref=…)` forms in `todocheck`; `docsync` (d) **error-count consistency** (errors.md headings = SPEC Appendix C total = ARCHITECTURE §1/§5 counts) |
-| S2.1 | `freshness`; `puritycheck`; `globalscheck`; `coverage-inclusion`; the grammar differential (T4); `docsync` (b) reserved words ↔ kwgen; **the nightly workflow** with one advisory, aging row per fuzz target |
-| S2.2 | `docsync` (b) [static] codes ↔ `catalog.go`; `docsync` (c) Appendix F ↔ `expr.Registry`; `allocgate` first rows |
-| S3.2 | race step + goleak proof; the **metric-tripwire step** (zero-config-is-failure; the outbox ceiling blocking at 65,536 — ADR-0006 §5, ADR-0015 §3.11); `allocgate` ingest → filter |
-| S3.3 | `apipartition` (`api/exports.golden`: `cep` + `io`) + `apidiff` against the merge base; the two-OS determinism proof; `gate/regen-baseline` + Tier-2 baselines; the conformance runner's planted wrong-expect proofs; **`api/clock.golden`** (exported signatures of `internal/clock`, added to `gate/law.json` at the freeze — a later change is a LAW Δ) |
-| S4.1, S8, S9.1, S9.2 | `allocgate` extended per hot-path stage; the walked-state / timer-derivability invariant (ADR-0006 §2) extended to each new state holder |
-| S6.2 | `fmtcheck` (scope below) |
-| S10 | benchmark tripwires (benchstat); the compose-kit nightly job |
-| S12 | `docsync` (a) reverse direction; the ARCHITECTURE §7 file-existence check |
+| S1.1a | registry + **parallel** runner + summary; parity + atomic installer; the `gofmt` and `go vet` rows; hooks; CI (concurrent jobs, cached) + summary fixtures; `gate/proofs/`; **`coverage-inclusion`** — every package tested + the **90%** per-package floor (owner 2026-11-02) |
+| S1.1b | `lawdelta` + `gate/law.json`; registry-lint; `importcheck`; `clockcheck`; `puritycheck`; `globalscheck` (their first subject, `internal/event`, exists from S1.1a); `todocheck` (basic); `testhygiene`; teeth meta-test; `smells`; `suppressions` + the one allowlist grammar |
+| S1.2 | `docsync` (a) one direction; the dependency-allowlist check; the licence check and `govulncheck`; the build-tag law; the weekly canary; the sprint-id grammar, `gate/current-sprint` and the skip / `deferred(P<n>, ref=…)` forms in `todocheck`; `docsync` (d) error-count consistency |
+| S2.1 | `freshness` |
+| S2.2a | the grammar differential (T4); `docsync` (b) reserved words ↔ kwgen; the nightly workflow (one advisory, aging row per fuzz target); `docsync` (c) Appendix F ↔ `expr.Registry`; `allocgate` first rows |
+| S2.2b | `docsync` (b) [static] codes ↔ `catalog.go` |
+| S3.2b | race step + goleak proof; the metric-tripwire step (outbox ceiling blocking at 65,536); `allocgate` ingest → filter; the two-OS determinism proof |
+| S3.3 | `apipartition` + `apidiff` (merge base); `gate/regen-baseline` + Tier-2 baselines; the planted wrong-expect proofs; `api/clock.golden` (law path, at the freeze) |
+| S4.1, S8, S9.1, S9.2 | `allocgate` extended per hot-path stage; the walked-state / timer-derivability invariant extended to each new state holder |
+| S6.2 | `fmtcheck` |
+| S10 | benchmark tripwires (`exclusive` rows); the compose-kit nightly job |
+| S12 | `docsync` (a) reverse direction; the ARCHITECTURE §7 file-existence check; the docs-to-conformance check |
 
-**Roadmap exit criteria → where each is proven.** (1) quickstart < 15 min → S10. (2) conformance + unit green for every construct → every sprint's exit; latency measured and published → S10. (3) docs for the shipped subset → S10, final pass S12; `v0.1.0` tag + public repo → S12. (4) DSL/Go parity proven by one test → S6.1 (twins extended S7–S9.2, S11). (5) attack gallery ≥ 5 → S11 (seven by owner decision).
+**Roadmap exit criteria → where each is proven.** (1) quickstart < 15 min → S10. (2) conformance + unit green for every construct → every sprint's exit; latency measured and published → S10. (3) docs for the shipped subset, `v0.1.0`, public repo → S12. (4) DSL/Go parity proven by one test → S6.1 (twins extended S7–S9.2, S11). (5) attack gallery ≥ 5 → S11 (seven by owner decision).
 
-**The 40 semantics-harness checks (`docs/language/checks/`) → the one sprint that ports each.** S2.2: the 1.1 null-strict asymmetry check (its scalar assertions; its `in` assertion is completed in S3.1), RT-14, "9 · TTL deploy check", RT-07's extended static check (pattern and rate parts) = 4. S3.3: the three §8 rate-limit checks = 3. S4.1: the eleven §6 checks, the 2.1/6.5 late-drop check, the four §2.1 checks other than RT-09 (all four run patterns), and the two pattern-dependent §9 purge checks = 18. S7: the seven §5 text checks = 7. S8: sort ×3, batch (RT-21), RT-06 changelog purge = 5. S9.1: cron half-open = 1, plus RT-07's window-extent assertions completing the check counted under S2.2. S9.2: delay = 1. **39 ported in Phase 1; RT-09 deferred to Phase 2** — it needs a rule consuming a derived stream, which v0.1 rejects (owner decision 2026-11-01); recorded as `deferred(P2, ref=sprint-plan §5 2026-11-01)` and ARCHITECTURE §7 is annotated. **S3.1 ports no harness check**: all §2.1 checks run patterns; S3.1 instead carries clock-level unit tests of the same arithmetic (admission strictness, the clamped min, per-stream virtual floors, idle exclusion), each citing the check whose arithmetic it pins. New harness checks (and-groups in S4.1; the cron admission rule in S1.2's rev 3) are written red-first in Python before any Go.
+**The 40 semantics-harness checks → the one sprint that ports each.** S2.2a: the 1.1 null-strict check's scalar assertions (its `in` assertion is completed in S3.1) = 1. S2.2b: RT-14, "9 · TTL deploy check", RT-07's extended static check (pattern and rate parts) = 3. S3.2b: the three §8 rate-limit checks = 3. S4.1: the eleven §6 checks, the 2.1/6.5 late-drop check, the four §2.1 checks other than RT-09, and the two pattern-dependent §9 purge checks = 18. S7: the seven §5 text checks = 7. S8: sort ×3, batch (RT-21), RT-06 changelog purge = 5. S9.1: cron half-open = 1, plus RT-07's window-extent assertions. S9.2: delay = 1. **39 ported; RT-09 deferred to Phase 2** (it needs a rule consuming a derived stream, which v0.1 rejects) as `deferred(P2, ref=sprint-plan §5 2026-11-01)`. S3.1 ports none: it carries clock-level unit tests of the same arithmetic, each citing its source check. New harness checks (and-groups in S4.2; the cron admission rule in S1.2's rev 3) are written red-first in Python before any Go.
 
-**Corpus examples → the sprint that turns each green.** 07-consent-gate, 09-params-and-quoting → S3.3. 01-agent-kill-switch, 08-session-flow → S4.1. 05-text-operators, 06-once-and-group → S7. 03-sort-leaderboard → S8. 02-cron-digest → S9.1. 04-delay-and-batch → its batch rule in S8, its delay rule and the whole file in S9.2. **Test material (owner decision 2026-11-02):** in the sprint that turns an example green, the QA agent adds to the example file **≥ 1 fire-path and ≥ 1 near-miss expect block, multi-key or multi-session wherever the rule correlates**, with expected outputs derived by hand from SEMANTICS or from the Python reference executor **before the engine runs** (first seen failing). Each addition is a spec-corpus change: `grammar_check` re-runs green and the LAW Δ block shows it. An output an expect block cannot express (03's `+`/`−` changelog rows, if SPEC §6.8 has no form for them) gets a `conformance/cases/<example>/` log beside it. Until its sprint, an example's cases are `skip: not-implemented(<sprint>)`; **a skip naming the current sprint is red at that sprint's own T4** (S1.2's current-sprint marker), and every skip still open at S12 is red.
+**Corpus examples → the sprint that turns each green.** 07-consent-gate, 09-params-and-quoting → S3.3 (their test material is written in S3.2b). 01-agent-kill-switch, 08-session-flow → S4.1. 05-text-operators, 06-once-and-group → S7. 03-sort-leaderboard → S8. 02-cron-digest → S9.1 (its parity twin in S9.2). 04-delay-and-batch → its batch rule in S8, the whole file in S9.2. **Test material (owner decision 2026-11-02):** in the sprint that owns an example, the QA agent adds to the example file **≥ 1 fire-path and ≥ 1 near-miss expect block, multi-key or multi-session wherever the rule correlates**, with expected outputs derived by hand from SEMANTICS or from the Python reference executor **before the engine runs**. Each addition is a spec-corpus change: `grammar_check` re-runs green and the LAW Δ block shows it. An output an expect block cannot express (03's `+`/`−` rows, if SPEC §6.8 has no form for them) gets a `conformance/cases/<example>/` log beside it. Until its sprint, an example's cases are `skip: not-implemented(<sprint>)`; **a skip naming the current sprint is red at that sprint's own T4**, and every skip still open at S12 is red.
 
 ---
 
-#### S1.1 — The gate core and the event kernel
+#### S1.1a — The gate runner, CI, coverage and the event kernel
 
 | | |
 |---|---|
-| **Goal** | A clean clone runs `make check` through the hostile gate's core — pinned toolchain, registry, runner, summary with the LAW Δ block first — and the event kernel `internal/event` exists, is tested, and is policed by it. |
-| **Routine · size** | Full loop (the event kernel fixes the null representation and the total order every later output depends on; the gate is an owner ratification condition) · 13 SP |
-| **Depends on** | — (first sprint; phase entry §9 must hold: architecture ratified and review-hardened ✔, this decomposition approved ☐) |
-| **In scope** | 1. The Go module `github.com/vorsar/complex-events-engine`: `go.mod` with `go` and `toolchain` lines, `GOTOOLCHAIN=local`, Go ≥ 1.24. · 2. `tools.json` + one installer (`cache/tmp.$$`, atomic `mv` into the hash-keyed path) + the parity step, first at every tier. · 3. `gate/registry.json` (row schema = ADR-0015 §1.1), `gate/run.sh` (POSIX; per-step process groups; TERM-then-KILL watchdogs; one JSON record per step; `summary.md` + `run.json`), collect-all, zero-is-failure, `expected_scope` checked against the live expansion, the `exit:` line; `make check`, `make combine-check`, `make strict-gate`. · 4. `gate/law.json` + `lawdelta` + the LAW Δ block (ADR-0015 §1.3). · 5. registry-lint with its three planted problems and the §2 instrument-id pin. · 6. Analyzers in `tools/analyzers/` with `analysistest` fixtures and `min_wants`: `importcheck` (rules from ARCHITECTURE §3 **as it stands after the owner's `io` split of 2026-11-02** — no cycle), `clockcheck` (incl. a synthetic fixture for the `internal/window/cron.go` exception), `todocheck`, `testhygiene`; the teeth meta-test. · 7. golangci-lint strict config (`smells`) with the §2.1 scope classes; `nolintlint`; the `suppressions` checker and the one allowlist grammar under `tools/allowlists/`. · 8. `docsync` (a), one direction: every package directory that exists is listed in ARCHITECTURE §3. · 9. `gate/proofs/` as a separate Go module with the proofs for this sprint's instruments. · 10. `.githooks/` (T0, T1) and the CI workflow (actions pinned by SHA; the summary job `needs: all`, `if: always()`, the only required check) with summary fixture trees. · 11. **`internal/event`**: `Type`, `Attr`, `Schema`, `Value` (null = `Value{Null:true}` keeping the declared `Kind`), `Event`, the total-order comparator `(Ts, StreamID, Seq)`. It is the first layered subject `importcheck` and `clockcheck` police. |
-| **Not in scope** | `internal/model` and spec rev 3 → S1.2. The dependency-allowlist, licence, vulnerability and build-tag checks → S1.2. Everything else per the instruments table. |
-| **Entry criteria** | The standard ones, plus: this decomposition approved; the plan check answers the linter version, the Go version pin and hook wiring, settles **whether ARCHITECTURE §3's per-package import lists (rules 3, 4, 6) are exhaustive** and writes the answer into `rules.json` (architecture review DA-11 lists the edges that depend on it), places `conformance/` and `bench/` in the layer model, and names the Go specialist agent; the owner sets branch protection (required check = the summary job; no force-push to `main`). |
+| **Goal** | A clean clone runs `make check` — pinned toolchain, parallel registry runner, deterministic summary — locally and in CI, with coverage enforced at 90% on the first Go package, `internal/event`. |
+| **Routine · size** | Full loop (the event kernel fixes the null representation and the total order every later output depends on; the gate is an owner ratification condition) · 13 SP (items 12.5) |
+| **Depends on** | — (first sprint; phase entry §9 holds: architecture ratified and review-hardened ✔, decomposition approved ✔) |
+| **In scope** | 1. The Go module `github.com/vorsar/complex-events-engine`: `go.mod` with `go` and `toolchain` lines, `GOTOOLCHAIN=local` [0.5]. · 2. `tools.json` + one installer (`cache/tmp.$$`, atomic `mv` into the hash-keyed path) + the parity step, first at every tier [2]. · 3. `gate/registry.json` (row schema = ADR-0015 §1.1), `gate/run.sh` (POSIX; per-step process groups; TERM-then-KILL watchdogs; one JSON record per step; `summary.md` + `run.json`), collect-all, zero-is-failure, `expected_scope` checked against the live expansion, the `exit:` line; `make check`, `make combine-check`, `make strict-gate`; **parallel by default** (owner 2026-11-02; ADR-0015 §1.1): rows run concurrently up to a worker limit, each starting when its `needs` finish; `exclusive` rows run alone; the summary stays in registry order and prints wall time beside summed step time [4]. · 4. The `gofmt` and `go vet` rows [0.5]. · 5. `.githooks/` (T0, T1) and the CI workflow (actions pinned by SHA; rows grouped into **concurrent jobs** by their `job` field, each restoring the Go module and build cache keyed by `go.sum` + the `tools.json` hash; the summary job `needs: all`, `if: always()`, the only required check) with summary fixture trees [2]. · 6. `gate/proofs/` as a separate Go module, with this sprint's proofs [1.5]. · 7. **`internal/event`**: `Type`, `Attr`, `Schema`, `Value` (null = `Value{Null:true}` keeping the declared `Kind`), `Event`, the total-order comparator `(Ts, StreamID, Seq)` [1]. · 8. **`coverage-inclusion`** (owner 2026-11-02): every `internal/*` and public package has tests (or a reasoned allowlist entry), and ≥ **90%** statement coverage per package from T2's coverprofile, scope per ADR-0015 §2.2 (generated files excluded), no waiver within scope [1]. |
+| **Not in scope** | The architecture analyzers, LAW Δ, registry-lint, suppressions → S1.1b. `internal/model` and spec rev 3 → S1.2. |
+| **Entry criteria** | The standard ones, plus (answered by the owner 2026-11-02, §5): toolchain = the newest stable Go that the pinned golangci-lint supports — exact versions recorded in the plan check on day one; the Go specialist is `.claude/agents/go-engineer.md` with JetBrains' `use-modern-go` skill; every agent `model: inherit`; `main` has force-push and deletion blocked before G0, and the summary check becomes required once this sprint's CI has run (before it merges). Hook wiring is ADR-0015 §3.1's (`core.hooksPath .githooks`). |
 | **Exit criteria** | The done-done block (§13), plus: |
-| | 1. A clean clone runs `make check` to `exit: 0`; the summary opens with the LAW Δ block — **proof:** CI `strict-gate` on the PR and the summary fixture tests classifying every planted tree. |
+| | 1. A clean clone runs `make check` to `exit: 0`; CI shows the same rows — **proof:** CI `strict-gate` on the PR and the summary fixture tests classifying every planted tree. |
 | | 2. A tool version that differs from `tools.json` fails before any other step and names the fix — **proof:** the parity proof. |
-| | 3. An upward import from `internal/event` (into any module package) is red at T0 on the staged file — **proof:** `importcheck` fixture + a hook-level proof acting on `internal/event`. |
-| | 4. `time.Now()` outside the allowlist is red; the synthetic `cron.go` fixture passes `time.LoadLocation` and fails `time.Now` — **proof:** `clockcheck` fixtures. |
-| | 5. A bare `//nolint`, a PERMANENT suppression without a resolvable `ref=`, and an allowlist entry naming a non-existent package each fail — **proof:** `suppressions` tests. |
-| | 6. Weakening a fixture below its `min_wants`, or deleting a §2 instrument's registry row, fails — **proof:** the teeth meta-test + registry-lint proofs. |
-| | 7. A planted edit to `rules.json` appears in the LAW Δ block with its one-line semantic delta — **proof:** `lawdelta` test over a fixture repository. |
-| | 8. A `time.Sleep` in a test outside the wait helper is red — **proof:** `testhygiene` fixture. |
-| | 9. The event total order and the null representation are pinned — **proof:** `internal/event` table tests whose expected orderings are written by hand before the code. |
-| **Owner's check** | *By running:* clone fresh, `make check`, read the summary; add a forbidden import on purpose and watch the commit refused. *By reading:* the LAW Δ block on the PR. *By hand:* branch protection set. |
-| **Split line** | If over the cap: **S1.1a** = items 1–5, 10 (runner, parity, registry-lint, hooks, CI); **S1.1b** = items 6–9, 11 (analyzers, smells, suppressions, proofs, `internal/event`). |
+| | 3. The runner really runs in parallel, and safely: two independent fixture rows that each wait for the other's marker file finish only if they run at the same time (run one after the other, the watchdog kills them — red); a row never starts before its `needs` finish; an `exclusive` row never overlaps another; the summary is byte-identical whatever order rows finish in — **proof:** runner fixture tests (no sleeps — marker files and watchdog ceilings). |
+| | 4. The parallel saving is measured — **proof:** the summary footer's wall time vs summed step time on the PR's CI run, recorded in the sprint record. |
+| | 5. An unformatted Go file is refused at T0 — **proof:** a hook-level proof. |
+| | 6. A package below 90% statement coverage, and a package with no tests, each turn the gate red naming the package and its number; `internal/event` is at or above 90% — **proof:** two planted proofs + the T2 run. |
+| | 7. The event total order and the null representation are pinned — **proof:** `internal/event` table tests whose expected orderings are written by hand before the code. |
+| **Owner's check** | *By running:* clone fresh, `make check`, read the summary and its timing footer; commit an unformatted file and watch the hook refuse it. *By hand:* add the required check on GitHub once CI has run. |
+| **Split line** | None needed (12.5); if the plan check sizes it over, CI caching and the timing footer move to S1.1b. |
 
-#### S1.2 — The model kernel, the remaining S1 gate rows and spec rev 3
+#### S1.1b — The analyzers and the law
+
+| | |
+|---|---|
+| **Goal** | Every architectural rule that can be checked from stage 1's code is mechanically red when broken — imports, clock use, goroutines, globals, TODOs, test hygiene, lint smells, suppressions — each analyzer proven able to fail, and every change to the gate's own rules shows in the LAW Δ block. |
+| **Routine · size** | Full loop · 13 SP (items 13) |
+| **Depends on** | S1.1a |
+| **In scope** | 1. `gate/law.json` + `lawdelta` + the LAW Δ block at the top of the summary (ADR-0015 §1.3) [2]. · 2. registry-lint with its three planted problems and the §2 instrument-id pin [1]. · 3. `importcheck` with `tools/importcheck/rules.json` encoding ARCHITECTURE §3's import lists as **exhaustive** (owner 2026-11-02) and the post-`io`-split edges; the docsync comparison of parsed edges; the edge-count ceiling [2]. · 4. `clockcheck`, incl. a synthetic fixture for the `internal/window/cron.go` exception [1]. · 5. `puritycheck` (module-wide) and `globalscheck` (const-like defined in the analyzer) [2]. · 6. `todocheck` (basic `TODO(owner\|S<n>\|#id)`) and `testhygiene` [1]. · 7. The teeth meta-test (`min_wants` per analyzer) [1]. · 8. golangci-lint strict config (`smells`, `forbidigo`, the §2.1 scope classes) + `nolintlint` [1]. · 9. The `suppressions` checker and the one allowlist grammar under `tools/allowlists/` [2]. Each analyzer ships with its `analysistest` fixture and scans S1.1a's code retroactively on landing. |
+| **Not in scope** | `docsync`, the dependency/licence/vulnerability/build-tag rows and the sprint-id grammar → S1.2. |
+| **Entry criteria** | The standard ones. |
+| **Exit criteria** | The done-done block, plus: |
+| | 1. A planted edit to `rules.json` appears in the LAW Δ block with its one-line semantic delta — **proof:** `lawdelta` test over a fixture repository. |
+| | 2. An upward import from `internal/event` is red at T0 on the staged file — **proof:** `importcheck` fixture + a hook-level proof. |
+| | 3. `time.Now()` outside the allowlist is red; the synthetic `cron.go` fixture passes `time.LoadLocation` and fails `time.Now` — **proof:** `clockcheck` fixtures. |
+| | 4. A `go` statement outside the allowed packages, an `unsafe` import, and a mutable package-level `var` are each red; an error sentinel is not — **proof:** `puritycheck` and `globalscheck` fixtures. |
+| | 5. A bare `//nolint`, a PERMANENT suppression without a resolvable `ref=`, and an allowlist entry naming a non-existent package each fail — **proof:** `suppressions` tests. |
+| | 6. Weakening a fixture below its `min_wants`, or deleting a §2 instrument's registry row, fails; registry-lint reports its three planted problems — **proof:** the teeth meta-test + registry-lint proofs. |
+| | 7. A `time.Sleep` in a test outside the wait helper is red — **proof:** `testhygiene` fixture. |
+| | 8. Every analyzer's retroactive scan of S1.1a's code is green — **proof:** the T2 run. |
+| **Owner's check** | *By running:* add a forbidden import on purpose and watch the commit refused. *By reading:* the LAW Δ block on the PR. |
+| **Split line** | **S1.1b-1** = items 1–5 (law, imports, clock, purity, globals); **S1.1b-2** = items 6–9. |
+
+#### S1.2 — The model kernel, the remaining gate rows and spec rev 3
 
 | | |
 |---|---|
 | **Goal** | `internal/model` holds the rule IR with a byte-stable canonical encoding, the remaining stage-1 gate rows are live, and spec rev 3 — the owner's language decisions of 2026-11-01 and 2026-11-02 — is applied and mechanically checked. |
-| **Routine · size** | Full loop (the IR and a language revision) · 13 SP |
-| **Depends on** | S1.1 |
-| **In scope** | 1. **`internal/model`**: the IR of ADR-0003 (every field named after its SPEC clause; durations and timestamps `int64` ms; `ParamRef` unresolved) and `MarshalCanonical` (sorted keys, explicit defaults, float `'g'`/−1/64, RFC3339 UTC millis, NaN/±Inf unencodable). **The canonical JSON carries no source positions** — diagnostics keep positions in a side table (QA DQ-16; builder parity needs this too). · 2. The dependency-allowlist check, the licence check, `govulncheck`, the build-tag law, the weekly canary. · 3. The sprint-id grammar, `gate/current-sprint`, and the skip / `deferred(P<n>, ref=…)` forms in `todocheck`. · 4. `docsync` (d), error-count consistency. · 5. **Spec rev 3** (language-design skill; docs lane), containing exactly: (a) the derived-stream-consumption error code (owner 2026-11-01); (b) **the cross-stream partition-key type-mismatch code** (RC8.1; owner decision 2026-11-02: reject at deploy — the error names both streams and both types); (c) **`late events allow` removed for v0.1** (owner 2026-11-02): `allow` is rejected wherever it appears, with E-LATE-002's text revised to "late handling per window arrives in Phase 2; use `late events drop` and set the stream's watermark bound"; example 02 changes to `late events drop`; SEMANTICS §7's cron row annotated; (d) **cron admission pinned to SPEC §6.1**: an event behind its stream's admission watermark is dropped and counted even if its cron bucket is still open — the Python reference executor's `cron_window` is aligned to this and a new harness check pins it, written red-first (the executor admitted such events; SPEC is normative); (e) **`text_invisibles` is engine-owned** (owner 2026-11-02): the name is reserved; the engine always computes it; a value supplied in a payload is ignored, overwritten and counted; a stream may declare it as `bool` for readability; (f) **keyword sets over a table operand read the table's per-event snapshot like `in`** (owner 2026-11-02: supported live); (g) `time arrival` stays (owner 2026-11-02): playback logs carry the recorded arrival stamp as `ts`; (h) E-GRAPH-001 marked unreachable in v0.1 (every cycle needs a rule consuming a derived stream, which (a) rejects first) and kept for Phase 2, with `docsync`'s 1:1 rule accepting the marking; (i) errors.md, SPEC Appendix C and the change log updated. |
-| **Not in scope** | Expect blocks for the examples → each example's own sprint. The SPEC §9 timing-comment sentence → S6.2 (with its format). |
+| **Routine · size** | Full loop (the IR and a language revision) · 13 SP (items 11) |
+| **Depends on** | S1.1b |
+| **In scope** | 1. **`internal/model`**: the IR of ADR-0003 (every field named after its SPEC clause; durations and timestamps `int64` ms; `ParamRef` unresolved) and `MarshalCanonical` (sorted keys, explicit defaults, float `'g'`/−1/64, RFC3339 UTC millis, NaN/±Inf unencodable); **the canonical JSON carries no source positions** — diagnostics keep positions in a side table [3]. · 2. The dependency-allowlist check, the licence check, `govulncheck`, the build-tag law, the weekly canary [2]. · 3. The sprint-id grammar (`S<stage>[.<part>][<letter>][-<n>]` (the `-<n>` suffix only when a plan check applies a card's split line)), `gate/current-sprint`, and the skip / `deferred(P<n>, ref=…)` forms in `todocheck` [1]. · 4. `docsync` (a) one direction (every package directory that exists is listed in ARCHITECTURE §3) and `docsync` (d) error-count consistency [1]. · 5. **Spec rev 3** (language-design skill; docs lane), containing exactly: (a) the derived-stream-consumption error code (owner 2026-11-01); (b) **the cross-stream partition-key type-mismatch code** (RC8.1; owner 2026-11-02: reject at deploy — the error names both streams and both types); (c) **`late events allow` removed for v0.1** (owner 2026-11-02): `allow` is rejected wherever it appears, with E-LATE-002's text revised to "late handling per window arrives in Phase 2; use `late events drop` and set the stream's watermark bound"; example 02 changes to `late events drop`; SEMANTICS §7's cron row annotated; (d) **cron admission pinned to SPEC §6.1**: an event behind its stream's admission watermark is dropped and counted even if its cron bucket is still open — the Python reference executor's `cron_window` is aligned and a new harness check pins it, written red-first; (e) **`text_invisibles` is engine-owned** (owner 2026-11-02): the name is reserved; the engine always computes it; a payload value is ignored, overwritten and counted; a stream may declare it as `bool` for readability; (f) **keyword sets over a table operand read the table's per-event snapshot like `in`** (owner 2026-11-02); (g) `time arrival` stays (owner 2026-11-02): playback logs carry the recorded arrival stamp as `ts`; (h) E-GRAPH-001 marked unreachable in v0.1 and kept for Phase 2, with `docsync`'s 1:1 rule accepting the marking; (i) errors.md, SPEC Appendix C and the change log updated [4]. |
+| **Not in scope** | Expect blocks for the examples → each example's own sprint. The SPEC §9 timing-comment sentence → S6.2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. `MarshalCanonical` is byte-stable and position-free — **proof:** a hand-derived canonical-JSON golden covering key order, −0, 1e21, timestamp millisecond truncation, and NaN/±Inf rejection (written before the code), plus a test that two models differing only in source positions encode identically. |
+| | 1. `MarshalCanonical` is byte-stable and position-free — **proof:** a hand-derived canonical-JSON golden (key order, −0, 1e21, millisecond truncation, NaN/±Inf rejection) written before the code, plus a test that two models differing only in source positions encode identically. |
 | | 2. An unapproved `go.mod` edit, a disallowed licence, a known-vulnerable module and a `//go:build !race` file are each red — **proof:** one planted proof each. |
 | | 3. A `TODO` naming a sprint more than two rows ahead, and a skip naming the current sprint, are red — **proof:** `todocheck` fixtures driven by a fixture `gate/current-sprint`. |
-| | 4. Spec rev 3 is applied: every decided code is present in errors.md with its SPEC § reference and fix text; the counts agree everywhere — **proof:** `docsync` (d) green, and red on a planted count mismatch; `grammar_check` PASS; the harness passes with its new cron-admission check, which was first seen failing against the unaligned executor. |
-| **Owner's check** | *By reading:* the rev-3 change log entry and the revised E-LATE-002 text; the canonical JSON of one model. *By hand:* LAW Δ block (spec files changed). |
-| **Split line** | **S1.2a** = items 1–4 (model + gate rows); **S1.2b** = item 5 (spec rev 3). |
+| | 4. Spec rev 3 is applied: every decided code is present in errors.md with its SPEC § reference and fix text; the counts agree everywhere — **proof:** `docsync` (d) green and red on a planted count mismatch; `grammar_check` PASS; the harness passes with its new cron-admission check, first seen failing against the unaligned executor. |
+| **Owner's check** | *By reading:* the rev-3 change log entry and the revised E-LATE-002 text; the canonical JSON of one model. *By hand:* the LAW Δ block (spec files changed). |
+| **Split line** | **S1.2-1** = items 1–4; **S1.2-2** = item 5. |
 
-#### S2.1 — The parser and the grammar differential
+#### S2.1 — The parser
 
 | | |
 |---|---|
-| **Goal** | `internal/parser` turns every corpus file into a `model.App` or into the exact catalogued parse error at the exact line and column, keeps every comment, and is proven equivalent to the normative lark grammar over the full corpus — by verdict and by parse shape. |
-| **Routine · size** | Full loop (the language) · 13 SP |
+| **Goal** | `internal/parser` turns every corpus file into a `model.App` or into the exact catalogued parse error at the exact line and column, and keeps every comment. |
+| **Routine · size** | Full loop (the language) · 13 SP (items 13) |
 | **Depends on** | S1.2 (rev 3 applied) |
-| **In scope** | 1. The hand-written lexer (ADR-0002 §3), positions in runes, **every comment kept as positioned trivia in a side table reachable from the parse result** (S6.2's printer needs it). · 2. `tools/kwgen/` → `internal/parser/keywords.go` (generated header). · 3. `cep.y` hand-derived from `grammar.lark`; `parser_gen.go` committed (generated header). · 4. AST and lowering to `model.App`. · 5. The `yyError` mapping for all [parse] codes, with line, column and fix text. · 6. **Expected positions:** before the parser runs, the QA agent adds a hand-derived `@ <line>:<col>` to the first-line comment of each of the 24 files in `docs/language/invalid/` (comments only — `grammar_check` ignores them). · 7. The grammar-differential T4 row (ADR-0002 §5 as amended): pinned Python + `lark==1.3.1`; verdicts and canonical operator-spine S-expressions; ≥ 10 torture files in `docs/language/eval/generated/torture/`; corpus count asserted; a comment-torture file. · 8. The parser fuzz target; the nightly workflow. · 9. Instruments: `freshness`, `puritycheck`, `globalscheck`, `coverage-inclusion`, `docsync` (b) kwgen. |
-| **Not in scope** | Static codes and expression typing → S2.2. The printer → S6.2. |
+| **In scope** | 1. The hand-written lexer (ADR-0002 §3), positions in runes, **every comment kept as positioned trivia in a side table reachable from the parse result** (S6.2's printer needs it), with its lossless round-trip test and a comment-torture file [3]. · 2. `tools/kwgen/` → `internal/parser/keywords.go` (generated header) [1]. · 3. `cep.y` hand-derived from `grammar.lark`; `parser_gen.go` committed (generated header); the AST; lowering to `model.App` [5]. · 4. The `yyError` mapping for all [parse] codes, with line, column and fix text [2]. · 5. **Expected positions:** before the parser runs, the QA agent adds a hand-derived `@ <line>:<col>` to the first-line comment of each of the 24 files in `docs/language/invalid/` [1]. · 6. `freshness` (goyacc + kwgen; scratch-dir regeneration; header-manifest anti-forgery) [1]. |
+| **Not in scope** | The grammar differential, the parser fuzz target and the nightly workflow → S2.2a. Static codes and typing → S2.2a/S2.2b. The printer → S6.2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. All 9 examples, the generated eval files and the torture files parse; each model's canonical JSON is golden-locked — **proof:** the parser corpus test. |
-| | 2. Each invalid file yields exactly its [parse] code at exactly its `@ line:col` — **proof:** the invalid-corpus table test against the hand-derived positions. |
-| | 3. Lexing and re-assembling every corpus, torture and comment-torture file from tokens plus trivia reproduces it byte for byte — **proof:** the lossless trivia round-trip test. |
-| | 4. The differential is green with counts at or above the known minimum, and red on a planted precedence swap in `cep.y` — **proof:** the differential row + its proof. |
-| | 5. A stale `parser_gen.go` and a forged generated header are each red — **proof:** `freshness` proofs. |
-| | 6. The instruments land with fixtures and `min_wants`, and their retroactive scan of S1's code is green — **proof:** the teeth meta-test + T2. |
-| **Owner's check** | *By running:* a deliberately broken rule file through the parser test helper (`go test ./internal/parser -run TestOwnerCheck -args <file>`, named in the plan check) — read code, line, column and fix text. *By reading:* the messages for E-KW-002, E-PAT-001 and E-STR-001. |
-| **Split line** | **S2.1a** = items 1–6 (lexer, parser, positions); **S2.1b** = items 7–9 (differential, fuzz, instruments). |
+| | 2. Each invalid file yields exactly its [parse] code at exactly its `@ line:col` — **proof:** the invalid-corpus table test. |
+| | 3. Lexing and re-assembling every corpus, torture and comment-torture file from tokens plus trivia reproduces it byte for byte — **proof:** the lossless trivia test. |
+| | 4. A stale `parser_gen.go` and a forged generated header are each red — **proof:** `freshness` proofs. |
+| **Owner's check** | *By running:* a deliberately broken rule file through the parser test helper (command named in the plan check) — read code, line, column and fix text. *By reading:* the messages for E-KW-002, E-PAT-001 and E-STR-001. |
+| **Split line** | **S2.1-1** = items 1, 2, 5 (lexer, keywords, positions); **S2.1-2** = items 3, 4, 6. |
 
-#### S2.2 — The validator, expression typing and the callable registry
+#### S2.2a — The grammar differential and the expression engine
 
 | | |
 |---|---|
-| **Goal** | Every corpus program validates clean, every reachable [static] code fires on its own minimal program with the catalogued fix text, every expression form in SPEC §5.10 is typed, and the scalar expression forms are compiled into executable trees. |
-| **Routine · size** | Full loop · 13 SP |
+| **Goal** | The engine's parser is proven equivalent to the normative lark grammar over the full corpus — by verdict and by parse shape — and every expression form in SPEC §5.10 is typed, with the scalar forms compiled into executable trees. |
+| **Routine · size** | Full loop (the language) · 13 SP (items 10.5) |
 | **Depends on** | S2.1 |
-| **In scope** | 1. `internal/validate`: `catalog.go` (every [static] code with fix text); one check per code; `${param}` resolution; the connector annotation table `connectors.go`; **the stream-graph checks E-GRAPH-001/002/003 and the derived-stream-consumption code live here** (the catalog's owner; ADR-0012 §1 is annotated on approval and `plan` consumes the validated graph); E-TTL-002 for pattern bounds and rate intervals; the E-NULL lints; E-REGEX-001's pre-scan. Pinned at this sprint's plan check, each with a named testdata program: whether a stream with no `@source` punctuates (E-WIN-002 for 04's `LoadedRecords`); how a `string` param becomes a list (05's `${risk_terms}`). · 2. Static test material in `internal/validate/testdata/` — one minimal program per reachable [static] code, **including the derived-stream code**. · 3. `internal/expr` (ADR-0011): **typing for every SPEC §5.10 form** — scalar, `in`, text operators, `chain`, `count` — exported to `validate`; **executable nodes only for** scalar, arithmetic, comparison, boolean, null handling and the functions `coalesce`, `minimum`, `maximum`, `abs`, `math:round` (half-up, per Appendix F — not Go's `math.Round`), `cast`, `ifThenElse`. The `in` nodes land in S3.1, `chain` in S4.1, text nodes in S7, `count` in S8. · 4. Harness ports: the 1.1 null-strict check's scalar assertions, RT-14, "9 · TTL deploy check", RT-07 (pattern and rate parts). · 5. Instruments: `docsync` (b) catalog, `docsync` (c) registry, `allocgate`. |
-| **Not in scope** | E-EXP-001 → S3.3 (needs the expect sandbox). E-TXT-002 → S7. E-WIN-003 and the cron part of E-TTL-002 → S9.1. Each is a visible `skip: not-implemented(<sprint>)`. |
+| **In scope** | 1. The grammar-differential T4 row (ADR-0002 §5 as amended): pinned Python + `lark==1.3.1`; verdicts and canonical operator-spine S-expressions; ≥ 10 torture files in `docs/language/eval/generated/torture/`; corpus count asserted [3]. · 2. The parser fuzz target and the nightly workflow (one advisory, aging row per fuzz target) [1]. · 3. `docsync` (b) reserved words ↔ kwgen [0.5]. · 4. `internal/expr` (ADR-0011): **typing for every SPEC §5.10 form** — scalar, `in`, text operators, `chain`, `count` — exported to `validate`; **executable nodes for** scalar, arithmetic, comparison, boolean, null handling and the functions `coalesce`, `minimum`, `maximum`, `abs`, `math:round` (half-up, per Appendix F — not Go's `math.Round`), `cast`, `ifThenElse`; the `Registry` with all nine Appendix F callables (the `in` nodes land in S3.1, `chain` in S4.1, text nodes in S7, `count` in S8) [4]. · 5. The per-function evaluation table [1]. · 6. `docsync` (c) Appendix F ↔ `expr.Registry`; `allocgate` first rows [1]. · 7. The 1.1 null-strict check's scalar assertions ported [incl.]. |
+| **Not in scope** | The validator → S2.2b. |
+| **Entry criteria** | The standard ones. |
+| **Exit criteria** | The done-done block, plus: |
+| | 1. The differential is green with counts at or above the known minimum, and red on a planted precedence swap in `cep.y` — **proof:** the differential row + its proof. |
+| | 2. Every E-TYPE-001 row of SPEC §5.10 has a table test — **proof:** `internal/expr` typing tests. |
+| | 3. Every function evaluates per Appendix F: `math:round` at ±0.5 and ±1.5; `cast` success and failure per target (a counted runtime error, never a panic); integer `/` and `%`; `minimum`/`maximum` over timestamps and durations; `ifThenElse` with a null condition — **proof:** the per-function table, expected values written before the code. |
+| | 4. Scalar evaluation allocates nothing except listed exclusions (`cast` to string) — **proof:** `allocgate`. |
+| | 5. `docsync` (b) and (c) go red on a planted drift — **proof:** their fixtures. |
+| **Owner's check** | *By reading:* one differential S-expression pair for a precedence torture file. |
+| **Split line** | None needed (10.5). |
+
+#### S2.2b — The validator
+
+| | |
+|---|---|
+| **Goal** | Every corpus program validates clean, and every reachable [static] code fires on its own minimal program with the catalogued fix text, line and column. |
+| **Routine · size** | Full loop · 13 SP (items 11.5) |
+| **Depends on** | S2.2a |
+| **In scope** | 1. `internal/validate`: `catalog.go` (every [static] code with fix text, incl. rev 3's); one check per code; E-TTL-002 for pattern bounds and rate intervals; the E-NULL lints; E-REGEX-001's pre-scan [5]. · 2. Static test material in `internal/validate/testdata/` — one minimal program per reachable [static] code, **including the derived-stream and key-type codes** [1]. · 3. The connector annotation table `connectors.go` (E-NAME-001; `punctuates`; E-SINK-001; E-WIN-002) [1]. · 4. **The stream-graph checks** E-GRAPH-001/002/003, the derived-stream rejection and the cross-stream key-type check live here (ADR-0012 §1 as annotated) [1.5]. · 5. `${param}` resolution [1]. · 6. Pinned at the plan check, each with a named testdata program: whether a stream with no `@source` punctuates (E-WIN-002 for 04's `LoadedRecords`); how a `string` param becomes a list (05's `${risk_terms}`) [0.5]. · 7. Harness ports: RT-14, "9 · TTL deploy check", RT-07 (pattern and rate parts) [1]. · 8. `docsync` (b) [static] codes ↔ `catalog.go` [0.5]. |
+| **Not in scope** | E-EXP-001 → S3.3. E-TXT-002 → S7. E-WIN-003 and the cron part of E-TTL-002 → S9.1. Each is a visible `skip: not-implemented(<sprint>)`. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. Each reachable [static] code fires on its testdata program with its fix text, line and column; no corpus example raises any code — **proof:** the validator table test + the corpus-clean test. |
-| | 2. `docsync` (b) and (c) go red on a planted drift — **proof:** their fixtures. |
-| | 3. Every E-TYPE-001 row of SPEC §5.10 has a table test — **proof:** `internal/expr` typing tests. |
-| | 4. Every function evaluates per Appendix F: `math:round` at ±0.5 and ±1.5; `cast` success and failure per target (a failure is a counted runtime error, never a panic); integer `/` and `%`; `minimum`/`maximum` over timestamps and durations; `ifThenElse` with a null condition — **proof:** the per-function evaluation table, expected values written before the code. |
-| | 5. Scalar evaluation allocates nothing, except nodes listed as counted exclusions (`cast` to string) — **proof:** `allocgate`. |
+| | 2. A rule reading a derived stream, and a partition block whose key is text in one stream and a number in another, are each rejected naming what the error says — **proof:** their testdata programs. |
+| | 3. `docsync` (b) goes red on a planted catalog drift — **proof:** its fixture. |
 | **Owner's check** | *By reading:* the fix texts of five codes the owner picks. *By running:* one invalid program per picked code through the validator test helper. |
-| **Split line** | **S2.2a** = `internal/expr` (item 3) + `docsync` (c) + `allocgate`; **S2.2b** = `internal/validate` (items 1, 2, 4) + `docsync` (b). |
+| **Split line** | None needed (11.5). |
 
-#### S3.1 — The clock service, tables and the playback format
+#### S3.1 — The clock service, tables and the decoder
 
 | | |
 |---|---|
-| **Goal** | The clock service implements ADR-0004 completely — every timer kind and the discard path exercised — tables give snapshot-per-event reads, and the playback log format (events, punctuations, batch ends, table records) loads deterministically, all proven by clock-level tests whose arithmetic matches the harness. |
-| **Routine · size** | Full loop (event time, watermarks, ordering, lateness) · 13 SP |
-| **Depends on** | S2.2 |
-| **In scope** | 1. `internal/clock`, all of ADR-0004: `StreamRegistry`, `clock.Instance`, `WMAdvance`, `clock.Driver`, one `Advance` with events → completions → discards. **The discard path is designed here:** a partial's within-deadline is scheduled with a discard timer kind that `Advance` routes to `OnDiscard`, never to `OnTimers`. · 2. **A test-double operator** that schedules every timer kind (completion, absence resolution, cron close, delay due, TTL purge) and the discard kind, so the full contract is exercised before it freezes at S3.3. · 3. `internal/metrics` counters. · 4. `internal/table` and the expression `in` / `not in` membership nodes (null-strict), completing the 1.1 check's `in` assertion. · 5. `internal/text.IngestFlags` (invisible flagging only). · 6. `internal/event/decode.go`, the schema-driven JSON decoder, with its differential test against `encoding/json` and a fuzz target written before any optimization. · 7. `internal/playback` **format layer only**: the log format — events; punctuation records; **batch-end records** `{"batch_end":"<id>","stream":"<name>"}` (SEMANTICS §7: batch boundaries are part of the replay log contract); table records applied at their file position — the loader, the virtual-clock `Driver`, the canonical output encoder. The drive loop is the runtime itself (S3.2). · 8. The `puritycheck` named exceptions for `internal/table` and `internal/event` with fixtures. |
-| **Not in scope** | The drive loop, shards and routing → S3.2. Harness ports → none here (see the mapping above). |
+| **Goal** | The clock service implements ADR-0004 completely — every timer kind and the discard path exercised — tables give snapshot-per-event reads, and JSON decodes by schema with full integer range, all proven by unit tests whose arithmetic matches the harness. |
+| **Routine · size** | Full loop (event time, watermarks, ordering, lateness) · 13 SP (items 13) |
+| **Depends on** | S2.2b |
+| **In scope** | 1. `internal/clock`, all of ADR-0004, incl. **the discard path** (a partial's `within` deadline is a discard timer kind routed to `OnDiscard`, never `OnTimers`) and **a test-double operator** that schedules every timer kind and the discard kind; clock-level unit tests of admission strictness, the clamped min, per-stream virtual floors and idle exclusion, each citing its source harness check [6]. · 2. `internal/metrics` counters [0.5]. · 3. `internal/table` and the `in` / `not in` membership nodes (null-strict), completing the 1.1 check's `in` assertion [2]. · 4. `internal/text.IngestFlags` (invisible flagging only) and the Unicode-version agreement check; `BuildInfo`'s Unicode fields [1]. · 5. `internal/event/decode.go`, the schema-driven JSON decoder, with its differential test against `encoding/json` and a fuzz target written before any optimization [3]. · 6. The `puritycheck` named exceptions for `internal/table` and `internal/event` with fixtures [0.5]. |
+| **Not in scope** | The replay log format and the runtime → S3.2a. Harness ports → none here. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. Admission strictness (an equal timestamp is admitted), the clamped-monotonic construct clock, per-stream virtual floors and idle exclusion each match the arithmetic of the harness check that pins them — **proof:** `internal/clock` unit tests, each naming its source check. |
+| | 1. The clock's arithmetic matches each cited harness check — **proof:** `internal/clock` unit tests, each naming its source check. |
 | | 2. Through the test-double operator, every timer kind fires in due order within (b), discards arrive only in (c), and a pending completion is never discarded — **proof:** the timer-contract test. |
-| | 3. A two-key registry + `Instance` trace: one key silent, its construct clock still advances through the broadcast `WMAdvance` — **proof:** the quiet-key clock test (the live, sharded version is S4.1's). |
-| | 4. Loading the same log twice yields a byte-identical **canonical trace** (released events, timer fires, stream-late and construct-late counters), and a planted map-iteration order turns it red — **proof:** the trace test + its proof. |
+| | 3. A two-key registry + `Instance` trace: one key silent, its construct clock still advances through the broadcast `WMAdvance` — **proof:** the quiet-key clock test. |
+| | 4. A table write is visible to the next evaluation, never the current one — **proof:** the table snapshot test. |
 | | 5. The decoder agrees with `encoding/json` on accept/reject and values, and keeps `int64` above 2^53 exact — **proof:** the differential test; fuzz nightly. |
-| | 6. A table record changes membership results from the next event onward, never for the current one — **proof:** a table + trace test. |
-| **Owner's check** | *By running:* a ten-line JSONL log through the trace helper; read the trace and the late counters. |
-| **Split line** | **S3.1a** = items 1–3 (clock + metrics); **S3.1b** = items 4–8 (tables, flags, decoder, playback format). |
+| **Owner's check** | *By reading:* the timer-contract test's table of timer kinds and their order. |
+| **Split line** | **S3.1-1** = items 1, 2 (clock); **S3.1-2** = items 3–6. |
 
-#### S3.2 — The runtime core: partitions, shards, routing, live and replay
+#### S3.2a — The replay format and the runtime core
 
 | | |
 |---|---|
-| **Goal** | A plain filter rule wired through `internal/plan` runs live (sharded) and in playback (the same runtime with one shard, stepped synchronously) with identical per-key output, and errors, arrival time and the invisible-character flag behave exactly per SEMANTICS. |
-| **Routine · size** | Full loop (concurrency, partitioned state) · 13 SP |
+| **Goal** | The engine's moving parts exist and hold under load: a deterministic replay-log format, per-key partitions with TTL, and sharded per-key execution with non-blocking routing. |
+| **Routine · size** | Full loop (concurrency, partitioned state) · 13 SP (items 11.5) |
 | **Depends on** | S3.1 |
-| **In scope** | 1. `internal/partition` (ADR-0006): `Instance`, `OpState`, key extraction via a compiled `expr.Expr`, the TTL purge timer and re-arm, `LastActivity`, the state registry, the timer-derivability invariant. · 2. `internal/runtime`: one ingest/router goroutine; shards with bounded mailboxes, per-key serial; the non-blocking outbox handoff; the router servicing every handoff while blocked; sink queues **and the sink flusher goroutines, owned by the runtime** (they call a sink through an internal function type the facade adapts — runtime never imports `io`); the key-less pseudo-key; panic recovery at the shard boundary; **an injectable idle-tick source for the live driver** (tests drive idleness without sleeping). · 3. **Playback's drive loop = this runtime with one shard and a synchronous step API** (ADR-0005 §3: playback runs through the real runtime). · 4. **`time arrival`** (owner 2026-11-02): live, the router stamps each event from the runtime's clock at ingest; playback replays the recorded stamp. · 5. **`text_invisibles` engine-owned** (owner 2026-11-02): the router always sets it; a payload value is ignored, overwritten and counted. · 6. **Error semantics** (SEMANTICS §10): per-rule expression errors; the stream error policy; null key; unknown attributes skipped and counted. · 7. `internal/plan` (minimal): the `StreamNode` graph consuming the validated graph, the routing table, filter-rule operator chains. · 8. Instruments: race step + goleak proof; the metric-tripwire step with the blocking outbox ceiling; `allocgate` ingest → filter. |
-| **Not in scope** | Rate limiting, `cep.Deploy` and the conformance runner → S3.3. Patterns → S4.1. Connectors → S5.1. |
+| **In scope** | 1. `internal/playback`'s **format layer**: the log format — events; punctuation records; batch-end records `{"batch_end":"<id>","stream":"<name>"}`; table records applied at their file position — the loader, the virtual-clock `Driver`, the canonical output encoder, and a **canonical trace** (released events, timer fires, late counters) [2.5]. · 2. `internal/partition` (ADR-0006): `Instance`, `OpState`, key extraction via a compiled `expr.Expr`, the TTL purge timer and re-arm, `LastActivity`, the state registry, the timer-derivability invariant [3]. · 3. `internal/runtime`: one ingest/router goroutine; shards with bounded mailboxes, per-key serial; the non-blocking outbox handoff; the router servicing every handoff while blocked; sink queues and the runtime-owned sink flusher goroutines (calling a sink through an internal function type the facade later adapts); the key-less pseudo-key; panic recovery at the shard boundary; **an injectable idle-tick source** for the live driver [6]. |
+| **Not in scope** | Rule plans, the replay drive loop and rule semantics → S3.2b. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. The same log run live (N shards) and in playback (one shard) gives identical per-key output order; S3.1's trace and table lines re-run through the real runtime — **proof:** the live/playback equivalence test. |
-| | 2. Progress with a full mailbox at a shard whose handoff is pending, plus a slow sink and a bursty source — **proof:** the saturation test under `-race` and a CPU hog, **50/50 passes**. |
-| | 3. Two rules on one stream: one divides by an attribute that is 0 on one event; the other still fires on that event; per-rule `errored_events` counts it; a null key, a missing non-optional attribute, an unknown attribute and a failed `cast` are each counted where SEMANTICS §10 says — **proof:** the error-semantics table test. |
-| | 4. A payload without `text_invisibles` gets the computed flag; a payload saying `false` over text containing a zero-width space yields `true` and increments the override counter — **proof:** the ingest-flag test. |
-| | 5. A `time arrival` stream: live events are stamped at ingest in arrival order; replaying the recorded log reproduces the same output byte for byte — **proof:** the arrival-time test. |
-| | 6. One TTL timer per instance, re-armed on activity, never one per event — **proof:** the conformance case guarding the Siddhi purge defect class. |
-| | 7. A planted data race turns the race step red; a planted goroutine leak turns goleak red; a single `Advance` emitting past the outbox ceiling is red — **proof:** three proof rows. |
-| | 8. Zero allocations per event from ingest through filter evaluation — **proof:** `allocgate`. |
-| **Owner's check** | *By reading:* the saturation test's scenario and its pass rate; the error-semantics table. |
-| **Split line** | **S3.2a** = items 1, 2, 7 and their proofs (partition, runtime, plan, race/goleak, saturation); **S3.2b** = items 3–6 and the tripwire step (replay, arrival, flags, errors). |
+| | 1. Loading the same log twice yields a byte-identical canonical trace, and a planted map-iteration order turns it red — **proof:** the trace test + its proof. |
+| | 2. A table record changes membership from the next event onward, never for the current one — **proof:** a table + trace test. |
+| | 3. Progress with a full mailbox at a shard whose handoff is pending, plus a slow sink and a bursty source — **proof:** the saturation test (test-double operators) under `-race` and a CPU hog, 50/50 passes. |
+| | 4. One TTL timer per instance, re-armed on activity, never one per event — **proof:** the case guarding the Siddhi purge defect class. |
+| **Owner's check** | *By reading:* the saturation scenario and its pass rate. |
+| **Split line** | **S3.2a-1** = items 1, 2; **S3.2a-2** = item 3. |
 
-#### S3.3 — The Deploy pipeline, rate limiting and the conformance runner — clock freeze
+#### S3.2b — One runtime, live and replay: rate limits, errors, arrival time
 
 | | |
 |---|---|
-| **Goal** | A filter rule deployed through the public `cep.Runtime.Deploy` runs with its expect blocks executed as a deploy stage, rate limiting works per SEMANTICS §8, the conformance runner provably fails on wrong expectations, and the clock contract is frozen under the gate. |
-| **Routine · size** | Full loop (the public Go API; changes what rules emit) · 13 SP |
-| **Depends on** | S3.2 |
-| **In scope** | 1. `plan`'s emission stage with **rate limiting** (`output first every`: one anchor per (rule, key) in `partition.Instance`; suppressed outputs counted). · 2. The public facade `cep` (minimal): `Runtime`, `Config`, `Deploy` (parse → validate → plan → expect sandbox → register), `AppHandle` `Start` / `Stop` (drain barrier to a fixpoint, `drained_pending`) / `Undeploy`, **`Runtime.Close` (apps stopped in reverse deploy order)**, **multiple apps per runtime**, `Input` with **`SendRow` only** (the typed `Send` needs the builder's mapping — S6.1), the `Table` API, `BuildInfo`. · 3. **The connector contracts as a leaf package `io` (package `cepio`)** — `Source`, `Sink`, `Mapper`, `RowWriter`, `EmitFunc`, `OutEvent`, `Mode`, and **the batch-close signal** (designed here; an API Δ) — plus `io/inmemory` (owner decision 2026-11-02: built-ins are sub-packages that import `cep` and `io`; `cep` imports `io`, never the reverse). · 4. **The expect sandbox in `internal/playback`** (ARCHITECTURE §3), called by both `cep.Deploy` and `conformance/`: a fresh sandbox per block, `given table` seeding through table records. · 5. The conformance runner `conformance/`; E-EXP-001 lifted from S2.2's skip. · 6. **Test material for 07 and 09** (QA, before the engine runs): fire-path and near-miss expect blocks — 09 gains a second event inside its rate-limit interval. · 7. The three §8 harness checks ported. · 8. Instruments: `apipartition` + `apidiff`; the two-OS determinism proof; `gate/regen-baseline` + Tier-2 baselines; the planted wrong-expect proofs; `api/clock.golden` added to `gate/law.json`. · 9. **The clock contract freezes at this sprint's G5**: ADR-0004 annotated "frozen at S3.3 exit". |
+| **Goal** | A plain filter rule wired through `internal/plan` runs live (sharded) and in replay (the same runtime, one shard, stepped synchronously) with identical per-key output, and rate limiting, errors, arrival time and the invisible-character flag behave exactly per SEMANTICS. |
+| **Routine · size** | Full loop (concurrency; changes what rules emit) · 13 SP (items 12.5) |
+| **Depends on** | S3.2a |
+| **In scope** | 1. `internal/plan` (minimal): the `StreamNode` graph consuming the validated graph, the routing table, filter-rule operator chains [2]. · 2. **The replay drive loop = the runtime with one shard and a synchronous step API** (ADR-0005 §3), re-running S3.1's and S3.2a's lines through it [1.5]. · 3. **`time arrival`** (owner 2026-11-02): live stamping at ingest; replay of the recorded stamp [1]. · 4. **`text_invisibles` engine-owned** (owner 2026-11-02): always computed; a payload value ignored, overwritten and counted [0.5]. · 5. **Error semantics** (SEMANTICS §10): per-rule expression errors; the stream error policy; null key; unknown attributes skipped and counted [1.5]. · 6. The emission stage with **rate limiting** (`output first every`; anchors in `partition.Instance`; suppressed outputs counted) and the three §8 harness ports [2]. · 7. Race step + goleak proof; the metric-tripwire step (outbox ceiling blocking); `allocgate` ingest → filter [2]. · 8. The two-OS determinism proof [1]. · 9. **Test material for 07 and 09** (QA, before the engine runs): fire-path and near-miss expect blocks — 09 gains a second event inside its rate-limit interval; they run green in S3.3 [1]. |
+| **Not in scope** | `cep.Deploy`, the connector contracts and the conformance runner → S3.3. |
+| **Entry criteria** | The standard ones. |
+| **Exit criteria** | The done-done block, plus: |
+| | 1. The same log run live (N shards) and in replay (one shard) gives identical per-key output order — **proof:** the live/replay equivalence test. |
+| | 2. Two rules on one stream: one divides by an attribute that is 0 on one event; the other still fires on that event; per-rule `errored_events` counts it; a null key, a missing non-optional attribute, an unknown attribute and a failed `cast` are each counted where SEMANTICS §10 says — **proof:** the error-semantics table test. |
+| | 3. A payload without `text_invisibles` gets the computed flag; a payload saying `false` over text containing a zero-width space yields `true` and increments the override counter — **proof:** the ingest-flag test. |
+| | 4. A `time arrival` stream: live events are stamped at ingest in arrival order; replaying the recorded log reproduces the output byte for byte — **proof:** the arrival-time test. |
+| | 5. A second output inside the rate-limit interval is suppressed and counted; a key-less rule uses one global anchor — **proof:** the three §8 ports. |
+| | 6. A planted data race, a planted goroutine leak, and a single `Advance` emitting past the outbox ceiling are each red — **proof:** three proof rows. |
+| | 7. The two-OS byte diff is green and catches a planted map-iteration nondeterminism — **proof:** the T4 proof row. |
+| | 8. Zero allocations per event from ingest through filter evaluation — **proof:** `allocgate`. |
+| **Owner's check** | *By reading:* the error-semantics table and the live/replay equivalence scenario. |
+| **Split line** | **S3.2b-1** = items 1, 2, 6, 9 (plan, replay loop, rate limits, material); **S3.2b-2** = items 3–5, 7, 8. |
+
+#### S3.3 — The Deploy pipeline and the conformance runner — clock freeze
+
+| | |
+|---|---|
+| **Goal** | A filter rule deployed through the public `cep.Runtime.Deploy` runs with its expect blocks executed as a deploy stage, the conformance runner provably fails on wrong expectations, and the clock contract is frozen under the gate. |
+| **Routine · size** | Full loop (the public Go API) · 13 SP (items 13) |
+| **Depends on** | S3.2b |
+| **In scope** | 1. The public facade `cep` (minimal): `Runtime`, `Config`, `Deploy` (parse → validate → plan → expect sandbox → register), `AppHandle` `Start` / `Stop` (drain barrier to a fixpoint, `drained_pending`) / `Undeploy`, `Runtime.Close` (reverse deploy order), multiple apps per runtime, `Input` with **`SendRow` only**, the `Table` API, `BuildInfo` [4]. · 2. **The connector contracts as the leaf package `io` (package `cepio`)** — `Source`, `Sink`, `Mapper`, `RowWriter`, `EmitFunc`, `OutEvent`, `Mode`, and **the batch-close signal** (designed here; an API Δ) — plus `io/inmemory` [1.5]. · 3. **The expect sandbox in `internal/playback`**, called by `cep.Deploy` and `conformance/`: a fresh sandbox per block, `given table` seeding through table records [2]. · 4. The conformance runner `conformance/` (public API only); E-EXP-001 lifted from S2.2b's skip; the six planted wrong-expect proofs [2]. · 5. `apipartition` (`api/exports.golden`: `cep` + `io`) + `apidiff` against the merge base [1.5]. · 6. `gate/regen-baseline` + Tier-2 baselines [1.5]. · 7. `api/clock.golden` added to `gate/law.json`; **the clock contract freezes at this sprint's G5** [0.5]. |
 | **Not in scope** | Patterns → S4.1. HTTP and the other connectors → S5.1, S5.2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 07 and 09 pass their fire-path and near-miss expects through `Deploy` — **proof:** the conformance runner. |
-| | 2. Each planted wrong expect — wrong value, missing output, extra output, wrong order, an output under an empty `then`, wrong timestamp — fails `Deploy` with E-EXP-001 naming the first divergence — **proof:** six proof rows in `gate/proofs/`. |
-| | 3. A second output inside the rate-limit interval is suppressed and counted; a key-less rule uses one global anchor — **proof:** the three §8 ports. |
-| | 4. Two apps in one runtime share no state; `Runtime.Close` stops them in reverse deploy order — **proof:** the multi-app isolation test. |
-| | 5. Two `in` predicates on one table within one event see one snapshot while a concurrent `Table.Upsert` is held between them — **proof:** the live table-snapshot test. |
-| | 6. An unlisted export turns `apipartition` red; `apidiff` reports a planted signature change against the merge base — **proof:** proof rows. |
-| | 7. The two-OS byte diff is green and catches a planted map-iteration nondeterminism — **proof:** the T4 proof row. |
-| | 8. A planted change to an exported `internal/clock` signature appears in the LAW Δ block — **proof:** the clock-golden proof. |
+| | 2. Each planted wrong expect — wrong value, missing output, extra output, wrong order, an output under an empty `then`, wrong timestamp — fails `Deploy` with E-EXP-001 naming the first divergence — **proof:** six proof rows. |
+| | 3. Two apps in one runtime share no state; `Runtime.Close` stops them in reverse deploy order — **proof:** the multi-app isolation test. |
+| | 4. Two `in` predicates on one table within one event see one snapshot while a concurrent `Table.Upsert` is held between them — **proof:** the live table-snapshot test. |
+| | 5. An unlisted export turns `apipartition` red; `apidiff` reports a planted signature change — **proof:** proof rows. |
+| | 6. `gate/regen-baseline` refuses to record a run that changes timestamps, ordering or counts, and records an additive one — **proof:** regen-baseline proofs. |
+| | 7. A planted change to an exported `internal/clock` signature appears in the LAW Δ block — **proof:** the clock-golden proof. |
 | **Owner's check** | *By running:* a 20-line Go program that embeds the engine, deploys 09 and feeds events through `SendRow`. *By reading:* `api/exports.golden` — the first public surface. |
-| **Split line** | **S3.3a** = items 1–3, 7 (emission, facade, contracts); **S3.3b** = items 4–6, 8–9 (sandbox, runner, test material, instruments, freeze). |
+| **Split line** | **S3.3-1** = items 1, 2, 5 (facade, contracts, API gate); **S3.3-2** = items 3, 4, 6, 7. |
 
 #### S4.1 — The pattern engine: the kill switch fires in playback
 
 | | |
 |---|---|
-| **Goal** | The flagship kill-switch rule fires and is defeated exactly per SEMANTICS §6 — including its full evidence chain, a second session, and a quiet key in live mode — and every pattern harness check passes in Go. |
-| **Routine · size** | Full loop (pattern matching) · 13 SP |
+| **Goal** | The flagship kill-switch rule fires and is defeated exactly per SEMANTICS §6 — including its full evidence chain and a second session — and every pattern harness check passes in Go. |
+| **Routine · size** | Full loop (pattern matching) · 13 SP (items 11) |
 | **Depends on** | S3.3 |
-| **In scope** | 1. `internal/pattern` (ADR-0013): partials, continuous absence watchers, completion timers, skip-till-next, skip-past-last earliest-wins, `every` / `once`, the per-instance freelist, `Walk`. · 2. **Logical `and` groups** (SPEC §5.2; SEMANTICS §6.1, §6.5): order-free pairs; a for-each group restarts per group completion. Their semantics have no worked example, so **new Python harness checks are written red-first in the design step** — both arrival orders, equal timestamps, an absence conjunct, `every` per group, skip-past-last contention, `once` — and any ambiguity they expose goes to the owner. · 3. The `chain` factory. · 4. Plan wiring for pattern rules. · 5. The 18 harness ports (see the mapping). · 6. **Test material (QA, before the engine runs):** 01 gains an expect with two sessions in one agent, and its fire-path expect asserts the full `evidence` value (in the expect if SPEC §6.8's record syntax can express it, otherwise a conformance case); 08 gains fire-path and near-miss expects where `sessionId == a.sessionId` can be false. · 7. **The live quiet-key case (ADR-0004 notes):** two keys, the live driver, ≥ 2 shards, the injectable idle-tick source; one key quiet after its anchor. · 8. **`drained_pending`** with a real pending absence at `Stop`. · 9. The walked-state invariant extended to partials; `allocgate` spawn; partial-count ceilings for 01 and 08. |
-| **Not in scope** | The oracle and the metamorphic suite → S4.2. Live connectors → S5.1. |
+| **In scope** | 1. `internal/pattern` (ADR-0013): partials, continuous absence watchers, completion timers, skip-till-next, skip-past-last earliest-wins, `every` / `once`, the per-instance freelist, `Walk` [5]. · 2. The `chain` factory [1]. · 3. Plan wiring for pattern rules [1]. · 4. The 18 harness ports (see the mapping) [2]. · 5. **Test material (QA, before the engine runs):** 01 gains an expect with two sessions in one agent, and its fire-path expect asserts the full `evidence` value (in the expect if SPEC §6.8 can express it, otherwise a conformance case); 08 gains fire-path and near-miss expects where `sessionId == a.sessionId` can be false [1]. · 6. The walked-state invariant extended to partials; `allocgate` spawn; partial-count ceilings for 01 and 08 [1]. |
+| **Not in scope** | `and` groups, the live quiet-key case, the drain case, the oracle and the metamorphic suite → S4.2. Live connectors → S5.1. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 01's expects pass: fire at 10:05 with the asserted evidence chain (both captures, in order, original values); defeat → nothing; the second session neither fires nor defeats the first — **proof:** the conformance runner. |
 | | 2. 08's expects pass — **proof:** the conformance runner. |
-| | 3. The 18 ported checks and the new and-group checks pass in Go — **proof:** `conformance/semantics_test.go`. |
-| | 4. Live, with the quiet key: its absence fires at exactly its deadline and its TTL purge happens at exactly its purge time — **proof:** the live quiet-key test (asserting times, not presence). |
-| | 5. `Stop` with a pending absence counts it in `drained_pending` and does not fire it — **proof:** the drain test. |
-| | 6. Spawning allocates nothing once the freelist is warm — **proof:** `allocgate`. |
-| **Owner's check** | *By running:* `go test ./conformance -run TestKillSwitch` (named in the plan check), then edit the approval timestamp: at 10:05:00.000 it defeats, at 10:05:00.001 it fires. *By reading:* the evidence chain. |
-| **Split line** | **S4.1a** = items 1, 3–5 and 01/08's material (the core engine); **S4.1b** = items 2, 7–9 (and-groups, the live quiet key, drain, freelist). |
+| | 3. The 18 ported checks pass in Go — **proof:** `conformance/semantics_test.go`. |
+| | 4. Spawning allocates nothing once the freelist is warm — **proof:** `allocgate`. |
+| **Owner's check** | *By running:* the kill-switch conformance test (command named in the plan check), then edit the approval timestamp: at 10:05:00.000 it defeats, at 10:05:00.001 it fires. *By reading:* the evidence chain. |
+| **Split line** | None needed (11). |
 
-#### S4.2 — The pattern engine against an independent oracle and the metamorphic laws
+#### S4.2 — The pattern engine completed and independently proven
 
 | | |
 |---|---|
-| **Goal** | The pattern engine agrees with an independently written oracle on hundreds of random streams per pattern shape, and all five metamorphic laws hold — each law proven able to fail. |
-| **Routine · size** | Full loop (it can only find pattern-semantics bugs, whose fixes change detections) · 8 SP |
+| **Goal** | Logical `and` groups work per SEMANTICS, a quiet key's absence fires on time in live mode, and the pattern engine agrees with an independently written oracle on hundreds of random streams while all five metamorphic laws hold — each law proven able to fail. |
+| **Routine · size** | Full loop (pattern matching; can only find bugs whose fixes change detections) · 13 SP (items 13) |
 | **Depends on** | S4.1 |
-| **In scope** | 1. The brute-force reference matcher, **written by an agent other than the pattern engine's author**, plus a differential against `docs/language/checks/executor.py` on the same seeds. **Shapes:** two- and three-step chains with cross-step references; absence before and after positives; `and` groups; `every` vs `once`; skip-past-last contention; a TTL purge mid-match; two streams with idle and virtual clocks. 200–300 seeded streams per shape; branch counters with floors (`matches > N`, `defeats > N`). · 2. The metamorphic suite (qa-strategy §2), five laws with their scopes, **a scenario floor per law that includes the oracle's random multi-key streams**, and **one planted proof per law**: a wall-clock leak (time shift), a shared cross-key map (key renaming), chunk-dependent logic (batch size), a buffer that releases on arrival (admissible reorder), a side effect of unfiltered events (irrelevant insertion). |
+| **In scope** | 1. **Logical `and` groups** (SPEC §5.2; SEMANTICS §6.1, §6.5): new Python harness checks written red-first in the design step — both arrival orders, equal timestamps, an absence conjunct, `every` per group, skip-past-last contention, `once` — and any ambiguity they expose goes to the owner [3]. · 2. **The live quiet-key case (ADR-0004 notes):** two keys, the live driver, ≥ 2 shards, the injectable idle-tick source [1.5]. · 3. **`drained_pending`** with a real pending absence at `Stop` [0.5]. · 4. The brute-force reference matcher, **written by an agent other than the pattern engine's author**, plus a differential against `docs/language/checks/executor.py` on the same seeds; shapes: two- and three-step chains with cross-step references, absence before and after positives, `and` groups, `every` vs `once`, skip-past-last contention, a TTL purge mid-match, two streams with idle and virtual clocks; 200–300 seeded streams per shape; branch counters with floors [5]. · 5. The metamorphic suite (qa-strategy §2): five laws with their scopes, a scenario floor per law incl. the oracle's random multi-key streams, one planted proof per law [3]. |
 | **Not in scope** | The cron variant of time shift → S9.1. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. Engine, oracle and executor agree on every stream of every shape, counters above their floors — **proof:** the oracle test. |
-| | 2. Each law is green over at least its scenario floor and red on its planted defect — **proof:** the metamorphic suite + five proof rows. |
-| **Owner's check** | *By reading:* the shape list and the counters from one run. |
-| **Split line** | n/a (8 SP). |
+| | 1. The new and-group checks pass in Python and in Go — **proof:** the harness + `conformance/semantics_test.go`. |
+| | 2. Live, with the quiet key: its absence fires at exactly its deadline and its TTL purge happens at exactly its purge time — **proof:** the live quiet-key test (asserting times, not presence). |
+| | 3. `Stop` with a pending absence counts it in `drained_pending` and does not fire it — **proof:** the drain test. |
+| | 4. Engine, oracle and executor agree on every stream of every shape, counters above their floors — **proof:** the oracle test. |
+| | 5. Each law is green over at least its scenario floor and red on its planted defect — **proof:** the metamorphic suite + five proof rows. |
+| **Owner's check** | *By reading:* the and-group harness checks; the oracle's shape list and one run's counters. |
+| **Split line** | **S4.2-1** = items 1–3 (and-groups, live quiet key, drain); **S4.2-2** = items 4–5 (oracle, metamorphic). |
 
 #### S5.1 — HTTP in, webhook out: the kill switch fires live
 
 | | |
 |---|---|
 | **Goal** | `cepd`, started with a JSON config, receives agent events over HTTP, detects the kill-switch pattern and calls the IAM webhook with the expected evidence, safely and with retries. |
-| **Routine · size** | Full loop (sink delivery) · 13 SP |
+| **Routine · size** | Full loop (sink delivery) · 13 SP (items 11.5) |
 | **Depends on** | S4.2 |
-| **In scope** | 1. `io/http` source (JSON per event; an NDJSON body = one source batch, **closed with the batch-close signal when the body ends**) and sink (JSON, `{{attr}}` templates, coalesced batches, exponential backoff with a cap, `sink_failures`). · 2. `io/jsonmap`, writing through `RowWriter` via a **facade decode entry** (`cep` exposes the schema-driven decoder to mappers — a named API Δ; built-ins never import `internal/*`). · 3. `io/render.go`, the shared `{{attr}}` renderer. · 4. `cmd/cepd` (minimal): rule files + `cepd.json` (param overrides **type-checked on override, E-PARAM-001**; connector settings; secrets via params or environment), `import _ "time/tzdata"`. · 5. The live end-to-end tests drive idleness through S3.2's idle-tick source. |
+| **In scope** | 1. `io/http` source (JSON per event; an NDJSON body = one source batch, closed with the batch-close signal when the body ends) and sink (JSON, `{{attr}}` templates, coalesced batches, exponential backoff with a cap, `sink_failures`) [4]. · 2. `io/jsonmap` via a **facade decode entry** (a named API Δ; built-ins never import `internal/*`) [1.5]. · 3. `io/render.go`, the shared renderer, and its injection-safety table [1.5]. · 4. `cmd/cepd` (minimal): rule files + `cepd.json` (param overrides type-checked, E-PARAM-001; connector settings; secrets via params or environment), `import _ "time/tzdata"` [2]. · 5. The live end-to-end tests, driving idleness through the idle-tick source, incl. S4.2's quiet-key case over HTTP [1.5]. · 6. The sink-failure test and the saturation test over HTTP [1]. |
 | **Not in scope** | stdin, SMTP, log, text mapper, `@OnError`, `/metrics`, `/healthz`, latency hooks → S5.2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. 01's fire scenario POSTed to the packaged `cepd` produces one POST at the stub IAM listener whose body equals S4.1's expected evidence value; the defeat scenario produces none, asserted only after a witness that the key's construct clock passed 10:05 — **proof:** the `cepd` end-to-end test. |
-| | 2. S4.1's quiet-key case, run over HTTP, fires at the same time — **proof:** the live quiet-key HTTP test. |
-| | 3. The renderer keeps JSON valid for attribute values containing quotes, backslashes, CR/LF, Unicode and invisible characters — **proof:** the renderer table test. |
-| | 4. A failing sink retries with backoff, then counts `sink_failures`; shards never block; sources feel the backpressure — **proof:** the sink-failure test + the saturation test over HTTP. |
+| | 1. 01's fire scenario POSTed to the packaged `cepd` produces one POST at the stub IAM listener whose body equals S4.1's expected evidence; the defeat scenario produces none, asserted only after a witness that the key's construct clock passed 10:05 — **proof:** the `cepd` end-to-end test. |
+| | 2. The quiet-key case over HTTP fires at the same time as in S4.2 — **proof:** the live quiet-key HTTP test. |
+| | 3. The renderer keeps JSON valid for values containing quotes, backslashes, CR/LF, Unicode and invisible characters — **proof:** the renderer table test. |
+| | 4. A failing sink retries with backoff, then counts `sink_failures`; shards never block; sources feel the backpressure — **proof:** the sink-failure + saturation tests. |
 | | 5. A param override of the wrong type is rejected with E-PARAM-001 at start-up — **proof:** the config test. |
-| **Owner's check** | *By running:* `cepd` with the named example config; send the two kill-switch events with `curl`; **the webhook stub logs the hit about one minute later** (the stream's `idle after 1 min` — stated, not a bug). *By reading:* the example `cepd.json`. |
-| **Split line** | **S5.1a** = items 1–3 (connectors, renderer); **S5.1b** = items 4–5 (`cepd`, live end-to-end). |
+| **Owner's check** | *By running:* `cepd` with the named example config; send the two kill-switch events with `curl`; the webhook stub logs the hit about one minute later (the stream's `idle after 1 min`). *By reading:* the example `cepd.json`. |
+| **Split line** | **S5.1-1** = items 1–3; **S5.1-2** = items 4–6. |
 
 #### S5.2 — The other connectors, error logging and observability
 
 | | |
 |---|---|
 | **Goal** | The stdin source, the SMTP and log sinks and the text mapper work and are safe, `@OnError` logs each error with its cause and rule, `cepd` serves metrics and health, and the engine records per-stage latency without contention. |
-| **Routine · size** | Full loop (sink delivery; hot-path instrumentation) · 8 SP |
+| **Routine · size** | Full loop (sink delivery; hot-path instrumentation) · 13 SP (items 9) |
 | **Depends on** | S5.1 |
-| **In scope** | 1. `io/stdin` (NDJSON; one batch per `--batch-lines` or per EOF, closed with the batch-close signal). · 2. `io/smtp` (`net/smtp` + STARTTLS; one message per event; rendered subject and body; **header-safe**: CR/LF in an attribute is encoded or refused, never written raw). · 3. `io/log` (canonical JSON). · 4. `io/textmap`. · 5. `@OnError` log (SEMANTICS §10): cause and rule id. · 6. A facade metrics-exposition method (a named API Δ); `cepd` `/metrics` (Prometheus text) and `/healthz`. · 7. **Per-stage latency hooks and per-shard histograms** (ADR-0010 §8: no locks, merged on read) — built here under the full loop so S10 only consumes them. · 8. `allocgate` rows for decode and encode. |
+| **In scope** | 1. `io/stdin` (NDJSON; one batch per `--batch-lines` or per EOF, closed with the batch-close signal) [1]. · 2. `io/smtp` (`net/smtp` + STARTTLS; one message per event; header-safe rendering) [2]. · 3. `io/log` (canonical JSON) [0.5]. · 4. `io/textmap` [0.5]. · 5. `@OnError` log: cause and rule id [1]. · 6. A facade metrics-exposition method (named API Δ); `cepd` `/metrics` and `/healthz` [1.5]. · 7. Per-stage latency hooks and per-shard histograms (no locks, merged on read) [2]. · 8. `allocgate` rows for decode and encode [0.5]. |
 | **Not in scope** | The benchmark suite and published numbers → S10. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. Against an in-test mail catcher on port 0: one message per event with the rendered subject and body; an `agentId` containing CR/LF cannot add a header — **proof:** the SMTP test + the header-injection rows of the renderer table. |
+| | 1. Against an in-test mail catcher on port 0: one message per event with the rendered subject and body; an `agentId` containing CR/LF cannot add a header — **proof:** the SMTP test + the header-injection rows. |
 | | 2. The log sink prints exactly the canonical JSON — **proof:** the log-sink golden. |
 | | 3. stdin replaying a log gives the same output as playback — **proof:** the stdin-vs-playback test. |
 | | 4. A division-by-zero error is logged with its cause and rule id — **proof:** the `@OnError` test. |
 | | 5. Histograms read concurrently with shard writes stay race-free — **proof:** the histogram test under `-race`, 50/50. |
 | | 6. `/metrics` exposes the counter set; `/healthz` answers — **proof:** the `cepd` test. |
 | **Owner's check** | *By running:* the named example config with the email sink; read the email in the local mail catcher. |
-| **Split line** | n/a (8 SP). |
+| **Split line** | None needed (9). |
 
 #### S6.1 — The Go builder, DSL/Go parity and the CLI
 
 | | |
 |---|---|
 | **Goal** | The kill-switch rule authored with the Go builder produces a byte-identical rule model and identical playback output to the DSL (roadmap exit criterion 4), and `cep validate` / `cep test` drive the public Deploy pipeline. |
-| **Routine · size** | Full loop (the public Go API) · 13 SP |
+| **Routine · size** | Full loop (the public Go API) · 13 SP (items 13) |
 | **Depends on** | S5.2 |
-| **In scope** | 1. Package `rule` (ADR-0003 §4; SPEC Appendix D): `rule.Stream[T]` with tags; **the design step lays out the whole SPEC §4.4 type-state graph** (incl. the window, emit and late branches and text operands) so S7–S9.2 add states without restructuring; implemented for every construct shipped through S5.2; `rule.Param[T]`; `Build()` returning catalog codes. **`rule → validate`** is a named import edge (settled at S1.1's plan check). · 2. **Typed input**: the generic entry point that maps `T` to `SendRow` (e.g. `cep.InputFor[T]`), with its mapping owner named in the design (Go has no generic methods; ADR-0012's `Send(ev T)` note is annotated). · 3. The parity test (ADR-0003 §5, a–e) for 01, 07, 08, 09. · 4. `cmd/cep validate` and `cmd/cep test` (thin drivers of the public Deploy; `import _ "time/tzdata"`); the rule unit-test framework (O6). · 5. `apipartition`: the `rule` exports. |
-| **Not in scope** | Builder surface for text and windows → S7, S8, S9.1, S9.2. The formatter → S6.2. |
+| **In scope** | 1. Package `rule` (ADR-0003 §4; SPEC Appendix D): `rule.Stream[T]` with tags; **the design step lays out the whole SPEC §4.4 type-state graph** so S7–S9.2 add states without restructuring; implemented for every construct shipped through S5.2; `rule.Param[T]`; `Build()` returning catalog codes; `rule → validate` is a listed import edge [6]. · 2. **Typed input**: the generic entry point mapping `T` to `SendRow` (e.g. `cep.InputFor[T]`), with its mapping owner named in the design [1.5]. · 3. The parity test (ADR-0003 §5, a–e) for 01, 07, 08, 09 [2]. · 4. `cmd/cep validate` and `cmd/cep test` (`import _ "time/tzdata"`); the rule unit-test framework (O6) [2]. · 5. One compile-failure row per mandatory clause [1]. · 6. `apipartition`: the `rule` exports [0.5]. |
+| **Not in scope** | Builder surface for text and windows → S7, S8, S9.2. The formatter → S6.2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. Parity holds for 01, 07, 08 and 09 — canonical JSON equal with `ParamRef`s, equal after resolution, identical playback outputs on their expect events — **proof:** the parity test (exit criterion 4). |
-| | 2. For every mandatory clause in SPEC §5.4, a builder chain that omits it does not compile — **proof:** one compile-failure row per clause. |
-| | 3. `cep test` runs every expect block and exits 0; on an example with a planted wrong expect it exits non-zero naming the divergence — **proof:** the CLI end-to-end test. |
-| | 4. `cep validate` on an invalid file prints code, line, column and fix text, and returns the documented exit code — **proof:** the CLI validate test. |
+| | 1. Parity holds for 01, 07, 08 and 09 — canonical JSON equal with `ParamRef`s, equal after resolution, identical playback outputs — **proof:** the parity test (exit criterion 4). |
+| | 2. For every mandatory clause in SPEC §5.4, a builder chain that omits it does not compile — **proof:** the compile-failure rows. |
+| | 3. `cep test` runs every expect block and exits 0; on a planted wrong expect it exits non-zero naming the divergence — **proof:** the CLI end-to-end test. |
+| | 4. `cep validate` on an invalid file prints code, line, column and fix text with the documented exit code — **proof:** the CLI validate test. |
 | **Owner's check** | *By running:* write the kill switch in Go from the package example; run `cep test` and `cep validate` on a broken file. *By reading:* the `rule` godoc. |
-| **Split line** | **S6.1a** = items 1, 2, 5 (builder + typed input); **S6.1b** = items 3–4 (parity + CLI). |
+| **Split line** | **S6.1-1** = items 1, 2, 5, 6; **S6.1-2** = items 3, 4. |
 
 #### S6.2 — `cep fmt` and the generated timing comment
 
 | | |
 |---|---|
 | **Goal** | `cep fmt` rewrites any rule file into SPEC §9's canonical form, preserving every user comment and keeping a formatter-owned comment on each rule that names the stream timing it inherits, and the gate refuses unformatted files. |
-| **Routine · size** | Full loop (the formatter's output is part of the language; design step runs the language-design skill) · 13 SP |
+| **Routine · size** | Full loop (the formatter's output is part of the language; the design step runs the language-design skill) · 13 SP (items 12.5) |
 | **Depends on** | S6.1 |
-| **In scope** | 1. The canonical printer `internal/parser/printer.go` from S2.1's trivia; **explicit parentheses kept as written** (so torture files keep their meaning). · 2. A facade entry `cep.Format` (a named API Δ — L5 binaries import only public packages) and `cmd/cep fmt` (rewrite; `--check`). · 3. **The generated timing comment** (owner decisions 2026-11-01): its marker and text designed here, and **the SPEC §9 sentence landing with it** ("canonical form includes the generated timing comment"). · 4. **The corpus regenerated once** — `docs/language/examples/` (and any in-scope file below) — semantically neutral by construction. · 5. **`fmtcheck`** with expected scope `git ls-files '*.cep' ':!docs/language/invalid/**' ':!docs/language/eval/generated/**' ':!**/testdata/**' ':!gate/proofs/**' ':!.claude/**'` — the invalid corpus is unparseable by design; `eval/generated/` is recorded evaluation evidence (EVAL.md) and the torture set; testdata carry position expectations; proofs are deliberately bad. |
+| **In scope** | 1. The canonical printer `internal/parser/printer.go` from S2.1's trivia, explicit parentheses kept as written [4]. · 2. A facade entry `cep.Format` (named API Δ) and `cmd/cep fmt` (rewrite; `--check`) [1]. · 3. The generated timing comment — marker and text designed here — and the SPEC §9 sentence landing with it [1.5]. · 4. The corpus regenerated once (`docs/language/examples/`), with the regeneration-neutrality check [1]. · 5. `fmtcheck` with expected scope `git ls-files '*.cep' ':!docs/language/invalid/**' ':!docs/language/eval/generated/**' ':!**/testdata/**' ':!gate/proofs/**' ':!.claude/**'` and its stale-comment proof [1]. · 6. The round-trip property test with the seeded layout-variant generator, comment-multiset property and the lark side of the differential [2]. · 7. The comment position-class table [1]. · 8. The parameterized timing-comment test [1]. |
 | **Not in scope** | Format-on-save or editor plugins (later). |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. For every file in `examples/`, `eval/generated/` and the torture set, and for seeded layout variants of them (whitespace added or removed, line breaks moved, comments moved between legal positions): `parse → format → parse` yields the identical model, formatting is idempotent, the multiset of user comments is preserved, and every formatted variant also passes the lark side of the grammar differential — **proof:** the round-trip property test. |
-| | 2. User comments survive at their position in every position class — between filter operands, inside expect records, between the parts of a duration, a trailing `--` at end of file with no newline, a multi-line block comment — and a user comment that looks like the generated marker is preserved, not swallowed — **proof:** the position-class table test. |
-| | 3. Changing any field the timing comment lists (`watermark bounded`, `ascending`, `arrival`, `idle after`) and re-formatting rewrites the comment on exactly the rules that consume that stream, including a rule that consumes two streams — **proof:** the parameterized timing-comment test. |
-| | 4. On the regeneration commit, every S2.1 model golden, every grammar-differential S-expression and every conformance output is byte-unchanged — **proof:** the regeneration-neutrality check run on that commit. |
-| | 5. A stream-timing edit without re-formatting turns `fmtcheck` red — **proof:** the planted stale-comment proof. |
+| | 1. For every file in `examples/`, `eval/generated/` and the torture set, and for seeded layout variants of them: `parse → format → parse` yields the identical model, formatting is idempotent, the multiset of user comments is preserved, and every formatted variant passes the lark side of the differential — **proof:** the round-trip property test. |
+| | 2. User comments survive at their position in every position class, and a user comment that looks like the generated marker is preserved — **proof:** the position-class table test. |
+| | 3. Changing any listed timing field and re-formatting rewrites the comment on exactly the rules that consume that stream, incl. a two-stream rule — **proof:** the parameterized timing-comment test. |
+| | 4. On the regeneration commit, every model golden, differential S-expression and conformance output is byte-unchanged — **proof:** the neutrality check. |
+| | 5. A stream-timing edit without re-formatting turns `fmtcheck` red — **proof:** the stale-comment proof. |
 | **Owner's check** | *By running:* mangle a rule file's layout and run `cep fmt`; change a stream's watermark and read the diff. *By reading:* the timing comment on the flagship. |
-| **Split line** | **S6.2a** = items 1–2 (printer + `cep fmt` without the timing comment); **S6.2b** = items 3–5. |
+| **Split line** | **S6.2-1** = items 1, 2, 6, 7 (printer + `cep fmt`); **S6.2-2** = items 3–5, 8. |
 
 #### S7 — Text operators, incl. live table term lists
 
 | | |
 |---|---|
 | **Goal** | All five text-operator families evaluate exactly per SEMANTICS §5 in both case modes and both front-ends, term lists stored in a table update live, and evidence keeps the original text. |
-| **Routine · size** | Full loop (changes what a rule detects) · 13 SP |
+| **Routine · size** | Full loop (changes what a rule detects) · 13 SP (items 13) |
 | **Depends on** | S6.2 |
-| **In scope** | 1. `internal/text` (ADR-0007): NFC, `FoldSimple`, `Tokens`, Aho-Corasick, regex wrappers incl. `(?i)` for `_ci`. · 2. The expression text nodes and `raw()`. · 3. **Table operands for keyword sets, live** (owner 2026-11-02): the matcher is rebuilt when the table's version changes — never per event, never shared mutably between shards; ADR-0007 §5 annotated. · 4. The validator's E-TXT-002 (lifting S2.2's skip); `validate → text` is a named edge (S1.1's plan check). · 5. The Unicode-version agreement check; `BuildInfo`. · 6. **Test material (QA, before the engine runs):** fire-path and near-miss expects for 05 and 06 (06 includes its `once` group); 05's include a payload that claims `text_invisibles: false`. · 7. Builder text surface + parity twins of 05 and 06. · 8. The seven §5 harness ports; fold-sensitive regex cases. · 9. `allocgate` rows for text (target zero; rebuild-on-update and any other allocating path listed as counted exclusions). |
+| **In scope** | 1. `internal/text` (ADR-0007): NFC, `FoldSimple`, `Tokens`, Aho-Corasick, regex wrappers incl. `(?i)` for `_ci` [5]. · 2. The expression text nodes and `raw()` [1.5]. · 3. **Table operands for keyword sets, live** (owner 2026-11-02): the matcher rebuilds when the table's version changes — never per event, never shared mutably between shards [2]. · 4. The validator's E-TXT-002 (lifting S2.2b's skip); `validate → text` is a listed edge [0.5]. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss expects for 05 and 06 (06's `and` group from S4.2 and its `once`); 05's include a payload claiming `text_invisibles: false` [1]. · 6. Builder text surface + parity twins of 05 and 06 [1.5]. · 7. The seven §5 harness ports; fold-sensitive regex cases [1]. · 8. `allocgate` rows for text (target zero; rebuild-on-update and other allocating paths listed as counted exclusions) [0.5]. |
 | **Not in scope** | Locale-aware or full case folding (never). LLM judgement → Phase 4. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 05 and 06 pass their expects; 05's spoofed-flag case still flags — **proof:** the conformance runner. |
 | | 2. The seven §5 ports and the fold-sensitive regex cases pass — **proof:** the conformance suite. |
 | | 3. Table operands × all four set families × both case modes × terms/substrings evaluate correctly, and a table record between two events changes the result from the next event onward — **proof:** the table-operand matrix test. |
-| | 4. A text rule's evidence carries the original text, including an invisible character and a case variant — **proof:** an evidence case. |
+| | 4. A text rule's evidence carries the original text, incl. an invisible character and a case variant — **proof:** an evidence case. |
 | | 5. Parity twins of 05 and 06 are green; no `skip: not-implemented(S7)` remains — **proof:** the parity test; the summary. |
 | **Owner's check** | *By running:* a keyword-set rule over a prompt containing an invisible character and a case variant; then update the term table and send the same prompt again. *By reading:* the evidence. |
-| **Split line** | **S7a** = items 1, 2, 4, 5, 8 (operators); **S7b** = items 3, 6, 7, 9 (table operands, material, twins). |
+| **Split line** | **S7-1** = items 1, 2, 4, 7, 8 (operators); **S7-2** = items 3, 5, 6. |
 
 #### S8 — Windows I: sort, batch and `count`
 
 | | |
 |---|---|
 | **Goal** | Sort and batch windows emit exactly per SEMANTICS §7–§9, `count` aggregates over a closed group, and batch punctuation works from live sources as well as from replay, in both front-ends. |
-| **Routine · size** | Full loop with the full blind three-reviewer design panel (owner decision 2026-11-01) · 13 SP |
+| **Routine · size** | Full loop with the full blind three-reviewer design panel (owner decision 2026-11-01; the panel's days sit outside the points) · 13 SP (items 12) |
 | **Depends on** | S7 |
-| **In scope** | 1. `internal/window`'s `Kind` interface and `Out` (ADR-0014 §1). · 2. Sort: the tie rule, changelog output, `OnPurge` retractions in total order. · 3. Batch: grouping by `BatchID` **within the key**; firing on the batch-close signal delivered by the router as a control timer; one group event at the group's max event time; **the fired-id dedup set lives per instance** (ADR-0014 §5; ADR-0006 §2(b) annotated on approval), TTL-purged with it. · 4. **`count`** (registry `Aggregate` kind) evaluated over a closed group, respecting E-SEL-002; reused by cron in S9.1. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss expects for 03 (its `+`/`−` rows in a conformance log if an expect cannot express them) and for 04's batch rule. · 6. Builder window surface for sort and batch + the twin of 03. · 7. The five harness ports (see the mapping). · 8. The walked-state invariant for window state; `allocgate` rows. |
+| **In scope** | 1. `internal/window`'s `Kind` interface and `Out` (ADR-0014 §1) [1]. · 2. Sort: the tie rule, changelog output, `OnPurge` retractions in total order [2.5]. · 3. Batch: grouping by `BatchID` within the key; firing on the batch-close signal delivered by the router as a control timer; one group event at the group's max event time; the fired-id dedup set per instance, TTL-purged with it [2.5]. · 4. **`count`** (registry `Aggregate` kind) over a closed group, respecting E-SEL-002 [1]. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss cases for 03 (its `+`/`−` rows in a conformance log if an expect cannot express them) and for 04's batch rule [1]. · 6. Builder sort and batch surface + the twin of 03 [1.5]. · 7. The five harness ports [1]. · 8. The live batch test (NDJSON over HTTP and the same records over stdin) [1]. · 9. The walked-state invariant for window state; `allocgate` [0.5]. |
 | **Not in scope** | Cron → S9.1; delay → S9.2. The time-based window catalog → Phase 2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
@@ -382,107 +439,106 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | | 4. A redelivered batch id emits nothing — **proof:** the RT-21 port. |
 | | 5. The twin of 03 is green — **proof:** the parity test. |
 | **Owner's check** | *By running:* a leaderboard rule with a tie. *By reading:* the changelog rows. |
-| **Split line** | **S8a** = sort (items 1, 2, 03's material and twin); **S8b** = batch + `count` (items 3, 4, 04's material, the live batch test). |
+| **Split line** | **S8-1** = sort (items 1, 2, 03's material and twin); **S8-2** = batch + `count` (items 3, 4, 04's material, the live batch test). |
 
 #### S9.1 — Windows II: cron
 
 | | |
 |---|---|
-| **Goal** | Cron windows emit exactly per SEMANTICS §7 with SPEC's dialect — including daylight saving — implemented in-repo, late events handled exactly as rev 3 pins them, and live firing driven by idleness, in both front-ends. |
-| **Routine · size** | Full loop with the full blind three-reviewer design panel · 13 SP |
+| **Goal** | Cron windows emit exactly per SEMANTICS §7 with SPEC's dialect — including daylight saving — implemented in-repo, late events handled exactly as rev 3 pins them, and live firing driven by idleness. |
+| **Routine · size** | Full loop with the full blind three-reviewer design panel · 13 SP (items 12) |
 | **Depends on** | S8 |
-| **In scope** | 1. `internal/window/cron.go` (ADR-0014 §3, §6): the 5-field Vixie parser; next-fire by field-wise search in the rule's timezone; `time.LoadLocation` over embedded tzdata. · 2. **Enumerated DST cases, expected UTC instants derived with Python `zoneinfo` before the Go code:** the spring gap and the autumn fold for `0 2 * * *` in America/New_York; Australia/Lord_Howe's 30-minute shift; a southern-hemisphere zone; a day-of-week-restricted expression across a transition. · 3. The `windowspec` helper for the validator: E-WIN-003 and the cron part of E-TTL-002 (lifting S2.2's skips) — **the 10-year extent scan reads its start instant from an injected clock, pinned in tests**, never the wall clock. · 4. Buckets with `count` (from S8), the close timer at `bᵢ₊₁`, a single fire — **no allowance** (rev 3). · 5. **Test material (QA, before the engine runs):** fire-path and near-miss expects for 02, including an event behind the admission watermark whose bucket is still open (dropped and counted, per rev 3). · 6. Live cron close through the idle-tick source. · 7. The time-shift law's cron variant. · 8. Builder cron surface + the twin of 02. · 9. The cron harness port; RT-07's window-extent assertions; the boundary property test; the walked-state invariant for buckets. |
-| **Not in scope** | Delay → S9.2. `late events allow` → Phase 2 (owner 2026-11-02). |
+| **In scope** | 1. `internal/window/cron.go` (ADR-0014 §3, §6): the 5-field Vixie parser; next-fire by field-wise search in the rule's timezone; `time.LoadLocation` over embedded tzdata [4]. · 2. **Enumerated DST cases, expected UTC instants derived with Python `zoneinfo` before the Go code:** the spring gap and autumn fold for `0 2 * * *` in America/New_York; Australia/Lord_Howe's 30-minute shift; a southern-hemisphere zone; a day-of-week-restricted expression across a transition [1.5]. · 3. The `windowspec` helper for the validator: E-WIN-003 and the cron part of E-TTL-002 (lifting S2.2b's skips) — the 10-year extent scan reads its start instant from an injected clock, pinned in tests [1.5]. · 4. Buckets with `count` (from S8), the close timer at `bᵢ₊₁`, a single fire, no allowance (rev 3), incl. the admission-drop case [1.5]. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss expects for 02, incl. an event behind the admission watermark whose bucket is still open [1]. · 6. Live cron close through the idle-tick source [1]. · 7. The time-shift law's cron variant [0.5]. · 8. The cron harness port; RT-07's window-extent assertions; the boundary property test; the walked-state invariant for buckets [1]. |
+| **Not in scope** | The builder's cron surface and the twin of 02 → S9.2. Delay → S9.2. `late events allow` → Phase 2. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 02 passes its cases, incl. the admission-drop case — **proof:** the conformance runner. |
 | | 2. Every enumerated DST case yields its pre-derived UTC instants; every rejected form returns E-WIN-003 — **proof:** the cron table tests. |
 | | 3. The extent scan gives the same answer whatever day the test runs — **proof:** the scan test with two different injected start instants. |
 | | 4. A live cron bucket closes through idleness at its boundary — **proof:** the live cron test. |
-| | 5. The cron time-shift variant is green; the twin of 02 is green; no `skip: not-implemented(S9.1)` remains — **proof:** the metamorphic suite; the parity test; the summary. |
+| | 5. The cron time-shift variant is green; no `skip: not-implemented(S9.1)` remains — **proof:** the metamorphic suite; the summary. |
 | **Owner's check** | *By running:* a daily-digest rule across a DST change in a named timezone. *By reading:* the bucket boundaries. |
-| **Split line** | **S9.1a** = items 1–3 (parser, DST, validator); **S9.1b** = items 4–9 (windows, live, laws, twin). |
+| **Split line** | **S9.1-1** = items 1–3 (parser, DST, validator); **S9.1-2** = items 4–8. |
 
-#### S9.2 — Windows III: delay
+#### S9.2 — Windows III: delay, and the cron/delay builder twins
 
 | | |
 |---|---|
-| **Goal** | Delay windows re-time events exactly per SEMANTICS §7, and 04 passes as a whole, in both front-ends. |
-| **Routine · size** | Full loop with the full blind three-reviewer design panel · 8 SP |
+| **Goal** | Delay windows re-time events exactly per SEMANTICS §7, 04 passes as a whole, and cron and delay rules can be authored with the Go builder with proven parity. |
+| **Routine · size** | Full loop with the full blind three-reviewer design panel · 8 SP (items 6.5) |
 | **Depends on** | S9.1 |
-| **In scope** | 1. Delay: a due-ordered queue; each event re-stamped `t + D`. · 2. **Test material (QA):** fire-path and near-miss expects for 04's delay rule, plus a delay case across a TTL purge. · 3. Builder delay surface + the twin of 04. · 4. The delay harness port; the walked-state invariant for the queue; `allocgate`. |
+| **In scope** | 1. Delay: a due-ordered queue; each event re-stamped `t + D` [2]. · 2. **Test material (QA):** fire-path and near-miss expects for 04's delay rule, plus a delay case across a TTL purge [1]. · 3. Builder cron and delay surface + the parity twins of 02 and 04 [2.5]. · 4. The delay harness port; the walked-state invariant for the queue; `allocgate` [1]. |
 | **Not in scope** | Rule-consumption of a delay's output (derived stream) → Phase 2 (RT-09). |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 04 passes all its cases, incl. the TTL-purge case — **proof:** the conformance runner. |
-| | 2. The delay port passes; the twin of 04 is green — **proof:** the conformance suite; the parity test. |
-| **Owner's check** | *By running:* a delay rule with one out-of-order event. |
-| **Split line** | n/a (8 SP). |
+| | 2. The delay port passes; the twins of 02 and 04 are green; no `skip: not-implemented(S9.2)` remains — **proof:** the conformance suite; the parity test; the summary. |
+| **Owner's check** | *By running:* a delay rule with one out-of-order event; the cron digest authored in Go. |
+| **Split line** | None needed (6.5). |
 
 #### S10 — Demo kit, quickstart, benchmarks and the published latency
 
 | | |
 |---|---|
 | **Goal** | A newcomer runs the kill-switch demo from the public quickstart in under 15 minutes, the demo is checked automatically, and detection latency is measured with an open-loop benchmark and published with its span, hardware and method. |
-| **Routine · size** | Lighter (no change to what any rule detects or emits; the hot-path hooks were built under the full loop in S5.2) · 13 SP |
+| **Routine · size** | Lighter (no change to what any rule detects or emits; the hot-path hooks were built under the full loop in S5.2) · 13 SP (items 10) |
 | **Depends on** | S9.2 |
-| **In scope** | 1. The `bench/` suite (ADR-0010 §8), consuming S5.2's hooks: scenario generators in `bench/gen/`; an open-loop load generator; per-stage and end-to-end percentiles. · 2. `benchstat` baselines + CI tripwires. · 3. `demo/`: the compose kit (traffic generator sharing `bench/gen/`, stub IAM endpoint, mail catcher) **and a nightly job that brings it up and asserts both the stub and the mail catcher receive the kill switch**. · 4. The quickstart. · 5. Docs for the shipped subset only, with the honest limits (no restart survival; at-least-once; per-agent only; no `late events allow` until Phase 2). · 6. The published latency page. |
-| **Not in scope** | Further optimization. Fleet-wide claims (Phase 2–3). |
+| **In scope** | 1. The `bench/` suite (ADR-0010 §8), consuming S5.2's hooks: scenario generators in `bench/gen/`; an open-loop load generator; per-stage and end-to-end percentiles [4]. · 2. `benchstat` baselines + CI tripwires, registered as **`exclusive`** rows [1.5]. · 3. `demo/`: the compose kit (traffic generator sharing `bench/gen/`, stub IAM endpoint, mail catcher) and a nightly job that brings it up and asserts both the stub and the mail catcher receive the kill switch [3]. · 4. The quickstart [1]. · 5. The published latency page [0.5]. |
+| **Not in scope** | The full docs for the shipped subset → S12. Further optimization. Fleet-wide claims (Phase 2–3). |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block (lighter), plus: |
 | | 1. The owner completes the quickstart cold in under 15 minutes — **proof:** the timed run recorded in the sprint record (exit criterion 1). |
-| | 2. Two spans published (exit criterion 2): **engine detection latency** — from the router accepting the event (or idle tick) that makes the match due to the kill-switch event entering the sink queue — with p50/p99/p99.9/max **and pass/fail against O3's sub-millisecond p99**; and **end-to-end** — through the IAM webhook's response — reported with hardware and method — **proof:** the bench report from the suite. |
+| | 2. Two spans published (exit criterion 2): **engine detection latency** — from the router accepting the event (or idle tick) that makes the match due to the kill-switch event entering the sink queue — with p50/p99/p99.9/max and pass/fail against O3's sub-millisecond p99; and **end-to-end** through the IAM webhook's response, with hardware and method — **proof:** the bench report. |
 | | 3. A planted 10× regression turns the benchmark tripwire red — **proof:** a gate proof. |
-| | 4. Every documented construct links to a conformance case **whose rule model uses that construct** — **proof:** the docs-to-conformance check. |
-| | 5. The compose-kit job is green and goes red when the stub IAM endpoint is removed — **proof:** the nightly job + its proof. |
-| **Owner's check** | *By running:* the quickstart on a clean machine with a timer. *By reading:* the limits page and the latency page. |
-| **Split line** | **S10a** = items 1, 2, 6 (benchmarks + latency); **S10b** = items 3–5 (demo, quickstart, docs). |
+| | 4. The compose-kit job is green and goes red when the stub IAM endpoint is removed — **proof:** the nightly job + its proof. |
+| **Owner's check** | *By running:* the quickstart on a clean machine with a timer. *By reading:* the latency page. |
+| **Split line** | None needed (10). |
 
 #### S11 — The attack gallery: seven examples
 
 | | |
 |---|---|
 | **Goal** | Every attack the attack-landscape review classes as expressible in the MVP language — A2 EchoLeak, A4 AgentFlayer, A5 GitHub MCP toxic flow, A6(a) malicious MCP server (static form), A7 Nx s1ngularity, A10 CoPhish, A13 the third-party AI-tool breach — ships as a documented, cited, runnable rule app that provably detects its attack and provably ignores a near miss, in the DSL and the Go builder. |
-| **Routine · size** | Lighter (consumes shipped constructs only) · 13 SP |
+| **Routine · size** | Lighter (consumes shipped constructs only) · 13 SP (items 12) |
 | **Depends on** | S10 |
-| **In scope** | 1. `gallery/<nn>-<slug>/` × 7: a README (plain-English story; citation; **a class tag matching the review's tally**; an honest note on the Phase-3 telemetry real deployments need), a synthetic timeline, the rule, its Go twin, its playback log. Stories are written inside this sprint. · 2. **Per app, written from the README's timeline before the engine runs: ≥ 1 non-empty fire-path expect naming the attributes it asserts, and ≥ 1 benign near-miss expect.** · 3. The conformance runner executes every app; the parity test covers every twin; the gallery joins the grammar-differential corpus (ADR-0002 §5 annotated on approval) and `fmtcheck`. · 4. Attacks the review classes P2, P3 or inexpressible listed as "coming", never faked. · 5. **An engine defect found here** is not fixed under the lighter routine: it goes to a full-loop fix (the owner may open a sprint) or to known issues with the owner's consent. |
+| **In scope** | 1. `gallery/<nn>-<slug>/` × 7: a README (plain-English story; citation; a class tag matching the review's tally; an honest note on the Phase-3 telemetry real deployments need), a synthetic timeline, the rule, its Go twin, its playback log; stories written inside this sprint [9]. · 2. Per app, written from the README's timeline before the engine runs: ≥ 1 non-empty fire-path expect naming the attributes it asserts, and ≥ 1 benign near-miss expect [1.5]. · 3. The conformance runner executes every app; the parity test covers every twin; the gallery joins the grammar-differential corpus and `fmtcheck` [0.5]. · 4. The class-tag script and the in-repo link check [1]. · 5. Attacks the review classes P2, P3 or inexpressible listed as "coming", never faked [incl.]. · 6. An engine defect found here goes to a full-loop fix (the owner may open a sprint) or to known issues with the owner's consent — never fixed under the lighter routine [incl.]. |
 | **Not in scope** | Any construct not already shipped. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block (lighter), plus: |
 | | 1. All seven apps pass their fire-path and near-miss expects in CI, each with a green twin, in the differential and `fmtcheck`-clean — **proof:** the conformance runner, the parity test, the differential, `fmtcheck`. |
-| | 2. Every README's class tag matches the review's tally table — **proof:** a script checking the tags against `docs/language/review/attack-validation.md`'s expressibility tally. |
+| | 2. Every README's class tag matches the review's tally table — **proof:** the class-tag script. |
 | | 3. Every citation link resolves to an in-repo anchor (no network in the gate) — **proof:** the in-repo link check. |
 | **Owner's check** | *By reading:* the seven stories for accuracy and defensive framing. *By running:* one gallery app through `cep test`. |
 | **Split line** | **S11.1** = four apps (A2, A4, A5, A10); **S11.2** = the other three. S11.1 alone does not meet exit criterion 5 (≥ 5), so S12 waits for S11.2. |
 
-#### S12 — Release close-out: whole-engine break-it and `v0.1.0`
+#### S12 — Release close-out: docs, whole-engine break-it and `v0.1.0`
 
 | | |
 |---|---|
-| **Goal** | The whole engine survives a whole-engine break-it with every finding dispositioned, all five roadmap exit criteria are proven by their named measurements, and the owner tags `v0.1.0`. |
-| **Routine · size** | Full loop + the whole-engine break-it (sprint model §14) · 8 SP |
+| **Goal** | The docs cover exactly the shipped subset, the whole engine survives a whole-engine break-it with every finding dispositioned, all five roadmap exit criteria are proven by their named measurements, and the owner tags `v0.1.0`. |
+| **Routine · size** | Full loop + the whole-engine break-it (sprint model §14) · 13 SP (items 12.5) |
 | **Depends on** | S11 |
-| **In scope** | 1. The whole-engine break-it (QA + the-fool): out-of-order and late events, equal timestamps, `within` exactly at its bound, absence timers at the edge, partition-key explosion, malformed input, sink failures, races, invariant violations; the sampled constant-flip spot-check (ADR-0015 §4). · 2. One fix round; every breaker's red test committed. · 3. `docsync` (a) reverse direction and the §7 file-existence check switched on; every open skip red. · 4. The release workflow (tag build with provenance); `docs/releases/v0.1.0.md`. · 5. Docs final pass. · 6. Roadmap and this plan annotated: what shipped, what moved, why. · 7. The public-repo step (owner decision). |
+| **In scope** | 1. **Docs for the shipped subset** (moved here from v2's S10, so they cover the gallery and every construct): the language reference for shipped constructs, the Go API, the connectors, and the honest limits — no restart survival; at-least-once delivery; per-agent detection only; no `late events allow` until Phase 2 — with the docs-to-conformance check (each documented construct links to a conformance case whose rule model uses it) [4]. · 2. The whole-engine break-it (QA + the-fool): out-of-order and late events, equal timestamps, `within` exactly at its bound, absence timers at the edge, partition-key explosion, malformed input, sink failures, races, invariant violations; the sampled constant-flip spot-check (ADR-0015 §4) [3]. · 3. One fix round; every breaker's red test committed [3]. · 4. `docsync` (a) reverse direction and the §7 file-existence check switched on; every open skip red [0.5]. · 5. The release workflow (tag build with provenance); `docs/releases/v0.1.0.md`; the roadmap and this plan annotated — what shipped, what moved, why; the public-repo step (owner decision) [2]. |
 | **Not in scope** | Any new construct. |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. Each of the five exit criteria is proven by its named measurement — **proof:** the exit-criteria table in the release notes, each row linking its proof. |
-| | 2. Every break-it finding is fixed with a test, forwarded with the owner's consent, or rejected with a reason — **proof:** the break-it report. |
-| | 3. T4 green on the tag candidate; main green after the merge — **proof:** CI runs. |
-| | 4. The owner tags `v0.1.0` — **proof:** the tag and its release build. |
+| | 1. Every documented construct links to a conformance case whose rule model uses it — **proof:** the docs-to-conformance check (exit criterion 3). |
+| | 2. Each of the five exit criteria is proven by its named measurement — **proof:** the exit-criteria table in the release notes, each row linking its proof. |
+| | 3. Every break-it finding is fixed with a test, forwarded with the owner's consent, or rejected with a reason — **proof:** the break-it report. |
+| | 4. T4 green on the tag candidate; main green after the merge; the owner tags `v0.1.0` — **proof:** CI runs; the tag and its release build. |
 | **Owner's check** | *By running:* the quickstart against the tagged build. *By reading:* the release notes and the limits page. *By hand:* the tag. |
-| **Split line** | n/a (8 SP). |
+| **Split line** | **S12-1** = item 1 (docs); **S12-2** = items 2–5. |
 
 ### Still open for the owner
 
-- *Approval of the decomposition — **done** (2026-11-02). The plan-derived annotations it triggered are applied: ARCHITECTURE §3 and §7; ADR-0002 §5; ADR-0004; ADR-0005 §1; ADR-0006 §2(b); ADR-0012 §1 and its `Send(ev T)` note; ADR-0015 §2.*
-- **At S1.1's plan check:** whether ARCHITECTURE §3's per-package import lists are exhaustive (and the edges listed in architecture review DA-11); the placement of `conformance/` and `bench/` in the layer model; the linter version, the Go version pin, hook wiring; the Go specialist agent; branch protection (owner-side).
+- *Approval of the v3 recalibration — **done** (2026-11-02); the sprint references in ADR-0005 §1, ADR-0012 §1, ADR-0015 and qa-strategy §4 are updated to v3's ids.*
+- **Owner action:** on GitHub, block force-pushes and deletion of `main`.
 
 *Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates.*
 
 ### Status
 
-**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (2026-11-02): 20 sprints, 240 SP, reviewed by architecture + QA (57 findings, all dispositioned) → next: S1.1's plan check (G0 for the first sprint).**
+**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).**
 
 **This line is the single prose status surface for the project.** The README and the roadmap defer to it; everything finer-grained lives in the source and the git log, which are authoritative if they disagree with this.
 
@@ -548,3 +604,21 @@ Round-4 review of ADR-0015 + qa-strategy.md + post-ratification drift: 49 verifi
 2. **Attack gallery = seven examples confirmed** (recommended, accepted): the coordinator's reading of 2026-11-01 decision 5 ("six or more") is confirmed — all seven MVP-expressible attacks.
 3. **Partition keys of different types across streams are rejected at deploy** (recommended, accepted — pre-mortem RC8.1, the last open rev-3 item): the error names both streams and both types; a text `"5"` and a number `5` never silently form two instances. Lands in spec rev 3 (S1.2) and the validator (S2.2).
 4. **Commit and push** the plan, the reviews and the annotations (recommended, accepted).
+
+### Owner decisions, 2026-11-02 — answered ahead of S1.1's plan check
+
+1. **Import rules are strict** (recommended, accepted): the per-package import lists in ARCHITECTURE §3 (rules 3, 4, 6 and the exception table) are exhaustive — only listed connections are allowed; every new edge is a `rules.json` change visible in the LAW Δ block (architecture review DA-11's known edges are added in the sprints that need them).
+2. **`conformance/` uses the public API only; `bench/` may import internal packages** (recommended, accepted): nothing imports either. Conformance proves the real product path; benchmarks can time internal stages for `allocgate` and ADR-0010 §8.
+3. **Toolchain = newest stable** (recommended, accepted): the newest stable Go release that the pinned golangci-lint supports, verified and pinned on S1.1's first day; later bumps are deliberate commits that also fix what the new version finds.
+4. **Go specialist = our own agent + the JetBrains skill** (recommended, accepted): `.claude/agents/go-engineer.md` carries the project's rules and runs JetBrains' `use-modern-go` skill (the `modern-go-guidelines` plugin the owner installed 2026-10-31 — a style skill, not an agent) before editing any Go file; where the two conflict, the gate wins.
+5. **Agents always inherit the session's model** (owner's own answer, replacing both offered options): every agent definition uses `model: inherit`; no cheaper model for any lane.
+6. **Branch protection: now, plus the required check in S1.1** (recommended, accepted): the owner blocks force-pushes and deletion of `main` now; once S1.1's CI has run once, the gate's summary check is added as required before S1.1 merges.
+7. **Code coverage starts in S1.1 at a 90% floor (≠ R on the level).** Recommendation was to move `coverage-inclusion` into S1.1 (accepted) at the ratified 85%; the owner raised the per-package floor to **90%** (amends the 2026-11-01 ratification's 85% — ADR-0015 §2 and §4 and qa-strategy §4 annotated). Scope is unchanged (`internal/*` + the public packages incl. the `io/*` built-ins; generated files excluded; no waiver within scope). S1.1 grows; its plan check confirms the cap or applies the split line.
+8. **Build and tests run in parallel wherever they can** (owner requirement): the gate runs independent rows concurrently (respecting `needs`), with only timing-sensitive rows marked `exclusive`; Go builds and tests parallelise across and within packages over a shared cache; CI runs its jobs concurrently with cached modules and builds. The summary stays deterministic (registry order) and reports the time saved. ADR-0015 §1.1 (new `exclusive` row field) and DEVELOPMENT.md amended; proven in S1.1 (exit lines 11–12).
+
+### Owner decisions, 2026-11-02 — recalibration (v3)
+
+1. **v3 approved** (recommended, accepted): every card re-estimated item by item against two anchors (`internal/event` = 1 point; the pattern-engine core = 5) with the fixed per-sprint process outside the points; at most 13 points per sprint. Ten of v2's twenty cards were over the cap; v3 has **23 sprints, ~270 points, forecast 46–69 weeks**, re-forecast at S1.2's and S3.3's G5. No item added or removed. Also moved by the first-subject rule: `puritycheck` and `globalscheck` to S1.1b (their first subject, `internal/event`, exists from S1.1a); the full docs for the shipped subset to S12 (so they cover every construct and the gallery).
+2. **Commit and push** (recommended, accepted).
+
+*Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
