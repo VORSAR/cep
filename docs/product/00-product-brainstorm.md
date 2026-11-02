@@ -311,7 +311,7 @@ Deterministic rules catch what you can specify; many agentic attacks are **seman
 2. **Scope: full pivot in mission, component in structure.** The Vorsar org's main product is the AI-agent detection & response platform; this repo is its CEP core engine, prioritized exclusively for that mission while keeping general-purpose mechanics.
 3. **Dialect: modernized Siddhi-inspired streaming SQL.** No SiddhiQL compatibility promise; fix known quirks (hopping window, week granularity, nested-query gap).
 4. **Headline interface: Go API-first.** The library leads the README/docs; the DSL is the shareable, hot-reloadable ops format.
-5. **Name: keep `complex-events-engine`** until a requirement forces a change — the brand belongs to the Vorsar platform, not this component.
+5. **Name: keep `complex-events-engine`** until a requirement forces a change — the brand belongs to the Vorsar platform, not this component. *(Amended 2026-11-02, owner decision at S1.1a-1's design step: "package names should reflect vorsar". The Go module path is **`github.com/vorsar/cep`**, the repository is renamed `VORSAR/cep`, and the gate's local names are `~/.cache/vorsar/cep/` and the `VORSAR_CEP_` prefix. Go package names stay short (`cep`, `rule`, `cepio`, `internal/*`). The documents keep "complex-events-engine" as the project's descriptive name.)*
 6. **Incremental aggregation: minimal rollups in v1** (minutes/hours/days, enough for per-agent behavioral baselines); full framework later.
 7. **WASM UDFs: fast-follow after v1**, once the native Go extension SPI stabilizes.
 8. **Detection rule packs: first-class versioned product line** with a maintenance commitment.
