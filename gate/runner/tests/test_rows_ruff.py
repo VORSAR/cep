@@ -137,6 +137,12 @@ class FakeRuff(support.GateTest):
         self.run_rows([self.row("ruff", command=wrapper(), expected_scope=SCOPE)])
         return self.reason("ruff")
 
+    def test_the_count_is_ruffs_not_the_lists(self):
+        # Ruff says it formatted one file of the two it was given: one went unchecked, so the row is red.
+        self.track("gate/x/n.py", CLEAN)
+        self.fake("1 file already formatted\n")
+        self.assertEqual(self.ruff_row(), "covered 1 ≠ expected 2")
+
     def test_an_unrecognised_summary_is_red(self):
         self.fake("1 file formatted, somehow\n")
         self.assertEqual(self.ruff_row(), "exit 1")
