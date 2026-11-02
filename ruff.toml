@@ -11,6 +11,11 @@ line-length = 120
 "gate/toolchain/manifest.py" = "py312"
 "gate/run.py" = "py312"
 "gate/runner/pyshim.py" = "py312"
+"gate/runner/tests/test_run_guard.py" = "py312"
+"gate/toolchain/tests/support.py" = "py312"
+"gate/toolchain/tests/test_bootstrap.py" = "py312"
+"gate/toolchain/tests/test_install.py" = "py312"
+"gate/toolchain/tests/test_manifest.py" = "py312"
 
 [lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "TID", "BLE", "S602", "S604", "S605"]
@@ -27,7 +32,6 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "TID", "BLE", "S602", "S604", "S
 [lint.per-file-ignores]
 "gate/wait.py" = ["TID251"]                              # the one wait helper may sleep (testing.md rule 1)
 "gate/runner/tests/test_sigchld.py" = ["TID251"]         # sets SIG_IGN on purpose to prove the false-green fix
-"gate/scaffold.py" = ["BLE001"]                          # main's catch-all → exit 2
 "gate/run.py" = ["BLE001"]                               # main's catch-all → exit 2
 "gate/runner/main.py" = ["BLE001"]                       # main's catch-all → exit 2
 "gate/bootstrap.py" = ["BLE001"]                         # main's catch-all → exit 2
