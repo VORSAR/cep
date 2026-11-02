@@ -264,8 +264,7 @@ class Environment(support.GateTest):
         self.run_rows([self.row("x")], environ=env)
         seen, _ = self.toolchain.calls[0]
         self.assertEqual(seen["GOTOOLCHAIN"], "local")
-        self.assertNotIn("PYTHONPATH", seen)
-        self.assertNotIn("GATE_ROW", seen)
+        self.assertFalse("PYTHONPATH" in seen or "GATE_ROW" in seen)  # not assertNotIn: it would print the environment
         self.assertTrue(seen["PATH"].startswith(self.toolchain.dirs[0]))
 
 
