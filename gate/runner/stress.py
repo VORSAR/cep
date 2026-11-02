@@ -77,6 +77,7 @@ class _Outcomes(unittest.TestResult):
     def __init__(self) -> None:
         super().__init__()
         self.outcomes: dict[str, str] = {}
+        self.why: dict[str, str] = {}
         self.current = ""
 
     def startTest(self, test: unittest.TestCase) -> None:
@@ -91,13 +92,17 @@ class _Outcomes(unittest.TestResult):
     def _bad(self, test: unittest.TestCase, outcome: str) -> None:
         self.outcomes[test.id()] = outcome
 
+    def _failed(self, test: unittest.TestCase, err) -> None:
+        self._bad(test, FAIL)
+        self.why.setdefault(test.id(), self._exc_info_to_string(err, test))
+
     def addError(self, test, err) -> None:
         super().addError(test, err)
-        self._bad(test, FAIL)
+        self._failed(test, err)
 
     def addFailure(self, test, err) -> None:
         super().addFailure(test, err)
-        self._bad(test, FAIL)
+        self._failed(test, err)
 
     def addSkip(self, test, reason) -> None:
         super().addSkip(test, reason)
@@ -114,10 +119,12 @@ class _Outcomes(unittest.TestResult):
     def addSubTest(self, test, subtest, err) -> None:
         super().addSubTest(test, subtest, err)
         if err is not None:
-            self._bad(test, FAIL)
+            self._failed(test, err)
 
     def on_unraisable(self, info: object) -> None:
-        self.outcomes[self.current or "<between tests>"] = "leak"
+        test = self.current or "<between tests>"
+        self.outcomes[test] = "leak"
+        self.why.setdefault(test, f"leak: {info.exc_type.__name__}: {info.exc_value}")
 
 
 def _flatten(suite: unittest.TestSuite) -> Iterator[unittest.TestCase]:
@@ -148,6 +155,7 @@ def child(argv: list[str]) -> int:
         "hash_probe": hash("abc"),
         "order": [test.id() for test in tests],
         "outcomes": result.outcomes,
+        "failures": result.why,
         "flags": {
             "isolated": sys.flags.isolated,
             "ignore_environment": sys.flags.ignore_environment,
@@ -184,6 +192,7 @@ def stress(modules: Sequence[str], *, runs: int, parallel: int, out_dir: str) ->
         reports = list(pool.map(lambda seed: _one_run(seed, script, root, modules, out_dir), range(runs)))
 
     passes: collections.Counter[str] = collections.Counter()
+    why: dict[str, tuple[int, str]] = {}
     seen: set[str] = set()
     died = False
     for seed, report in enumerate(reports):
@@ -195,11 +204,17 @@ def stress(modules: Sequence[str], *, runs: int, parallel: int, out_dir: str) ->
         for test, outcome in report["outcomes"].items():
             seen.add(test)
             passes[test] += outcome == PASS
+            if outcome != PASS and test not in why:
+                text = report["failures"].get(test, outcome).strip().splitlines()
+                why[test] = (seed, text[-1] if text else outcome)
     if not seen:
         print("stress: no test ran: zero is a failure")
         return 1
     for test in sorted(seen):
         print(f"{passes[test]}/{runs} {test}")
+    for test in sorted(why):
+        seed, line = why[test]
+        print(f"why {test}: run {seed}: {line} (the traceback is in run-{seed}.json)")
     below = sum(1 for test in seen if passes[test] < runs)
     print(f"stress: {len(seen)} tests, {below} below {runs}/{runs}")
     return 1 if below or died else 0
