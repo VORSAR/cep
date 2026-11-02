@@ -1,12 +1,22 @@
-# Wave-1 Makefile of S1.1a-1. Lane A owns it from wave 1. Until combine-W1, `make check` runs the
-# throwaway scaffold (design note s1-1a-gate-design.md §2, §7) under the pinned CPython 3.15.2.
-TOOLS := $(or $(VORSAR_CEP_TOOLS_CACHE),$(HOME)/.cache/vorsar/cep/tools)
-PY := $(TOOLS)/python-3.15.2-285a6b924713/bin/python3.15
+# The gate's entry points (S1.1a-1; design note s1-1a-gate-design.md §3–§6). Every gate target installs any
+# missing pinned tools first, then hands over to the pinned CPython through the bootstrap; a system python3 >= 3.12
+# only starts it, with -I so that nothing in the caller's environment can run inside it.
 
-.PHONY: check runner-check
-check:
-	$(PY) -I -B -X utf8 gate/scaffold.py
+.PHONY: tools clean-tools check combine-check strict-gate ci
 
-# The real runner over a demonstration registry (gate/runner/testdata/demo.py says why not gate/run.py yet).
-runner-check:
-	$(PY) -I -B -X utf8 gate/runner/testdata/demo.py --tier T2 --registry gate/runner/testdata/demo.json
+tools:
+	python3 -I -B gate/bootstrap.py install
+
+clean-tools:
+	python3 -I -B gate/bootstrap.py clean-tools
+
+check: tools
+	python3 -I -B gate/bootstrap.py exec -- --tier T2
+
+combine-check: tools
+	python3 -I -B gate/bootstrap.py exec -- --tier T3
+
+strict-gate: tools
+	python3 -I -B gate/bootstrap.py exec -- --tier T4
+
+ci: strict-gate
