@@ -3,6 +3,10 @@
 TOOLS := $(or $(VORSAR_CEP_TOOLS_CACHE),$(HOME)/.cache/vorsar/cep/tools)
 PY := $(TOOLS)/python-3.15.2-285a6b924713/bin/python3.15
 
-.PHONY: check
+.PHONY: check runner-check
 check:
 	$(PY) -I -B -X utf8 gate/scaffold.py
+
+# The real runner over a demonstration registry (gate/runner/testdata/demo.py says why not gate/run.py yet).
+runner-check:
+	$(PY) -I -B -X utf8 gate/runner/testdata/demo.py --tier T2 --registry gate/runner/testdata/demo.json
