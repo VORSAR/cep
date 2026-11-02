@@ -2,7 +2,7 @@
 
 The toolchain, the gate, and the code rules every change follows. The process that runs them is [00-sprint-model.md](../sprints/00-sprint-model.md); the test rules are [testing.md](testing.md).
 
-> **Not built yet (2026-10-31).** No Go module, gate, hooks or CI exist. This guide is the contract they are built to. The gate is an enabler: it lands before the first feature that needs it ([sprint model §16](../sprints/00-sprint-model.md#16-sequencing)). Command names below are the intended ones; the sprint that builds them updates this file to what exists, and the "proposed" tool choices are settled at that sprint's plan check.
+> **Not built yet (2026-10-31).** No Go module, gate, hooks or CI exist. This guide is the contract they are built to. The gate is an enabler: it lands before the first feature that needs it ([sprint model §16](../sprints/00-sprint-model.md#16-sequencing)). Command names below are the intended ones; the sprint that builds them updates this file to what exists, and the "proposed" tool choices are settled at that sprint's plan check. *(Annotated 2026-11-02: settled at S1.1a's plan check. The pins are Go 1.27.3, golangci-lint v2.15.0, CPython 3.15.2 and ruff 0.17.3. The gate's own tooling is stdlib Python, never shell (owner decision); see [sprint-plan §5](../sprints/sprint-plan.md#5-decisions).)*
 
 ---
 
@@ -26,12 +26,12 @@ The gate is a **registry**, not a script: every check is one row. **The row sche
 **The four rules the gate enforces:**
 1. **Collect-all.** A failing step never stops the run. Every step runs to completion; a skip is recorded with its reason, never as green.
 2. **Every step has a ceiling.** Each step runs under a watchdog that kills its whole process group and names the timeout.
-3. **Zero is a failure.** A step that covers zero files or zero tests fails. (`go test -run` with a misspelt pattern runs nothing and exits 0; the gate turns that into a failure.)
+3. **Zero is a failure.** A step that covers zero files or zero tests fails. (`go test -run` with a misspelt pattern runs nothing and exits 0; the gate turns that into a failure.) *(Annotated 2026-11-02, owner decision: one named exception. At T0 only, a check whose staged scope is empty, such as the Go format check on a docs-only commit, records SKIP with its reason and does not fail the commit. At T1–T4, zero is still a failure.)*
 4. **The exit code is the verdict**, and the summary is the table. The run prints `job | step | verdict | time | reason`, then `GATE PASSED` or `GATE FAILED`, then `exit: <code>`.
 
 | Tier | Command | When | Covers at least *(intent sketch — **the registry is the tier map**; per-instrument tiers are ADR-0015 §2's table, which wins on any difference)* |
 |------|---------|------|------------------------------|
-| T0 | pre-commit hook | each `git commit` | parity first (it runs first at **every** tier), then staged files: format (auto-fix, exact-path re-stage), the landed T0 analyzers (ADR-0015 §3.1) |
+| T0 | pre-commit hook | each `git commit` | parity first (it runs first at **every** tier), then staged files: format (auto-fix, exact-path re-stage), the landed T0 analyzers (ADR-0015 §3.1) *(annotated 2026-11-02, owner decision: format **refuses** an unformatted staged file and prints the fix command; it never auto-fixes or re-stages)* |
 | T1 | pre-push hook | each push | format check, lint, suppressions, posture guards |
 | T2 | `make check` | a lane says "done" | T1 + build, `go vet`, the linter, unit tests, the conformance suite, the coverage floor |
 | T3 | `make combine-check` | before pushing an integration branch | T2 + the race detector, deterministic-replay checks, the slow suites, the demo scenario |
@@ -39,7 +39,7 @@ The gate is a **registry**, not a script: every check is one row. **The row sche
 
 **Reading a run.** CI shows the same table as the summary of one **`strict-gate`** check, which is the one check to read. A job that did not report (cancelled, timed out, crashed) is a failure, never an absence of failures. A run on `main` is never cancelled.
 
-**Hooks** live in version control (`.githooks/`), activated once per clone with `git config core.hooksPath .githooks`. A missing required tool blocks the commit. `--no-verify` is not used — that is policy, not mechanism: the hook is technically bypassable, which is why it is a convenience and the real net is CI + the owner's merge (ADR-0015 §3.1; the sprint model's "a hook is never bypassed" states the same policy).
+**Hooks** live in version control (`.githooks/`), activated once per clone with `git config core.hooksPath .githooks`. A missing required tool blocks the commit. *(Annotated 2026-11-02, owner decision: `make setup` turns the hooks on, and `make check` refuses to run until they are on. CI turns them on too, so the rows stay identical. Lands in S1.1a-2.)* `--no-verify` is not used — that is policy, not mechanism: the hook is technically bypassable, which is why it is a convenience and the real net is CI + the owner's merge (ADR-0015 §3.1; the sprint model's "a hook is never bypassed" states the same policy).
 
 ---
 
