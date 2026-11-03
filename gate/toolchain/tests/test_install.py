@@ -5,11 +5,13 @@ with the two seams a test cannot reach otherwise injected: the download and the 
 """
 
 import errno
+import gzip
 import hashlib
 import http.client
 import io
 import os
 import stat
+import tarfile
 import unittest
 
 from gate.toolchain import install, manifest
@@ -737,3 +739,24 @@ class Main(InstallTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TruncatedGzip(InstallTest):
+    """Break-it QB9: a gzip stream cut short is refused with its fix, and nothing is published."""
+
+    def test_a_gzip_stream_cut_short_is_refused_with_a_fix(self):
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w", format=tarfile.USTAR_FORMAT) as tf:
+            info = tarfile.TarInfo("demo/bin/demo")
+            info.size, info.mode = 512, 0o755
+            tf.addfile(info, io.BytesIO(b"A" * 512))
+        whole = gzip.compress(buffer.getvalue())
+        with open(self.archive, "wb") as f:
+            f.write(whole[:-20])  # the deflate stream and its trailer stop early: EOFError inside tarfile
+        entry = support.tool_entry(self.archive)
+        support.write_tools(self.repo, [entry])
+        digest = entry["platforms"][manifest.platform_key()]["archive_sha256"]
+        home = os.path.join(self.cache, f"{entry['name']}-{entry['version']}-{digest[:12]}")
+        code, lines = self.run_main("install")
+        self.assert_refused(code, lines, "truncated or corrupt", "check its pin in tools.json")
+        self.assertFalse(os.path.lexists(home))
