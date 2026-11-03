@@ -21,6 +21,8 @@ The owner cut S1.2 to `internal/model` plus spec rev 3, and moved its gate extra
   - The cron-admission check was seen failing first. With the reference executor aligned, 41/41 harness checks pass.
   - The grammar is unchanged; example 02 now reads `late events drop`.
 
+- **Main went red at the S1.1b merge (#3), found on this PR's CI.** `archcheck` became a T0 row, but the hook proof's test world lacked `go.mod` and `tools/archcheck`, so its clean commit failed. It was never seen locally because the proofs row runs at T4 only, and S1.1b was checked at T2. Fixed in this PR at the root: the world copies what the T0 rows run. Local T4 then passed every row. *Lesson: a registry change is checked at T4 before its push.*
+
 ## Exit lines and gaps
 
 - **Exit 1** (byte-stable and position-free): the hand-derived golden passes. "Two models differing only in source positions" cannot be built, because the model holds no positions. QA's test proves that structurally, and the literal test arrives with the parser's position side table (S2.1).
