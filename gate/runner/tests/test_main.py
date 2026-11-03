@@ -53,7 +53,7 @@ class Cli(support.GateTest):
         # review BA8: an "exit: 0" from a fixture registry must not pass for a run of the repository's law.
         reg = self.reg()
         self.cli("--tier", "T2", "--registry", reg, "--run-dir", self.run_dir)
-        self.assertEqual(self.output.splitlines()[-4:-3], [f"registry: {reg}"])
+        self.assertEqual(self.output.splitlines()[-5:-3], [f"registry: {reg}", f"run: {self.run_dir}"])
         with open(reg, "rb") as f:
             self.assertEqual(self.run_json()["registry_sha256"], hashlib.sha256(f.read()).hexdigest())
 
@@ -140,6 +140,13 @@ class Cli(support.GateTest):
         self.assertEqual(code, 0)
         path = os.path.join(self.repo, ".gate", "runs", support.RUN_ID, "run.json")
         self.assertPinnedJson(path)
+
+    def test_the_summary_names_the_run_directory(self):
+        # owner, 2026-11-03 (review BA3): inside the repository relative to it, elsewhere absolute.
+        self.cli("--tier", "T2", "--registry", self.reg())
+        self.assertIn(f"run: .gate/runs/{support.RUN_ID}", self.output.splitlines())
+        self.cli("--tier", "T2", "--registry", self.reg(), "--run-dir", self.run_dir)
+        self.assertIn(f"run: {self.run_dir}", self.output.splitlines())
 
     def test_a_real_run_id_is_made_from_the_wall_clock(self):
         code = self.cli("--tier", "T2", "--registry", self.reg(), new_run_id=main.clock.run_id)

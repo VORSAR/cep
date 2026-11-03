@@ -177,7 +177,7 @@ class Workers(support.GateTest):
         for workers in (1, 4):
             run_dir = os.path.join(self.root, f"run-{workers}")
             os.mkdir(run_dir)
-            summaries.append(self.run_rows(rows, workers=workers, run_dir=run_dir).summary)
+            summaries.append(support.masked(self.run_rows(rows, workers=workers, run_dir=run_dir).summary, run_dir))
         self.assertEqual(summaries[0], summaries[1])
         self.assertIn("exit 1", summaries[0])
 
@@ -237,13 +237,17 @@ class CompletionOrder(support.GateTest):
         return result, run_dir
 
     def test_frozen_clock_summaries_are_byte_identical_across_orders(self):
-        # design-QA counter-example 25; the frozen clock leaves nothing to mask.
+        # design-QA counter-example 25; the frozen clock leaves nothing to mask but the run's own directory.
         ab, ab_dir = self.run_in_order("a", "b")
         ba, ba_dir = self.run_in_order("b", "a")
-        self.assertEqual(ab.summary.encode(), ba.summary.encode())
+        self.assertEqual(support.masked(ab.summary, ab_dir).encode(), support.masked(ba.summary, ba_dir).encode())
         for rel in ("summary.md", "run.json", "records/lint/a.json", "records/lint/b.json"):
             with open(os.path.join(ab_dir, rel), "rb") as f, open(os.path.join(ba_dir, rel), "rb") as g:
-                self.assertEqual(f.read(), g.read(), rel)
+                mine, theirs = f.read(), g.read()
+            if rel == "summary.md":
+                mine = support.masked(mine.decode(), ab_dir).encode()
+                theirs = support.masked(theirs.decode(), ba_dir).encode()
+            self.assertEqual(mine, theirs, rel)
 
     def test_the_summary_lists_rows_in_registry_order_whatever_finished_first(self):
         result, _ = self.run_in_order("b", "a")
@@ -260,7 +264,7 @@ class CompletionOrder(support.GateTest):
                 self.assertEqual(table[2].split(" | ")[3].strip(), "1.5s")
                 self.assertEqual(table[3].split(" | ")[3].strip(), "0.1s")
                 # By hand: wall 1500, summed 1650; (1650 - 1500) * 100 // 1650 = 9.
-                self.assertEqual(table[4], "wall 1.5s · summed 1.6s · saved 9%")
+                self.assertEqual(table[-3], "wall 1.5s · summed 1.6s · saved 9%")
 
 
 class ScriptedClock:

@@ -42,6 +42,13 @@ def tool_bin(name: str) -> str:
     return os.path.join(home, tool["path_dir"])
 
 
+def masked(summary: str, run_dir: str) -> str:
+    """A summary with its `run:` line made run-independent, so runs in two directories compare byte for byte."""
+    line = f"\nrun: {run_dir}\n"
+    assert summary.count(line) == 1, summary
+    return summary.replace(line, "\nrun: <run_dir>\n")
+
+
 def base_env() -> dict[str, str]:
     """A world-owned environment: no git config or location of the caller's, and none of an outer gate run's row."""
     env = {k: v for k, v in os.environ.items() if k not in HIDDEN and not k.startswith("GATE_")}

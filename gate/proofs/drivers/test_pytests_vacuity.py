@@ -28,12 +28,12 @@ class PytestsVacuity(support.DriverTest):
         (self.world.track if tracked else self.world.write)(rel, text)
         run = self.run_pytests()
         self.assertParityPassed(run, "test")
-        self.assertRed(run, "test", "pytests", "exit 1")
         out = run.row_stdout("test", "pytests")
         failed = [line for line in out.split("\n") if line.startswith("failed: ")]
         self.assertEqual(len(failed), 1, out)
         self.assertTrue(failed[0].startswith(f"failed: {rel}: "), failed)
         self.assertIn(cause, failed[0])
+        self.assertRed(run, "test", "pytests", f"exit 1: {failed[0].removeprefix('failed: ')}")
         clean = run.row_file("test", "pytests", "py", f"{CLEAN}.stdout")
         self.assertIn(f"pyshim: {CLEAN}: passed 1 tests", clean)
 

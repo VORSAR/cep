@@ -21,7 +21,7 @@ class CoverageBelow(support.DriverTest):
 
         self.assertParityPassed(run, "test")
         self.assertRow(run, "test", "unit", True, "covered 2")
-        self.assertRed(run, "test", "coverage-inclusion", "exit 1")
+        self.assertRed(run, "test", "coverage-inclusion", f"exit 1: {BELOW.removeprefix('FAIL ')}")
         self.assertEqual(run.row_stdout("test", "coverage-inclusion").split("\n")[:2], [BELOW, CONTROL])
         record = run.record("test", "coverage-inclusion")
         self.assertEqual((record["covered"], record["expected"]), (2, 2))

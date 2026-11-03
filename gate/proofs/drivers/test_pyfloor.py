@@ -41,9 +41,10 @@ class Pyfloor(support.DriverTest):
     def assertRedUnder312Only(self, why: str) -> None:
         run = self.world.run(registry=self.world.registry(support.registry_row("pyfloor")))
         self.assertParityPassed(run, "lint")
-        self.assertRed(run, "lint", "pyfloor", "exit 1")
-        out = run.row_stdout("lint", "pyfloor")
-        self.assertIn(f"failed: gate/toolchain/tests/test_install.py: pyshim: {MODULE}: ", out)
+        failed = [line for line in run.row_stdout("lint", "pyfloor").split("\n") if line.startswith("failed: ")]
+        prefix = f"failed: gate/toolchain/tests/test_install.py: pyshim: {MODULE}: "
+        self.assertTrue([line for line in failed if line.startswith(prefix)], failed)
+        self.assertRed(run, "lint", "pyfloor", f"exit 1: {failed[0].removeprefix('failed: ')}")  # the first one
         self.assertIn(why, run.row_file("lint", "pyfloor", "py", f"{MODULE}.stderr"))
         # The witness: the same planted tree passes under the pinned 3.15.2, so the floor alone made it red.
         cache = support.real_cache()

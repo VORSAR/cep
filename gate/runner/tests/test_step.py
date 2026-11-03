@@ -128,6 +128,21 @@ class Slots(support.GateTest):
         self.assertEqual(self.reason("x"), "exit 3")
         self.assertEqual(self.record("lint", "x")["exit_code"], 3)
 
+    def test_slot_7_names_the_rows_first_failure_line(self):
+        # owner, 2026-11-03 (review BA3): the wrappers' `failed: ` line, coverage's `FAIL ` line, a crash's own line.
+        for i, (printed, want) in enumerate((
+            (("note", "failed: a.go: run gofmt -w a.go", "failed: b.go: run gofmt -w b.go"), "a.go: run gofmt -w a.go"),
+            (("PASS ex.com/m/a 100.00% (2/2)", "FAIL ex.com/m/b 50.00% (1/2) < 90%"), "ex.com/m/b 50.00% (1/2) < 90%"),
+            (("internal error: KeyError: 'x'", "GATE FAILED"), "internal error: KeyError: 'x'"),
+            (("failed:no space", "FAILED", "fail: lower case"), ""),
+        )):  # fmt: skip
+            with self.subTest(printed):
+                self.run_dir = os.path.join(self.root, f"run-{i}")
+                os.mkdir(self.run_dir)
+                actions = [x for line in printed for x in ("print", line)]
+                self.run_rows([self.good("x", *actions, "status", 1)])
+                self.assertEqual(self.reason("x"), f"exit 1: {want}" if want else "exit 1")
+
     def test_slot_7_killed_by_signal(self):
         self.run_rows([self.row("x", "killself", signal.SIGKILL)])
         self.assertEqual(self.reason("x"), "killed by signal 9")

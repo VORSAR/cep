@@ -351,6 +351,7 @@ class Runner:
                 scope_error=outcome.scope_error,
                 left_running=outcome.left_running,
                 returncode=outcome.returncode or 0,
+                first_failure=outcome.first_failure,
                 covered=outcome.covered,
                 expected=outcome.expected,
             )
@@ -501,7 +502,12 @@ class Runner:
             for d in ordered
         ]
         text = summary.render(
-            lines, wall_ms=wall_ms, summed_ms=summed_ms, exit_code=exit_code, registry=self._registry_shown
+            lines,
+            wall_ms=wall_ms,
+            summed_ms=summed_ms,
+            exit_code=exit_code,
+            run_dir=summary.shown(self._run_dir, self._repo),
+            registry=self._registry_shown,
         )
         rows = [self._record(self._parity, job) for job in self._jobs]
         rows += [self._record(self._finished[r.id], r.job) for r in self._rows]

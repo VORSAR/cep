@@ -26,7 +26,7 @@ class HashSeeds(support.GateTest):
                     "--tier", "T2", "--registry", registry, "--run-dir", run_dir]  # fmt: skip
             code, out, err = support.run_tool(argv, self.repo, env)
             self.assertEqual((code, err), (1, b""))
-            outputs.add(out)
+            outputs.add(support.masked(out.decode("utf-8"), run_dir))  # the one line a run's directory may change
             with open(probe, encoding="utf-8") as f:
                 hashes.add(f.read())
             with open(os.path.join(run_dir, "run.json"), "rb") as f:

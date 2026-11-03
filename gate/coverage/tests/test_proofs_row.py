@@ -47,9 +47,10 @@ class ProofsRow(support.DriverTest):
         self.world.track("gate/proofs/drivers/test_d03.py", BAD)
         run = self.run_proofs()
         self.assertParityPassed(run, "proofs")
-        self.assertRed(run, "proofs", "proofs", "exit 1")
+        failed = "gate/proofs/drivers/test_d03.py: pyshim: gate.proofs.drivers.test_d03: failed: 1 failures, 0 errors"
+        self.assertRed(run, "proofs", "proofs", f"exit 1: {failed}")
         out = run.row_stdout("proofs", "proofs")
-        self.assertIn("failed: gate/proofs/drivers/test_d03.py: pyshim: gate.proofs.drivers.test_d03: failed: ", out)
+        self.assertIn(f"failed: {failed}", out)
         self.assertEqual(out.count("failed: gate/proofs/drivers/"), 1, out)
 
     def test_a_driver_outside_the_drivers_directory_is_not_counted(self):
