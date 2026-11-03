@@ -146,7 +146,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | | |
 |---|---|
 | **Goal** | Every commit and push runs its tier through the same runner, `make check` refuses to run until the hooks are on, and CI runs the registry's rows as concurrent jobs with one required check. |
-| **Routine · size** | Full loop · 5 SP (items 3.5) |
+| **Routine · size** | Full loop · 5 SP (items 3.5) *(re-sized 2026-11-03 by the owner at G0: about 10 SP, items 5.5; see the [plan check](s1-1a-2-plan-check.md) §0 and §5 decisions)* |
 | **Depends on** | S1.1a-1 |
 | **In scope** | 1. `.githooks/pre-commit` (T0 over an index snapshot; refuses an unformatted file and prints the fix; SKIP when nothing is staged) and `.githooks/pre-push` (T1 over the pushed tip), both Python; `make setup`; a row that makes `make check` refuse until the hooks are on (CI sets `core.hooksPath`) [1]. · 2. `gate/ci/`, which generates `.github/workflows/gate.yml` from `registry.json` (`ubuntu-latest` per the owner, actions pinned by SHA, concurrent jobs, module and build caches), plus the `ci-fresh` row [1]. · 3. `summarize` (expected rows taken from the registry) + its fixture trees [1]. · 4. The hook proof and the summary proofs [0.5]. |
 | **Not in scope** | The analyzers and LAW Δ → S1.1b. |
@@ -581,7 +581,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 
 ### Status
 
-**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).** *(Annotated 2026-11-02: S1.1a's plan check is answered, and S1.1a is split into S1.1a-1 + S1.1a-2 (24 sprints) → next: S1.1a-1's design note and G1.)* *(Annotated 2026-11-02: S1.1a-1 passed G1 → next: the coordinator's first commit, then wave 1.)* *(Annotated 2026-11-03: S1.1a-1 merged and closed (G5): the local gate, coverage and the event kernel are on main → next: S1.1a-2's plan check (G0), hooks and CI.)*
+**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).** *(Annotated 2026-11-02: S1.1a's plan check is answered, and S1.1a is split into S1.1a-1 + S1.1a-2 (24 sprints) → next: S1.1a-1's design note and G1.)* *(Annotated 2026-11-02: S1.1a-1 passed G1 → next: the coordinator's first commit, then wave 1.)* *(Annotated 2026-11-03: S1.1a-1 merged and closed (G5): the local gate, coverage and the event kernel are on main → next: S1.1a-2's plan check (G0), hooks and CI.)* *(Annotated 2026-11-03: S1.1a-2 passed G0 → next: its design (G1), then the build in the main session.)*
 
 **This line is the single prose status surface for the project.** The README and the roadmap defer to it; everything finer-grained lives in the source and the git log, which are authoritative if they disagree with this.
 
@@ -724,5 +724,14 @@ The coordinator re-verified the blockers' red tests. All four answers below matc
 4. **Every record carries a `blocking` field.**
 5. **The coordinator makes the fix round itself, in the main session** (later the same day; ≠ the plan check's "agents write gate code; the coordinator reviews"). The fix agents had stalled after rate limits. Each fix is test-first, with one commit per finding.
 6. **No separate review of the fix round** (≠ R: a fresh QA reviewer was recommended, because the coordinator wrote the fixes and ground rule 14 says nobody reviews their own work). The fixes stand on their tests, each seen red first, and on the three green tiers.
+
+### Owner decisions, 2026-11-03 — S1.1a-2 plan check (G0)
+
+The plan check ([s1-1a-2-plan-check.md](s1-1a-2-plan-check.md), v2) was reviewed blind by the architect (2 blocker, 6 should-fix, 6 later) and QA (2 blocker, 13 should-fix, 1 later). Both reviews' blockers changed the design: a commit is checked by its own gate, in a tree outside the work tree. All four answers match the recommendations.
+
+1. **The card is re-sized from 5 to about 10 points** (items 3.5 → 5.5): T0/T1 support in the runner, the checked tree, a `pre-merge-commit` hook and CI's record checks. It stays one sprint, under the cap.
+2. **The coordinator builds the sprint in the main session.** Fresh, time-boxed agents write QA's red tests first and do the step-7 review.
+3. **CI may use four GitHub Actions, and only these:** `checkout`, `cache`, `upload-artifact`, `download-artifact`, each pinned by commit SHA (MIT-licensed). They are the project's first outside dependencies.
+4. **A commit runs only the fast checks on its staged files** (parity's executables, `gofmt`, `ruff`); `pyfloor` runs at push.
 
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.

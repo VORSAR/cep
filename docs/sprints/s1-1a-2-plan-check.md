@@ -6,7 +6,7 @@
 Sprint S1.1a-2 — Hooks and CI · routine: full · SP ≈ 10 as re-sized (card: 5, items 3.5 → 5.5) · cap 2 weeks
 Entry (G0)   ☐ card complete and approved ☑ dependencies merged (S1.1a-1, PR #1), main green (local T4 on 5166ce4)
              ☑ fits the cap, lanes ≤ 8 days ☑ test material: making it is an item (the hook and summary proofs)
-             ☑ reviewed by the architect (§10) ☑ reviewed by QA (§10) ☐ answered by the owner (§11)
+             ☑ reviewed by the architect (§10) ☑ reviewed by QA (§10) ☑ answered by the owner (§11, 2026-11-03: all as recommended)
 ```
 *At G0 the full done-done block ([§13](00-sprint-model.md#13-done-done-the-exit-checklist)) is copied into the sprint record.*
 
