@@ -1,4 +1,4 @@
--- expect: E-SYN-003 (`in` takes a table name, not a literal list; use has_any_* or a table)
+-- expect: E-SYN-003 (`in` takes a table name, not a literal list; use has_any_* or a table) @ 7:15
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

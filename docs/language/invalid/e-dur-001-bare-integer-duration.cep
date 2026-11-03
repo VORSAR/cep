@@ -1,4 +1,4 @@
--- expect: E-DUR-001 (durations carry units: `5 min`, never `5`)
+-- expect: E-DUR-001 (durations carry units: `5 min`, never `5`) @ 9:10
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

@@ -1,4 +1,4 @@
--- expect: E-ORD-001 (clause order is fixed: within, after match, late events)
+-- expect: E-ORD-001 (clause order is fixed: within, after match, late events) @ 9:3
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

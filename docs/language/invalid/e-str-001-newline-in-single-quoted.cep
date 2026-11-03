@@ -1,4 +1,4 @@
--- expect: E-STR-001 (single-quoted strings are one line; use triple quotes for multiline)
+-- expect: E-STR-001 (single-quoted strings are one line; use triple quotes for multiline) @ 6:10
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

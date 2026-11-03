@@ -1,4 +1,4 @@
--- expect: E-SYN-001 (no synonyms: the sequence connector is '->', not 'followed by')
+-- expect: E-SYN-001 (no synonyms: the sequence connector is '->', not 'followed by') @ 8:31
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

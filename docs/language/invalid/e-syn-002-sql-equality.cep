@@ -1,4 +1,4 @@
--- expect: E-SYN-002 (equality is `==`, not SQL `=`)
+-- expect: E-SYN-002 (equality is `==`, not SQL `=`) @ 7:12
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

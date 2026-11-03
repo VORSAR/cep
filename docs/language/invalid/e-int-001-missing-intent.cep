@@ -1,4 +1,4 @@
--- expect: E-INT-001 (every rule must state its intent)
+-- expect: E-INT-001 (every rule must state its intent) @ 6:3
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

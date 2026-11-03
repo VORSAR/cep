@@ -1,4 +1,4 @@
--- expect: E-WIN-001 (cron windows name an explicit IANA timezone)
+-- expect: E-WIN-001 (cron windows name an explicit IANA timezone) @ 8:33
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);
