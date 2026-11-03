@@ -28,10 +28,10 @@ def write_atomic(path: str, data: bytes, *, rename: Callable[[str, str], None] =
         raise
 
 
-def one_line(text: str) -> str:
-    """A reason is one line of bounded length, whatever a tool's error text held."""
+def one_line(text: str, limit: int | None = REASON_MAX) -> str:
+    """A reason is one line, whatever a tool's error text held, and at most `limit` characters (None: no limit)."""
     flat = _CONTROL.sub(" ", text)
-    return flat if len(flat) <= REASON_MAX else flat[: REASON_MAX - 1] + "…"
+    return flat if limit is None or len(flat) <= limit else flat[: limit - 1] + "…"
 
 
 def make(
@@ -51,7 +51,9 @@ def make(
     ended_ms: int,
     duration_ms: int,
     scope_sha256: str,
+    reason_max: int | None = REASON_MAX,
 ) -> dict[str, object]:
+    """One step record. `reason_max=None` keeps a reason whole: parity's lists every failing tool (review BA5)."""
     return {
         "schema": SCHEMA,
         "run_id": run_id,
@@ -61,7 +63,7 @@ def make(
         "id": row_id,
         "blocking": blocking,  # review BA12 (owner, 2026-11-03): a non-blocking "fail" is a WARN
         "verdict": verdict,
-        "reason": one_line(reason),
+        "reason": one_line(reason, reason_max),
         "exit_code": exit_code,
         "covered": covered,
         "expected": expected,

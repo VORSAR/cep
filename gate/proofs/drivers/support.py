@@ -192,7 +192,7 @@ class Run:
     def summary(self, job: str, row_id: str) -> list[str]:
         """The summary's cells for one row."""
         for line in self.stdout.split("\n"):
-            cells = [cell.strip() for cell in line.split(" | ")]
+            cells = [cell.strip() for cell in line.split(" | ", 4)]  # the reason is last and may hold " | "
             if cells[:2] == [job, row_id]:
                 return cells
         raise AssertionError(f"no summary line for {job}/{row_id} in:\n{self.stdout}")
