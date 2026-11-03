@@ -1,8 +1,10 @@
 """What the row wrappers share (design note §5; plan check S3).
 
 A wrapper's children stay in the wrapper's process group, so the runner's watchdog reaches them: a new session here
-would let a child outlive its row. Their output goes to files in GATE_ROW_DIR, and stdin is /dev/null. Every wrapper
-prints exactly one GATE_COVERED line, counted from the tool's own work and never from its input list.
+would let a child outlive its row. A wrapper turns the runner's SIGTERM into Terminated (gate/term.py), so it waits
+for the children the TERM also reached, which run their own cleanups, and starts no other (review BA1). Their
+output goes to files in GATE_ROW_DIR, and stdin is /dev/null. Every wrapper prints exactly one GATE_COVERED line,
+counted from the tool's own work and never from its input list.
 """
 
 import concurrent.futures
@@ -12,6 +14,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 
+from gate import term
 from gate.runner import workers
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -22,6 +25,7 @@ SHIM_FLAGS = ("-I", "-B", "-X", "dev", "-W", "error")
 def start() -> str:
     """Every wrapper's first line. An ignored SIGCHLD survives exec, and it turns a failed tool into exit 0."""
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+    term.install()
     return os.environ["GATE_ROW_DIR"]
 
 
@@ -71,8 +75,11 @@ def run_modules(python: str, paths: Sequence[str], row_dir: str) -> tuple[int, l
     """Run each module in its own process: (modules that passed, one line per module that did not)."""
     out_dir = os.path.join(row_dir, "py")
     os.makedirs(out_dir, exist_ok=True)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers.parse(os.environ)) as pool:
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers.parse(os.environ))
+    try:
         problems = list(pool.map(lambda p: _run_module(python, p, out_dir), paths))
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)  # stopped: the running modules finish, no other starts
     failed = [f"{path}: {problem}" for path, problem in zip(paths, problems, strict=True) if problem]
     return len(paths) - len(failed), sorted(failed)
 

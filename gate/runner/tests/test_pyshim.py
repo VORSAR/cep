@@ -1,8 +1,11 @@
 """gate/runner/pyshim.py: a Python test module passes only by really running (design note §5; DQ17)."""
 
 import os
+import signal
+import subprocess
 import sys
 
+from gate import wait
 from gate.runner.tests import support
 
 SHIM = os.path.join(support.GATE, "runner", "pyshim.py")
@@ -26,6 +29,40 @@ class Shim(support.GateTest):
         code, out, err = self.shim(HEAD + "    def test_ok(self):\n        self.assertTrue(True)\n")
         self.assertEqual(code, 0, (out, err))
         self.assertEqual(out.decode().splitlines()[-1], "pyshim: pkg.test_m: passed 1 tests")
+
+    def test_a_stopped_module_runs_its_cleanups_and_starts_no_later_test(self):
+        # review BA1, break-it QB4: TERM ends the test where it is, its cleanups run, and no later test starts.
+        w = self.witness("start")
+        cleaned, later = os.path.join(self.root, "cleaned"), os.path.join(self.root, "later")
+        body = (
+            "import os\nimport signal\n"
+            + HEAD
+            + (
+                "    def test_a_holds(self):\n"
+                f"        self.addCleanup(lambda: open({cleaned!r}, 'w').close())\n"
+                f"        os.write(os.open({w.path!r}, os.O_WRONLY), b's')\n"
+                "        signal.pause()\n"
+                "\n"
+                "    def test_b_later(self):\n"
+                f"        open({later!r}, 'w').close()\n"
+            )
+        )
+        self.write("pkg/__init__.py", "")
+        self.write("pkg/test_m.py", body)
+        out = os.path.join(self.root, "shim.stdout")
+        with open(out, "wb") as f:
+            proc = subprocess.Popen([sys.executable, *FLAGS, SHIM, self.repo, "pkg.test_m"], cwd=self.repo,
+                                    env=support.base_env(), stdin=subprocess.DEVNULL, stdout=f, stderr=f)  # fmt: skip
+        self.addCleanup(proc.wait)
+        self.addCleanup(proc.kill)
+        w.started(1)
+        proc.send_signal(signal.SIGTERM)
+        self.assertEqual(proc.wait(timeout=wait.DEFAULT_CAP_S), 1)
+        w.gone()
+        with open(out, "rb") as f:
+            last = f.read().decode().splitlines()[-1]
+        self.assertEqual(last, "pyshim: pkg.test_m: stopped by SIGTERM; failed: 0 failures, 1 errors")
+        self.assertEqual((os.path.exists(cleaned), os.path.exists(later)), (True, False))
 
     def test_exit_0_at_import_is_not_a_pass(self):
         self.assertBad("import sys\n\nsys.exit(0)\n", "import error")

@@ -23,6 +23,10 @@ import tempfile
 import unittest
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from gate import term
+
 RUNS = 50
 SCRUBBED_KEEP = (
     "PATH",
@@ -188,8 +192,11 @@ def _one_run(seed: int, script: str, root: str, modules: Sequence[str], out_dir:
 def stress(modules: Sequence[str], *, runs: int, parallel: int, out_dir: str) -> int:
     script = os.path.abspath(__file__)
     root = os.path.dirname(os.path.dirname(os.path.dirname(script)))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=parallel)
+    try:
         reports = list(pool.map(lambda seed: _one_run(seed, script, root, modules, out_dir), range(runs)))
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)  # stopped: the running runs finish, no other starts
 
     passes: collections.Counter[str] = collections.Counter()
     why: dict[str, tuple[int, str]] = {}
@@ -223,6 +230,7 @@ def stress(modules: Sequence[str], *, runs: int, parallel: int, out_dir: str) ->
 def main(argv: list[str]) -> int:
     if argv[:1] == ["--child"]:
         return child(argv[1:])
+    term.install()  # review BA1: a TERM ends the run through `hogs`'s finally, never leaving the hogs behind
     parser = argparse.ArgumentParser(prog="gate/runner/stress.py")
     parser.add_argument("--runs", type=int, default=RUNS)
     parser.add_argument("--parallel", type=int, default=1)

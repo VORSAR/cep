@@ -177,6 +177,9 @@ class Commands(BootstrapTest):
                 )
                 for log in (first, second)
             ]
+        for proc in procs:  # also when the shim's TERM stops this test (review BA1)
+            self.addCleanup(proc.wait)
+            self.addCleanup(support.kill_group, proc.pid)
         codes = [proc.wait(timeout=support.CHILD_CAP_S) for proc in procs]
         self.assertEqual(codes, [0, 0])
         self.assertEqual(os.listdir(self.cache), [os.path.basename(home)])
