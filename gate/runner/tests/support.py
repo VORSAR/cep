@@ -45,6 +45,15 @@ def base_env() -> dict[str, str]:
     """A world-owned environment: no git config or location of the caller's, and none of an outer gate run's row."""
     env = {k: v for k, v in os.environ.items() if k not in HIDDEN and not k.startswith("GATE_")}
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    # No background maintenance: git's commit would start a detached `git maintenance run` that outlives the
+    # command, escapes its process group and writes into .git while the world is being removed (forwarded item i).
+    env.update(
+        GIT_CONFIG_COUNT="2",
+        GIT_CONFIG_KEY_0="maintenance.auto",
+        GIT_CONFIG_VALUE_0="false",
+        GIT_CONFIG_KEY_1="gc.auto",
+        GIT_CONFIG_VALUE_1="0",
+    )
     return env
 
 

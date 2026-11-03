@@ -141,6 +141,13 @@ class Cli(support.GateTest):
 class RealParts(support.GateTest):
     """The defaults main wires up, each run against the real thing it reads."""
 
+    def test_a_worlds_git_runs_no_background_maintenance(self):
+        # Forwarded item (i): git 2.54's commit starts `git maintenance run --auto --detach`, which outlives the
+        # command and its group and writes into .git while the world is being removed. The world turns it off.
+        for key, want in (("maintenance.auto", "false"), ("gc.auto", "0")):
+            code, out, _ = support.run_tool(["git", "config", "--get", key], self.repo)
+            self.assertEqual((code, out.strip()), (0, want.encode()), key)
+
     def test_the_commit_is_head(self):
         self.git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "x")
         want = self.git("rev-parse", "HEAD").decode().strip()
