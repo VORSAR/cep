@@ -1,0 +1,16 @@
+mode: set
+ex.com/m/internal/notests/n.go:3.16,3.26 1 0
+ex.com/m/internal/notests/n.go:5.16,5.26 1 0
+ex.com/m/internal/skipped/s.go:3.16,3.26 2 0
+ex.com/m/internal/full/f.go:3.16,4.2 2 1
+ex.com/m/internal/full/f.go:6.16,6.26 1 1
+ex.com/m/internal/ninety/n.go:3.16,4.2 9 1
+ex.com/m/internal/ninety/n.go:6.16,6.26 1 0
+ex.com/m/internal/eightnine/e.go:3.16,4.2 8 1
+ex.com/m/internal/eightnine/e.go:6.16,6.26 1 0
+ex.com/m/internal/c29/c.go:3.16,900.2 17999 1
+ex.com/m/internal/c29/c.go:901.16,901.26 2001 0
+ex.com/m/internal/gen/real.go:3.16,3.26 1 1
+ex.com/m/internal/gen/gen.go:3.16,9.2 5 0
+ex.com/m/internal/allgen/g.go:3.16,9.2 4 0
+ex.com/m/outside/o.go:3.16,3.26 7 0
