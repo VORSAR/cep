@@ -41,52 +41,6 @@ QUIET_GIT = {
     "GIT_CONFIG_KEY_1": "gc.auto",
     "GIT_CONFIG_VALUE_1": "0",
 }
-_PYTHON = ("python3.15", "-I", "-B", "-X", "utf8")
-
-# The rows the coverage proofs run. They are exactly the rows this lane asks the coordinator to add to
-# gate/registry.json at combine-W2; the rows that exist since combine-W1 are read from the registry itself.
-UNIT_ROW = {
-    "id": "unit",
-    "job": "test",
-    "tiers": ["T2", "T3", "T4"],
-    "blocking": True,
-    "timeout_s": 600,
-    "needs": [],
-    "scope": ["prod", "test"],
-    "expected_scope": ["go", "./..."],
-    "min_wants": 0,
-    "lands_in": "S1.1a-1",
-    "exclusive": False,
-    "command": [*_PYTHON, "gate/runner/rows/unit.py", "./..."],
-}
-COVERAGE_ROW = {
-    "id": "coverage-inclusion",
-    "job": "test",
-    "tiers": ["T2", "T3", "T4"],
-    "blocking": True,
-    "timeout_s": 120,
-    "needs": ["unit"],
-    "scope": ["prod"],
-    "expected_scope": ["go", "./internal/...", ".", "./rule/...", "./io/..."],
-    "min_wants": 0,
-    "lands_in": "S1.1a-1",
-    "exclusive": False,
-    "command": [*_PYTHON, "gate/coverage/main.py"],
-}
-PROOFS_ROW = {
-    "id": "proofs",
-    "job": "proofs",
-    "tiers": ["T4"],
-    "blocking": True,
-    "timeout_s": 600,
-    "needs": [],
-    "scope": ["proofs"],
-    "expected_scope": ["git", ":(glob)gate/proofs/drivers/test_*.py"],
-    "min_wants": 10,
-    "lands_in": "S1.1a-1",
-    "exclusive": False,
-    "command": [*_PYTHON, "gate/proofs/row.py", "{files}"],
-}
 
 
 def tools() -> tuple[manifest.Tool, ...]:
@@ -124,6 +78,13 @@ def registry_row(row_id: str) -> dict:
     if len(found) != 1:
         raise AssertionError(f"gate/registry.json has {len(found)} rows with id {row_id!r}, not 1")
     return found[0]
+
+
+# The rows the coverage and proofs-row proofs run, read from gate/registry.json itself, so a driver can never run
+# a stale copy of a row (forwarded item ii).
+UNIT_ROW = registry_row("unit")
+COVERAGE_ROW = registry_row("coverage-inclusion")
+PROOFS_ROW = registry_row("proofs")
 
 
 def _stop_group(pgid: int, signum: int) -> None:
