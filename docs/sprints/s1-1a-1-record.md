@@ -89,6 +89,9 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
   - The coordinator's probe: 19,082 files take 5.2 s serial when cold, and 2.7–3.1 s with 8–16 threads.
   - Lane B makes the change as a follow-up.
 
+**During the fix round: the owner, 2026-11-03:**
+- **The coordinator makes the fix round itself, in the main session** ("do this in main agent"; ≠ the plan check's decision that agents write gate code and the coordinator reviews it). The fix agents had stalled after rate limits and were stopped. Each fix is test-first, one commit per finding, re-verified by a full run.
+
 ## Measured results
 
 *(filled as lanes land)*
@@ -128,9 +131,15 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
   **Its 16 design-silent choices are accepted by the coordinator.** Among them:
   - the registry shape `{"schema": 1, "rows": [...]}`;
   - the summary's byte layout;
-  - a WARN row's record still says `"verdict": "fail"`, so S1.1a-2's `summarize` reads `blocking` from the registry;
+  - a WARN row's record still says `"verdict": "fail"`, so S1.1a-2's `summarize` reads `blocking` from the registry; *(superseded 2026-11-03 by the owner, review BA12: every record now carries `"blocking"`)*
   - row directories `rows/<job>/<id>/`;
   - the `run.py` guard reads `tools.json` itself.
+
+  *Added after the step-7 review (architect item 13), choices later work depends on:*
+  - the `--registry PATH` option, beside the plan check's `--tier`, `--job` and `--run-dir` (since review BA8 a non-default registry is named in the summary, and `run.json` carries `registry_sha256`);
+  - a nested worker pool inside the `pytests`, `pyfloor` and `proofs` wrappers, sized by `VORSAR_CEP_WORKERS` (`gate/runner/rows/__init__.py`);
+  - an extra `pytests` rule: a test module in a directory without `__init__.py` fails, naming it;
+  - the `trace.json` format (`event`, `id`, `job`, …) that the parity drivers read.
 
   **A gap in the coordinator's briefs:** the `ruff` row's wrapper had no owner. Lane A builds it as a follow-up.
 - **Follow-ups (both re-verified by the coordinator):**
@@ -171,6 +180,12 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
   - **Coverage:** `internal/event` is at 100.00% (40/40).
   - **G2 passed.**
 - **Step 6, the slow real check: exit line 1** (2026-11-03). A fresh clone of `s1-1a-1/integration` @ c9a498e ran `make check` against an empty `VORSAR_CEP_TOOLS_CACHE`. It installed all five pinned tools, then ran every T2 row to PASS: `wall 52.3s`, `GATE PASSED`, `exit: 0`; **82 s** end to end, downloads included. `make clean-tools` then removed that cache.
+- **Step 7, review and break-it** (2026-11-03, on `a1e4646`). Two blind reports: architecture + the-fool, and QA break-it. QA committed red tests for 6 findings. Every finding and its outcome is under [Findings](#findings).
+- **The fix round** (2026-11-03, the coordinator in the main session, owner decision). There were 16 commits, from 7c2fc0f to 2469831, each test-first. Each test was seen red before its fix, or, for the pinning tests (BA4), shown to fail when its ban was removed. **Re-verified on 2469831:**
+  - **T2 `make check`:** 8 rows PASS (ruff 110 files, pytests 44 modules). `wall 47.6s · summed 66.3s · saved 28%`, `exit: 0`.
+  - **T3 `make combine-check`:** the same 8 PASS. `wall 44.5s`, `exit: 0`.
+  - **T4 `make strict-gate`:** the same 8, plus `proofs` PASS, covered 10. `wall 59.8s · summed 136.8s · saved 56%`, `exit: 0`.
+  - QA's red tests all pass. No new orphaned process was left after the three runs; the only orphans on the machine date from before the fix.
 
 ## Test material
 
@@ -187,10 +202,44 @@ None after G0. *(The split into S1.1a-1 / S1.1a-2 was decided at the plan check,
 
 ## Findings
 
-*Plan-check findings: see the plan check's §10. Review and break-it findings of the combined build go here.*
+*Plan-check findings: see the plan check's §10.* The step-7 reports, written blind of each other on `a1e4646`: [architecture + the-fool](../reviews/s1-1a-1-build-architecture.md) (0 blocker, 4 should-fix, 10 later) and [QA break-it](../reviews/s1-1a-1-breakit-qa.md) (2 blocker, 2 should-fix, 6 later; red tests for 6). The owner set the fix round's scope on 2026-11-03 ([sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-03--s11a-1-review-and-break-it-step-7)). Nothing was rejected.
 
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
+| QB1 | QA | blocker | A tracked test module under `gate/proofs/` but not directly in `drivers/` ran in no row, and the gate passed over its failing test (false green). | **Fixed:** ac0c4e4 (`pytests` fails any tracked test module no row runs, naming the fix) and 7c2fc0f (the `pytests` scope excludes only `gate/proofs/drivers/**`). Red test 79b6a31. |
+| QB2 | QA | should-fix | Renaming one of `pyfloor`'s four modules shrank the row unseen. | **Fixed:** 7c2fc0f (`pyfloor` `min_wants` 4). Red test 79b6a31. |
+| QB3 | QA | blocker | A FIFO at a hashed path hung parity and `bootstrap.py exec`. | **Fixed:** e401ece (hashing opens without blocking or following a link, and refuses anything but a regular file; the cache containment check comes before hashing). Red test 8140e18. |
+| QB4 | QA | should-fix | A stopped row left its new-session descendants running for ever (seen for real). | **Fixed with BA1:** 27adcd2. Red test d5df2a1. Its timing was amended: the grace's KILL now fires after TERM has had its effect, which is the contract (cleanups run inside the grace). |
+| QB5 | QA | later | A tar stream cut inside a header installed half a tool and stamped `.complete`. | **Fixed:** a03bc73 (the stream must end in its end-of-archive blocks). Red test 33f7664. |
+| QB6 | QA | later | Equivalent spellings walked past the reaping and `SIG_IGN` bans. | **Fixed:** 7c2fc0f (`ruff.toml` also bans `os.waitpid`, `os.waitid`, `signal.Handlers.SIG_IGN`). Red test c5f2382; every ban pinned by 2469831. |
+| QB7 | QA | later (owner question) | A skipped Go test passed `unit`, while a Python skip fails `pytests`. | **Fixed (owner, 2026-11-03):** 7b40234. |
+| QB8 | QA | later | Ctrl-C before the scheduler starts read as `internal error`, exit 2. | **Fixed:** b519c8f (`interrupted`, exit 1, the two closing lines). |
+| QB9 | QA | later | A truncated gzip was refused as an `internal error` with no fix text. | **Fixed:** a03bc73 (refused as truncated or corrupt, naming the pin to check). |
+| QB10 | QA | later | Two contrived test-module shapes can be shadowed at import (a dotted directory name; an untracked package beside a tracked module). | **Known issue:** contrived, no false green seen. Fix area: `misplaced()` refuses dotted directories under `gate/` and a directory named like a tracked module. |
+| BA1 | architect | should-fix | Process containment stopped at a session boundary: nested gates, in-test runners, stress hogs and toolchain test children outlived a stopped row. | **Fixed:** 27adcd2. `gate/term.py` turns the first TERM into an exception (the shim has its own copy); the wrappers and the stress harness start nothing new once stopped; a driver passes the TERM to its nested gate before any KILL. What is left is the residue below. |
+| BA2 | architect | should-fix | The `ruff` row's verdict depended on the caller's `RUFF_*` variables. | **Fixed:** 989557b (the runner drops every `RUFF_*`). |
+| BA3 | architect | should-fix | A red summary said only `exit 1` and named no place to look. | **Fixed (owner, 2026-11-03):** 6a1e603 (the reason carries the row's first failure line; the summary prints `run: <dir>`). |
+| BA4 | architect | should-fix | Four of the five ruff bans had no test that could fail. | **Fixed:** 2469831 (every ban and every per-file waiver pinned; shown to fail with one ban removed). |
+| BA5 | architect | later | The record cut parity's reason at 300 characters; summary reasons were not one line. | **Fixed:** aacbc39. |
+| BA6 | architect | later | The `go`-kind expected scope cannot see a subtree lost to a nested `go.mod`. | **Forwarded → S1.1b** (a check that the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`). |
+| BA7 | architect | later | Registry `scope` classes are unenforced and disagree with the expected scopes. | **Forwarded → S1.1b** (its plan check fixes the class map before registry-lint). |
+| BA8 | architect | later | A run under `--registry` looked like a real run. | **Fixed:** d619319 (the summary names a non-default registry; `run.json` carries `registry_sha256`); the option is listed among the choices above. |
+| BA9 | architect | later | Logic duplicated across lanes (scope rule, platform map, process runners). | **Known issue:** every copy fails loudly on drift, so no false green. Merge each copy when its file is next changed. |
+| BA10 | architect | later | An interrupt during parity's whole-tree hash waits for the hash (about 2.5 s; for ever if a read hangs). | **Known issue:** the cost is normally 2.5 s. Fix area: a cancel flag per file and a cap of its own. |
+| BA11 | architect | later | `make` reports exit 2 for a red gate. | **Fixed (docs):** DEVELOPMENT.md says the `exit:` line, not make's status, is the verdict. S1.1a-2's hooks and CI read that line or call the bootstrap. |
+| BA12 | architect | later | A WARN's record said `"fail"` with no `blocking` field. | **Fixed (owner, 2026-11-03):** 4e15823. |
+| BA13 | architect | later | The shim's pass line shares stdout with the module under test. | **Known issue:** adversarial only (print the line, then `os._exit(0)`). Fix area: the shim reports to a file the wrapper names. |
+| BA14 | architect | later | ruff's and `pyfloor`'s scopes will miss S1.1a-2's extensionless hooks. | **Forwarded → S1.1a-2** (its G0 adds them by explicit path). |
+| (i) | forwarded | — | git's background maintenance raced a test world's cleanup. | **Fixed:** 4625173. |
+| (ii) | forwarded | — | The coverage drivers carried registry rows as constants. | **Fixed:** 779c6b2 (they read `gate/registry.json`). |
+
+**Accepted residue** (owner, 2026-11-03, decision 1: leftover-process risk the fix cannot remove):
+- A SIGKILL of the runner, a row or a driver skips every cleanup. What it started in sessions of its own stays.
+- A cleanup that outlasts the 5 s grace is cut short by the KILL. A driver gives its nested gate 2 s of that grace.
+- A nested gate KILLed before its own stop finishes leaves its rows TERMed but not KILLed. A row that ignores TERM then stays.
+- A TERM during a test module's import, or between its tests, skips `tearDownClass`/`tearDownModule`.
+- A row whose process daemonizes (`setsid`) and then exits 0 passes with the daemon running. macOS has no subreaper to see it.
+- A SIGTERM in the milliseconds before the runner installs its handlers ends it without the two closing lines.
 
 ## Done-done
 
@@ -204,12 +253,12 @@ Design (G1)  ☑ architecture + the-fool findings resolved (24 + re-check 19; no
              ☑ QA testability findings resolved (36; none rejected)
              ☑ owner decisions recorded (sprint-plan §5)
              ☑ ADRs written for lasting decisions (annotations: ARCHITECTURE §3, §4; ADR-0001, ADR-0009, ADR-0015) — G1 passed 2026-11-02
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
-             ☐ conformance cases for every construct shipped or changed (n/a: no construct)
-             ☐ tests on the real code ☐ every breaker's red test committed
-Review (G3)  ☐ architecture review of the combined diff: no drift
-             ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 strict-gate exit 0, run complete ☐ owner's check passed
+Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0
+             ☑ conformance cases for every construct shipped or changed (n/a: no construct)
+             ☑ tests on the real code ☑ every breaker's red test committed — G2 passed 2026-11-03
+Review (G3)  ☑ architecture review of the combined diff: no code drift; doc drift annotated (2026-11-03)
+             ☑ QA break-it run ☑ all 24 findings: 17 fixed, 3 forwarded, 4 known issues, none rejected; both blockers fixed; both forwarded items fixed
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (2469831) ☐ owner's check passed
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main green on the merge commit (CI arrives in S1.1a-2: the local T4 stands in)

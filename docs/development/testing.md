@@ -2,7 +2,7 @@
 
 This is the test contract for complex-events-engine. The gate that runs it is in [DEVELOPMENT.md](DEVELOPMENT.md#the-gate).
 
-> **Not built yet (2026-10-31).** No test rig exists. These rules are what it is built to; the sprint that builds each layer adds its concrete helpers and commands here.
+> **Not built yet (2026-10-31).** No test rig exists. These rules are what it is built to; the sprint that builds each layer adds its concrete helpers and commands here. *(Annotated 2026-11-03, S1.1a-1: the gate's Python side has its rig. `gate/wait.py` is the one wait helper (ruff bans `time.sleep` everywhere else), and `gate/runner/stress.py` runs test modules 50 times each under load. The Go-side wait helper lands with the first Go test that needs one.)*
 
 **Tests are the spec.** Agent-written code is only as trustworthy as the gates it must pass, so the conformance suite, deterministic replay and the rule unit-test framework are the development method, built before the operators they test ([01-objectives](../product/01-objectives.md), operating model).
 
