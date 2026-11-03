@@ -1,0 +1,69 @@
+-- constructs: lexical-torture quote-styles every-escape raw-strings numbers-fraction-exponent
+--             compound-durations timestamp-literal booleans backticked-names param-ref-every-slot
+--             raw-operand non-ascii-rune signed-param-default delay-window-param
+language cep/0.1;
+
+param hook string = "http://localhost:9000/hook";
+param threshold float = 0.75;
+param floor int = -1;
+param grace duration = 1 hour 30 min;
+param term string = 'override';
+param terms string = 'ignore previous, disregard instructions';
+param pause duration = 2 min;
+param strict bool = true;
+
+stream `agent-events` (agentId string, text string optional, risk float, score int, flagged bool,
+                       `select` string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Approvals (agentId string, text string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+table Blocked (agentId string) primary key (agentId);
+
+@sink(type = 'http', url = ${hook}, @map(type = 'json'))
+stream Findings (agentId string, why string, scaled float, ts timestamp);
+
+stream Delayed (agentId string, n int, ts timestamp);
+
+rule LexicalTorture
+  intent "Exercise every literal form of SPEC section 2.4 in one rule."
+  partition by agentId of `agent-events`, agentId of Approvals ttl ${grace}
+  from every lead = `agent-events`[text has_ci ${term}
+                                   or text has_any_ci(${terms})
+                                   or text contains_cs 'it\'s a \'quoted\' word'
+                                   or text contains_cs "say \"hi\" and a \\ backslash"
+                                   or text contains_cs 'tab\tnewline\ncarriage\rreturné'
+                                   or text starts_with_cs '''raw \n stays A literal'''
+                                   or text ends_with_cs """raw "double" and 'single' quotes"""
+                                   or text contains_match_ci '''wire\s+transfer'''
+                                   or raw(text) contains_cs 'café'
+                                   or `select` == "double"
+                                   or risk * 100 / 100 > ${threshold}
+                                   or risk >= 2.5e-3 and risk < 1e3
+                                   or score % 2 == 0 and score != ${floor} and -score <= -1
+                                   or (flagged == true or flagged == false)
+                                   or text is null or text is not null
+                                   or agentId in Blocked or agentId not in Blocked
+                                   or ts > timestamp '2026-01-01T00:00:00Z'
+                                   or coalesce(text, 'none') == 'none']
+    -> follow = `agent-events`[agentId == lead.agentId and not flagged]
+    and not Approvals[agentId == lead.agentId] for ${grace}
+  within ${grace}
+  after match skip past last
+  late events drop
+  expect given `agent-events` [ {agentId: 'a1', text: 'override', risk: 0.9, score: -3, flagged: false, `select`: 'x', ts: timestamp '2026-01-01T10:00:00Z'},
+                                {agentId: 'a1', text: null, risk: 1.5e-1, score: 4, flagged: false, `select`: "y", ts: timestamp '2026-01-01T10:05:00Z'} ]
+         then Findings [ {agentId: 'a1', why: 'lexical', scaled: 1.0, ts: timestamp '2026-01-01T11:35:00Z'} ]
+  select lead.agentId, 'lexical' as why, math:round(lead.risk) as scaled
+  output first every ${pause}
+  insert into Findings;
+
+rule DelaySlot
+  intent 'A delay window takes its duration from a param; the ttl is a five-unit compound duration.'
+  partition by agentId of `agent-events` ttl 2 day 3 hour 15 min 10 sec 500 ms
+  from `agent-events` window delay(${pause})
+  emit on due
+  late events drop
+  select agentId, count() as n
+  insert into Delayed;

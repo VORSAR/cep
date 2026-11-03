@@ -1,0 +1,45 @@
+-- constructs: comment-torture line-comments block-comments comment-before-pragma comment-after-last-statement
+--             comment-inside-expression crlf tabs raw-string-with-comment-text no-trailing-newline
+/* a block comment before the pragma */
+language cep/0.1; -- a line comment at the end of the pragma line
+
+-- a line comment whose text contains /* and */ and -- again
+/* a block comment whose text contains -- and a 'quote' and a "double quote" */
+param	grace	duration = 2 min;	-- tabs between the tokens and before this comment
+
+stream Actions (agentId string, action string, -- a line comment inside the attribute list, ending in CRLF
+		resource string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Approvals (agentId string, action string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+/* a block comment
+   spanning three lines,
+   the middle one ending in CRLF */
+@sink(type = 'log' /* a block comment inside an annotation */)
+stream Escalations (agentId string, reason string, ts timestamp);
+
+rule CommentTorture
+  intent '''A multi-line raw intent string.
+-- not a comment
+/* not a comment */
+It ends here.'''
+  partition by agentId of Actions, agentId of Approvals ttl 15 min
+  from every read = Actions[action == /* a block comment between tokens inside an expression */ 'read'
+                            and resource == 'vault -- not a comment either' -- but this one is
+                            ]
+    -> send = Actions[action == 'send' /* a block comment
+                      spanning two lines inside the filter */ ]
+    and not Approvals[action == 'send'] for ${grace}
+  within ${grace} -- a line comment after the within clause
+  after /* a block comment between two keywords of one clause */ match skip past last
+  late events drop
+  expect given Actions [ {agentId: 'a1', action: 'read', resource: 'vault -- not a comment either', ts: timestamp '2026-01-01T10:00:00Z'}, -- a record
+                         {agentId: 'a1', action: 'send', resource: 'x', ts: timestamp '2026-01-01T10:01:00Z'} ]
+         then Escalations [ {agentId: 'a1', reason: 'read-then-send', ts: timestamp '2026-01-01T10:03:00Z'} ]
+  select read.agentId, 'read-then-send' as reason
+  output first every 10 min
+  insert into Escalations; -- a line comment after the last semicolon
+/* a block comment after the last semicolon */
+-- the last line: a line comment with no trailing newline
