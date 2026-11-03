@@ -33,6 +33,13 @@ class CleanEnv(unittest.TestCase):
         for key in keys:
             self.assertNotIn(key, got)
 
+    def test_drops_every_ruff_variable(self):
+        # Review BA2: RUFF_OUTPUT_FORMAT=json turned a clean tree red, and RUFF_OUTPUT_FILE wrote outside the run.
+        keys = ("RUFF_OUTPUT_FORMAT", "RUFF_OUTPUT_FILE", "RUFF_CACHE_DIR", "RUFF_NO_CACHE", "RUFF_TARGET_VERSION")
+        got = env.clean_env(dict.fromkeys(keys, "1"), [])
+        for key in keys:
+            self.assertNotIn(key, got)
+
     def test_keeps_the_git_location_variables_and_the_rest(self):
         keys = ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE", "HOME", "TMPDIR")
         got = env.clean_env(dict.fromkeys(keys, "/k"), [])

@@ -10,7 +10,8 @@ PINNED = {"GOTOOLCHAIN": "local", "GOENV": "off", "GOFLAGS": "", "GOWORK": "off"
 def _dropped(name: str) -> bool:
     if name.startswith("GO"):
         return name not in GO_ALLOWED
-    return name.startswith("PYTHON") or (name.startswith("GIT_") and name.endswith("_PATHSPECS"))
+    # RUFF_*: a caller's RUFF_OUTPUT_FORMAT turned a clean tree red, RUFF_OUTPUT_FILE wrote outside the run (BA2).
+    return name.startswith(("PYTHON", "RUFF_")) or (name.startswith("GIT_") and name.endswith("_PATHSPECS"))
 
 
 def clean_env(base: Mapping[str, str], path_dirs: Iterable[str]) -> dict[str, str]:

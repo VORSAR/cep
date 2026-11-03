@@ -19,7 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 from gate.runner import rows
 
 BATCH = 256
-FLAGS = ("--no-cache", "--config", "ruff.toml")
+# The output format is pinned too: the summary line and the file names are parsed from it (review BA2).
+FLAGS = ("--no-cache", "--config", "ruff.toml", "--output-format", "full")
 ECHO = "ruff> "
 # Bytes patterns, so \d is ASCII only.
 _BOTH = re.compile(rb"(?:(\d+) files? would be reformatted, )?(\d+) files? already formatted")
