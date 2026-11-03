@@ -1,4 +1,4 @@
--- expect: E-PAT-003 (every pattern starts with `every` or `once`)
+-- expect: E-PAT-003 (every pattern starts with `every` or `once`) @ 8:11
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

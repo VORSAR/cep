@@ -1,4 +1,4 @@
--- expect: E-CMT-001 (unterminated block comment swallows the rest of the file)
+-- expect: E-CMT-001 (unterminated block comment swallows the rest of the file) @ 4:1
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 /* this comment never closes

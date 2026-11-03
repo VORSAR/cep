@@ -1,4 +1,4 @@
--- expect: E-PAT-004 (an absence requires its bound: `for <duration>`)
+-- expect: E-PAT-004 (an absence requires its bound: `for <duration>`) @ 10:3
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream R (a string, ts timestamp) time ts watermark bounded 1 min;

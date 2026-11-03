@@ -1,4 +1,4 @@
--- expect: E-EMIT-001 (every window rule states its emit mode)
+-- expect: E-EMIT-001 (every window rule states its emit mode) @ 9:3
 language cep/0.1;
 stream S (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);

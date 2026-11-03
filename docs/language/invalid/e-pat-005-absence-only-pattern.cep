@@ -1,4 +1,4 @@
--- expect: E-PAT-005 (a pattern needs at least one positive step; anchor the absence or use a cron window)
+-- expect: E-PAT-005 (a pattern needs at least one positive step; anchor the absence or use a cron window) @ 8:14
 language cep/0.1;
 stream R (a string, ts timestamp) time ts watermark bounded 1 min;
 stream T (a string, ts timestamp);
