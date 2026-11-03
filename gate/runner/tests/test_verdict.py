@@ -50,6 +50,16 @@ class Precedence(unittest.TestCase):
                                     scope_error="", left_running=False, returncode=-9)  # fmt: skip
         self.assertEqual(verdict.decide(facts).reason, "killed by signal 9")
 
+    def test_an_exit_carries_the_rows_first_failure_line(self):
+        # owner, 2026-11-03 (review BA3): a red row's summary shows its first failure line, not a bare "exit 1".
+        clear = dataclasses.replace(ALL_WRONG, parity_failed=False, stopped="", timed_out=False, spawn_error="",
+                                    scope_error="", left_running=False)  # fmt: skip
+        named = dataclasses.replace(clear, returncode=1, first_failure="internal/event 85.10% (40/47) < 90%")
+        self.assertEqual(verdict.decide(named).reason, "exit 1: internal/event 85.10% (40/47) < 90%")
+        self.assertEqual(verdict.decide(dataclasses.replace(named, first_failure="")).reason, "exit 1")
+        self.assertEqual(verdict.decide(dataclasses.replace(named, returncode=-9)).reason, "killed by signal 9")
+        self.assertEqual(verdict.decide(dataclasses.replace(named, timed_out=True)).reason, "timeout after 60s")
+
     def test_a_ceiling_breach_carries_its_own_reason(self):
         facts = dataclasses.replace(ALL_WRONG, parity_failed=False, stopped="run ceiling 420s exceeded")
         self.assertEqual(verdict.decide(facts).reason, "run ceiling 420s exceeded")

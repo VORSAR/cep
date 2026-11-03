@@ -18,6 +18,7 @@ class Facts:
     scope_error: str = ""
     left_running: bool = False
     returncode: int = 0  # Popen's convention: negative means killed by that signal
+    first_failure: str = ""  # the row's own first failure line, if it printed one (step.first_failure)
     covered: Covered = field(default_factory=Covered)
     expected: int = 0
 
@@ -44,7 +45,8 @@ def decide(f: Facts) -> Verdict:
     if f.returncode < 0:
         return Verdict(False, f"killed by signal {-f.returncode}")
     if f.returncode > 0:
-        return Verdict(False, f"exit {f.returncode}")
+        # owner, 2026-11-03 (review BA3): a red row's reason shows its first failure line, not a bare exit code.
+        return Verdict(False, f"exit {f.returncode}: {f.first_failure}" if f.first_failure else f"exit {f.returncode}")
     if f.covered.problem:
         return Verdict(False, f.covered.problem)
     if f.covered.count != f.expected:

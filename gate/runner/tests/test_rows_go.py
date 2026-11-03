@@ -46,14 +46,14 @@ class Gofmt(GoRows):
     def test_an_unformatted_file_fails_naming_it_and_the_fix(self):
         self.go_files(2)
         self.track("p/bad.go", "package p\nvar   x = 1\n")
-        self.assertEqual(self.gofmt(), "exit 1")
+        self.assertEqual(self.gofmt(), "exit 1: p/bad.go is not formatted: fix it with gofmt -w p/bad.go")
         out = self.stdout("gofmt")
         self.assertIn("p/bad.go", out)
         self.assertIn("gofmt -w p/bad.go", out)
 
     def test_a_file_gofmt_cannot_parse_fails_naming_it(self):
         self.track("p/broken.go", "package p\nfunc {\n")
-        self.assertEqual(self.gofmt(), "exit 1")
+        self.assertEqual(self.gofmt(), "exit 1: gofmt exit 2: p/broken.go:2:6: expected 'IDENT', found '{'")
         self.assertIn("p/broken.go", self.stdout("gofmt"))
 
     def test_257_files_cross_the_batch_boundary(self):
@@ -115,20 +115,21 @@ class Vet(GoRows):
     def test_a_diagnostic_fails_naming_its_position_even_though_vet_exits_0(self):
         # design-QA counter-example 2.
         self.track("c/c.go", 'package c\n\nimport "fmt"\n\nvar S = fmt.Sprintf("%d", "x")\n')
-        self.assertEqual(self.vet(), "exit 1")
+        position = os.path.join(self.repo, "c", "c.go:5:22")
+        self.assertEqual(self.vet(), f'exit 1: {position}: fmt.Sprintf format %d has arg "x" of wrong type string')
         self.assertIn("c/c.go:5", self.stdout("vet"))
 
     def test_a_compile_error_prints_no_object_and_still_fails(self):
         self.track("a/a.go", "package a\n")
         self.track("b/b.go", 'package b\n\nvar x int = "s"\n')
-        self.assertEqual(self.vet(), "exit 1")
+        self.assertRegex(self.vet(), r"^exit 1: go vet exit 1: .* b/b\.go:3:13: cannot use ")
         self.assertIn("b/b.go", self.stdout("vet"))
 
     def test_a_compile_error_only_in_a_test_file_fails(self):
         # re-check S5: `go build` is green here; vet's non-zero exit is the only signal.
         self.track("a/a.go", "package a\n")
         self.track("a/a_test.go", 'package a\n\nvar x int = "s"\n')
-        self.assertEqual(self.vet(), "exit 1")
+        self.assertRegex(self.vet(), r"^exit 1: go vet exit 1: .* a/a_test\.go:3:13: cannot use ")
 
 
 class Unit(GoRows):
@@ -164,7 +165,7 @@ class Unit(GoRows):
     def test_a_failing_test_fails_naming_it(self):
         self.package("a")
         self.package("b", self.BAD)
-        self.assertEqual(self.unit(), "exit 1")
+        self.assertEqual(self.unit(), "exit 1: ex.com/m/b: TestBad")
         out = self.stdout("unit", "test")
         self.assertIn("ex.com/m/b", out)
         self.assertIn("TestBad", out)
@@ -173,19 +174,19 @@ class Unit(GoRows):
         # Owner, 2026-11-03 (break-it QB7): a skipped Go test fails the row, as a skipped Python test fails pytests.
         skip = self.GOOD + '\nfunc TestLater(t *testing.T) { t.Skip("flaky") }\n'
         self.package("a", skip)
-        self.assertEqual(self.unit(), "exit 1")
+        self.assertEqual(self.unit(), "exit 1: ex.com/m/a: TestLater: skipped")
         out = self.stdout("unit", "test")
         self.assertIn("ex.com/m/a: TestLater: skipped", out)
 
     def test_no_test_at_all_fails(self):
         self.track("a/a.go", "package a\n")
         self.track("b/b.go", "package b\n")
-        self.assertEqual(self.unit(), "exit 1")
+        self.assertEqual(self.unit(), "exit 1: no test ran")
         self.assertIn("no test ran", self.stdout("unit", "test"))
 
     def test_a_test_build_failure_fails(self):
         self.package("a", 'package p\n\nvar x int = "s"\n')
-        self.assertEqual(self.unit(), "exit 1")
+        self.assertEqual(self.unit(), "exit 1: ex.com/m/a: package failed")
 
     def test_narrowed_to_one_of_two_packages_is_red(self):
         self.package("a")

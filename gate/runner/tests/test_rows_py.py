@@ -43,8 +43,9 @@ class Pytests(Base):
         # design-QA counter-example 14, as the `:(glob)` fix leaves it: this file now runs, so its failure is seen.
         self.track("gate/test_top.py", GOOD.replace("assertTrue(True)", "fail('x')"))
         self.track("gate/x/test_a.py", GOOD)
-        self.assertEqual(self.pytests(), "exit 1")
-        self.assertIn("gate/test_top.py", self.out())
+        self.assertEqual(
+            self.pytests(), "exit 1: gate/test_top.py: pyshim: gate.test_top: failed: 1 failures, 0 errors"
+        )
 
     def test_proofs_are_outside_this_row(self):
         self.track("gate/x/test_a.py", GOOD)
@@ -57,7 +58,8 @@ class Pytests(Base):
         # C10 (d).
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/x/test_bad.py", "import no_such_module_xyz\n")
-        self.assertEqual(self.pytests(), "exit 1")
+        want = "exit 1: gate/x/test_bad.py: pyshim: gate.x.test_bad: import error; failed: 0 failures, 1 errors"
+        self.assertEqual(self.pytests(), want)
         self.assertIn("gate/x/test_bad.py", self.out())
         self.assertIn("import error", self.out())
 
@@ -65,14 +67,14 @@ class Pytests(Base):
         # C10 (c).
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/x/test_skip.py", SKIP)
-        self.assertEqual(self.pytests(), "exit 1")
+        self.assertEqual(self.pytests(), "exit 1: gate/x/test_skip.py: pyshim: gate.x.test_skip: skipped: 1")
         self.assertIn("gate/x/test_skip.py", self.out())
         self.assertIn("skipped", self.out())
 
     def test_a_module_with_no_tests_is_named(self):
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/x/test_none.py", "x = 1\n")
-        self.assertEqual(self.pytests(), "exit 1")
+        self.assertEqual(self.pytests(), "exit 1: gate/x/test_none.py: pyshim: gate.x.test_none: ran 0 tests")
         self.assertIn("gate/x/test_none.py", self.out())
         self.assertIn("ran 0 tests", self.out())
 
@@ -81,7 +83,7 @@ class Pytests(Base):
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/x/test_exit.py", "import sys\n\nsys.exit(0)\n")
         self.track("gate/x/test_hard.py", "import os\n\nos._exit(0)\n")
-        self.assertEqual(self.pytests(), "exit 1")
+        self.assertEqual(self.pytests(), "exit 1: gate/x/test_exit.py: pyshim: gate.x.test_exit: import error")
         self.assertIn("gate/x/test_exit.py", self.out())
         self.assertIn("gate/x/test_hard.py", self.out())
 
@@ -89,7 +91,7 @@ class Pytests(Base):
         # C10 (a): namespace packages would import it silently, and the layout rule would be gone.
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/noinit/test_b.py", GOOD)
-        self.assertEqual(self.pytests(), "exit 1")
+        self.assertEqual(self.pytests(), "exit 1: gate/noinit/test_b.py: gate/noinit/__init__.py is missing")
         self.assertIn("gate/noinit/test_b.py", self.out())
         self.assertIn("__init__.py", self.out())
 
@@ -97,28 +99,25 @@ class Pytests(Base):
         # C10 (b), design-QA counter-example 14.
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/x/runner_test.py", GOOD)
-        self.assertEqual(self.pytests(), "exit 1")
-        self.assertIn("gate/x/runner_test.py", self.out())
+        self.assertEqual(self.pytests(), "exit 1: gate/x/runner_test.py: misnamed: test modules are test_*.py")
 
     def test_an_untracked_misnamed_module_is_named(self):
         self.track("gate/x/test_a.py", GOOD)
         self.write("gate/x/other_test.py", GOOD)
-        self.assertEqual(self.pytests(), "exit 1")
-        self.assertIn("gate/x/other_test.py", self.out())
+        self.assertEqual(self.pytests(), "exit 1: gate/x/other_test.py: misnamed: test modules are test_*.py")
 
     def test_an_untracked_test_module_is_named(self):
         self.track("gate/x/test_a.py", GOOD)
         self.write("gate/x/test_new.py", GOOD)
-        self.assertEqual(self.pytests(), "exit 1")
-        self.assertIn("gate/x/test_new.py", self.out())
-        self.assertIn("git add", self.out())
+        self.assertEqual(self.pytests(), "exit 1: gate/x/test_new.py: untracked, so it never runs: git add it")
 
     def test_a_stray_file_under_tests_is_named(self):
         self.track("gate/tests/__init__.py", "")
         self.track("gate/tests/support.py", "")
         self.track("gate/tests/test_a.py", GOOD)
         self.track("gate/tests/helpers.py", "x = 1\n")
-        self.assertEqual(self.pytests(), "exit 1")
+        want = "gate/tests/helpers.py: not a test module: a tests directory holds test_*.py, __init__.py and support.py"
+        self.assertEqual(self.pytests(), f"exit 1: {want}")
         out = self.out()
         self.assertIn("gate/tests/helpers.py", out)
         self.assertNotIn("gate/tests/support.py", out)
@@ -206,16 +205,16 @@ class Pyfloor(Base):
             "self.assertTrue(True)", "try:\n            pass\n        except ValueError, TypeError:\n            pass"
         )
         self.track("gate/x/test_a.py", body)
-        self.assertEqual(self.pyfloor("gate/x/test_a.py"), "exit 1")
-        out = self.row_file("lint", "pyfloor", "stdout").decode()
-        self.assertIn("gate/x/test_a.py", out)
-        self.assertIn("import error", out)
+        self.assertEqual(
+            self.pyfloor("gate/x/test_a.py"), "exit 1: gate/x/test_a.py: pyshim: gate.x.test_a: import error"
+        )
 
     def test_an_api_newer_than_the_floor_is_red(self):
         # copy.replace is 3.13, design note §8 test_pyfloor.
         body = GOOD.replace("assertTrue(True)", "assertTrue(__import__('copy').replace)")
         self.track("gate/x/test_a.py", body)
-        self.assertEqual(self.pyfloor("gate/x/test_a.py"), "exit 1")
+        want = "exit 1: gate/x/test_a.py: pyshim: gate.x.test_a: failed: 0 failures, 1 errors"
+        self.assertEqual(self.pyfloor("gate/x/test_a.py"), want)
 
     def test_the_real_guard_module_passes_under_the_floor(self):
         # The one floor module on this branch: run for real, from the real repository, through the wrapper.

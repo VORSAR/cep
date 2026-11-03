@@ -44,45 +44,54 @@ class Render(unittest.TestCase):
             "lint   | gofmt              | PASS    | 1.5s  | covered 12\n"
             "test   | coverage-inclusion | FAIL    | 0.1s  | exit 1\n"
             "proofs | proofs             | WARN    | 60.0s | covered 8 < min_wants 10\n"
+            "run: r\n"
             "wall 60.2s · summed 61.8s · saved 2%\n"
             "GATE FAILED\n"
             "exit: 1\n"
         )
-        self.assertEqual(summary.render(lines, wall_ms=60200, summed_ms=61800, exit_code=1), want)
+        self.assertEqual(summary.render(lines, wall_ms=60200, summed_ms=61800, exit_code=1, run_dir="r"), want)
 
     def test_short_values_never_shrink_a_column_below_its_header(self):
         lines = [Line("a", "b", "PASS", 0, "c")]
         want = (
             "job | step | verdict | time | reason\n"
             "a   | b    | PASS    | 0.0s | c\n"
+            "run: r\n"
             "wall 0.0s · summed 0.0s · saved 0%\n"
             "GATE PASSED\n"
             "exit: 0\n"
         )
-        self.assertEqual(summary.render(lines, wall_ms=0, summed_ms=0, exit_code=0), want)
+        self.assertEqual(summary.render(lines, wall_ms=0, summed_ms=0, exit_code=0, run_dir="r"), want)
 
     def test_the_last_two_lines_follow_the_exit_code(self):
         for code, word in ((0, "GATE PASSED"), (1, "GATE FAILED"), (2, "GATE FAILED")):
             with self.subTest(code):
-                last = summary.render([], wall_ms=0, summed_ms=0, exit_code=code).splitlines()[-2:]
+                last = summary.render([], wall_ms=0, summed_ms=0, exit_code=code, run_dir="r").splitlines()[-2:]
                 self.assertEqual(last, [word, f"exit: {code}"])
 
     def test_a_reason_is_one_bounded_line(self):
         # review BA5: a crash text holding a newline would split one row over two table lines.
         crash = "internal error: Traceback\n  File x\r\n"
         lines = [Line("a", "b", "FAIL", 0, crash), Line("a", "c", "FAIL", 0, "y" * 400)]
-        table = summary.render(lines, wall_ms=0, summed_ms=0, exit_code=2).splitlines()[1:3]
+        table = summary.render(lines, wall_ms=0, summed_ms=0, exit_code=2, run_dir="r").splitlines()[1:3]
         self.assertEqual(table[0], "a   | b    | FAIL    | 0.0s | internal error: Traceback   File x")
         self.assertEqual(table[1], "a   | c    | FAIL    | 0.0s | " + "y" * 299 + "…")
 
     def test_a_registry_other_than_the_default_is_named_before_the_footer(self):
         # review BA8.
-        text = summary.render([], wall_ms=0, summed_ms=0, exit_code=0, registry="fixtures/r.json")
-        want = "job | step | verdict | time | reason\nregistry: fixtures/r.json\nwall 0.0s · summed 0.0s · saved 0%\n"
-        self.assertEqual(text, want + "GATE PASSED\nexit: 0\n")
+        text = summary.render([], wall_ms=0, summed_ms=0, exit_code=0, run_dir="r", registry="fixtures/r.json")
+        want = "job | step | verdict | time | reason\nregistry: fixtures/r.json\nrun: r\n"
+        self.assertEqual(text, want + "wall 0.0s · summed 0.0s · saved 0%\nGATE PASSED\nexit: 0\n")
+
+    def test_the_run_directory_is_named_before_the_footer(self):
+        # owner, 2026-11-03 (review BA3): the reader is told where each row's own output is.
+        text = summary.render([], wall_ms=0, summed_ms=0, exit_code=1, run_dir=".gate/runs/20261103T000000Z-abc123")
+        self.assertEqual(
+            text.splitlines()[-4:-2], ["run: .gate/runs/20261103T000000Z-abc123", "wall 0.0s · summed 0.0s · saved 0%"]
+        )
 
     def test_no_line_has_trailing_whitespace(self):
-        text = summary.render([Line("a", "b", "FAIL", 0, "")], wall_ms=0, summed_ms=0, exit_code=1)
+        text = summary.render([Line("a", "b", "FAIL", 0, "")], wall_ms=0, summed_ms=0, exit_code=1, run_dir="r")
         for line in text.splitlines():
             self.assertEqual(line, line.rstrip())
 

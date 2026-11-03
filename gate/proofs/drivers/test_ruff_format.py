@@ -18,7 +18,7 @@ class RuffFormat(support.DriverTest):
         run = self.world.run(registry=self.world.registry(support.registry_row("ruff")))
 
         self.assertParityPassed(run, "lint")
-        self.assertRed(run, "lint", "ruff", "exit 1")
+        self.assertRed(run, "lint", "ruff", f"exit 1: {PLANT}: ruff format (exit 1)")
         out = run.row_stdout("lint", "ruff")
         self.assertIn("File would be reformatted", out)
         failed = [line for line in out.split("\n") if line.startswith("failed: ")]

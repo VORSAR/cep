@@ -20,17 +20,17 @@ from gate.runner.tests import support
 from gate.runner.tests.test_rows_py import GOOD, Base, wrapper
 
 FAILING = GOOD.replace("assertTrue(True)", "fail('planted: this test must run and fail')")
+NO_ROW = "no row runs it: move it into the pytests scope or directly into gate/proofs/drivers/"
 
 
 class QB1TestModulesNoRowRuns(Base):
-    def assertRedNaming(self, rel: str) -> None:
-        self.assertEqual(self.pytests(), "exit 1", self.out())
-        self.assertIn(rel, self.out())
+    def assertRedNaming(self, rel: str, why: str = NO_ROW) -> None:
+        self.assertEqual(self.pytests(), f"exit 1: {rel}: {why}", self.out())
 
     def test_qb1_witness_the_failing_module_is_red_where_pytests_looks(self):
         self.track("gate/x/test_a.py", GOOD)
         self.track("gate/x/test_planted.py", FAILING)
-        self.assertRedNaming("gate/x/test_planted.py")
+        self.assertRedNaming("gate/x/test_planted.py", "pyshim: gate.x.test_planted: failed: 1 failures, 0 errors")
 
     def test_qb1_a_test_module_in_a_tests_directory_beside_the_proofs_row(self):
         self.track("gate/x/test_a.py", GOOD)

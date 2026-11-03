@@ -97,7 +97,7 @@ class Wrapper(support.GateTest):
     def test_a_badly_formatted_file_is_red_and_named(self):
         self.clean_files(2)
         self.track("gate/x/bad.py", "x  =  1\n")
-        self.assertEqual(self.ruff_row(), "exit 1")
+        self.assertEqual(self.ruff_row(), "exit 1: gate/x/bad.py: ruff format (exit 1)")
         out = self.out()
         self.assertIn("File would be reformatted", out)  # ruff 0.17.3's own text, as the proofs read it
         self.assertIn("failed: gate/x/bad.py", out)
@@ -106,7 +106,7 @@ class Wrapper(support.GateTest):
         # --ignore-noqa: the only waivers are ruff.toml's per-file-ignores (owner, 2026-11-02).
         self.clean_files(1)
         self.track("gate/x/sleepy.py", "import time\n\ntime.sleep(0)  # noqa: TID251\n")
-        self.assertEqual(self.ruff_row(), "exit 1")
+        self.assertEqual(self.ruff_row(), "exit 1: gate/x/sleepy.py: ruff check (exit 1)")
         out = self.out()
         self.assertIn("TID251", out)
         self.assertIn("failed: gate/x/sleepy.py", out)
@@ -114,8 +114,7 @@ class Wrapper(support.GateTest):
     def test_a_file_ruff_cannot_parse_is_red_and_named(self):
         self.clean_files(1)
         self.track("gate/x/broken.py", "def f(:\n")
-        self.assertEqual(self.ruff_row(), "exit 1")
-        self.assertIn("failed: gate/x/broken.py", self.out())
+        self.assertEqual(self.ruff_row(), "exit 1: gate/x/broken.py: ruff check (exit 1)")
 
     def test_more_files_than_one_batch_are_all_counted(self):
         self.clean_files(257)
@@ -154,13 +153,11 @@ class FakeRuff(support.GateTest):
 
     def test_an_unrecognised_summary_is_red(self):
         self.fake("1 file formatted, somehow\n")
-        self.assertEqual(self.ruff_row(), "exit 1")
-        self.assertIn("unrecognised ruff summary", self.row_file("lint", "ruff", "stdout").decode())
+        self.assertEqual(self.ruff_row(), "exit 1: unrecognised ruff summary in batch 0: 1 file formatted, somehow")
 
     def test_no_summary_at_all_is_red(self):
         self.fake("")
-        self.assertEqual(self.ruff_row(), "exit 1")
-        self.assertIn("unrecognised ruff summary", self.row_file("lint", "ruff", "stdout").decode())
+        self.assertEqual(self.ruff_row(), "exit 1: unrecognised ruff summary in batch 0: (none)")
 
     def test_ruffs_output_can_never_forge_the_rows_count(self):
         # Every line of ruff's output is echoed under a prefix, so no line it prints can start a GATE_COVERED.
@@ -177,5 +174,4 @@ class FakeRuff(support.GateTest):
             "    print('X001 planted\\n --> gate/x/m.py:1:1')\n"
             "    sys.exit(1)\n"
         ))  # fmt: skip
-        self.assertEqual(self.ruff_row(), "exit 1")
-        self.assertIn("failed: gate/x/m.py", self.row_file("lint", "ruff", "stdout").decode())
+        self.assertEqual(self.ruff_row(), "exit 1: gate/x/m.py: ruff check (exit 1)")

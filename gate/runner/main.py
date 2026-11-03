@@ -14,7 +14,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from gate.runner import clock, env, registry, scheduler, workers
+from gate.runner import clock, env, registry, scheduler, summary, workers
 from gate.runner.clock import Clock, Timers
 from gate.runner.proc import Group
 from gate.toolchain import manifest, parity
@@ -109,7 +109,9 @@ def _run(argv: list[str], deps: Deps) -> int:
     loaded, registry_sha256 = registry.load_with_digest(path)
     rows = registry.select(loaded, args.tier, args.job)
     # review BA8: a run of any other law says so, so its "exit: 0" cannot pass for the repository's.
-    shown = None if os.path.realpath(path) == os.path.realpath(default) else path
+    shown = None
+    if os.path.realpath(path) != os.path.realpath(default):
+        shown = summary.shown(os.path.abspath(path), deps.repo)
     toolchain = deps.toolchain(deps.repo, deps.environ)
     run_id = deps.new_run_id(deps.clock.wall_ms())
     run_dir = _prepare_run_dir(args.run_dir, deps.repo, run_id)

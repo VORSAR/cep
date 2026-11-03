@@ -33,6 +33,20 @@ class Outcome:
     covered: Covered = field(default_factory=Covered)
     expected: int = 0
     scope_sha256: str = ""
+    first_failure: str = ""
+
+
+def first_failure(stdout: bytes) -> str:
+    """The row's own explanation of a red exit, for its reason (owner, 2026-11-03; review BA3).
+
+    The first stdout line that starts `failed: ` (the wrappers' `rows.finish`) or `FAIL ` (the coverage instrument),
+    without that marker, or one that starts `internal error: ` (a row's crash), whole. "" if there is none.
+    """
+    for line in stdout.decode("utf-8", errors="replace").splitlines():
+        for marker, keep in (("failed: ", False), ("FAIL ", False), ("internal error: ", True)):
+            if line.startswith(marker):
+                return line if keep else line.removeprefix(marker)
+    return ""
 
 
 def row_dir(run_dir: str, row: Row) -> str:
@@ -67,11 +81,12 @@ def execute(row: Row, group: Group, ctx: Context) -> Outcome:
         return done
     returncode, left_running = group.reap(proc)
     with open(stdout, "rb") as f:
-        count = covered.parse(f.read())
+        printed = f.read()
     return Outcome(
         returncode=returncode,
         left_running=left_running,
-        covered=count,
+        covered=covered.parse(printed),
         expected=expansion.count,
         scope_sha256=digest,
+        first_failure=first_failure(printed),
     )

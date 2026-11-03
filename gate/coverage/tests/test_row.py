@@ -54,8 +54,9 @@ class Row(support.DriverTest):
         run = self.run_rows(unit, support.COVERAGE_ROW)
         self.assertParityPassed(run, "test")
         self.assertRed(run, "test", "unit", "exit 1")
-        self.assertRow(run, "test", "coverage-inclusion", False, "exit 1")
         unit_dir = os.path.join(run.run_dir, "rows", "test", "unit")
+        missing = f"{os.path.join(unit_dir, 'cover.prof')} is missing: the unit row did not write it"
+        self.assertRow(run, "test", "coverage-inclusion", False, f"exit 1: {missing}")
         self.assertEqual(
             run.row_stdout("test", "coverage-inclusion").split("\n"),
             [
