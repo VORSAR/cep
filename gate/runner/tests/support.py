@@ -22,6 +22,7 @@ CEILING_S = 240
 PLATFORMS = {("darwin", "arm64"): "darwin-arm64", ("linux", "x86_64"): "linux-amd64"}
 RUN_ID = "20261102T000000Z-abc123"
 COMMIT = "0" * 40
+REGISTRY_SHA256 = "f" * 64
 HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS")
 
 
@@ -327,6 +328,7 @@ class GateTest(unittest.TestCase):
             "repo": self.repo,
             "environ": env,
             "toolchain": self.toolchain,
+            "registry_sha256": REGISTRY_SHA256,
             "clock": FROZEN,
             "timers": self.timers,
             "record_go_env": False,

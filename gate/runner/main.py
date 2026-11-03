@@ -104,8 +104,12 @@ def _run(argv: list[str], deps: Deps) -> int:
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)  # ignored, subprocess reports a dead child as exit 0: a false green
     args = _parse(argv)
     count = workers.parse(deps.environ)
-    path = args.registry or os.path.join(deps.repo, DEFAULT_REGISTRY)
-    rows = registry.select(registry.load(path), args.tier, args.job)
+    default = os.path.join(deps.repo, DEFAULT_REGISTRY)
+    path = args.registry or default
+    loaded, registry_sha256 = registry.load_with_digest(path)
+    rows = registry.select(loaded, args.tier, args.job)
+    # review BA8: a run of any other law says so, so its "exit: 0" cannot pass for the repository's.
+    shown = None if os.path.realpath(path) == os.path.realpath(default) else path
     toolchain = deps.toolchain(deps.repo, deps.environ)
     run_id = deps.new_run_id(deps.clock.wall_ms())
     run_dir = _prepare_run_dir(args.run_dir, deps.repo, run_id)
@@ -121,6 +125,8 @@ def _run(argv: list[str], deps: Deps) -> int:
         repo=deps.repo,
         environ=deps.environ,
         toolchain=toolchain,
+        registry_sha256=registry_sha256,
+        registry_shown=shown,
         clock=deps.clock,
         timers=deps.timers,
         record_go_env=deps.record_go_env,
