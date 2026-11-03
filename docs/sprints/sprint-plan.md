@@ -581,7 +581,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 
 ### Status
 
-**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).** *(Annotated 2026-11-02: S1.1a's plan check is answered, and S1.1a is split into S1.1a-1 + S1.1a-2 (24 sprints) → next: S1.1a-1's design note and G1.)* *(Annotated 2026-11-02: S1.1a-1 passed G1 → next: the coordinator's first commit, then wave 1.)*
+**Architecture baseline RATIFIED and review-hardened (2026-11-01). Phase 1 decomposition APPROVED (v2, 2026-11-02) and recalibrated the same day (v3, APPROVED: 23 sprints, every card ≤ 13 points by an item-by-item estimate, ~270 points, forecast 46–69 weeks) → next: S1.1a's plan check (G0 for the first sprint).** *(Annotated 2026-11-02: S1.1a's plan check is answered, and S1.1a is split into S1.1a-1 + S1.1a-2 (24 sprints) → next: S1.1a-1's design note and G1.)* *(Annotated 2026-11-02: S1.1a-1 passed G1 → next: the coordinator's first commit, then wave 1.)* *(Annotated 2026-11-03: S1.1a-1 merged and closed (G5): the local gate, coverage and the event kernel are on main → next: S1.1a-2's plan check (G0), hooks and CI.)*
 
 **This line is the single prose status surface for the project.** The README and the roadmap defer to it; everything finer-grained lives in the source and the git log, which are authoritative if they disagree with this.
 

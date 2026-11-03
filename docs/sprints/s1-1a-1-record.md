@@ -189,10 +189,12 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
   - **T3 `make combine-check`:** the same 8 PASS. `wall 44.5s`, `exit: 0`.
   - **T4 `make strict-gate`:** the same 8, plus `proofs` PASS, covered 10. `wall 59.8s · summed 136.8s · saved 56%`, `exit: 0`.
   - QA's red tests all pass. No new orphaned process was left after the three runs; the only orphans on the machine date from before the fix.
+- **Merge and main** (2026-11-03). The owner merged PR #1 by rebase: 74 commits, linear, the tree identical to the branch. T4 `make strict-gate` on main's merge commit: 9 rows PASS, `wall 63.1s · summed 141.4s · saved 55%`, `exit: 0`.
+- **Points and duration:** 13 SP (items 11.5), from G0 on 2026-11-02 to the merge on 2026-11-03: 2 calendar days.
 
 ## Test material
 
-*To be listed as it lands:*
+*All landed in S1.1a-1:*
 - the `internal/event` tables (QA, written by hand before the code);
 - the runner's fixture registries;
 - the `file://` fixture archives;
@@ -264,13 +266,17 @@ Review (G3)  ☑ architecture review of the combined diff: no code drift; doc dr
 Verify (G4)  ☑ T4 strict-gate exit 0, run complete (2469831) ☑ owner's check passed (2026-11-03)
              ☑ every acceptance line met by its named proof (1: fresh clone at c9a498e; 2: parity proofs; 3: runner
                fixture tests; 6: coverage proofs + T2; 7: QA's event tables; 8: pytests proof; 9: ruff proofs) — G4 passed
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main green on the merge commit (CI arrives in S1.1a-2: the local T4 stands in)
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
+Exit (G5)    ☑ one PR, ≤ 100 commits, merged by the owner (PR #1, 74 commits, 2026-11-03)
+             ☑ main green on the merge commit (CI arrives in S1.1a-2: the local T4 stood in, exit 0)
+             ☑ sprint record + five-line retro ☑ known issues ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only) ☑ memory updated
+             ☑ worktrees removed ☑ points and duration recorded — G5 passed 2026-11-03
 ```
 
 ## Retro
 
-*(at close-out)*
+1. **Worked — blind review and break-it before the merge.** Two independent reports found what green tiers had passed: a test module no row ran (a false green) and a FIFO that hung parity, plus four should-fix gaps. Each red test was committed before its fix, and every finding ended fixed, forwarded or a known issue.
+2. **Worked — proofs that check the gate itself.** The ten planted-defect drivers and the byte-exact summary tests caught every place a fix changed the gate's output (BA3 changed about 50 pinned reasons). All three tiers run in about a minute of wall time.
+3. **Missed — process containment across sessions.** "Nothing outlives the runner" was tested only inside a row's own process group. Orphans from stopped test runs piled up on the owner's machine for a day before the break-it named them. A design-review case ("stop a row whose child started its own session") would have caught it at G1.
+4. **Friction — agent lanes and usage limits.** Lanes paused or stalled several times on the API usage window, and the fix agents stalled outright, so the owner moved the fix round into the main session. Verification runs heavier than the claim needed (a fresh clone after the fix round) were judged excessive.
+5. **Change next sprint.** Batch a fix round: write every test, run them red once, make every fix, verify once (owner, 2026-11-03). Size any agent lane to finish inside one usage window, or run it in the main session. Prove each claim with the cheapest run that proves it. *Proposed for the sprint model; the owner decides.*
