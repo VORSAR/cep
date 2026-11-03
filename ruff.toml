@@ -16,6 +16,9 @@ line-length = 120
 "gate/toolchain/tests/test_bootstrap.py" = "py312"
 "gate/toolchain/tests/test_install.py" = "py312"
 "gate/toolchain/tests/test_manifest.py" = "py312"
+".githooks/*" = "py39"
+"gate/hooks/*.py" = "py312"
+"gate/hooks/tests/test_launcher.py" = "py312"
 
 [lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "TID", "BLE", "S602", "S604", "S605"]

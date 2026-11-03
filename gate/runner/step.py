@@ -34,6 +34,7 @@ class Outcome:
     expected: int = 0
     scope_sha256: str = ""
     first_failure: str = ""
+    skipped: int = -1  # T0 only: the tracked count of a scope with nothing staged; -1 when not skipped
 
 
 def first_failure(stdout: bytes) -> str:
@@ -59,7 +60,11 @@ def execute(row: Row, group: Group, ctx: Context) -> Outcome:
     os.makedirs(directory)
     row_env = env.row_env(ctx.clean_env, tier=ctx.tier, row=row.id, run_dir=ctx.run_dir, row_dir=directory)
     try:
-        expansion = scope.expand(row.expected_scope, group=group, cwd=ctx.repo, env=row_env, row_dir=directory)
+        expansion = scope.expand(
+            row.expected_scope, group=group, cwd=ctx.repo, env=row_env, row_dir=directory, staged=ctx.tier == "T0"
+        )
+    except scope.NothingStaged as e:
+        return Outcome(skipped=e.tracked)
     except scope.ScopeError as e:
         return Outcome(scope_error=str(e))
     except scope.Stopped:

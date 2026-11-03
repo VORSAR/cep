@@ -1,9 +1,9 @@
-"""The proofs row (design note §5, §8; QA DQ4, C38): each driver in its own process, and at least ten of them.
+"""The proofs row (design note §5, §8; QA DQ4, C38): each driver in its own process, and at least min_wants of them.
 
 The row counts the drivers that passed. Its expected scope is a live `git` expansion, so deleting a driver lowers
-both sides alike; min_wants 10 is what turns that red, "covered 9 < min_wants 10". Stand-in drivers keep this fast:
-the real ten run only in the proofs row itself. The row is T4-only, so this test runs the runner at T4; its stand-ins
-never start a runner of their own.
+both sides alike; the registry's min_wants is what turns that red, "covered n-1 < min_wants n". Stand-in drivers
+keep this fast: the real ones run only in the proofs row itself. The row is T4-only, so this test runs the runner at
+T4; its stand-ins never start a runner of their own.
 """
 
 import os
@@ -12,6 +12,7 @@ from gate.proofs.drivers import support
 
 GOOD = "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_a(self):\n        self.assertTrue(True)\n"
 BAD = GOOD.replace("assertTrue(True)", "fail('planted')")
+DRIVERS = support.PROOFS_ROW["min_wants"]  # the registry's own minimum, so this test follows it
 
 
 class ProofsRow(support.DriverTest):
@@ -21,7 +22,7 @@ class ProofsRow(support.DriverTest):
         self.world.copy("gate/proofs/__init__.py")
         self.world.copy("gate/proofs/row.py")
         self.world.write("gate/proofs/drivers/__init__.py", "")
-        for i in range(10):
+        for i in range(DRIVERS):
             self.world.write(f"gate/proofs/drivers/test_d{i:02}.py", GOOD)
         self.world.commit()
 
@@ -31,17 +32,17 @@ class ProofsRow(support.DriverTest):
     def test_ten_passing_drivers_pass(self):
         run = self.run_proofs()
         self.assertParityPassed(run, "proofs")
-        self.assertRow(run, "proofs", "proofs", True, "covered 10")
+        self.assertRow(run, "proofs", "proofs", True, f"covered {DRIVERS}")
         self.assertEqual((run.tail(), run.code), (["GATE PASSED", "exit: 0"], 0))
 
     def test_deleting_one_driver_is_red(self):
-        # C38 and QA DQ4: expected and covered both fall to 9, so only the pinned minimum can see it.
+        # C38 and QA DQ4: expected and covered both fall by one, so only the pinned minimum can see it.
         self.world.git("rm", "-q", "--", "gate/proofs/drivers/test_d07.py")
         run = self.run_proofs()
         self.assertParityPassed(run, "proofs")
-        self.assertRed(run, "proofs", "proofs", "covered 9 < min_wants 10")
+        self.assertRed(run, "proofs", "proofs", f"covered {DRIVERS - 1} < min_wants {DRIVERS}")
         record = run.record("proofs", "proofs")
-        self.assertEqual((record["covered"], record["expected"]), (9, 9))
+        self.assertEqual((record["covered"], record["expected"]), (DRIVERS - 1, DRIVERS - 1))
 
     def test_a_failing_driver_is_red_naming_it(self):
         self.world.track("gate/proofs/drivers/test_d03.py", BAD)
@@ -57,7 +58,7 @@ class ProofsRow(support.DriverTest):
         # The scope is :(glob)gate/proofs/drivers/test_*.py, and * never crosses a /.
         self.world.track("gate/proofs/drivers/deeper/__init__.py", "")
         self.world.track("gate/proofs/drivers/deeper/test_d10.py", GOOD)
-        self.assertRow(self.run_proofs(), "proofs", "proofs", True, "covered 10")
+        self.assertRow(self.run_proofs(), "proofs", "proofs", True, f"covered {DRIVERS}")
 
     def test_a_crash_in_the_wrapper_is_exit_2_never_exit_1(self):
         # Exit 1 reads as "a driver failed"; a broken wrapper must not pass for that.

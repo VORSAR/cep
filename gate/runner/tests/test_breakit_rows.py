@@ -74,11 +74,12 @@ class QB2PyfloorShrinksUnseen(Base):
         self.run_rows([row])
         return self.record("lint", "pyfloor")
 
-    def test_qb2_witness_the_four_registered_floor_modules_pass(self):
+    def test_qb2_witness_the_registered_floor_modules_pass(self):
         row = self.floor()
-        self.assertEqual(len(row.expected_scope[1:]), 4, row.expected_scope)
+        count = len(row.expected_scope[1:])
+        self.assertEqual(count, row.min_wants, row.expected_scope)  # min_wants pins the list's length (QB2's fix)
         record = self.plant(row)
-        self.assertEqual((record["verdict"], record["reason"]), ("pass", "covered 4"))
+        self.assertEqual((record["verdict"], record["reason"]), ("pass", f"covered {count}"))
 
     def test_qb2_a_renamed_floor_module_does_not_pass_unseen(self):
         row = self.floor()

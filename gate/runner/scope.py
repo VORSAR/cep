@@ -23,6 +23,14 @@ class Stopped(Exception):
     """The step was signalled while its scope was being expanded."""
 
 
+class NothingStaged(Exception):
+    """At T0, none of the row's scope is staged (gate design §12.3): the row skips. Carries the tracked count."""
+
+    def __init__(self, tracked: int) -> None:
+        super().__init__(tracked)
+        self.tracked = tracked
+
+
 @dataclass(frozen=True)
 class Expansion:
     items: tuple[bytes, ...]  # what files.nul lists: paths, or import paths for the go kinds
@@ -53,6 +61,19 @@ def _git(args: Sequence[str], group: Group, cwd: str, env: Mapping[str, str], ro
     return Expansion(paths, len(paths))
 
 
+def _staged(tracked: Expansion, group: Group, cwd: str, env: Mapping[str, str], row_dir: str) -> Expansion:
+    """T0: the tracked paths that are staged (added, copied, modified or renamed), under git's own GIT_INDEX_FILE.
+
+    The same `ls-files` engine as every other tier decides what is in scope (QA Q1); this only cuts it.
+    """
+    data = _capture(["git", "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"], group, cwd, env, row_dir)
+    staged = {p for p in data.split(b"\0") if p}
+    paths = tuple(p for p in tracked.items if p in staged)
+    if not paths:
+        raise NothingStaged(tracked.count)
+    return Expansion(paths, len(paths))
+
+
 def _is_real(entry: dict) -> bool:
     path = entry.get("ImportPath", "")
     if path in (".", "..") or path.startswith(("./", "../")):
@@ -76,11 +97,18 @@ def _units(package: dict) -> int:
     return int(plain) + int(bool(package.get("XTestGoFiles")))
 
 
-def expand(spec: Sequence[str], *, group: Group, cwd: str, env: Mapping[str, str], row_dir: str) -> Expansion:
-    """Expand one row's expected_scope. Zero is a failure, so an empty expansion is a ScopeError."""
+def expand(
+    spec: Sequence[str], *, group: Group, cwd: str, env: Mapping[str, str], row_dir: str, staged: bool = False
+) -> Expansion:
+    """Expand one row's expected_scope. Zero is a failure, so an empty expansion is a ScopeError.
+
+    `staged` (T0 only) cuts a git scope to the staged paths; none staged raises NothingStaged, never zero.
+    """
     kind, *args = spec
     if kind == "git":
         result = _git(args, group, cwd, env, row_dir)
+        if staged:
+            return _staged(result, group, cwd, env, row_dir)
     elif kind in ("go", "go-vet-units"):
         packages = _packages(args, group, cwd, env, row_dir)
         count = len(packages) if kind == "go" else sum(_units(p) for p in packages)

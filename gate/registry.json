@@ -5,6 +5,7 @@
       "id": "gofmt",
       "job": "lint",
       "tiers": [
+        "T0",
         "T1",
         "T2",
         "T3",
@@ -71,6 +72,7 @@
       "id": "ruff",
       "job": "lint",
       "tiers": [
+        "T0",
         "T1",
         "T2",
         "T3",
@@ -84,7 +86,8 @@
       ],
       "expected_scope": [
         "git",
-        ":(glob)gate/**/*.py"
+        ":(glob)gate/**/*.py",
+        ".githooks/pre-commit"
       ],
       "min_wants": 0,
       "lands_in": "S1.1a-1",
@@ -119,9 +122,10 @@
         "gate/runner/tests/test_run_guard.py",
         "gate/toolchain/tests/test_bootstrap.py",
         "gate/toolchain/tests/test_install.py",
-        "gate/toolchain/tests/test_manifest.py"
+        "gate/toolchain/tests/test_manifest.py",
+        "gate/hooks/tests/test_launcher.py"
       ],
-      "min_wants": 4,
+      "min_wants": 5,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [
@@ -132,6 +136,69 @@
         "utf8",
         "gate/runner/rows/pyfloor.py",
         "{files}"
+      ]
+    },
+    {
+      "id": "hooks",
+      "job": "lint",
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 60,
+      "needs": [],
+      "scope": [
+        "tools"
+      ],
+      "expected_scope": [
+        "git",
+        ".githooks/pre-commit",
+        ".githooks/pre-merge-commit",
+        ".githooks/pre-push"
+      ],
+      "min_wants": 3,
+      "lands_in": "S1.1a-2",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/hooks.py"
+      ]
+    },
+    {
+      "id": "ci-fresh",
+      "job": "lint",
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 60,
+      "needs": [],
+      "scope": [
+        "tools"
+      ],
+      "expected_scope": [
+        "git",
+        ".github/workflows/gate.yml"
+      ],
+      "min_wants": 1,
+      "lands_in": "S1.1a-2",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/ci_fresh.py"
       ]
     },
     {
@@ -249,7 +316,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 10,
+      "min_wants": 12,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [

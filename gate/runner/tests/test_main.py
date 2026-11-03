@@ -21,6 +21,10 @@ class Cli(support.GateTest):
         self.output = out.getvalue()
         return code
 
+    def record_at(self, rel, job, row_id):
+        with open(os.path.join(self.repo, rel, "records", job, f"{row_id}.json"), "rb") as f:
+            return json.loads(f.read())
+
     def assertRefused(self, code, needle):
         self.assertEqual(code, 2, self.output)
         self.assertEqual(self.output.splitlines()[-2:], ["GATE FAILED", "exit: 2"], self.output)
@@ -166,6 +170,19 @@ class Cli(support.GateTest):
         target = os.path.join(self.root, "a", "b")
         self.assertEqual(self.cli("--tier", "T2", "--registry", self.reg(), "--run-dir", target), 0)
         self.assertPinnedJson(os.path.join(target, "run.json"))
+
+    def test_commit_and_run_id_can_be_given(self):
+        # gate design §12.3: a push names its sha; every CI job of one run shares one id.
+        sha = "a" * 40
+        code = self.cli("--tier", "T2", "--registry", self.reg(), "--commit", sha, "--run-id", "77-1")
+        self.assertEqual(code, 0, self.output)
+        self.assertIn("run: .gate/runs/77-1", self.output.splitlines())
+        self.assertEqual(self.record_at(".gate/runs/77-1", "lint", "x")["commit"], sha)
+
+    def test_a_bad_commit_or_run_id_is_refused(self):
+        for argv, needle in ((("--commit", "abc"), "--commit"), (("--run-id", "a/b"), "--run-id")):
+            with self.subTest(argv):
+                self.assertRefused(self.cli("--tier", "T2", "--registry", self.reg(), *argv), needle)
 
     def test_t1_rows_run_at_t1(self):
         reg = self.reg(self.row("x", tiers=("T1", "T2")))

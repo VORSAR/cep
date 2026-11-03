@@ -49,10 +49,12 @@ class HookCommit(support.DriverTest):
         return self.world.git("rev-parse", "HEAD").strip()
 
     def snapshot(self) -> dict[str, bytes]:
-        """HEAD, .git/index and every work-tree file outside .git/ and .gate/ (the runs), as bytes."""
-        snap = {"HEAD": self.head().encode()}
-        with open(os.path.join(self.world.repo, ".git", "index"), "rb") as f:
-            snap[".git/index"] = f.read()
+        """HEAD, the index's entries and every work-tree file outside .git/ and .gate/ (the runs), as bytes.
+
+        The index's entries, not its raw bytes: `git commit` itself rewrites the index's cache data (its cache-tree
+        extension) before the hook runs, whatever the hook does. What is staged must not change.
+        """
+        snap = {"HEAD": self.head().encode(), "index entries": self.world.git("ls-files", "-s", "-z").encode()}
         for top, dirs, files in os.walk(self.world.repo):
             dirs[:] = sorted(d for d in dirs if not (top == self.world.repo and d in (".git", ".gate")))
             for name in files:
@@ -117,7 +119,7 @@ class HookCommit(support.DriverTest):
         self.assertNotEqual(code, 0, out)
         self.assertIn(f"{BAD} {GUARD}", out)
         self.assertNotIn("GATE PASSED", out)
-        self.assertNotIn("GATE FAILED", out, "the guard refuses before any row runs")
+        self.assertNotIn("| step", out, "the guard refuses before any row runs: no summary table")
         self.assertEqual(self.snapshot(), before)
 
     def test_a_no_op_pre_commit_hook_fails_this_proof(self):

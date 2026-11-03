@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""The git hooks' launcher (gate design §12.4). pre-merge-commit and pre-push are links to this one file.
+
+Any python3 may start it, so it parses under Python 3.9 and imports nothing from gate/. It finds a Python 3.12 or
+newer, preferring the pinned CPython in the tool cache, and runs the hook's real code in gate/hooks/ with it.
+"""
+
+import json
+import os
+import platform
+import sys
+
+SCRIPTS = {"pre-commit": "pre_commit.py", "pre-merge-commit": "pre_commit.py", "pre-push": "pre_push.py"}
+PLATFORMS = {("darwin", "arm64"): "darwin-arm64", ("linux", "x86_64"): "linux-amd64"}
+
+
+def pinned_python(repo, environ):
+    """The pinned interpreter's path, laid out exactly as gate/run.py's pinned_python (a test keeps them equal)."""
+    with open(os.path.join(repo, "tools.json"), "rb") as f:
+        tool = next(t for t in json.load(f)["tools"] if t["name"] == "python")
+    digest = tool["platforms"][PLATFORMS[(sys.platform, platform.machine())]]["archive_sha256"]
+    cache = environ.get("VORSAR_CEP_TOOLS_CACHE") or os.path.join(environ.get("HOME", "~"), ".cache/vorsar/cep/tools")
+    home = os.path.join(os.path.expanduser(cache), f"{tool['name']}-{tool['version']}-{digest[:12]}")
+    return os.path.join(home, tool["path_dir"], tool["command"])
+
+
+def interpreter(repo, environ, executable, version_info):
+    """The pinned CPython if it is installed; else this interpreter if it is 3.12 or newer; else ""."""
+    try:
+        pinned = pinned_python(repo, environ)
+    except (OSError, ValueError, KeyError, StopIteration):
+        pinned = ""
+    if pinned and os.access(pinned, os.X_OK):
+        return pinned
+    return executable if tuple(version_info[:2]) >= (3, 12) else ""
+
+
+def main():
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    hook = os.path.basename(sys.argv[0])
+    python = interpreter(repo, os.environ, sys.executable, sys.version_info)
+    if not python:
+        sys.stderr.write(f"{hook}: no Python 3.12 or newer: run make tools\n")
+        return 1
+    script = os.path.join(repo, "gate", "hooks", SCRIPTS[hook])
+    os.execv(python, [python, "-I", "-B", script, *sys.argv[1:]])
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
