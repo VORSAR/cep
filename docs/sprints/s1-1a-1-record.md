@@ -93,6 +93,8 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
 - **The coordinator makes the fix round itself, in the main session** ("do this in main agent"; ≠ the plan check's decision that agents write gate code and the coordinator reviews it). The fix agents had stalled after rate limits and were stopped. Each fix is test-first, one commit per finding, re-verified by a full run.
 - **No separate review of the fix round** (≠ R: a fresh QA reviewer was recommended, since the coordinator wrote the fixes; ground rule 14). The fixes stand on their red-first tests and the three green tiers.
 
+**The owner's check (G4): the owner, 2026-11-03:** ran `make check` on the final branch: `exit: 0`. No fresh-clone re-run of exit line 1 after the fix round (≠ the coordinator's proposal; the owner judged it excessive). Exit line 1 stands on its fresh-clone, empty-cache run at c9a498e.
+
 ## Measured results
 
 *(filled as lanes land)*
@@ -259,8 +261,9 @@ Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0
              ☑ tests on the real code ☑ every breaker's red test committed — G2 passed 2026-11-03
 Review (G3)  ☑ architecture review of the combined diff: no code drift; doc drift annotated (2026-11-03)
              ☑ QA break-it run ☑ all 24 findings: 17 fixed, 3 forwarded, 4 known issues, none rejected; both blockers fixed; both forwarded items fixed
-Verify (G4)  ☑ T4 strict-gate exit 0, run complete (2469831) ☐ owner's check passed
-             ☐ every acceptance line met by its named proof
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (2469831) ☑ owner's check passed (2026-11-03)
+             ☑ every acceptance line met by its named proof (1: fresh clone at c9a498e; 2: parity proofs; 3: runner
+               fixture tests; 6: coverage proofs + T2; 7: QA's event tables; 8: pytests proof; 9: ruff proofs) — G4 passed
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main green on the merge commit (CI arrives in S1.1a-2: the local T4 stands in)
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
