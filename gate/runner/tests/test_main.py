@@ -122,11 +122,13 @@ class Cli(support.GateTest):
         with mock.patch.object(main.scheduler.Runner, "run", side_effect=ValueError("planted")):
             self.assertRefused(self.cli("--tier", "T2", "--registry", self.reg(), "--run-dir", self.run_dir), "planted")
 
-    def test_a_keyboard_interrupt_before_the_run_starts_is_exit_2(self):
+    def test_a_keyboard_interrupt_before_the_run_starts_is_an_interrupt_not_an_internal_error(self):
+        # break-it QB8: a Ctrl-C before the scheduler's own handlers is the user's, so it reads as the run's would.
         def boom(repo, environ):
             raise KeyboardInterrupt
 
-        self.assertRefused(self.cli("--tier", "T2", "--registry", self.reg(), toolchain=boom), "KeyboardInterrupt")
+        code = self.cli("--tier", "T2", "--registry", self.reg(), toolchain=boom)
+        self.assertEqual((code, self.output.splitlines()), (1, ["interrupted", "GATE FAILED", "exit: 1"]))
 
     def test_the_job_filter(self):
         rows = (self.row("a", job="lint"), self.row("b", job="test"))

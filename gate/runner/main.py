@@ -2,9 +2,9 @@
 
     gate/run.py --tier T0..T4 [--job NAME] [--run-dir DIR] [--registry PATH]
 
-Exit 0: pass. Exit 1: the gate failed. Exit 2: usage or internal error. The last two stdout lines are always
-`GATE PASSED|GATE FAILED` and `exit: <n>`: main catches everything, because an uncaught exception would exit 1,
-which means "gate failed".
+Exit 0: pass. Exit 1: the gate failed, or was interrupted. Exit 2: usage or internal error. The last two stdout
+lines are always `GATE PASSED|GATE FAILED` and `exit: <n>`: main catches everything, because an uncaught exception
+would exit 1, which means "gate failed".
 """
 
 import argparse
@@ -141,13 +141,18 @@ def _run(argv: list[str], deps: Deps) -> int:
 
 
 def main(argv: list[str], *, deps: Deps | None = None) -> int:
+    code = 2
     try:
         return _run(argv, deps if deps is not None else default_deps())
     except (UsageError, registry.RegistryError, workers.WorkersError, manifest.ManifestError) as e:
         print(e)
+    except KeyboardInterrupt:
+        # break-it QB8: a Ctrl-C outside the scheduler's own handlers is the user's interrupt, never a gate bug.
+        print(scheduler.INTERRUPTED)
+        code = 1
     except BaseException as e:
         print(f"internal error: {type(e).__name__}: {e}")
     print("GATE FAILED")
-    print("exit: 2")
+    print(f"exit: {code}")
     sys.stdout.flush()
-    return 2
+    return code
