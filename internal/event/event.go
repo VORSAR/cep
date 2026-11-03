@@ -1,12 +1,12 @@
 // Package event holds the engine's canonical event, its schema, and the one total order
 // in which every buffer releases events (ARCHITECTURE §4, SEMANTICS §1 and §2.2).
-//
-// This file is the S1.1a-1 declaration stub: the surface is final (design note §1), the
-// bodies of String, NewSchema and Compare are placeholders until Lane D implements them
-// against QA's tables.
 package event
 
-import "errors"
+import (
+	"cmp"
+	"errors"
+	"fmt"
+)
 
 // Type is an attribute's declared type. The zero value, TInvalid, marks an unset slot:
 // it is never a declared type and never a null (a null keeps its declared type).
@@ -26,7 +26,27 @@ const (
 
 // String names the type: "invalid", "string", …, "object"; otherwise "Type(<n>)".
 func (t Type) String() string {
-	return "" // TODO(S1.1a-1): Lane D implements.
+	switch t {
+	case TInvalid:
+		return "invalid"
+	case TString:
+		return "string"
+	case TInt:
+		return "int"
+	case TFloat:
+		return "float"
+	case TBool:
+		return "bool"
+	case TTimestamp:
+		return "timestamp"
+	case TDuration:
+		return "duration"
+	case TObject:
+		return "object"
+	default:
+		// The uint8 conversion keeps fmt off String, whatever the verb.
+		return fmt.Sprintf("Type(%d)", uint8(t))
+	}
 }
 
 // Attr is one declared attribute of a stream.
@@ -47,8 +67,6 @@ type Schema struct {
 	timeAttr int
 }
 
-var errNotImplemented = errors.New("event: not implemented")
-
 // The rule each NewSchema error wraps, one per rule of design note §1, r1 to r7. They stay
 // unexported: the surface is fixed, and a caller needs the message, not the rule's identity.
 var (
@@ -61,10 +79,58 @@ var (
 	errTimeAttrType      = errors.New("time attribute is not a timestamp")
 )
 
-// NewSchema validates and copies a stream declaration (design note §1 lists the rules).
+// NewSchema validates and copies a stream declaration (design note §1). It rejects an empty
+// stream name; zero attributes; an empty attribute name; a duplicate attribute name, compared
+// case-sensitively; an attribute Type of TInvalid or above TObject; a timeAttr that is neither
+// ArrivalTime nor an attribute index; and a timeAttr naming an attribute that is not a
+// TTimestamp. An Optional time attribute is accepted: a null timestamp is an event-level error
+// at ingest (SEMANTICS §1.1), not a schema error.
+//
+// When several rules are broken it reports the first, checking in this order: the stream name,
+// the attribute count, each attribute in declaration order (its name, then its type), then
+// timeAttr. Each rule has its own message, which names the offending attribute where there is
+// one. On error it returns the zero Schema.
+//
+// It reads attrs and never writes it. The Schema keeps its own copy, so changing attrs
+// afterwards changes nothing.
 func NewSchema(stream string, attrs []Attr, timeAttr int) (Schema, error) {
-	_, _, _ = stream, attrs, timeAttr
-	return Schema{}, errNotImplemented // TODO(S1.1a-1): Lane D implements.
+	if stream == "" {
+		return Schema{}, fmt.Errorf("event: invalid schema: %w", errEmptyStream)
+	}
+	if len(attrs) == 0 {
+		return Schema{}, fmt.Errorf("event: invalid schema for stream %q: %w (a stream declares at least one)",
+			stream, errNoAttrs)
+	}
+	// Check the copy, not the caller's slice, so the schema holds exactly what was checked.
+	own := make([]Attr, len(attrs))
+	copy(own, attrs)
+	declaredAt := make(map[string]int, len(own))
+	for i, a := range own {
+		if a.Name == "" {
+			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d: %w",
+				stream, i, errEmptyAttrName)
+		}
+		if first, dup := declaredAt[a.Name]; dup {
+			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w, first declared as attribute %d (names are case-sensitive)",
+				stream, i, a.Name, errDuplicateAttrName, first)
+		}
+		declaredAt[a.Name] = i
+		if a.Type < TString || a.Type > TObject {
+			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w (%v); want one of %v, %v, %v, %v, %v, %v, %v",
+				stream, i, a.Name, errInvalidAttrType, a.Type, TString, TInt, TFloat, TBool, TTimestamp, TDuration, TObject)
+		}
+	}
+	if timeAttr != ArrivalTime {
+		if timeAttr < 0 || timeAttr >= len(own) {
+			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: %w: index %d; want ArrivalTime (%d) or 0 to %d",
+				stream, errTimeAttrRange, timeAttr, ArrivalTime, len(own)-1)
+		}
+		if a := own[timeAttr]; a.Type != TTimestamp {
+			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w (its type is %v)",
+				stream, timeAttr, a.Name, errTimeAttrType, a.Type)
+		}
+	}
+	return Schema{stream: stream, attrs: own, timeAttr: timeAttr}, nil
 }
 
 // Stream is the stream's name.
@@ -103,7 +169,17 @@ type Event struct {
 }
 
 // Compare orders events by (Ts, StreamID, Seq) and returns -1, 0 or +1. Both arguments must be non-nil.
+// Payload fields never affect it.
+//
+// Each key is compared with cmp.Compare and the first difference decides. It never subtracts,
+// which would overflow at the int64, int and uint64 extremes. It returns early rather than
+// using cmp.Or, which would evaluate all three comparisons on every call of a hot-path sort.
 func Compare(a, b *Event) int {
-	_, _ = a, b
-	return 0 // TODO(S1.1a-1): Lane D implements.
+	if c := cmp.Compare(a.Ts, b.Ts); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(a.StreamID, b.StreamID); c != 0 {
+		return c
+	}
+	return cmp.Compare(a.Seq, b.Seq)
 }
