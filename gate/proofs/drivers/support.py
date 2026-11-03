@@ -69,7 +69,7 @@ PROOFS_ROW = {
     "job": "proofs",
     "tiers": ["T4"],
     "blocking": True,
-    "timeout_s": 1800,
+    "timeout_s": 600,
     "needs": [],
     "scope": ["proofs"],
     "expected_scope": ["git", ":(glob)gate/proofs/drivers/test_*.py"],
