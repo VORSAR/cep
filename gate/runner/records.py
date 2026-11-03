@@ -41,6 +41,7 @@ def make(
     tier: str,
     job: str,
     row_id: str,
+    blocking: bool,
     verdict: str,
     reason: str,
     exit_code: int,
@@ -58,6 +59,7 @@ def make(
         "tier": tier,
         "job": job,
         "id": row_id,
+        "blocking": blocking,  # review BA12 (owner, 2026-11-03): a non-blocking "fail" is a WARN
         "verdict": verdict,
         "reason": one_line(reason),
         "exit_code": exit_code,

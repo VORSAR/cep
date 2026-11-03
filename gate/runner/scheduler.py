@@ -467,6 +467,7 @@ class Runner:
             tier=self._tier,
             job=job,
             row_id=done.id,
+            blocking=done.blocking,
             verdict="pass" if done.ok else "fail",
             reason=done.reason,
             exit_code=done.exit_code,
