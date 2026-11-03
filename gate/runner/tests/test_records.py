@@ -55,6 +55,9 @@ class OneLine(unittest.TestCase):
         self.assertEqual(len(got), records.REASON_MAX)
         self.assertTrue(got.endswith("…"))
 
+    def test_no_limit_keeps_long_text_whole(self):
+        self.assertEqual(records.one_line("x\n" * 400, limit=None), "x " * 400)
+
     def test_short_text_is_unchanged(self):
         self.assertEqual(records.one_line("exit 1"), "exit 1")
 
@@ -95,6 +98,15 @@ class Record(unittest.TestCase):
             exit_code=1, covered=0, expected=0, started_ms=0, ended_ms=0, duration_ms=0, scope_sha256="",
         )  # fmt: skip
         self.assertEqual(rec["reason"], "a b")
+
+    def test_a_record_may_keep_a_long_reason_whole(self):
+        # review BA5: parity's record lists every failing tool, however long the list is.
+        rec = records.make(
+            run_id="r", commit="c", tier="T2", job="j", row_id="parity", blocking=True, verdict="fail",
+            reason="z" * 900, exit_code=1, covered=0, expected=0, started_ms=0, ended_ms=0, duration_ms=0,
+            scope_sha256="", reason_max=None,
+        )  # fmt: skip
+        self.assertEqual(rec["reason"], "z" * 900)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import shutil
 import signal
 import sys
 
+from gate.runner import records
 from gate.runner.tests import support
 
 
@@ -28,6 +29,17 @@ class Slots(support.GateTest):
         self.toolchain.reasons = ["python: a", "go: b", "ruff: c"]
         self.run_rows([self.row("x")])
         self.assertEqual(self.reason("parity"), "python: a; go: b; ruff: c")
+
+    def test_slot_1_keeps_every_parity_reason_whole_in_the_record(self):
+        # review BA5: two version reasons came to 311 characters, and the record cut the second one short.
+        reasons = [f"{tool}: version: want {'a' * 70}, got {'b' * 70}: run make clean-tools" for tool in ("go", "ruff")]
+        self.toolchain.reasons = reasons
+        result = self.run_rows([self.row("x")])
+        joined = "; ".join(reasons)
+        self.assertGreater(len(joined), records.REASON_MAX)
+        self.assertEqual(self.reason("parity"), joined)
+        line = next(x for x in result.summary.splitlines() if " parity " in x)
+        self.assertEqual(line.split(" | ", 4)[4], joined[: records.REASON_MAX - 1] + "…")
 
     def test_slot_3_timeout(self):
         h = self.start([self.row("x", "block", timeout_s=7)])

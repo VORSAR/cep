@@ -67,6 +67,14 @@ class Render(unittest.TestCase):
                 last = summary.render([], wall_ms=0, summed_ms=0, exit_code=code).splitlines()[-2:]
                 self.assertEqual(last, [word, f"exit: {code}"])
 
+    def test_a_reason_is_one_bounded_line(self):
+        # review BA5: a crash text holding a newline would split one row over two table lines.
+        crash = "internal error: Traceback\n  File x\r\n"
+        lines = [Line("a", "b", "FAIL", 0, crash), Line("a", "c", "FAIL", 0, "y" * 400)]
+        table = summary.render(lines, wall_ms=0, summed_ms=0, exit_code=2).splitlines()[1:3]
+        self.assertEqual(table[0], "a   | b    | FAIL    | 0.0s | internal error: Traceback   File x")
+        self.assertEqual(table[1], "a   | c    | FAIL    | 0.0s | " + "y" * 299 + "…")
+
     def test_no_line_has_trailing_whitespace(self):
         text = summary.render([Line("a", "b", "FAIL", 0, "")], wall_ms=0, summed_ms=0, exit_code=1)
         for line in text.splitlines():

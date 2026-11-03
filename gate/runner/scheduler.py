@@ -477,6 +477,7 @@ class Runner:
             ended_ms=done.ended_ms,
             duration_ms=done.duration_ms,
             scope_sha256=done.scope_sha256,
+            reason_max=None if done.id == PARITY_ID else records.REASON_MAX,
         )
 
     def _exit_code(self, ordered: list[_Done]) -> int:
