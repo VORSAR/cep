@@ -170,6 +170,7 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
   - **T4 `make strict-gate`:** the same 8, plus `proofs` PASS, covered 10. `wall 61.0s · summed 137.8s · saved 55%`, `exit: 0`.
   - **Coverage:** `internal/event` is at 100.00% (40/40).
   - **G2 passed.**
+- **Step 6, the slow real check: exit line 1** (2026-11-03). A fresh clone of `s1-1a-1/integration` @ c9a498e ran `make check` against an empty `VORSAR_CEP_TOOLS_CACHE`. It installed all five pinned tools, then ran every T2 row to PASS: `wall 52.3s`, `GATE PASSED`, `exit: 0`; **82 s** end to end, downloads included. `make clean-tools` then removed that cache.
 
 ## Test material
 
