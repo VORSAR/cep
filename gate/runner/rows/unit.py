@@ -2,6 +2,7 @@
 
 test.json and cover.prof stay in the row's directory for coverage-inclusion. GATE_COVERED counts the distinct
 packages with a package-level pass, fail or skip. A run with no `run` event at all fails: `go test` exits 0 on that.
+A skipped test fails too, naming it: a skip is never green (owner, 2026-11-03; break-it QB7).
 Arguments are package patterns, by default `./...` (with none, go would test only the current directory).
 """
 
@@ -32,6 +33,9 @@ def main(argv: list[str]) -> int:
     packages = {e.get("Package", "") for e in events if "Test" not in e and e.get("Action") in PACKAGE_ENDS}
     failures += [f"{e.get('Package')}: {e['Test']}" for e in events if e.get("Action") == "fail" and "Test" in e]
     failures += [f"{e.get('Package')}: package failed" for e in events if e.get("Action") == "fail" and "Test" not in e]
+    failures += [
+        f"{e.get('Package')}: {e['Test']}: skipped" for e in events if e.get("Action") == "skip" and "Test" in e
+    ]
     if not any(e.get("Action") == "run" for e in events):
         failures.append("no test ran")
     if code != 0:

@@ -169,6 +169,14 @@ class Unit(GoRows):
         self.assertIn("ex.com/m/b", out)
         self.assertIn("TestBad", out)
 
+    def test_a_skipped_test_fails_naming_it(self):
+        # Owner, 2026-11-03 (break-it QB7): a skipped Go test fails the row, as a skipped Python test fails pytests.
+        skip = self.GOOD + '\nfunc TestLater(t *testing.T) { t.Skip("flaky") }\n'
+        self.package("a", skip)
+        self.assertEqual(self.unit(), "exit 1")
+        out = self.stdout("unit", "test")
+        self.assertIn("ex.com/m/a: TestLater: skipped", out)
+
     def test_no_test_at_all_fails(self):
         self.track("a/a.go", "package a\n")
         self.track("b/b.go", "package b\n")
