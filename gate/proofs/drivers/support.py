@@ -29,6 +29,7 @@ TIER = "T2"
 CEILING_S = 900  # one driver test, under the stress harness's CPU hogs
 RUN_CAP_S = 600  # one nested gate run
 GRACE_S = 5
+NESTED_GRACE_S = 2  # under the runner's 5 s grace, so the driver's own cleanups run after it
 RECOVER = "run make clean-tools tools"  # the fix every parity reason but "not installed" names (Lane B's strings)
 HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS", "VORSAR_CEP_TOOLS_CACHE")
 GIT_IDENTITY = ("-c", "user.name=gate proofs", "-c", "user.email=proofs@gate.invalid", "-c", "commit.gpgsign=false")
@@ -93,7 +94,12 @@ def _stop_group(pgid: int, signum: int) -> None:
 
 
 def run_process(argv: list[str], *, cwd: str, env: dict[str, str], out: str, err: str, cap_s: float) -> int:
-    """Run to completion in its own group, output to files; then kill whatever of the group is left."""
+    """Run to completion in its own group, output to files; then kill whatever of the group is left.
+
+    Stopped while waiting (the shim's TERM, or Ctrl-C), it passes a TERM on first: a nested gate then stops its own
+    rows, each in a session of its own, which a KILL of its group would leave running (review BA1). It waits
+    NESTED_GRACE_S for that, inside the runner's own grace, so this driver's cleanups still run before the KILL.
+    """
     with open(out, "wb") as o, open(err, "wb") as e:
         proc = subprocess.Popen(
             argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=o, stderr=e, start_new_session=True
@@ -107,6 +113,11 @@ def run_process(argv: list[str], *, cwd: str, env: dict[str, str], out: str, err
         _stop_group(proc.pid, signal.SIGKILL)
         proc.wait()
         raise AssertionError(f"timed out after {cap_s}s waiting for {' '.join(argv[:6])} to finish") from None
+    except BaseException:
+        _stop_group(proc.pid, signal.SIGTERM)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=NESTED_GRACE_S)
+        raise
     finally:
         _stop_group(proc.pid, signal.SIGKILL)
 

@@ -181,7 +181,7 @@ class Child:
         return self.stdout.splitlines()
 
 
-def _kill_group(pgid: int) -> None:
+def kill_group(pgid: int) -> None:
     with contextlib.suppress(ProcessLookupError):
         os.killpg(pgid, signal.SIGKILL)
 
@@ -199,10 +199,11 @@ def run_child(argv: list[str], *, env: dict[str, str], cwd: str, out_dir: str) -
     try:
         code = proc.wait(timeout=CHILD_CAP_S)
     except subprocess.TimeoutExpired:
-        _kill_group(proc.pid)
+        kill_group(proc.pid)
         proc.wait()
         raise AssertionError(f"child did not exit within {CHILD_CAP_S}s: {argv}") from None
-    _kill_group(proc.pid)
+    finally:
+        kill_group(proc.pid)  # also when the shim's TERM stops this test (review BA1)
     with open(out_path, "rb") as f:
         stdout = f.read().decode("utf-8", errors="replace")
     with open(err_path, "rb") as f:

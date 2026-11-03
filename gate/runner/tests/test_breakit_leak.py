@@ -8,6 +8,8 @@ runs, so every helper outlives the row, the run, and the gate. Seen for real: on
 pytests row left four rowfix.py `start ... block` fixtures and a fake `git ls-files` running, parented to launchd;
 this machine also held about twenty such orphans of earlier runs, up to a day old.
 
+Fixed (review BA1): the shim and the wrapper turn TERM into an exception, so cleanups run inside the grace.
+
 The planted module below is that pattern in miniature: a helper in its own session, which holds a witness FIFO open,
 an addCleanup that would kill it, and a test that blocks until it is stopped. The witness: the same helper in the
 row's own process group is gone once the row is stopped, so the test's machinery sees "gone" when it happens.
@@ -18,6 +20,7 @@ import os
 import signal
 
 from gate import wait
+from gate.runner.tests import support
 from gate.runner.tests.test_rows_py import TESTS, Base, wrapper
 
 CAP_S = 20  # a killed process is gone within milliseconds
@@ -87,8 +90,11 @@ class QB4StoppedRowLeavesNothing(Base):
                 pid = f.read()
             self.fail(f"pid {pid}, started by the stopped pytests row, is still running {CAP_S}s after the run ended")
 
-    def stop_by_watchdog(self, h) -> None:
+    def stop_by_watchdog(self, h, w) -> None:
+        """TERM, then the grace's KILL. The fix runs cleanups on TERM, inside the grace (review BA1), so the helper
+        must be gone before the grace ends: the KILL that follows can then only reach what TERM left."""
         self.timers.expect("watchdog:test/pytests").fire()
+        self.assertAllGone(w)
         self.timers.expect("grace:test/pytests").fire()
         h.join()
         self.assertEqual(self.reason("pytests", "test"), "timeout after 60s")
@@ -97,22 +103,31 @@ class QB4StoppedRowLeavesNothing(Base):
         w = self.plant(new_session=False)
         h = self.start_pytests()
         w.started(1)
-        self.stop_by_watchdog(h)
-        self.assertAllGone(w)
+        self.stop_by_watchdog(h, w)
 
     def test_qb4_a_helper_in_its_own_session_is_gone_after_a_timeout(self):
         w = self.plant(new_session=True)
         h = self.start_pytests()
         w.started(1)
-        self.stop_by_watchdog(h)
-        self.assertAllGone(w)
+        self.stop_by_watchdog(h, w)
 
     def test_qb4_a_helper_in_its_own_session_is_gone_after_an_interrupt(self):
         w = self.plant(new_session=True)
         h = self.start_pytests()
         w.started(1)
         h.runner.post_signal(signal.SIGINT)
+        self.assertAllGone(w)
         self.timers.expect("interrupt-grace").fire()
         h.join()
         self.assertEqual(self.reason("pytests", "test"), "interrupted")
-        self.assertAllGone(w)
+
+    def test_a_module_not_yet_started_never_starts_after_the_stop(self):
+        # review BA1: the wrapper waits for its running modules and starts no other once it is stopped.
+        w = self.plant(new_session=True)
+        later = os.path.join(self.root, "later")
+        self.track("gate/x/test_later.py", f"open({later!r}, 'w').close()\n")  # sorts after test_hold.py
+        h = self.start([self.row("pytests", command=wrapper("pytests"), expected_scope=TESTS, job="test")],
+                       environ={**support.base_env(), "VORSAR_CEP_WORKERS": "1"})  # fmt: skip
+        w.started(1)
+        self.stop_by_watchdog(h, w)
+        self.assertFalse(os.path.exists(later))
