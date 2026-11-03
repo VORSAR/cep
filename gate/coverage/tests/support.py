@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+from gate.runner import env as runner_env
+
 COVERAGE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(os.path.dirname(COVERAGE))
 TESTDATA = os.path.join(COVERAGE, "testdata")
@@ -16,8 +18,6 @@ MAIN = os.path.join(COVERAGE, "main.py")
 CEILING_S = 300
 PLATFORMS = {("darwin", "arm64"): "darwin-arm64", ("linux", "x86_64"): "linux-amd64"}
 HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS")
-# The settings the runner pins for every row (design note §4); the instrument and go run under them here too.
-PINNED_GO = {"GOTOOLCHAIN": "local", "GOENV": "off", "GOFLAGS": "", "GOWORK": "off", "CGO_ENABLED": "0"}
 
 
 def fixture(name: str) -> bytes:
@@ -40,12 +40,10 @@ def tool_bin(name: str) -> str:
 
 
 def go_env(**extra: str) -> dict[str, str]:
-    """A world-owned environment: the pinned go first on PATH, the runner's pinned settings, no outer gate row."""
-    env = {k: v for k, v in os.environ.items() if k not in HIDDEN and not k.startswith(("GATE_", "GO", "PYTHON"))}
-    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", **PINNED_GO)
-    env["PATH"] = os.pathsep.join([tool_bin("go"), env.get("PATH", "")])
-    env.update(extra)
-    return env
+    """The environment a row gets (the runner's own rule, design note §4), the pinned go first; no outer gate row."""
+    base = {k: v for k, v in os.environ.items() if k not in HIDDEN and not k.startswith("GATE_")}
+    base.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    return {**runner_env.clean_env(base, [tool_bin("go")]), **extra}
 
 
 def run(argv: list[str], cwd: str, env: dict[str, str], out_dir: str, name: str) -> tuple[int, str, str]:
