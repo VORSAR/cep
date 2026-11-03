@@ -10,8 +10,9 @@
 //   - purity (non-test files): go statements and channels stay in internal/runtime, io/* and cmd;
 //     sync only there and in internal/event and internal/table; os, net and io only at the boundary;
 //     unsafe and //go:linkname nowhere;
-//   - globals (non-test files): a package-level var is an error sentinel, a compiled regexp, a
-//     lookup table never written, or event's sync.Pool.
+//   - globals (non-test files): a package-level var is an error sentinel, a value built at its
+//     declaration by a Must-constructor (regexp.MustCompile, participle.MustBuild: built from
+//     constants, never written), a lookup table never written, or event's sync.Pool.
 //
 // It prints one "failed: <file>:<line>: <check>: <message>" line per finding, then GATE_COVERED with
 // the number of files read, and exits 1 if anything failed.
@@ -320,17 +321,40 @@ func (c *checker) written(files map[string]string) (map[string]bool, error) {
 	return out, nil
 }
 
-func call(e ast.Expr, pkg string, funcs ...string) bool {
+// callee is the package and function a call names, through a generic instantiation if there is one.
+func callee(e ast.Expr) (pkg, fn string, ok bool) {
 	ce, ok := e.(*ast.CallExpr)
 	if !ok {
-		return false
+		return "", "", false
 	}
-	sel, ok := ce.Fun.(*ast.SelectorExpr)
+	fun := ce.Fun
+	switch f := fun.(type) {
+	case *ast.IndexExpr:
+		fun = f.X
+	case *ast.IndexListExpr:
+		fun = f.X
+	}
+	sel, ok := fun.(*ast.SelectorExpr)
 	if !ok {
-		return false
+		return "", "", false
 	}
 	x, ok := sel.X.(*ast.Ident)
-	return ok && x.Name == pkg && slices.Contains(funcs, sel.Sel.Name)
+	if !ok {
+		return "", "", false
+	}
+	return x.Name, sel.Sel.Name, true
+}
+
+func call(e ast.Expr, pkg string, funcs ...string) bool {
+	p, fn, ok := callee(e)
+	return ok && p == pkg && slices.Contains(funcs, fn)
+}
+
+// mustConstructor reports a call like regexp.MustCompile or participle.MustBuild[T]: a value built once from its
+// arguments at declaration, which panics rather than yields a wrong value.
+func mustConstructor(e ast.Expr) bool {
+	_, fn, ok := callee(e)
+	return ok && strings.HasPrefix(fn, "Must")
 }
 
 func table(e ast.Expr) bool {
@@ -363,10 +387,10 @@ func (c *checker) globals(files map[string]string) error {
 				}
 				switch {
 				case value != nil && (call(value, "errors", "New") || call(value, "fmt", "Errorf")):
-				case value != nil && call(value, "regexp", "MustCompile"):
+				case value != nil && mustConstructor(value):
 				case value != nil && table(value) && !written[id.Name]:
 				default:
-					c.report(id.Pos(), "globals: %s is a mutable package-level var: only error sentinels, compiled regexps and never-written lookup tables are allowed (ADR-0015 §2.2)", id.Name)
+					c.report(id.Pos(), "globals: %s is a mutable package-level var: only error sentinels, Must-constructed values and never-written lookup tables are allowed (ADR-0015 §2.2)", id.Name)
 				}
 			}
 		}

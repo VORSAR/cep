@@ -146,6 +146,10 @@ func TestGlobals(t *testing.T) {
 	t.Run("a compiled regexp and a blank assertion are fine", func(t *testing.T) {
 		wantNone(t, check(t, "internal/model/x.go", "package model\nimport \"regexp\"\nvar re = regexp.MustCompile(\"a\")\nvar _ error = nil\n"))
 	})
+	t.Run("a Must-constructed value is fine, a plainly built one is not", func(t *testing.T) {
+		wantNone(t, check(t, "internal/parser/x.go", "package parser\nimport \"p\"\nvar g = p.MustBuild[int](1)\nvar r = p.MustSimple(2)\n"))
+		wantOne(t, check(t, "internal/parser/x.go", "package parser\nimport \"p\"\nvar g = p.Build(1)\n"), "globals: g")
+	})
 	t.Run("tests may hold package-level state", func(t *testing.T) {
 		wantNone(t, check(t, "internal/model/x_test.go", "package model\nvar seen int\n"))
 	})

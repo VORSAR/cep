@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vorsar/cep/internal/model"
 	"github.com/vorsar/cep/internal/parser"
 )
 
@@ -30,7 +31,7 @@ func TestInvalidCorpus(t *testing.T) {
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
 			code, line, col := expectation(t, path)
-			app, err := parser.ParseFile(path)
+			app, err := parseFile(path)
 			if err == nil {
 				t.Fatalf("ParseFile(%s) accepted an invalid file (app=%v); want %s at %d:%d", path, app, code, line, col)
 			}
@@ -68,7 +69,7 @@ func TestValidCorpus(t *testing.T) {
 		}
 		t.Run(filepath.ToSlash(rel), func(t *testing.T) {
 			t.Parallel()
-			app, err := parser.ParseFile(path)
+			app, err := parseFile(path)
 			if err != nil {
 				t.Fatalf("ParseFile(%s): %v", path, err)
 			}
@@ -115,4 +116,17 @@ func expectation(t *testing.T, path string) (code string, line, col int) {
 		t.Fatal(err)
 	}
 	return m[1], line, col
+}
+
+// parseFile reads one corpus file and parses it: the parser itself does no I/O (ADR-0015 §2.2).
+func parseFile(path string) (*model.App, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	r, err := parser.Parse(path, string(data))
+	if err != nil {
+		return nil, err
+	}
+	return r.App, nil
 }
