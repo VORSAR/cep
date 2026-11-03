@@ -4,6 +4,7 @@ Runs under Python 3.12+: the installer imports it before the pinned interpreter 
 """
 
 import concurrent.futures
+import errno
 import hashlib
 import json
 import os
@@ -207,9 +208,21 @@ def path_dirs(cache: str, tools: list[Tool]) -> list[str]:
 
 
 def sha256_file(path: str | bytes) -> str:
-    """The hex sha256 of one file's content."""
-    with open(path, "rb") as f:
-        return hashlib.file_digest(f, "sha256").hexdigest()
+    """The hex sha256 of one regular file's content.
+
+    Opened without blocking and without following a link, then refused unless it is a regular file: a plain open()
+    of a FIFO planted at a hashed path would block for ever, hanging parity and `bootstrap.py exec` (break-it QB3).
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "not a regular file", os.fsdecode(path))
+        with os.fdopen(fd, "rb") as f:
+            fd = -1  # the file object owns it now
+            return hashlib.file_digest(f, "sha256").hexdigest()
+    finally:
+        if fd != -1:
+            os.close(fd)
 
 
 def _default_workers() -> int:

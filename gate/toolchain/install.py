@@ -312,6 +312,9 @@ def exec(repo: str, cache: str, platform: str, args: Sequence[str], out: TextIO,
     if rel not in python.exec_sha256:
         raise InstallError(f"{python.name}: {rel} is not listed in exec_sha256: fix tools.json")
     interpreter = os.path.join(home, rel)
+    # Containment first: sha256_file refuses links, so a link leading out must still be named for what it is.
+    if not os.path.realpath(interpreter).startswith(os.path.realpath(home) + os.sep):
+        raise InstallError(f"{python.name}: {interpreter} is outside the cache: {REINSTALL}")
     for path, want in sorted(python.exec_sha256.items()):
         try:
             got = manifest.sha256_file(os.path.join(home, path))
@@ -319,8 +322,6 @@ def exec(repo: str, cache: str, platform: str, args: Sequence[str], out: TextIO,
             raise InstallError(f"{python.name}: cannot read {path} in {home}: {e.strerror}: run make tools") from e
         if got != want:
             raise InstallError(f"{python.name}: sha256 of {path} differs from tools.json: {REINSTALL}")
-    if not os.path.realpath(interpreter).startswith(os.path.realpath(home) + os.sep):
-        raise InstallError(f"{python.name}: {interpreter} is outside the cache: {REINSTALL}")
     out.flush()
     try:
         execv(interpreter, [interpreter, "-I", "-B", "-X", "utf8", os.path.join(repo, "gate", "run.py"), *args])
