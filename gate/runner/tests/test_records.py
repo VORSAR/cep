@@ -62,8 +62,9 @@ class OneLine(unittest.TestCase):
 class Record(unittest.TestCase):
     def test_has_exactly_the_contract_fields(self):
         rec = records.make(
-            run_id="r", commit="c", tier="T2", job="lint", row_id="gofmt", verdict="pass", reason="covered 1",
-            exit_code=0, covered=1, expected=1, started_ms=5, ended_ms=9, duration_ms=4, scope_sha256="ab",
+            run_id="r", commit="c", tier="T2", job="lint", row_id="gofmt", blocking=True, verdict="pass",
+            reason="covered 1", exit_code=0, covered=1, expected=1, started_ms=5, ended_ms=9, duration_ms=4,
+            scope_sha256="ab",
         )  # fmt: skip
         self.assertEqual(
             rec,
@@ -74,6 +75,7 @@ class Record(unittest.TestCase):
                 "tier": "T2",
                 "job": "lint",
                 "id": "gofmt",
+                "blocking": True,
                 "verdict": "pass",
                 "reason": "covered 1",
                 "exit_code": 0,
@@ -89,8 +91,8 @@ class Record(unittest.TestCase):
 
     def test_a_multi_line_reason_stays_one_line(self):
         rec = records.make(
-            run_id="r", commit="c", tier="T2", job="j", row_id="i", verdict="fail", reason="a\nb", exit_code=1,
-            covered=0, expected=0, started_ms=0, ended_ms=0, duration_ms=0, scope_sha256="",
+            run_id="r", commit="c", tier="T2", job="j", row_id="i", blocking=True, verdict="fail", reason="a\nb",
+            exit_code=1, covered=0, expected=0, started_ms=0, ended_ms=0, duration_ms=0, scope_sha256="",
         )  # fmt: skip
         self.assertEqual(rec["reason"], "a b")
 

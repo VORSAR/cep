@@ -203,6 +203,16 @@ class Warn(support.GateTest):
         self.assertEqual(result.summary.splitlines()[-2:], ["GATE PASSED", "exit: 0"])
         self.assertEqual(self.record("lint", "b")["verdict"], "fail")
 
+    def test_every_record_says_whether_its_row_blocks(self):
+        # review BA12 (owner, 2026-11-03): a WARN's record reads "fail", so the record must say it does not block.
+        self.run_rows([self.row("a"), self.good("b", "status", 1, blocking=False)])
+        self.assertEqual((self.record("lint", "a")["blocking"], self.record("lint", "b")["blocking"]), (True, False))
+        self.assertTrue(self.record("lint", "parity")["blocking"])
+        with open(os.path.join(self.run_dir, "run.json"), "rb") as f:
+            run = json.loads(f.read())
+        got = [(r["id"], r["blocking"]) for r in run["records"]]
+        self.assertEqual(got, [("parity", True), ("a", True), ("b", False)])
+
     def test_a_blocking_failure_beside_it_still_fails_the_run(self):
         result = self.run_rows([self.good("a", "status", 1), self.good("b", "status", 1, blocking=False)])
         self.assertEqual(result.exit_code, 1)
