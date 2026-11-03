@@ -349,3 +349,39 @@ class ParityDriver(DriverTest):
         self.assertEqual(run.started(), ["parity"])
         cells = run.summary("*", "parity")
         self.assertEqual((cells[2], cells[4]), ("FAIL", reason), run.stdout)
+
+
+def copy_hooks(world: World) -> list[str]:
+    """The tracked .githooks/ launchers, gate/hooks/ (no tests) and the Makefile, byte for byte with their modes, so
+    the hook proofs run the real hooks (QA Q2). Gives the copied paths; never none of the launchers."""
+    copied = []
+    for rel in [*world.tracked(".githooks"), *world.tracked("gate/hooks"), "Makefile", ".gitignore"]:
+        if "tests" in rel.split("/")[:-1]:
+            continue
+        copied.append(world.copy(rel))
+        with open(os.path.join(REPO, rel), "rb") as a, open(copied[-1], "rb") as b:
+            if a.read() != b.read():
+                raise AssertionError(f"{rel} is not a byte-for-byte copy")
+    return copied
+
+
+def isolated_git_env(world: World) -> dict[str, str]:
+    """The world's environment with no inherited GIT_* variable, its own HOME, no global or system git config, and
+    the real tool cache named explicitly (HOME no longer leads to it)."""
+    home_dir = os.path.join(world.root, "home")
+    os.makedirs(home_dir, exist_ok=True)
+    env = {k: v for k, v in world.env.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", HOME=home_dir, **QUIET_GIT)
+    env["VORSAR_CEP_TOOLS_CACHE"] = real_cache()
+    return env
+
+
+def hooks_on(world: World) -> None:
+    """Turn the world's hooks on through its real `make setup`; plain git config only when there is no make."""
+    if shutil.which("make", path=world.env.get("PATH")) is None:
+        world.git("config", "core.hooksPath", ".githooks")
+        return
+    out, err = os.path.join(world.root, "make.stdout"), os.path.join(world.root, "make.stderr")
+    code = run_process(["make", "setup"], cwd=world.repo, env=world.env, out=out, err=err, cap_s=RUN_CAP_S)
+    if code != 0:
+        raise AssertionError(f"make setup: exit {code}: {read_text(out)}{read_text(err)}")
