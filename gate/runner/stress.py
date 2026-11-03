@@ -66,7 +66,7 @@ def hogs(count: int, python: str) -> Iterator[list[subprocess.Popen[bytes]]]:
     procs: list[subprocess.Popen[bytes]] = []
     try:
         for _ in range(count):
-            procs.append(subprocess.Popen([python, "-I", "-c", HOG], stdin=subprocess.DEVNULL, start_new_session=True))
+            procs.append(term.popen([python, "-I", "-c", HOG], stdin=subprocess.DEVNULL))
         yield procs
     finally:
         for proc in procs:

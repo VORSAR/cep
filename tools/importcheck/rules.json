@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "module": "github.com/vorsar/cep",
+  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red.",
+  "imports": {
+    "internal/event": [],
+    "internal/model": ["internal/event"],
+    "internal/metrics": [],
+    "internal/clock": ["internal/event", "internal/metrics"],
+    "internal/text": ["internal/event", "internal/clock", "internal/metrics"],
+    "internal/table": ["internal/event", "internal/clock", "internal/metrics"],
+    "internal/partition": ["internal/event", "internal/clock", "internal/metrics"],
+    "internal/expr": ["internal/event", "internal/clock", "internal/text", "internal/table", "internal/metrics"],
+    "internal/pattern": ["internal/event", "internal/clock", "internal/expr", "internal/metrics"],
+    "internal/window": ["internal/event", "internal/clock", "internal/expr", "internal/metrics"],
+    "internal/plan": ["internal/event", "internal/model", "internal/expr", "internal/partition", "internal/pattern", "internal/window", "internal/text", "internal/table", "internal/metrics"],
+    "internal/validate": ["internal/event", "internal/model", "internal/expr", "internal/window", "internal/metrics"],
+    "internal/runtime": ["internal/event", "internal/clock", "internal/partition", "internal/plan", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/metrics"],
+    "internal/parser": ["internal/event", "internal/model", "internal/metrics"],
+    "internal/playback": ["internal/event", "internal/model", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate"],
+    "": ["internal/event", "internal/model", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate", "internal/parser", "internal/playback", "io"],
+    "rule": ["internal/event", "internal/model"],
+    "io": [],
+    "io/*": ["", "io"],
+    "cmd/*": ["", "rule", "io", "io/*"],
+    "conformance": ["", "rule", "io", "io/*"],
+    "bench": ["internal/event", "internal/model", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate", "internal/parser", "internal/playback", "", "rule", "io", "io/*"]
+  },
+  "external": {
+    "internal/text": ["golang.org/x/text/"]
+  }
+}

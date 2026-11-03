@@ -20,6 +20,7 @@ import tempfile
 import unittest
 from dataclasses import dataclass
 
+from gate import term
 from gate.toolchain import manifest
 
 DRIVERS = os.path.dirname(os.path.abspath(__file__))
@@ -100,11 +101,10 @@ def run_process(argv: list[str], *, cwd: str, env: dict[str, str], out: str, err
     rows, each in a session of its own, which a KILL of its group would leave running (review BA1). It waits
     NESTED_GRACE_S for that, inside the runner's own grace, so this driver's cleanups still run before the KILL.
     """
-    with open(out, "wb") as o, open(err, "wb") as e:
-        proc = subprocess.Popen(
-            argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=o, stderr=e, start_new_session=True
-        )
+    proc = None
     try:
+        with open(out, "wb") as o, open(err, "wb") as e:
+            proc = term.popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=o, stderr=e)
         return proc.wait(timeout=cap_s)
     except subprocess.TimeoutExpired:
         _stop_group(proc.pid, signal.SIGTERM)
@@ -114,12 +114,14 @@ def run_process(argv: list[str], *, cwd: str, env: dict[str, str], out: str, err
         proc.wait()
         raise AssertionError(f"timed out after {cap_s}s waiting for {' '.join(argv[:6])} to finish") from None
     except BaseException:
-        _stop_group(proc.pid, signal.SIGTERM)
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.wait(timeout=NESTED_GRACE_S)
+        if proc is not None:
+            _stop_group(proc.pid, signal.SIGTERM)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.wait(timeout=NESTED_GRACE_S)
         raise
     finally:
-        _stop_group(proc.pid, signal.SIGKILL)
+        if proc is not None:
+            _stop_group(proc.pid, signal.SIGKILL)
 
 
 def read_text(path: str) -> str:
