@@ -1,0 +1,210 @@
+// Package parser turns a rule file into the rule model (ADR-0002, as amended 2026-11-04: participle v2).
+//
+// Parse gives the model.App of a valid file, or one *Error carrying a catalogue code, a line and a column in
+// runes, and the fix text (docs/language/errors.md). A Result also keeps every token and every comment as
+// positioned trivia, so the canonical printer (S6.2) can reproduce the source byte for byte.
+package parser
+
+import (
+	"errors"
+	"strings"
+
+	"github.com/alecthomas/participle/v2"
+	"github.com/alecthomas/participle/v2/lexer"
+
+	"github.com/vorsar/cep/internal/model"
+)
+
+// Position is a token's place in the source: line and column in runes, both 1-based.
+type Position = lexer.Position
+
+// Result is one parsed source: the model, and the tokens and trivia that reproduce it.
+type Result struct {
+	App    *model.App
+	Tokens []Token // every token the parser saw, in order
+	Trivia []Token // every comment and run of whitespace, in order
+}
+
+// Reassemble writes the tokens and trivia back in source order: the lossless round trip (card exit line 3).
+func (r *Result) Reassemble() string {
+	var b strings.Builder
+	i, j := 0, 0
+	for i < len(r.Tokens) || j < len(r.Trivia) {
+		if j >= len(r.Trivia) || (i < len(r.Tokens) && r.Tokens[i].Pos.Offset < r.Trivia[j].Pos.Offset) {
+			b.WriteString(r.Tokens[i].Value)
+			i++
+		} else {
+			b.WriteString(r.Trivia[j].Value)
+			j++
+		}
+	}
+	return b.String()
+}
+
+var grammar = participle.MustBuild[Program](
+	participle.Lexer(definition{Definition: rules}),
+	participle.UseLookahead(2),
+)
+
+// filterGrammar parses one bracketed filter on its own. When the whole-file parse stops at a filter's `[`, the
+// filter is parsed again alone, so the error names the token inside it (a bare `=`, an IN-list, an unsuffixed
+// operator) rather than the bracket.
+var filterGrammar = participle.MustBuild[Expr](
+	participle.Lexer(definition{Definition: rules}),
+	participle.UseLookahead(2),
+)
+
+// Parse parses one source. A leading UTF-8 BOM is ignored (SPEC §2.1). The error, if any, is a *Error.
+func Parse(name, src string) (*Result, error) {
+	src = strings.TrimPrefix(src, "\xEF\xBB\xBF")
+	code, trivia, err := lexAll(name, src)
+	if err != nil {
+		return nil, lexError(name, src, err)
+	}
+	if len(code) == 0 {
+		return nil, mk(name, "E-PRAG-001", Position{Line: 1, Column: 1}, "the file holds no statement")
+	}
+	peek, err := lexer.Upgrade(&sliceLexer{toks: code})
+	if err != nil {
+		return nil, lexError(name, src, err)
+	}
+	tree, err := grammar.ParseFromLexer(peek)
+	if err != nil {
+		return nil, parseError(name, code, err)
+	}
+	app, lerr := lower(tree)
+	if lerr != nil {
+		return nil, mk(name, lerr.code, lerr.pos, lerr.msg)
+	}
+	return &Result{App: app, Tokens: code, Trivia: trivia}, nil
+}
+
+func mk(name, code string, pos Position, msg string) *Error {
+	return &Error{Name: name, Code: code, Line: pos.Line, Col: pos.Column, Msg: msg, Fix: fixes[code]}
+}
+
+// lexError: the lexer refused at a position; the character there says why.
+func lexError(name, src string, err error) *Error {
+	var perr participle.Error
+	if !errors.As(err, &perr) {
+		return &Error{Name: name, Code: "E-SYN-001", Line: 1, Col: 1, Msg: err.Error()}
+	}
+	pos := perr.Position()
+	lines := strings.Split(src, "\n")
+	if pos.Line-1 < len(lines) {
+		runes := []rune(lines[pos.Line-1])
+		if pos.Column-1 < len(runes) {
+			switch runes[pos.Column-1] {
+			case '\'', '"':
+				return mk(name, "E-STR-001", pos, "a single-quoted string does not end on its line")
+			}
+		}
+	}
+	return mk(name, "E-SYN-001", pos, perr.Message())
+}
+
+// parseError is the catalogue mapping (ADR-0002 §4): from participle's error, which names the unexpected token
+// and what it expected there, to one code at one position. The table leans on the token and its neighbours as
+// much as on the expected set, and a filter that failed is parsed again alone for the token inside it.
+func parseError(name string, toks []Token, err error) *Error {
+	var perr participle.Error
+	if !errors.As(err, &perr) {
+		return &Error{Name: name, Code: "E-SYN-001", Line: 1, Col: 1, Msg: err.Error()}
+	}
+	msg, pos := perr.Message(), perr.Position()
+	at := len(toks) // end of input
+	for i, t := range toks {
+		if t.Pos.Line == pos.Line && t.Pos.Column == pos.Column {
+			at = i
+			break
+		}
+	}
+	tok := func(i int) Token {
+		if i < 0 || i >= len(toks) {
+			return Token{Type: lexer.EOF, Pos: pos}
+		}
+		return toks[i]
+	}
+	cur, prev, prev2 := tok(at), tok(at-1), tok(at-2)
+	if cur.Value == "[" {
+		if close := closingBracket(toks, at); close > at+1 {
+			peek, err := lexer.Upgrade(&sliceLexer{toks: toks[at+1 : close]})
+			if err == nil {
+				if _, err = filterGrammar.ParseFromLexer(peek); err != nil {
+					return parseError(name, toks, err)
+				}
+			}
+		}
+	}
+	kind := typeName(cur.Type)
+	expects := func(what string) bool {
+		return strings.Contains(msg, "expected "+what) || strings.Contains(msg, "expected ("+what)
+	}
+	// Does a keyword appear later in this statement? Then a clause is out of order, not missing.
+	later := func(word string) bool {
+		for i := at; i < len(toks) && toks[i].Value != ";"; i++ {
+			if toks[i].Value == word {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case kind == "BadComment":
+		return mk(name, "E-CMT-001", cur.Pos, "the block comment never closes")
+	case at == 0:
+		return mk(name, "E-PRAG-001", cur.Pos, "the file does not start with the version pragma")
+	case kind == "Keyword" && reservedFuture[cur.Value]:
+		return mk(name, "E-RES-001", cur.Pos, cur.Value+" is reserved for a later version")
+	case (kind == "Keyword" || kind == "MixedKeyword") && expects("(<ident>"):
+		return mk(name, "E-KW-001", cur.Pos, cur.Value+" is a reserved word, so it cannot be a name")
+	case kind == "MixedKeyword":
+		return mk(name, "E-KW-002", cur.Pos, "keywords are lowercase: write "+strings.ToLower(cur.Value))
+	case kind == "Ident" && synonyms[cur.Value] != "":
+		return mk(name, "E-SYN-001", cur.Pos, cur.Value+" is not a construct of this language; the canonical form is "+synonyms[cur.Value])
+	case kind == "Ident" && unsuffixed[cur.Value]:
+		return mk(name, "E-TXT-001", cur.Pos, cur.Value+" has no case mode")
+	case cur.Value == "=" && prev2.Value == "from" && typeName(prev.Type) == "Ident":
+		return mk(name, "E-PAT-003", cur.Pos, "the pattern has no restart marker")
+	case cur.Value == "=":
+		return mk(name, "E-SYN-002", cur.Pos, "= is not an operator here")
+	case cur.Value == "(" && prev.Value == "in":
+		return mk(name, "E-SYN-003", cur.Pos, "in takes a table name, not a list")
+	case cur.Value == "*" && prev.Value == "select":
+		return mk(name, "E-SYN-004", cur.Pos, "select * is not allowed")
+	case cur.Value == "and" && expects("PosElem"):
+		return mk(name, "E-PAT-005", cur.Pos, "the pattern has no positive step")
+	case cur.Value == ")" && typeName(prev.Type) == "String" && prev2.Value == "(":
+		return mk(name, "E-WIN-001", cur.Pos, "cron needs its timezone")
+	case kind == "Number" && (expects("DurationOrParam") || expects("Duration")):
+		return mk(name, "E-DUR-001", cur.Pos, cur.Value+" has no unit")
+	case expects(`"for"`):
+		return mk(name, "E-PAT-004", cur.Pos, "the absence has no bound")
+	}
+	for word, code := range clauseStart {
+		if expects(`"` + word + `"`) {
+			if later(word) {
+				return mk(name, "E-ORD-001", cur.Pos, "clauses are out of order: "+word+" comes before "+cur.Value)
+			}
+			return mk(name, code, cur.Pos, "the "+word+" clause is missing")
+		}
+	}
+	return mk(name, "E-SYN-001", cur.Pos, perr.Message())
+}
+
+// closingBracket finds the `]` matching the `[` at index open, or -1.
+func closingBracket(toks []Token, open int) int {
+	depth := 0
+	for i := open; i < len(toks); i++ {
+		switch toks[i].Value {
+		case "[":
+			depth++
+		case "]":
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
