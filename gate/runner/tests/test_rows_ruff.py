@@ -76,6 +76,15 @@ class Wrapper(support.GateTest):
         self.clean_files(3)
         self.assertEqual(self.ruff_row(), "covered 3")
 
+    def test_the_callers_ruff_settings_change_nothing(self):
+        # Review BA2: the verdict is the same whatever RUFF_* the caller exports (common in CI: =github, =json).
+        self.clean_files(3)
+        for fmt in ("json", "github", "concise"):
+            environ = {**support.base_env(), "RUFF_OUTPUT_FORMAT": fmt}
+            self.run_dir = os.path.join(self.root, f"run-{fmt}")  # a run directory per run, as the runner requires
+            self.run_rows([self.row("ruff", command=wrapper(), expected_scope=SCOPE)], environ=environ)
+            self.assertEqual(self.reason("ruff"), "covered 3", fmt)
+
     def test_narrowed_by_one_file_is_red(self):
         # The teeth: the count is what ruff formatted, so a list one short is red, naming both numbers.
         self.clean_files(3)
