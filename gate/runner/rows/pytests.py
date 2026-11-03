@@ -1,8 +1,11 @@
 """The pytests row: every tracked test module, each in its own process under the pinned CPython (design note §5).
 
 Before running, it looks for test files that would silently never run: a misnamed module, a stray file under a
-tests directory, an untracked module, a module in a directory without __init__.py. Each one fails, naming the file.
-GATE_COVERED counts the modules that passed.
+tests directory, an untracked module, a module in a directory without __init__.py, and a tracked module that no
+row runs (break-it QB1). Each one fails, naming the file. GATE_COVERED counts the modules that passed.
+
+Only two rows run test modules: this one, over its own scope, and the proofs row, over the modules directly in
+gate/proofs/drivers/ (gate/registry.json). A tracked test module in neither is a test nobody runs.
 """
 
 import os
@@ -23,8 +26,20 @@ def tracked_under_gate(row_dir: str) -> set[str]:
     return {rows.show(path) for path in rows.read_list(out)}
 
 
-def misplaced(tracked: set[str]) -> list[str]:
-    """Every Python file under gate/, tracked or not, that could hold tests nobody runs."""
+PROOF_DRIVERS = ("gate", "proofs", "drivers")
+
+
+def run_by_proofs_row(path: str) -> bool:
+    """The proofs row runs the test modules directly in gate/proofs/drivers/, and nothing deeper."""
+    parts = path.split("/")
+    return len(parts) == len(PROOF_DRIVERS) + 1 and tuple(parts[:-1]) == PROOF_DRIVERS
+
+
+def misplaced(tracked: set[str], runs: set[str]) -> list[str]:
+    """Every Python file under gate/, tracked or not, that could hold tests nobody runs.
+
+    `runs` is this row's own scope: the modules it is about to run.
+    """
     found: list[str] = []
     for directory, _, names in os.walk("gate"):
         for name in names:
@@ -39,6 +54,10 @@ def misplaced(tracked: set[str]) -> list[str]:
                 )
             elif name.startswith("test_") and path not in tracked:
                 found.append(f"{path}: untracked, so it never runs: git add it")
+            elif name.startswith("test_") and path not in runs and not run_by_proofs_row(path):
+                found.append(
+                    f"{path}: no row runs it: move it into the pytests scope or directly into gate/proofs/drivers/"
+                )
     return found
 
 
@@ -55,10 +74,17 @@ def missing_init(paths: list[str]) -> list[str]:
     return found
 
 
+def row_scope(row_dir: str, paths: list[str]) -> set[str]:
+    """The row's whole scope as the runner expanded it ($GATE_ROW_DIR/files.nul), not the list handed to this
+    command: a command narrowed by mistake must still be caught by its count, not mistaken for a stray module."""
+    scope = os.path.join(row_dir, "files.nul")
+    return {rows.show(path) for path in rows.read_list(scope)} if os.path.exists(scope) else set(paths)
+
+
 def main(argv: list[str]) -> int:
     row_dir = rows.start()
     paths = [rows.show(path) for path in rows.read_list(argv[1])]
-    failures = misplaced(tracked_under_gate(row_dir)) + missing_init(paths)
+    failures = misplaced(tracked_under_gate(row_dir), row_scope(row_dir, paths)) + missing_init(paths)
     passed, problems = rows.run_modules(PYTHON, paths, row_dir)
     rows.covered(passed)
     return rows.finish(sorted(failures + problems))
