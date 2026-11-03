@@ -139,6 +139,17 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
 - **Combine-W1** (2026-11-02): both lanes were cherry-picked linearly (Lane A 14 commits, Lane B 9), with no conflicts. The switch-over commit adds `gate/registry.json` and the real Makefile targets, adds py312 targets for the modules `pyfloor` runs, and deletes the scaffold.
   - **The first real `make check`:** parity PASS (5 tools, 3.6 s), gofmt (1 file), vet (1 unit), ruff (74 files), pyfloor (4 modules under 3.12.16), pytests (29 modules); `wall 28.1s · summed 37.5s · saved 25%`; `GATE PASSED`, `exit: 0`.
   - **Planted defects:** an unformatted Go file and a `time.sleep` in gate Python turned it red (gofmt and ruff FAIL, every other row still ran, `exit: 1`).
+- **QA: the event test material** (`s1-1a-1/lane-d`, 4 commits, written before any code). Four test files, re-verified by the coordinator: 21 top-level tests compile against the stub; 11 fail on assertions, and 10 pass first by design, their first red coming from planted drift; no build failure. QA reports 62 planted defects, all red. One design gap QA found was closed: design §1's `NewSchema` contract, clarified 2026-11-03.
+- **Lane D: the event kernel** (2 commits on QA's tip). **Re-verified by the coordinator:**
+  - QA's four files are unchanged;
+  - 102 tests (QA's 78 plus 24 of Lane D's own) pass, and 50 repeated runs pass;
+  - statement coverage is **100.0%**;
+  - the imports are exactly `cmp`, `errors`, `fmt`;
+  - gofmt and vet are clean; `make check` exits 0.
+
+  **Lane D's own choices**, accepted by the coordinator for review at step 7:
+  - `NewSchema` reports the first broken rule, checked in a documented order, with one sentinel-wrapped error per rule;
+  - `Compare` uses early returns rather than `cmp.Or`, which is about 2.4× slower on the hot-path sort (measured).
 
 ## Test material
 
