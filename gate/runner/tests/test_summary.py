@@ -75,6 +75,12 @@ class Render(unittest.TestCase):
         self.assertEqual(table[0], "a   | b    | FAIL    | 0.0s | internal error: Traceback   File x")
         self.assertEqual(table[1], "a   | c    | FAIL    | 0.0s | " + "y" * 299 + "…")
 
+    def test_a_registry_other_than_the_default_is_named_before_the_footer(self):
+        # review BA8.
+        text = summary.render([], wall_ms=0, summed_ms=0, exit_code=0, registry="fixtures/r.json")
+        want = "job | step | verdict | time | reason\nregistry: fixtures/r.json\nwall 0.0s · summed 0.0s · saved 0%\n"
+        self.assertEqual(text, want + "GATE PASSED\nexit: 0\n")
+
     def test_no_line_has_trailing_whitespace(self):
         text = summary.render([Line("a", "b", "FAIL", 0, "")], wall_ms=0, summed_ms=0, exit_code=1)
         for line in text.splitlines():

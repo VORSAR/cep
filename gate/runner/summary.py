@@ -27,15 +27,16 @@ def footer(wall_ms: int, summed_ms: int) -> str:
     return f"wall {tenths(wall_ms)} · summed {tenths(summed_ms)} · saved {saved}%"
 
 
-def render(lines: Sequence[Line], *, wall_ms: int, summed_ms: int, exit_code: int) -> str:
+def render(lines: Sequence[Line], *, wall_ms: int, summed_ms: int, exit_code: int, registry: str | None = None) -> str:
     """The whole summary. Each reason is one bounded line (review BA5); the last column is not padded, so no line
-    carries trailing spaces."""
+    carries trailing spaces. `registry` is named only when it is not the repository's own (review BA8)."""
     cells = [HEADER, *((x.job, x.step, x.verdict, tenths(x.ms), one_line(x.reason)) for x in lines)]
     widths = [max(len(row[i]) for row in cells) for i in range(len(HEADER) - 1)]
     table = [" | ".join([*map(str.ljust, row[:-1], widths, strict=True), row[-1]]).rstrip() for row in cells]
     return "\n".join(
         [
             *table,
+            *([] if registry is None else [f"registry: {registry}"]),
             footer(wall_ms, summed_ms),
             "GATE PASSED" if exit_code == 0 else "GATE FAILED",
             f"exit: {exit_code}",

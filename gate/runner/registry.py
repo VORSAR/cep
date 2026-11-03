@@ -4,6 +4,7 @@ Every rule here is enforced before anything runs; a violation is exit 2, naming 
 Python's json module accepts duplicate keys, NaN, and a bool where an int belongs, so each is refused by hand.
 """
 
+import hashlib
 import json
 import re
 from collections.abc import Sequence
@@ -209,12 +210,18 @@ def loads(text: str) -> list[Row]:
 
 
 def load(path: str) -> list[Row]:
+    return load_with_digest(path)[0]
+
+
+def load_with_digest(path: str) -> tuple[list[Row], str]:
+    """The rows, and the sha256 of the very bytes they were parsed from (review BA8: run.json names the law)."""
     try:
         with open(path, "rb") as f:
-            text = f.read().decode("utf-8")
+            data = f.read()
+        text = data.decode("utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise RegistryError(f"cannot read {path}: {e}") from None
-    return loads(text)
+    return loads(text), hashlib.sha256(data).hexdigest()
 
 
 def select(rows: Sequence[Row], tier: str, job: str | None) -> list[Row]:

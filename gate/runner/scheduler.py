@@ -105,6 +105,8 @@ class Runner:
         toolchain: Toolchain,
         clock: Clock,
         timers: Timers,
+        registry_sha256: str,
+        registry_shown: str | None = None,
         record_go_env: bool = True,
         observer: Callable[[dict], None] | None = None,
         grace_s: int = GRACE_S,
@@ -122,6 +124,8 @@ class Runner:
         self._toolchain = toolchain
         self._clock = clock
         self._timers = timers
+        self._registry_sha256 = registry_sha256
+        self._registry_shown = registry_shown
         self._record_go_env = record_go_env
         self._observer = observer
         self._grace_s = grace_s
@@ -496,13 +500,16 @@ class Runner:
             summary.Line(d.job, d.id, "PASS" if d.ok else "FAIL" if d.blocking else "WARN", d.duration_ms, d.reason)
             for d in ordered
         ]
-        text = summary.render(lines, wall_ms=wall_ms, summed_ms=summed_ms, exit_code=exit_code)
+        text = summary.render(
+            lines, wall_ms=wall_ms, summed_ms=summed_ms, exit_code=exit_code, registry=self._registry_shown
+        )
         rows = [self._record(self._parity, job) for job in self._jobs]
         rows += [self._record(self._finished[r.id], r.job) for r in self._rows]
         run = {
             "schema": records.SCHEMA,
             "run_id": self._run_id,
             "tier": self._tier,
+            "registry_sha256": self._registry_sha256,
             "records": rows,
             "wall_ms": wall_ms,
             "summed_ms": summed_ms,

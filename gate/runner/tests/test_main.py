@@ -1,10 +1,12 @@
 """The CLI (plan check S4; design note §4): exit codes, the last two lines, the run directory, parity's wiring."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
 import re
+import shutil
 from unittest import mock
 
 from gate.runner import main
@@ -42,6 +44,30 @@ class Cli(support.GateTest):
         self.cli("--tier", "T2", "--registry", self.reg(), "--run-dir", self.run_dir)
         with open(os.path.join(self.run_dir, "summary.md"), encoding="utf-8") as f:
             self.assertEqual(self.output, f.read())
+
+    def run_json(self) -> dict:
+        with open(os.path.join(self.run_dir, "run.json"), "rb") as f:
+            return json.loads(f.read())
+
+    def test_a_registry_other_than_the_default_is_named_and_recorded(self):
+        # review BA8: an "exit: 0" from a fixture registry must not pass for a run of the repository's law.
+        reg = self.reg()
+        self.cli("--tier", "T2", "--registry", reg, "--run-dir", self.run_dir)
+        self.assertEqual(self.output.splitlines()[-4:-3], [f"registry: {reg}"])
+        with open(reg, "rb") as f:
+            self.assertEqual(self.run_json()["registry_sha256"], hashlib.sha256(f.read()).hexdigest())
+
+    def test_the_default_registry_is_recorded_and_not_named(self):
+        default = os.path.join(self.repo, "gate", "registry.json")
+        os.mkdir(os.path.dirname(default))
+        shutil.copyfile(self.reg(), default)
+        for argv in ((), ("--registry", default)):
+            with self.subTest(argv):
+                run_dir = os.path.join(self.root, f"run-{len(argv)}")
+                self.assertEqual(self.cli("--tier", "T2", *argv, "--run-dir", run_dir), 0, self.output)
+                self.assertFalse([x for x in self.output.splitlines() if x.startswith("registry:")], self.output)
+                with open(os.path.join(run_dir, "run.json"), "rb") as f, open(default, "rb") as g:
+                    self.assertEqual(json.loads(f.read())["registry_sha256"], hashlib.sha256(g.read()).hexdigest())
 
     def test_usage_errors(self):
         reg = self.reg()
