@@ -1,7 +1,7 @@
 # Sprint Model & Development Process — complex-events-engine
 
 **Document ID:** SPRINT-CEE-001
-**Version:** 1.1 — 2026-10-31: explicit entry and exit criteria for sprints and phases, named gates G0–G5, sprint cards, and architecture and QA review at every stage (§3, §4, §6, §8, §9).
+**Version:** 1.1 — 2026-10-31: explicit entry and exit criteria for sprints and phases, named gates G0–G5, sprint cards, and architecture and QA review at every stage (§3, §4, §6, §8, §9). *Amended 2026-11-03 (owner, S1.1a-1 retro): batched fix rounds (§6), lanes sized to one usage window (§11), the cheapest proving run (§10).*
 **Status:** Authoritative. Governs **how** every sprint runs. [sprint-plan.md](sprint-plan.md) says **what** runs next; [02-roadmap.md](../product/02-roadmap.md) holds the arc; [DEVELOPMENT.md](../development/DEVELOPMENT.md) and [testing.md](../development/testing.md) hold the tools, the gate and the test rules. Sprint document formats: [README.md](README.md) and [templates/](templates/).
 
 ---
@@ -116,6 +116,8 @@ The coordinator names the routine at the plan check and asks the owner before ex
 
 **One fix round, not a loop.** Findings after the fix round that are not blockers go to known issues with a forward; the owner decides whether a blocker reopens the sprint.
 
+**A fix round is batched** (owner, 2026-11-03): write every fix's test, run them all red once, make every fix, then verify once. Each fix still has its own failing test and, where files allow, its own commit.
+
 ---
 
 ## 7. The lighter routine
@@ -179,6 +181,7 @@ A roadmap phase is a set of sprints with its own edges.
 
 - **One pinned toolchain** (Go and every gate tool at an exact version, in one manifest) in every checkout and worktree; T1 refuses a push otherwise. A hook is never bypassed.
 - **Green means the real exit code** of a gate run that finished: read the `exit:` line, never a piped tail or a background task's wrapper. The same holds for an agent's "green".
+- **The cheapest proving run** (owner, 2026-11-03): prove a claim with the cheapest run that proves it. An existing proof stands unless a later change touches what it covered; ask before a heavy re-run.
 - **Tests** follow [testing.md](../development/testing.md)'s four rules: time only ever breaks a hang; measure the component, never the machine; each test owns its world; every run has a ceiling. A rule is tested in the package that owns it; never through a mirror. A new timing- or concurrency-sensitive test is stressed under load before it merges.
 - **A flaky test is fixed at its root immediately**: never quarantined, never retried.
 - **A linter finding is fixed at its root**, never suppressed to get past it. Suppressions carry the metadata DEVELOPMENT.md requires.
@@ -205,6 +208,7 @@ A roadmap phase is a set of sprints with its own edges.
 **Running them:**
 - A **fresh agent per job**, never one agent reused for several jobs (its context and cost grow without bound). A reviewer is never the agent that wrote what it reviews. Check an agent's `model:` frontmatter before choosing it.
 - **At most two at once** unless the owner says otherwise.
+- **A lane fits one usage window** (owner, 2026-11-03): size it to finish before a usage limit can stop it, or do the work in the main session.
 - **Monitoring:** rely on the completion notification. Never judge an agent stalled by its transcript's size or modification time: it writes only between tool rounds. The stall ladder: check the deliverable → nudge → resume by raw agent ID → the coordinator does the step.
 - **Resuming across sessions** works by the agent's raw ID, not its name. Active IDs are recorded only under the active sprint's resume point in memory, and deleted when the work closes.
 - **Keep an agent's worktree until its sprint closes**: a fix round may need to resume it.
