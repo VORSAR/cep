@@ -167,8 +167,12 @@ class Run:
     def records(self) -> list[dict]:
         return self._json("run.json")["records"]
 
+    def trace(self) -> list[tuple[str, str]]:
+        """The scheduler's trace, as (event, row id) in order."""
+        return [(entry["event"], entry["id"]) for entry in self._json("trace.json")]
+
     def started(self) -> list[str]:
-        return [entry["id"] for entry in self._json("trace.json") if entry["event"] == "start"]
+        return [row_id for event, row_id in self.trace() if event == "start"]
 
     def row_stdout(self, job: str, row_id: str) -> str:
         return read_text(os.path.join(self.run_dir, "rows", job, row_id, "stdout"))
@@ -299,12 +303,14 @@ class World:
         fill("")
         return dest
 
-    def run(self, *, registry: str | None = None, cache_dir: str | None = None, path_first: str = "") -> Run:
-        """The real runner at T2, in a new run directory."""
+    def run(
+        self, *, registry: str | None = None, cache_dir: str | None = None, path_first: str = "", tier: str = TIER
+    ) -> Run:
+        """The real runner, at T2 unless a test of a T4 row says otherwise, in a new run directory."""
         self.runs += 1
         run_dir = os.path.join(self.root, f"run{self.runs}")
         argv = [pinned_python(), "-I", "-B", "-X", "utf8", os.path.join(self.repo, "gate", "run.py")]
-        argv += ["--tier", TIER, "--run-dir", run_dir, *(["--registry", registry] if registry else [])]
+        argv += ["--tier", tier, "--run-dir", run_dir, *(["--registry", registry] if registry else [])]
         env = {**self.env, "VORSAR_CEP_TOOLS_CACHE": cache_dir or real_cache()}
         if path_first:
             env["PATH"] = os.pathsep.join([path_first, env.get("PATH", "")])
