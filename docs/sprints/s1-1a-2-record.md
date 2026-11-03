@@ -1,6 +1,6 @@
 # S1.1a-2 — sprint record
 
-**Sprint:** S1.1a-2 — Hooks and CI · **Routine:** the full loop, no design panel · **Size:** about 10 SP (items 5.5) against the 2-week cap · **Branch:** `s1-1a-2/integration`
+**Sprint:** S1.1a-2 — Hooks and CI · **Routine:** the full loop, no design panel · **Size:** about 8 SP (items 4.5) against the 2-week cap · **Branch:** `s1-1a-2/integration`
 **What to build and how each item is proven:** [sprint plan — S1.1a-2](sprint-plan.md#s11a-2--hooks-and-ci) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
@@ -20,7 +20,11 @@ The full plan check is [s1-1a-2-plan-check.md](s1-1a-2-plan-check.md) (v2), draf
 3. **CI may use four GitHub Actions, and only these** (`checkout`, `cache`, `upload-artifact`, `download-artifact`), pinned by commit SHA.
 4. **A commit runs only the fast checks on its staged files;** `pyfloor` runs at push.
 
-**Decided as recommended, unless the owner objects:** the hooks are three short launchers in `.githooks/` that find a Python ≥ 3.12 (the cached pinned one first) and run the hook code in `gate/hooks/`; a commit is checked by its own gate in a tree outside the work tree (plan check §2 S1).
+5. **The hooks check in place, with a guard** (2026-11-04; asked as a follow-up: the separate checked tree was "overkill" for a convenience check). The size falls to about 8 SP.
+
+**Decided as recommended, unless the owner objects:** the hooks are three short launchers in `.githooks/` that find a Python ≥ 3.12 (the cached pinned one first) and run the hook code in `gate/hooks/`.
+
+**The design — the owner, 2026-11-04:** G1 approved: "implement this fast and get it over".
 
 ## Measured results
 
@@ -49,8 +53,8 @@ Entry (G0)   ☑ card complete and approved (re-sized by the owner, 2026-11-03)
              ☑ dependencies merged (S1.1a-1, PR #1), main green (local T4) ☑ fits the cap, lanes ≤ 8 days
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-03) — G0 passed
              ☑ test material: making it is an item (the hook, hooks-off and summary proofs)
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
+Design (G1)  ☑ architecture + the-fool findings resolved ☑ QA testability findings resolved (plan check §10)
+             ☑ owner decisions recorded ☑ ADRs: residue noted in design §12.8 — G1 passed 2026-11-04
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
              ☐ tests on the real code ☐ every breaker's red test committed
