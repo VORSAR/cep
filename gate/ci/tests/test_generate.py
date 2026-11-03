@@ -38,6 +38,13 @@ class Render(unittest.TestCase):
         for ref in uses:
             self.assertRegex(ref, r"^actions/(checkout|cache|upload-artifact|download-artifact)@[0-9a-f]{40}$")
 
+    def test_the_tool_cache_is_where_a_developer_has_it(self):
+        # First CI run (2026-11-04): a cache inside the checkout put the project's go.mod above every tool, so go
+        # followed its toolchain line and a parity witness passed differently on CI than on a developer's machine.
+        self.assertNotIn("VORSAR_CEP_TOOLS_CACHE", self.text)
+        self.assertNotIn(".tools-cache", self.text)
+        self.assertIn("path: ~/.cache/vorsar/cep/tools", self.text)
+
     def test_the_posture(self):
         needles = (
             "runs-on: ubuntu-latest",

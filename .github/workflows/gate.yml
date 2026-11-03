@@ -10,7 +10,6 @@ concurrency:
   group: gate-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
-  VORSAR_CEP_TOOLS_CACHE: ${{ github.workspace }}/.tools-cache
   CGO_ENABLED: '0'
 jobs:
   lint:
@@ -22,7 +21,7 @@ jobs:
           persist-credentials: false
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: .tools-cache
+          path: ~/.cache/vorsar/cep/tools
           key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -48,7 +47,7 @@ jobs:
           persist-credentials: false
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: .tools-cache
+          path: ~/.cache/vorsar/cep/tools
           key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -74,7 +73,7 @@ jobs:
           persist-credentials: false
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: .tools-cache
+          path: ~/.cache/vorsar/cep/tools
           key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -102,7 +101,7 @@ jobs:
           persist-credentials: false
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: .tools-cache
+          path: ~/.cache/vorsar/cep/tools
           key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:

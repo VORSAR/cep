@@ -28,7 +28,9 @@ ACTIONS = {
     "download": ("actions/download-artifact", "9000827ccba6bdab643e8b6fd33ac0654aef8333", "v8.0.2"),
 }
 RUN_ID = "${{ github.run_id }}-${{ github.run_attempt }}"
-TOOLS_CACHE = "${{ github.workspace }}/.tools-cache"
+# The tool cache stays where a developer has it, outside the checkout: inside it, the project's go.mod would sit
+# above every tool and change what go does (the first CI run, 2026-11-04).
+TOOLS_CACHE = "~/.cache/vorsar/cep/tools"
 
 
 def _uses(name: str) -> str:
@@ -43,7 +45,7 @@ def _setup_steps() -> list[str]:
         "          persist-credentials: false",
         f"      - {_uses('cache')}",
         "        with:",
-        "          path: .tools-cache",
+        f"          path: {TOOLS_CACHE}",
         "          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}",
         f"      - {_uses('cache')}",
         "        with:",
@@ -113,7 +115,6 @@ def render(rows: Sequence[Row]) -> str:
         "  group: gate-${{ github.ref }}",
         "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
         "env:",
-        f"  VORSAR_CEP_TOOLS_CACHE: {TOOLS_CACHE}",
         "  CGO_ENABLED: '0'",
         "jobs:",
     ]
