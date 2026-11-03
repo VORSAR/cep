@@ -9,6 +9,7 @@ absolute paths and `..` in member names, so every rule of §3 step 4 is checked 
 """
 
 import contextlib
+import gzip
 import http.client
 import os
 import posixpath
@@ -19,6 +20,7 @@ import sys
 import tarfile
 import tempfile
 import urllib.request
+import zlib
 from collections.abc import Callable, Mapping, Sequence
 from typing import BinaryIO, TextIO
 
@@ -77,6 +79,16 @@ def _name_problem(name: str) -> str | None:
     return None
 
 
+def _check_ends_whole(tf: tarfile.TarFile) -> None:
+    """A tar stream ends with zero-filled end-of-archive blocks. tarfile stops without a word at a header cut short
+    after the first member, treating it as the end (break-it QB5), so whatever follows the last member read must
+    be those blocks and nothing else; otherwise the archive was truncated and only part of the tool came out."""
+    tf.fileobj.seek(tf.offset)
+    rest = tf.fileobj.read()
+    if len(rest) < 2 * tarfile.BLOCKSIZE or rest.strip(b"\0"):
+        raise _Rejected("<end of archive>", "the tar stream stops before its end-of-archive blocks: it is truncated")
+
+
 class _Extraction:
     """One archive going into one directory. Nothing is ever written through a symlink: `kinds` records
     what this extraction made at each path, every parent of a write is a directory it made itself, and
@@ -90,12 +102,16 @@ class _Extraction:
         self.modes: dict[str, int] = {}  # relative path -> permission bits from the archive; symlinks have none
 
     def extract(self, archive: str) -> None:
-        with tarfile.open(archive, "r:gz", encoding="utf-8") as tf:
-            for member in tf:
-                try:
-                    self._member(tf, member)
-                except FileExistsError as e:  # a case-insensitive filesystem folds two names into one
-                    raise _Rejected(member.name, "it collides with an earlier member on this filesystem") from e
+        try:
+            with tarfile.open(archive, "r:gz", encoding="utf-8") as tf:
+                for member in tf:
+                    try:
+                        self._member(tf, member)
+                    except FileExistsError as e:  # a case-insensitive filesystem folds two names into one
+                        raise _Rejected(member.name, "it collides with an earlier member on this filesystem") from e
+                _check_ends_whole(tf)
+        except (EOFError, zlib.error, tarfile.ReadError, gzip.BadGzipFile) as e:  # a cut or corrupt stream (QB9)
+            raise _Rejected("<archive>", f"the archive is truncated or corrupt ({type(e).__name__})") from e
         self._check_resolved_links()
 
     def _relative(self, name: str) -> str:
