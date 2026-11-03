@@ -150,6 +150,26 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
   **Lane D's own choices**, accepted by the coordinator for review at step 7:
   - `NewSchema` reports the first broken rule, checked in a documented order, with one sentinel-wrapped error per rule;
   - `Compare` uses early returns rather than `cmp.Or`, which is about 2.4× slower on the hot-path sort (measured).
+- **Lane C: coverage and the proofs** (7 commits). Re-verified by the coordinator: it changed only its own files (`gate/coverage/**`, `gate/proofs/**`).
+
+  **Lane-reported:**
+  - 78 tests in 18 modules, each 50/50 under the stress harness;
+  - 46 planted defects, all red;
+  - a fixture T4 run of the 10 drivers: PASS, covered 10.
+
+  **Its additions to design §5, accepted by the coordinator:**
+  - "0 statements" counts only when go itself prints `[no statements]` (a panicking test binary would otherwise pass as n/a);
+  - a 0-statement package with no passing test FAILs;
+  - a third planted package, `internal/control`, keeps "only this check can fail" true.
+
+  **Forwarded to the fix round:**
+  - (i) git 2.54's background `git maintenance --detach`, started by `commit`, can race a temporary repository's cleanup. Lane C's driver worlds turn it off; Lane A's `test_main.py` has the same latent race, not yet seen failing;
+  - (ii) the coverage drivers carry the `unit` and `coverage-inclusion` rows as constants. They should read the registry, so that a drift between the registry and the proof is caught.
+- **Combine-W2 and G2** (2026-11-03): QA, Lane D and Lane C were cherry-picked linearly, with no conflicts. The `unit`, `coverage-inclusion` and `proofs` rows were added to `gate/registry.json`.
+  - **T3 `make combine-check`:** 8 rows PASS: parity (5 tools), gofmt (11), vet (1), ruff (102), pyfloor (4), unit (1), coverage-inclusion (1), pytests (37). `wall 49.7s · summed 69.8s · saved 28%`, `exit: 0`.
+  - **T4 `make strict-gate`:** the same 8, plus `proofs` PASS, covered 10. `wall 61.0s · summed 137.8s · saved 55%`, `exit: 0`.
+  - **Coverage:** `internal/event` is at 100.00% (40/40).
+  - **G2 passed.**
 
 ## Test material
 
