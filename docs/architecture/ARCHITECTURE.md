@@ -26,6 +26,7 @@ graph TD
         TBL["Tables (keyed sets)"] -.read by filters.-> PAT
         PB["Playback driver\nvirtual clock"] -. replaces arrival + clock .-> ING
     end
+    %% annotated 2026-11-04: the parser is participle v2, not goyacc (ADR-0002 as amended)
     RULES["rule files (.cep)\nor Go builder calls"] --> PARSE["Parser (goyacc) + Validator\n57-code catalog"] --> MODEL["Rule model (IR)"] --> PLAN["Planner"] --> RT
 ```
 
@@ -111,7 +112,7 @@ cmd/cepd/                                 the binary runner (rule files + config
 cmd/cep/                                  the CLI: validate / test / fmt
 internal/event/                           canonical event + schema (value union, flags, seq)
 internal/model/                           the rule-model IR (single source of truth, ADR-0003)
-internal/parser/                          lexer, goyacc grammar (cep.y), AST, AST→model lowering, and the canonical printer (SPEC §9 formatter; round-trip law parse→print→parse; drives `cep fmt`; *placement amended at the approved Phase-1 decomposition, 2026-11-02:* the lexer keeps comments as positioned trivia in sprint S2.1, and the printer + `cep fmt` land in sprint S6.2 — round-2 F10)
+internal/parser/                          lexer, goyacc grammar (cep.y), AST, AST→model lowering, and the canonical printer (SPEC §9 formatter; round-trip law parse→print→parse; drives `cep fmt`; *placement amended at the approved Phase-1 decomposition, 2026-11-02:* the lexer keeps comments as positioned trivia in sprint S2.1, and the printer + `cep fmt` land in sprint S6.2 — round-2 F10) *(annotated 2026-11-04, owner: participle v2 struct-tag grammar (`grammar.go`), no `cep.y`, no generated file; ADR-0002 as amended)*
 internal/validate/                        static checks; the error catalog as a data table
 internal/plan/                            model → executable graph (operators wired per rule)
 internal/clock/                           watermarks: admission/contribution, punctuations, timers (ADR-0004)
@@ -134,7 +135,7 @@ gate/proofs/                              planted-defect proof fixtures — a SE
 tools/analyzers/                          the gate's go/analysis analyzers + testdata fixtures + teeth_test.go (ADR-0015 §2)
 tools/importcheck/rules.json              the layer law, diffed against this §3 as parsed edges (ADR-0015)
 tools/allowlists/, tools/deps-allowlist.json  the one allowlist grammar (ADR-0015 §3.10)
-tools/kwgen/                              keyword-table generator (ADR-0002)
+tools/kwgen/                              keyword-table generator (ADR-0002) *(annotated 2026-11-04: not built; the keyword table is pinned equal to `grammar.lark` by a test in `internal/parser` instead)*
 api/exports.golden                        the hand-written public-export law file (ADR-0015 §2 apipartition)
 .githooks/, Makefile, tools.json          the gate (ADR-0005; DEVELOPMENT.md is the doctrine; ADR-0015 the mechanism catalog)
 ```
@@ -218,7 +219,7 @@ type Event struct {
 
 This narrative is normative for component responsibilities. Rule: [docs/language/examples/01-agent-kill-switch.cep](../language/examples/01-agent-kill-switch.cep).
 
-1. **Deploy.** `cep.Runtime.Deploy(appSource)` → `internal/parser` lexes and parses (goyacc; a parse error carries line/col and one of the 23 parse codes) → AST → lowering to `internal/model.App` → `internal/validate` runs every static rule in [docs/language/errors.md](../language/errors.md) marked **[static]** (34 codes; the catalog is a table in `internal/validate/catalog.go`, one entry per code, so the gate can assert 1:1 coverage) → `internal/plan` builds one executable graph per rule: ingest spec → partition router spec → operator chain → sink bindings. Alternatively the same `model.App` arrives from package `rule` (the Go builder); from `model` onward the path is identical — this is what the parity test proves (ADR-0003).
+1. **Deploy.** `cep.Runtime.Deploy(appSource)` → `internal/parser` lexes and parses (goyacc; a parse error carries line/col and one of the 23 parse codes) → AST → lowering to `internal/model.App` → `internal/validate` runs every static rule in [docs/language/errors.md](../language/errors.md) marked **[static]** (34 codes; the catalog is a table in `internal/validate/catalog.go`, one entry per code, so the gate can assert 1:1 coverage) → `internal/plan` builds one executable graph per rule: ingest spec → partition router spec → operator chain → sink bindings. Alternatively the same `model.App` arrives from package `rule` (the Go builder); from `model` onward the path is identical — this is what the parity test proves (ADR-0003). *(Annotated 2026-11-04, owner: the parser is participle v2, not goyacc; ADR-0002 as amended.)*
 2. **Ingest.** A source (`io/http`) delivers a JSON event for `AgentActions`. The router validates it against the schema — runtime policy (round-2 F23): an UNKNOWN attribute in the payload is skipped without materialization (tolerant ingestion, O4; counted in `unknown_attrs`); a MISSING non-optional attribute or a null/absent timestamp is a stream-level event error (drop + log + `errored_events`, SEMANTICS §10); E-NAME-001 is deploy-time only. It then computes `Invisibles` over all string attributes (one pass, `internal/text.IngestFlags`), stamps `Seq`, and hands it to the runtime.
 3. **Routing.** The router (ingest side) evaluates the rule's compiled key expression (an `expr.Expr`) for this stream (`agentId`) — null key = per-rule event error — hashes the key to a shard, and enqueues `(instanceKey, event)`; the stream's watermark advance (if any) follows as a control message to every shard (ADR-0004 §3), so even quiet keys' clocks move.
 4. **Clocking.** `internal/clock` tracks, per stream: admission watermark `max(Ts seen) − d` (monotonic). Per rule instance it tracks the construct clock: `max(previous, min over input streams of contribution)` where contribution = admission wm raised by idleness (live) or the virtual clock (playback) — SEMANTICS §2.1 as pinned. Events behind their stream's admission wm are stream-late (dropped + counted); events behind the construct clock are construct-late (dropped + counted separately).

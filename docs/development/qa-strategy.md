@@ -17,7 +17,7 @@ Owner condition at the 2026-11-01 architecture ratification; **revised 2026-11-0
 | Architecture analyzers | the layer charter, purity, clock discipline, API partition | ADR-0015 §2 table, each with teeth | T0–T2 |
 | Law-change visibility | no gate/spec/architecture rule changes silently | the LAW Δ block (ADR-0015 §1.3), read by the owner at every merge | every tier |
 | Conformance suite | SEMANTICS.md construct by construct | golden cases ported from `docs/language/checks/` (each Go case cites its Python source) + every corpus `expect` via playback, incl. `given table` seeding (SPEC §6.8 rev 2; ADR-0005 §4) | T2 |
-| Grammar differential | SPEC grammar ≡ engine parser | lark vs goyacc over examples/ + invalid/ + eval/generated: accept/reject verdicts AND canonical operator-spine shapes (ADR-0002 §5, RC7), counts asserted | T4 |
+| Grammar differential | SPEC grammar ≡ engine parser | lark vs goyacc over examples/ + invalid/ + eval/generated: accept/reject verdicts AND canonical operator-spine shapes (ADR-0002 §5, RC7), counts asserted | T4 *(annotated 2026-11-04: the engine side is participle v2, ADR-0002 as amended)* |
 | Determinism | byte-identical replay | same-log same-build byte diff; two-OS T4 job; planted map-iteration fixture must be caught | T3/T4 |
 | Allocation gate | the zero-alloc hot path (ADR-0010 §1) | `allocgate`: AllocsPerRun per stage fails on > 0; freelist-warm spawn benchmark | T2 |
 | Oracle & property tests | the pattern engine against an independent mind | a brute-force reference matcher (exhaustive over small windows) vs the engine on 200–300 seeded-random streams per shape; counters prove the interesting branches ran (`matches > N`, `defeats > N`); state-space caps recorded as skips, never silent | T3 |
@@ -44,12 +44,12 @@ Each law reruns conformance scenarios and compares outputs mechanically — no n
 
 ## 4. Debt tripwires (drift that fails the build, not the retro)
 
-- Doc-sync: error catalog ↔ validator table; Appendix F ↔ expr registry; ARCHITECTURE package list ↔ directories; reserved words ↔ kwgen (ADR-0015 §2, per sub-check `lands_in`).
+- Doc-sync: error catalog ↔ validator table; Appendix F ↔ expr registry; ARCHITECTURE package list ↔ directories; reserved words ↔ kwgen (ADR-0015 §2, per sub-check `lands_in`). *(annotated 2026-11-04: reserved words are pinned to `grammar.lark` by a parser test; no kwgen)*
 - API: the hand-written export list (`api/exports.golden`, a law file) + `apidiff` at T4 against merge-base/last-tag (ADR-0015).
 - Coverage: the binary inclusion rule (allowlist-waivable with a recorded reason) + the **90%** per-package statement floor *(owner, 2026-11-02: raised from 85%; enforced from sprint S1.1a, the first Go code)*, **unwaivable within its stated scope** — `internal/*` + the public packages (`cep`, `rule`, `io` and the `io/*` built-ins), generated files excluded (ADR-0015 §2.2; the old "no waiver path" sentence conflated the two rules).
 - Dependency allowlist (`tools/deps-allowlist.json`) — an unapproved `go.mod` edit is red.
 - Suppression + allowlist accountability: one grammar (ADR-0015 §3.10), expiry enforcement, liveness, counts + deltas in the summary.
-- Generated-code freshness (parser, keywords) regenerate-and-diff, scratch-dir only.
+- Generated-code freshness (parser, keywords) regenerate-and-diff, scratch-dir only. *(annotated 2026-11-04: no generated parser or keywords with participle; dormant until a generator lands)*
 - Runtime-metric tripwires are **zero-config-is-failure** (ADR-0015 §3.11): the **outbox ceiling is blocking** (default 65,536, ADR-0006 §5); `partial-count`, `sink-depth` and `drained_pending` are advisory per-rule ceilings set at the plan check — an unset ceiling fails the step; a deliberate opt-out is an explicit `ceiling: none # reason` entry. Advisory findings age into blocking after 2 sprints (ADR-0015 §3.9).
 
 ## 5. Review process hooks (people and agents)
