@@ -391,7 +391,7 @@ func TestMarshalCanonicalTimestamps(t *testing.T) {
 func TestMarshalCanonicalStrings(t *testing.T) {
 	t.Parallel()
 	in := "a\"b\\c\nd\re\tf\bg\fh\x01i<j>k&l m né"
-	want := `a\"b\\c\nd\re\tf\bg\fh\u0001i<j>k&l m né`
+	want := `a\"b\\c\nd\re\tf\bg\fh\u0001i<j>k&l\u2028m\u2029né`
 	app := model.App{Language: in}
 	assertBytes(t, mustEncode(t, app), `{"language":"`+want+`","params":[],"rules":[],"streams":[],"tables":[]}`)
 }
