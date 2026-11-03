@@ -1,0 +1,10 @@
+# Known issues
+
+Open defects with a forward. Each entry says what is wrong, why it is not fixed yet, and when it will be. An entry leaves this file when it is fixed (with a test) or when the owner rejects it. Process: [00-sprint-model.md](../sprints/00-sprint-model.md).
+
+| Id | Found | Issue | Why not fixed yet | Forward |
+|---|---|---|---|---|
+| QB10 | S1.1a-1 break-it | Two contrived test-module shapes can be shadowed at import: a directory under `gate/` with a dot in its name maps two files to one module name, and an untracked package directory shadows the tracked module of the same name. | Contrived; no false green has been seen. | The next sprint that changes the `pytests` row: refuse dotted directory names under `gate/` and a directory named like a tracked module. |
+| BA9 | S1.1a-1 review | The same logic exists in two places: the coverage instrument and the runner's scope rule; the platform map and cache layout in `gate/run.py` and in the toolchain manifest; several process-running helpers in tests. | Every copy fails loudly when it drifts, so none can give a false green. | Merge each copy the next time its file changes; pin `gate/run.py`'s computed tool path to the manifest's with one test. |
+| BA10 | S1.1a-1 review | A stop (interrupt or run ceiling) during parity's whole-tree hash waits for the hash to finish: about 2.5 s normally, and for ever if a file read hangs (for example on a stuck network home directory). | The usual cost is 2.5 s. The hang needs a broken file system. | A later gate sprint: a cancel flag checked per file, and a time cap of parity's own. |
+| BA13 | S1.1a-1 review | The shim's pass line shares stdout with the module under test, so a module that prints that line and then ends the process with `os._exit(0)` passes without running a test. | Adversarial only: no accident produces it. | A later gate sprint: the shim writes its report to a file the wrapper names. |
