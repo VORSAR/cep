@@ -96,6 +96,8 @@ func Compare(a, b *Event) int
 
 It **accepts** an `Optional` time attribute: a null timestamp is an event-level error at ingest (SEMANTICS §1.1, §10), not a schema error. It **copies** `attrs`, so the caller mutating its slice afterwards changes nothing.
 
+*(Clarified 2026-11-03 at wave 2, from the QA brief; QA open item 1, DQ25.)* On any error, `NewSchema` returns the **zero `Schema`**. Each rule's message is distinct from every other rule's, and names the offending attribute where there is one. It never writes the caller's slice.
+
 **Residue and forwards:**
 - `Value{}` is detectably invalid (`Kind == TInvalid`), but nothing reads `Kind` this sprint. The consumers that fill or read slots (S3.1's decoder, S3.2a's playback loader, S2.2a's expression nodes) MUST treat `TInvalid` as an error. Their sprints carry that as a test (inferred placement; forwarded).
 - `Type` numbers MUST never be encoded: S1.2's canonical encoding writes types by name (architect DA24; forwarded to S1.2).
