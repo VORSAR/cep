@@ -49,6 +49,18 @@ type Schema struct {
 
 var errNotImplemented = errors.New("event: not implemented")
 
+// The rule each NewSchema error wraps, one per rule of design note §1, r1 to r7. They stay
+// unexported: the surface is fixed, and a caller needs the message, not the rule's identity.
+var (
+	errEmptyStream       = errors.New("empty stream name")
+	errNoAttrs           = errors.New("no attributes declared")
+	errEmptyAttrName     = errors.New("empty attribute name")
+	errDuplicateAttrName = errors.New("duplicate attribute name")
+	errInvalidAttrType   = errors.New("invalid attribute type")
+	errTimeAttrRange     = errors.New("time attribute out of range")
+	errTimeAttrType      = errors.New("time attribute is not a timestamp")
+)
+
 // NewSchema validates and copies a stream declaration (design note §1 lists the rules).
 func NewSchema(stream string, attrs []Attr, timeAttr int) (Schema, error) {
 	_, _, _ = stream, attrs, timeAttr
