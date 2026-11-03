@@ -194,16 +194,16 @@ class Summarize(support.GateTest):
         out = self.assertRed("lint", "gofmt", "stale")
         self.assertNotIn("missing", self.cells(out, "lint", "gofmt")[4].lower(), out)
 
-    def test_two_attempts_are_stale_not_duplicate(self):
-        """N33: attempts 1 and 2 both downloaded: the older one's records are stale, never duplicates."""
+    def test_two_attempts_judge_only_the_current(self):
+        """N33, as the coordinator settled QA's ambiguity 7: attempts 1 and 2 both downloaded ("re-run all jobs").
+        Only the current attempt is judged, so a complete re-run can pass; the older records are never duplicates."""
         old = self.tree[f"records-lint-{ATTEMPT}"]
         self.tree["records-lint-1"] = {
             **old,
             "records": {k: {**v, "run_id": "4242-1"} for k, v in old["records"].items()},
         }
         code, out = self.summarize()
-        self.assertEqual((code, self.tail(out)), (1, ["GATE FAILED", "exit: 1"]), out)
-        self.assertIn("stale", out.lower(), out)
+        self.assertEqual((code, self.tail(out)), (0, ["GATE PASSED", "exit: 0"]), out)
         self.assertNotIn("duplicate", out.lower(), out)
 
     def test_a_wrong_tier_is_red(self):

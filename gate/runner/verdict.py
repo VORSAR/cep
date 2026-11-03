@@ -12,6 +12,7 @@ class Facts:
     cap_s: int
     min_wants: int = 0
     parity_failed: bool = False
+    skipped: int = -1  # T0: the tracked count of a scope with nothing staged (gate design §12.3); -1: not skipped
     stopped: str = ""  # the reason unfinished rows carry: "interrupted", or the ceiling's reason
     timed_out: bool = False
     spawn_error: str = ""
@@ -27,11 +28,14 @@ class Facts:
 class Verdict:
     ok: bool
     reason: str
+    skip: bool = False
 
 
 def decide(f: Facts) -> Verdict:
     if f.parity_failed:
         return Verdict(False, "not run: parity failed")
+    if f.skipped >= 0:
+        return Verdict(True, f"skip: nothing staged in scope ({f.skipped} tracked)", skip=True)
     if f.stopped:
         return Verdict(False, f.stopped)
     if f.timed_out:

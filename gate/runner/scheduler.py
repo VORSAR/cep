@@ -73,6 +73,7 @@ class _Done:
     started_ms: int
     ended_ms: int
     scope_sha256: str = ""
+    skipped: bool = False
     start_ns: int = 0
     end_ns: int = 0
     ran: bool = False
@@ -80,6 +81,13 @@ class _Done:
     @property
     def duration_ms(self) -> int:
         return (self.end_ns - self.start_ns) // NS_PER_MS
+
+
+def _word(d: _Done) -> str:
+    """The summary's verdict column."""
+    if d.skipped:
+        return "SKIP"
+    return "PASS" if d.ok else "FAIL" if d.blocking else "WARN"
 
 
 @dataclass(frozen=True)
@@ -345,6 +353,7 @@ class Runner:
             verdict.Facts(
                 cap_s=live.row.timeout_s,
                 min_wants=live.row.min_wants,
+                skipped=outcome.skipped,
                 stopped=live.stopped,
                 timed_out=live.timed_out,
                 spawn_error=outcome.spawn_error,
@@ -378,6 +387,7 @@ class Runner:
             started_ms=live.start_ms,
             ended_ms=end_ms,
             scope_sha256=digest,
+            skipped=decided.skip,
             start_ns=live.start_ns,
             end_ns=end_ns,
             ran=True,
@@ -473,7 +483,7 @@ class Runner:
             job=job,
             row_id=done.id,
             blocking=done.blocking,
-            verdict="pass" if done.ok else "fail",
+            verdict="skip" if done.skipped else "pass" if done.ok else "fail",
             reason=done.reason,
             exit_code=done.exit_code,
             covered=done.covered,
@@ -497,10 +507,7 @@ class Runner:
         wall_ms = (max(d.end_ns for d in ran) - min(d.start_ns for d in ran)) // NS_PER_MS if ran else 0
         summed_ms = sum(d.duration_ms for d in ran)
         exit_code = self._exit_code(ordered)
-        lines = [
-            summary.Line(d.job, d.id, "PASS" if d.ok else "FAIL" if d.blocking else "WARN", d.duration_ms, d.reason)
-            for d in ordered
-        ]
+        lines = [summary.Line(d.job, d.id, _word(d), d.duration_ms, d.reason) for d in ordered]
         text = summary.render(
             lines,
             wall_ms=wall_ms,

@@ -174,6 +174,13 @@ def _row(raw: object, index: int) -> Row:
     )
 
 
+def _t0_needs_git(row: Row) -> Row:
+    """T0 cuts scopes to the staged paths, which only a git scope has (gate design §12.3)."""
+    if "T0" in row.tiers and row.expected_scope[0] != "git":
+        raise RegistryError(f"row {row.id!r}: a T0 row needs a git expected_scope, not {row.expected_scope[0]!r}")
+    return row
+
+
 def _check_graph(rows: list[Row]) -> None:
     """`needs` names earlier rows of the same job, whose tiers include this row's; so the order is topological."""
     earlier: dict[str, Row] = {}
@@ -204,7 +211,7 @@ def loads(text: str) -> list[Row]:
         raise RegistryError(f"schema must be {SCHEMA}, got {doc['schema']!r}")
     if not isinstance(doc["rows"], list):
         raise RegistryError("rows must be a list")
-    rows = [_row(raw, i) for i, raw in enumerate(doc["rows"])]
+    rows = [_t0_needs_git(_row(raw, i)) for i, raw in enumerate(doc["rows"])]
     _check_graph(rows)
     return rows
 

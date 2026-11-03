@@ -2,13 +2,19 @@
 # missing pinned tools first, then hands over to the pinned CPython through the bootstrap; a system python3 >= 3.12
 # only starts it, with -I so that nothing in the caller's environment can run inside it.
 
-.PHONY: tools clean-tools check combine-check strict-gate ci
+.PHONY: tools clean-tools setup ci-workflow check combine-check strict-gate ci
 
 tools:
 	python3 -I -B gate/bootstrap.py install
 
 clean-tools:
 	python3 -I -B gate/bootstrap.py clean-tools
+
+setup:
+	git config core.hooksPath .githooks
+
+ci-workflow: tools
+	python3 -I -B gate/bootstrap.py exec -- generate-ci
 
 check: tools
 	python3 -I -B gate/bootstrap.py exec -- --tier T2

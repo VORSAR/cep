@@ -1,6 +1,8 @@
 """The gate's command line (plan check S4; design note §4).
 
-    gate/run.py --tier T0..T4 [--job NAME] [--run-dir DIR] [--registry PATH]
+    gate/run.py --tier T0..T4 [--job NAME] [--run-dir DIR] [--registry PATH] [--commit SHA] [--run-id ID]
+    gate/run.py summarize ...      (gate/runner/summarize.py)
+    gate/run.py generate-ci        (gate/ci/generate.py)
 
 Exit 0: pass. Exit 1: the gate failed, or was interrupted. Exit 2: usage or internal error. The last two stdout
 lines are always `GATE PASSED|GATE FAILED` and `exit: <n>`: main catches everything, because an uncaught exception
@@ -9,6 +11,7 @@ would exit 1, which means "gate failed".
 
 import argparse
 import os
+import re
 import signal
 import sys
 from collections.abc import Callable, Mapping
@@ -88,7 +91,24 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--job")
     parser.add_argument("--run-dir", dest="run_dir")
     parser.add_argument("--registry")
+    parser.add_argument("--commit", type=_matching(_SHA, "--commit", "40 or 64 lowercase hex digits"))
+    parser.add_argument("--run-id", dest="run_id", type=_matching(_RUN_ID, "--run-id", "1-64 of [A-Za-z0-9._-]"))
     return parser.parse_args(argv)
+
+
+_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_RUN_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
+
+def _matching(pattern: re.Pattern[str], option: str, want: str):
+    """A value checker for one option (gate design §12.3); anything else is a usage error, exit 2."""
+
+    def check(value: str) -> str:
+        if not pattern.fullmatch(value) or value in (".", ".."):
+            raise UsageError(f"{option} must be {want}, not {value!r}")
+        return value
+
+    return check
 
 
 def _prepare_run_dir(given: str | None, repo: str, run_id: str) -> str:
@@ -113,7 +133,7 @@ def _run(argv: list[str], deps: Deps) -> int:
     if os.path.realpath(path) != os.path.realpath(default):
         shown = summary.shown(os.path.abspath(path), deps.repo)
     toolchain = deps.toolchain(deps.repo, deps.environ)
-    run_id = deps.new_run_id(deps.clock.wall_ms())
+    run_id = args.run_id or deps.new_run_id(deps.clock.wall_ms())
     run_dir = _prepare_run_dir(args.run_dir, deps.repo, run_id)
     clean = env.clean_env(deps.environ, toolchain.path_dirs())
     runner = scheduler.Runner(
@@ -123,7 +143,7 @@ def _run(argv: list[str], deps: Deps) -> int:
         workers=count,
         run_dir=run_dir,
         run_id=run_id,
-        commit=deps.commit(deps.repo, clean, run_dir, args.tier),
+        commit=args.commit or deps.commit(deps.repo, clean, run_dir, args.tier),
         repo=deps.repo,
         environ=deps.environ,
         toolchain=toolchain,
@@ -143,6 +163,14 @@ def _run(argv: list[str], deps: Deps) -> int:
 def main(argv: list[str], *, deps: Deps | None = None) -> int:
     code = 2
     try:
+        if argv[:1] == ["summarize"]:
+            from gate.runner import summarize
+
+            return summarize.main(argv[1:])
+        if argv[:1] == ["generate-ci"]:
+            from gate.ci import generate
+
+            return generate.main(argv[1:])
         return _run(argv, deps if deps is not None else default_deps())
     except (UsageError, registry.RegistryError, workers.WorkersError, manifest.ManifestError) as e:
         print(e)

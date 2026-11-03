@@ -215,5 +215,13 @@ class Select(unittest.TestCase):
         self.assertIn("zero", str(caught.exception))
 
 
+class T0Kinds(unittest.TestCase):
+    def test_a_t0_row_must_use_a_git_scope(self):
+        # gate design §12.3: T0 cuts scopes to staged paths, which only a git scope has.
+        doc = {"schema": 1, "rows": [row(tiers=["T0", "T2"], expected_scope=["go", "./..."])]}
+        with self.assertRaisesRegex(registry.RegistryError, "T0"):
+            registry.loads(json.dumps(doc))
+
+
 if __name__ == "__main__":
     unittest.main()

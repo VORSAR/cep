@@ -35,17 +35,26 @@ def shown(path: str, repo: str) -> str:
 
 
 def render(
-    lines: Sequence[Line], *, wall_ms: int, summed_ms: int, exit_code: int, run_dir: str, registry: str | None = None
+    lines: Sequence[Line],
+    *,
+    wall_ms: int,
+    summed_ms: int,
+    exit_code: int,
+    run_dir: str,
+    registry: str | None = None,
+    image: str | None = None,
 ) -> str:
     """The whole summary. Each reason is one bounded line (review BA5); the last column is not padded, so no line
     carries trailing spaces. `registry` is named only when it is not the repository's own (review BA8). `run_dir`,
-    where every row's own output is, is always named (owner, 2026-11-03; review BA3)."""
+    where every row's own output is, is always named (owner, 2026-11-03; review BA3). `image` is CI's runner image,
+    which the owner asked every CI summary to record (sprint-plan §5, 2026-11-02)."""
     cells = [HEADER, *((x.job, x.step, x.verdict, tenths(x.ms), one_line(x.reason)) for x in lines)]
     widths = [max(len(row[i]) for row in cells) for i in range(len(HEADER) - 1)]
     table = [" | ".join([*map(str.ljust, row[:-1], widths, strict=True), row[-1]]).rstrip() for row in cells]
     return "\n".join(
         [
             *table,
+            *([] if image is None else [f"image: {image}"]),
             *([] if registry is None else [f"registry: {registry}"]),
             f"run: {run_dir}",
             footer(wall_ms, summed_ms),

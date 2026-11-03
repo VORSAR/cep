@@ -20,16 +20,16 @@ class HooksOff(support.DriverTest):
         self.world.commit()
         self.registry = self.world.registry(support.registry_row("hooks"))
 
-    def assertHooksRed(self) -> None:
+    def assertHooksRed(self, reason: str = OFF) -> None:
         run = self.world.run(registry=self.registry)
         self.assertParityPassed(run, "lint")
         self.assertGateFailed(run)
         record = run.record("lint", "hooks")
         self.assertEqual(record["verdict"], "fail", run.stdout)
-        self.assertIn(OFF, record["reason"], run.stdout)
+        self.assertIn(reason, record["reason"], run.stdout)
         cells = run.summary("lint", "hooks")
         self.assertEqual(cells[2], "FAIL", run.stdout)
-        self.assertIn(OFF, cells[4], run.stdout)
+        self.assertIn(reason, cells[4], run.stdout)
 
     def assertHooksGreen(self) -> None:
         run = self.world.run(registry=self.registry)
@@ -50,7 +50,7 @@ class HooksOff(support.DriverTest):
         self.world.git("config", "core.hooksPath", ".githooks")
         launcher = os.path.join(self.world.repo, ".githooks", "pre-commit")
         os.chmod(launcher, 0o644)
-        self.assertHooksRed()
+        self.assertHooksRed(".githooks/pre-commit is not executable: run git checkout -- .githooks")
 
     def test_the_relative_hooks_path_of_make_setup_is_green(self):
         support.hooks_on(self.world)

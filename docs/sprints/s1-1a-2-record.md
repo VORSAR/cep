@@ -30,6 +30,11 @@ The full plan check is [s1-1a-2-plan-check.md](s1-1a-2-plan-check.md) (v2), draf
 
 *(filled as the build lands)*
 
+**During the build — the coordinator, 2026-11-04** (QA's red tests named eight ambiguities in design §12; the ones that change behaviour, settled here for the owner to overrule):
+- **Two attempts downloaded together ("re-run all jobs"): only the current attempt is judged** (QA ambiguity 7; plan check N33 read this way). Records of an older attempt count only as "stale" when they are all a row has (N32). Otherwise every full re-run would be red.
+- **`summarize` reads every job's folder in every artifact,** so a record filed in another job's artifact is a duplicate, never invisible.
+- **The composite run id `<run_id>-<attempt>` is what `summarize` compares** (ambiguity 1); RED reasons start with their class word (ambiguity 4); `summarize` writes its own `run.json` and `summary.md` under `<artifacts>/strict-gate/` (ambiguity 3).
+
 ## Test material
 
 - the hook proof's isolated git worlds (built at test time, never committed unformatted files);

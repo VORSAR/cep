@@ -60,6 +60,16 @@ class Precedence(unittest.TestCase):
         self.assertEqual(verdict.decide(dataclasses.replace(named, returncode=-9)).reason, "killed by signal 9")
         self.assertEqual(verdict.decide(dataclasses.replace(named, timed_out=True)).reason, "timeout after 60s")
 
+    def test_a_t0_skip_comes_after_parity_and_before_everything_else(self):
+        # gate design §12.3: "skip: nothing staged in scope" sits between rules 1 and 2.
+        skipped = dataclasses.replace(ALL_WRONG, parity_failed=False, skipped=3)
+        got = verdict.decide(skipped)
+        self.assertEqual((got.ok, got.skip, got.reason), (True, True, "skip: nothing staged in scope (3 tracked)"))
+        self.assertEqual(
+            verdict.decide(dataclasses.replace(skipped, parity_failed=True)).reason, "not run: parity failed"
+        )
+        self.assertFalse(verdict.decide(dataclasses.replace(skipped, skipped=-1)).skip)
+
     def test_a_ceiling_breach_carries_its_own_reason(self):
         facts = dataclasses.replace(ALL_WRONG, parity_failed=False, stopped="run ceiling 420s exceeded")
         self.assertEqual(verdict.decide(facts).reason, "run ceiling 420s exceeded")
