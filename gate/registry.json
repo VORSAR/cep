@@ -121,7 +121,7 @@
         "gate/toolchain/tests/test_install.py",
         "gate/toolchain/tests/test_manifest.py"
       ],
-      "min_wants": 0,
+      "min_wants": 4,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [
@@ -218,7 +218,7 @@
       "expected_scope": [
         "git",
         ":(glob)gate/**/test_*.py",
-        ":(glob,exclude)gate/proofs/**"
+        ":(glob,exclude)gate/proofs/drivers/**"
       ],
       "min_wants": 0,
       "lands_in": "S1.1a-1",

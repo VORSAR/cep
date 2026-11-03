@@ -706,4 +706,21 @@ The design note ([s1-1a-gate-design.md](s1-1a-gate-design.md)) was reviewed blin
 10. **G1 approved for S1.1a-1** (recommended, accepted) on design note v2.1, after the focused re-check. That re-check found 3 more blockers, which were fixed and re-verified.
 11. **Parity re-hashes whole tool trees at T2 and above, and executables only at commit or push** (recommended, accepted), through a pinned `tree_sha256` per tool.
 
+### Owner decisions, 2026-11-03 — S1.1a-1 review and break-it (step 7)
+
+The combined build was reviewed blind:
+- **Architect + the-fool:** 0 blocker / 4 should-fix / 10 later.
+- **QA break-it:** 2 blocker / 2 should-fix / 6 later. Red tests are committed for 6 of them.
+
+The coordinator re-verified the blockers' red tests. All four answers below match the recommendations.
+
+1. **Fix-round scope:**
+   - Fix both blockers (QB1: test modules no row runs; QB3: a FIFO in the cache hangs parity) and every should-fix item.
+   - Also fix the cheap later items: a truncated archive accepted; a parity record cut at 300 characters; the registry used not recorded; Ctrl-C before the scheduler starts; the `make` exit-code doc note.
+   - Move later-sprint items to their sprints: the nested `go.mod` check and the scope-class map → S1.1b; the hook scopes → S1.1a-2. The rest go to known issues with reasons.
+   - Leftover-process risk that the fix cannot remove (e.g. a SIGKILL of the runner itself) is recorded as accepted residue.
+2. **A red row's summary shows its first failure line,** and the summary prints the run's directory.
+3. **A skipped Go test fails the `unit` row,** as Python skips already fail `pytests` ("a skip is never green"). S1.2's skip grammar may later admit only the named `not-implemented(S<n>)` form.
+4. **Every record carries a `blocking` field.**
+
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.

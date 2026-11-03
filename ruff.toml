@@ -26,8 +26,11 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "TID", "BLE", "S602", "S604", "S
 "os.wait".msg = "never reap children behind subprocess's back (it turns a failure into exit 0)"
 "os.wait3".msg = "never reap children behind subprocess's back (it turns a failure into exit 0)"
 "os.wait4".msg = "never reap children behind subprocess's back (it turns a failure into exit 0)"
+"os.waitpid".msg = "never reap children behind subprocess's back (it turns a failure into exit 0)"
+"os.waitid".msg = "never reap children behind subprocess's back (it turns a failure into exit 0)"
 "shutil.move".msg = "use os.rename: atomic, and never nests into an existing directory"
 "signal.SIG_IGN".msg = "never ignore a signal: an ignored SIGCHLD reports a failed child as exit 0"
+"signal.Handlers.SIG_IGN".msg = "never ignore a signal: an ignored SIGCHLD reports a failed child as exit 0"
 
 [lint.per-file-ignores]
 "gate/wait.py" = ["TID251"]                              # the one wait helper may sleep (testing.md rule 1)
