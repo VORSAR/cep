@@ -13,10 +13,11 @@ import stat
 
 from gate.proofs.drivers import support
 
-BAD = "pkg/bad.go"
-GOOD = "pkg/good.go"
-UNFORMATTED = "package pkg\nfunc  F( ) {\n}\n"
-FORMATTED = "package pkg\n\nfunc F() {}\n"
+# Planted in a package the import law lists, so archcheck (a T0 row since S1.1b) passes them and only gofmt judges.
+BAD = "internal/event/bad.go"
+GOOD = "internal/event/good.go"
+UNFORMATTED = "package event\nfunc  F( ) {\n}\n"
+FORMATTED = "package event\n\nfunc G() {}\n"
 GUARD = "has unstaged changes: stage them or stash them"
 
 
@@ -91,7 +92,7 @@ class HookCommit(support.DriverTest):
     def test_a_formatted_file_commits(self):
         """The positive control: the same hooks let a clean commit through, and the gate ran to say so."""
         before = self.head()
-        self.world.track("pkg/other.go", FORMATTED.replace("func F", "func G"))
+        self.world.track("internal/event/other.go", FORMATTED.replace("func G", "func H"))
         code, out = self.git_commit()
         self.assertEqual(code, 0, out)
         self.assertNotEqual(self.head(), before, out)
