@@ -1,0 +1,197 @@
+{
+  "language": "cep/0.1",
+  "params": [
+    {
+      "default": {"bool": false, "float": 0.75, "int": 0, "kind": "float", "ms": 0, "param": "", "str": ""},
+      "name": "threshold",
+      "type": "float"
+    }
+  ],
+  "rules": [
+    {
+      "body": {
+        "kind": "plain",
+        "pattern": {
+          "afterMatch": "",
+          "elements": [],
+          "lateEvents": {"allow": {"ms": 0, "param": ""}, "mode": ""},
+          "restart": "",
+          "within": {"ms": 0, "param": ""}
+        },
+        "source": {
+          "filter": {
+            "args": [
+              {
+                "args": [
+                  {
+                    "args": [
+                      {
+                        "args": [],
+                        "kind": "attr",
+                        "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                        "name": "score", "namespace": "", "negated": false, "op": "",
+                        "operand": {"param": "", "strings": [], "table": ""},
+                        "qualifier": "", "table": ""
+                      },
+                      {
+                        "args": [],
+                        "kind": "literal",
+                        "lit": {"bool": false, "float": 0, "int": 0, "kind": "param", "ms": 0, "param": "threshold", "str": ""},
+                        "name": "", "namespace": "", "negated": false, "op": "",
+                        "operand": {"param": "", "strings": [], "table": ""},
+                        "qualifier": "", "table": ""
+                      }
+                    ],
+                    "kind": "compare",
+                    "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                    "name": "", "namespace": "", "negated": false, "op": ">",
+                    "operand": {"param": "", "strings": [], "table": ""},
+                    "qualifier": "", "table": ""
+                  },
+                  {
+                    "args": [
+                      {
+                        "args": [],
+                        "kind": "attr",
+                        "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                        "name": "agent", "namespace": "", "negated": false, "op": "",
+                        "operand": {"param": "", "strings": [], "table": ""},
+                        "qualifier": "", "table": ""
+                      }
+                    ],
+                    "kind": "text",
+                    "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                    "name": "", "namespace": "", "negated": false, "op": "contains_ci",
+                    "operand": {"param": "", "strings": ["curl"], "table": ""},
+                    "qualifier": "", "table": ""
+                  }
+                ],
+                "kind": "and",
+                "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                "name": "", "namespace": "", "negated": false, "op": "",
+                "operand": {"param": "", "strings": [], "table": ""},
+                "qualifier": "", "table": ""
+              },
+              {
+                "args": [
+                  {
+                    "args": [],
+                    "kind": "attr",
+                    "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                    "name": "user", "namespace": "", "negated": false, "op": "",
+                    "operand": {"param": "", "strings": [], "table": ""},
+                    "qualifier": "", "table": ""
+                  }
+                ],
+                "kind": "in",
+                "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+                "name": "", "namespace": "", "negated": false, "op": "",
+                "operand": {"param": "", "strings": [], "table": ""},
+                "qualifier": "", "table": "Blocked"
+              }
+            ],
+            "kind": "and",
+            "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+            "name": "", "namespace": "", "negated": false, "op": "",
+            "operand": {"param": "", "strings": [], "table": ""},
+            "qualifier": "", "table": ""
+          },
+          "stream": "Logins"
+        },
+        "window": {
+          "cronExpr": "",
+          "cronTZ": "",
+          "delay": {"ms": 0, "param": ""},
+          "emit": "",
+          "kind": "",
+          "lateEvents": {"allow": {"ms": 0, "param": ""}, "mode": ""},
+          "sortAttr": "",
+          "sortDir": "",
+          "sortN": 0,
+          "source": {
+            "filter": {
+              "args": [],
+              "kind": "",
+              "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+              "name": "", "namespace": "", "negated": false, "op": "",
+              "operand": {"param": "", "strings": [], "table": ""},
+              "qualifier": "", "table": ""
+            },
+            "stream": ""
+          }
+        }
+      },
+      "expects": [],
+      "insertInto": "Alerts",
+      "intent": "flag a risky login & its score",
+      "name": "RiskyLogin",
+      "outputFirstEvery": {"ms": 60000, "param": ""},
+      "partition": {"keys": [], "ttl": {"ms": 0, "param": ""}},
+      "select": [
+        {
+          "as": "",
+          "expr": {
+            "args": [],
+            "kind": "attr",
+            "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+            "name": "user", "namespace": "", "negated": false, "op": "",
+            "operand": {"param": "", "strings": [], "table": ""},
+            "qualifier": "", "table": ""
+          }
+        },
+        {
+          "as": "s",
+          "expr": {
+            "args": [],
+            "kind": "attr",
+            "lit": {"bool": false, "float": 0, "int": 0, "kind": "", "ms": 0, "param": "", "str": ""},
+            "name": "score", "namespace": "", "negated": false, "op": "",
+            "operand": {"param": "", "strings": [], "table": ""},
+            "qualifier": "", "table": ""
+          }
+        }
+      ],
+      "todos": []
+    }
+  ],
+  "streams": [
+    {
+      "annotations": [
+        {
+          "items": [
+            {
+              "key": "type",
+              "nested": [],
+              "value": {"bool": false, "float": 0, "int": 0, "kind": "string", "ms": 0, "param": "", "str": "stdin"}
+            }
+          ],
+          "name": "source"
+        }
+      ],
+      "attrs": [
+        {"name": "user", "optional": false, "type": "string"},
+        {"name": "score", "optional": false, "type": "float"},
+        {"name": "agent", "optional": true, "type": "string"},
+        {"name": "ts", "optional": false, "type": "timestamp"}
+      ],
+      "name": "Logins",
+      "time": {"attr": "ts", "bound": 5000, "idleAfter": 30000, "kind": "bounded"}
+    },
+    {
+      "annotations": [],
+      "attrs": [
+        {"name": "user", "optional": false, "type": "string"},
+        {"name": "s", "optional": false, "type": "float"}
+      ],
+      "name": "Alerts",
+      "time": {"attr": "", "bound": 0, "idleAfter": 0, "kind": "none"}
+    }
+  ],
+  "tables": [
+    {
+      "attrs": [{"name": "user", "optional": false, "type": "string"}],
+      "name": "Blocked",
+      "primaryKey": ["user"]
+    }
+  ]
+}
