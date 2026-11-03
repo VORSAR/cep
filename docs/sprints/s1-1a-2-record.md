@@ -1,6 +1,6 @@
 # S1.1a-2 — sprint record
 
-**Sprint:** S1.1a-2 — Hooks and CI · **Routine:** the full loop, no design panel · **Size:** about 8 SP (items 4.5) against the 2-week cap · **Branch:** `s1-1a-2/integration`
+**Sprint:** S1.1a-2 — Hooks and CI · **Routine:** the full loop, no design panel · **Size:** about 8 SP (items 4.5), from G0 on 2026-11-03 to the build on 2026-11-04 against the 2-week cap · **Branch:** `s1-1a-2/integration`
 **What to build and how each item is proven:** [sprint plan — S1.1a-2](sprint-plan.md#s11a-2--hooks-and-ci) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
@@ -80,13 +80,17 @@ Review (G3)  ☑ n/a by the owner's decision (2026-11-04: utility code; no step-
              ☑ QA's 35 red tests, written first, all pass; nothing open — G3 passed
 Verify (G4)  ☑ T4 strict-gate and CI exit 0, runs complete (CI 41697865717) ☐ owner's check passed
              ☐ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
+Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner (PR #2)
+             ☐ main CI green on the merge commit (the workflow runs on every push to main)
+             ☑ sprint record + five-line retro ☑ known issues: none new (residue in design §12.8) ☑ sprint-plan §Status line
+             ☑ documents reconciled (DEVELOPMENT.md annotated) ☑ memory updated
+             ☑ worktrees removed ☑ points and duration recorded (about 8 SP; 2 days)
 ```
 
 ## Retro
 
-*(at close-out)*
+1. **Worked — the first CI run found a real difference at once.** The tool cache sat inside the checkout, and the project's `go.mod` changed what `go` did; a witness test went red only on Linux. It was fixed and pinned within the hour, and `summarize` reported it as one named row.
+2. **Worked — QA's red tests first, written in parallel with the build.** 35 tests were ready before the code. Three were stricter than the design and were relaxed with reasons; none hid a defect.
+3. **Missed — the plan grew before it shrank.** The blind reviews turned a 5-point card into 10, then the owner cut the separate checked tree as overkill (8). A "what does CI already cover?" question at the first draft would have kept it at about 8 from the start.
+4. **Friction — process weight on utility code.** Plan reviews, a re-check and a step-7 review were each started for gate tooling. The owner stopped the last two.
+5. **Change next sprint.** For gate and utility work: one plan, the owner's questions, the build, CI green, done; reviews and break-it are saved for engine code unless the owner asks (recorded in memory, not yet in the sprint model; the owner decides).
