@@ -91,6 +91,7 @@ A lane is done at the scaffold's `make check` in W1, and at the real `make check
 
 **During the fix round: the owner, 2026-11-03:**
 - **The coordinator makes the fix round itself, in the main session** ("do this in main agent"; ≠ the plan check's decision that agents write gate code and the coordinator reviews it). The fix agents had stalled after rate limits and were stopped. Each fix is test-first, one commit per finding, re-verified by a full run.
+- **No separate review of the fix round** (≠ R: a fresh QA reviewer was recommended, since the coordinator wrote the fixes; ground rule 14). The fixes stand on their red-first tests and the three green tiers.
 
 ## Measured results
 
