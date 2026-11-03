@@ -146,7 +146,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | | |
 |---|---|
 | **Goal** | Every commit and push runs its tier through the same runner, `make check` refuses to run until the hooks are on, and CI runs the registry's rows as concurrent jobs with one required check. |
-| **Routine · size** | Full loop · 5 SP (items 3.5) *(re-sized 2026-11-03 by the owner at G0: about 10 SP, items 5.5; see the [plan check](s1-1a-2-plan-check.md) §0 and §5 decisions)* |
+| **Routine · size** | Full loop · 5 SP (items 3.5) *(re-sized 2026-11-03 by the owner at G0: about 10 SP, items 5.5, then about 8 SP, items 4.5, on 2026-11-04; see the [plan check](s1-1a-2-plan-check.md) §0 and §5 decisions)* |
 | **Depends on** | S1.1a-1 |
 | **In scope** | 1. `.githooks/pre-commit` (T0 over an index snapshot; refuses an unformatted file and prints the fix; SKIP when nothing is staged) and `.githooks/pre-push` (T1 over the pushed tip), both Python; `make setup`; a row that makes `make check` refuse until the hooks are on (CI sets `core.hooksPath`) [1]. · 2. `gate/ci/`, which generates `.github/workflows/gate.yml` from `registry.json` (`ubuntu-latest` per the owner, actions pinned by SHA, concurrent jobs, module and build caches), plus the `ci-fresh` row [1]. · 3. `summarize` (expected rows taken from the registry) + its fixture trees [1]. · 4. The hook proof and the summary proofs [0.5]. |
 | **Not in scope** | The analyzers and LAW Δ → S1.1b. |
@@ -733,5 +733,7 @@ The plan check ([s1-1a-2-plan-check.md](s1-1a-2-plan-check.md), v2) was reviewed
 2. **The coordinator builds the sprint in the main session.** Fresh, time-boxed agents write QA's red tests first and do the step-7 review.
 3. **CI may use four GitHub Actions, and only these:** `checkout`, `cache`, `upload-artifact`, `download-artifact`, each pinned by commit SHA (MIT-licensed). They are the project's first outside dependencies.
 4. **A commit runs only the fast checks on its staged files** (parity's executables, `gofmt`, `ruff`); `pyfloor` runs at push.
+5. **The hooks check in place, with a guard** (2026-11-04, as recommended in a follow-up question; replaces plan v2's separate checked tree as "overkill" for a convenience check). A staged file with unstaged changes is refused; a push of anything but a clean HEAD is left to CI. The size falls to about 8 SP.
+6. **G1: "implement this fast and get it over"** (2026-11-04): the owner approved the design (gate design §12) and asked for speed.
 
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
