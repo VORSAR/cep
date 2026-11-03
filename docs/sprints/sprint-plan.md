@@ -743,4 +743,9 @@ The plan check ([s1-1a-2-plan-check.md](s1-1a-2-plan-check.md), v2) was reviewed
 2. **The rest of S1.1b moves to a later sprint, S1.1c,** sized at its own G0: `law.json`/`lawdelta` and the LAW Δ block, registry-lint, `todocheck`, `testhygiene`, the teeth meta-test, golangci-lint `smells` + `nolintlint`, and the suppressions checker with the allowlist grammar. Until then, a package-level var outside the four allowed forms has no allowlist: it is red.
 3. **"Don't make this overly complicated":** one plan in the record, no plan reviews, no step-7 review (utility code, as for S1.1a-2).
 
+### Owner decisions, 2026-11-04 — S1.2 cut to the model kernel and spec rev 3
+
+1. **S1.2 = `internal/model` (the IR and its canonical JSON) + spec rev 3** (≠ R: the recommendation was the model kernel alone, with spec rev 3 just before the validator sprint). The owner kept spec rev 3 beside the model because the model's fields are named after spec clauses.
+2. **The gate extras move to S1.1c:** the dependency-allowlist, licence and `govulncheck` checks, the build-tag law, the weekly canary, the sprint-id grammar with `gate/current-sprint` and the `todocheck` forms, and `docsync` (a) and (d).
+
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
