@@ -121,3 +121,5 @@ Every non-SQL construct is priced here before it enters SYNTAX.md.
 | 5 (L4) | SPEC.md, grammar.ebnf+.lark, errors.md (56 codes), examples/ (9) + invalid/ (22) | **frozen in v0.1** 2026-11-01 after the L6 round — `grammar_check` PASS; expect-runner lands with the engine |
 | 6 (L5) | EVAL.md | **run 2026-10-31** — 12/12 parse, 12/12 static, 0 ambiguous (targets ≥97/≥90 met); 14 spec-gap reports harvested → L6 input; executor-agreement + human read-aloud planned (engine Phase 1 / pre-launch) |
 | 7 (L6) | REVIEW.md | **closed 2026-11-01** — A–F checklist + independent red team (28 findings: 26 fixed, 2 accepted, 0 rejected); **SPEC v0.1 FROZEN**; engine Phase 1 unblocked |
+
+*Spec rev 3 (2026-11-04, sprint S1.2): the owner's decisions of 2026-11-01/02 applied — `E-GRAPH-004`, `E-PART-003`, `E-TIME-003` added (60 codes); `late events allow` removed for v0.1; cron admission pinned to SPEC §6.1 (executor aligned, 41/41 harness checks); `text_invisibles` engine-owned; keyword sets over tables use the per-event snapshot; `time arrival` kept. No new design decisions.*

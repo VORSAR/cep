@@ -32,7 +32,7 @@ Three clocks exist; **every time-dependent construct states its clock; there is 
 
 - **Event time** — the timestamp attribute named in the stream declaration. The only clock deterministic under replay. The MVP language permits *only* event time.
 - **Processing time** — wall clock; opt-in by keyword (reserved, not MVP). Wall-clock functions (`now()` etc.) are forbidden in filters/projections of event-time rules (deploy error).
-- **Ingestion time** — degenerate event time: a source may declare "stamp on arrival"; thereafter the event's timestamp *is* its event time.
+- **Ingestion time** — degenerate event time: a source may declare "stamp on arrival"; thereafter the event's timestamp *is* its event time. *(SPEC rev 3: `time arrival` stays; a playback log carries the recorded arrival stamp as `ts`.)*
 
 **Stream declaration must state one of:** `timestamp = <attr>` (event time), `timestamp = arrival` (ingestion), or (reserved) `clock = processing`. Missing clause = deploy error with fix suggestion.
 
@@ -46,7 +46,7 @@ A watermark `wm` is the assertion "no event with timestamp < wm will arrive agai
 
 Constructs reading multiple streams (patterns over two streams, later joins) advance on the **minimum** of their input watermarks, **clamped monotonic**: `wm_construct = max(previous wm_construct, min(input wms))` — a construct's watermark never retreats, even when an idle stream resumes behind it. End of stream (and playback end): `wm → +∞`, all open state fires/expires.
 
-**Derived (intermediate) streams** — a query's output consumed by another query — carry **no** timestamp/watermark clauses (declaring one is a deploy error; the mandatory clauses of §2 apply to *source* streams only). Instead, watermarks are **punctuations that flow through constructs**: a construct forwards watermark `W` downstream only after emitting everything it owes at `W`. Consequently an event on a derived stream is never behind that stream's watermark by construction — e.g. `delay(D)` releases every held event due in `(W_prev, W]` *before* forwarding `W`, so downstream constructs admit them. Downstream lateness is judged against the **propagated** watermark, never re-derived from event timestamps.
+*(SPEC rev 3: v0.1 rejects a rule reading a derived stream, `E-GRAPH-004`; the derived-stream semantics below describe Phase 2's rule chaining.)* **Derived (intermediate) streams** — a query's output consumed by another query — carry **no** timestamp/watermark clauses (declaring one is a deploy error; the mandatory clauses of §2 apply to *source* streams only). Instead, watermarks are **punctuations that flow through constructs**: a construct forwards watermark `W` downstream only after emitting everything it owes at `W`. Consequently an event on a derived stream is never behind that stream's watermark by construction — e.g. `delay(D)` releases every held event due in `(W_prev, W]` *before* forwarding `W`, so downstream constructs admit them. Downstream lateness is judged against the **propagated** watermark, never re-derived from event timestamps.
 
 **Single-input timers (pinned 2026-11-01):** the contribution mechanism applies to every timer-holding construct, a single-input one included — a pattern's absence deadline or a window's close advances on its input's *contribution* (admission wm raised by idleness/virtual clock), so a quiet stream cannot stall its own rule's timers in live mode, and `idle after` is therefore required on any timer-feeding stream (§11.10).
 
@@ -66,7 +66,7 @@ Filters and projections are **pure**: no side effects, no wall clock, no externa
 
 ## 4. Tables and membership
 
-A table is a keyed set (primary key mandatory) holding rows, mutated programmatically (Go API) in MVP. Evaluation sees a **per-event snapshot**: all predicates evaluated for one event read the same table state; a concurrent programmatic update is visible to the next event, never mid-event. `<expr> in <Table>` is true iff a row whose key equals the expression exists (null-strict per §1.1). Rules referencing a missing table: deploy error.
+A table is a keyed set (primary key mandatory) holding rows, mutated programmatically (Go API) in MVP. *(SPEC rev 3: keyword-set operators over a table operand read the same per-event snapshot as `in`.)* Evaluation sees a **per-event snapshot**: all predicates evaluated for one event read the same table state; a concurrent programmatic update is visible to the next event, never mid-event. `<expr> in <Table>` is true iff a row whose key equals the expression exists (null-strict per §1.1). Rules referencing a missing table: deploy error.
 
 ## 5. Text matching
 
@@ -74,7 +74,7 @@ All text operators evaluate over the **normalization pipeline** by default (owne
 
 ### 5.1 Normalization pipeline (stages fixed, in order)
 
-1. **Invisible handling**: code points in categories Cf (format), Cc (control, except TAB/LF/CR), Co (private use), Cn (unassigned) — including the Tags block used for ASCII smuggling — are **stripped from the match text and flagged**. The flag (`text_invisibles=true`) is computed **once at ingestion, over all string attributes of the event**, and attached as event metadata before any rule evaluates — so filters stay pure (§3) and the flag reads the same in any filter position. Rules can test the flag.
+1. **Invisible handling**: code points in categories Cf (format), Cc (control, except TAB/LF/CR), Co (private use), Cn (unassigned) — including the Tags block used for ASCII smuggling — are **stripped from the match text and flagged**. The flag (`text_invisibles=true`) is computed **once at ingestion, over all string attributes of the event**, and attached as event metadata before any rule evaluates — so filters stay pure (§3) and the flag reads the same in any filter position. Rules can test the flag. *(SPEC rev 3: `text_invisibles` is engine-owned — always computed; a payload value under that name is ignored, overwritten and counted; a stream may declare it as `bool` for readability.)*
 2. **NFC normalization.**
 3. **Case folding** — applied only when the operator instance says insensitive: Unicode **simple, locale-independent (ordinal) fold** (as in Go's `strings.EqualFold`; `ß` folds to `ß`, not `ss` — the full fold is explicitly not used). Never locale-aware (Turkish-I is a documented bypass).
 
@@ -149,7 +149,7 @@ A window is keyed state attached to one stream input. **Every stateful construct
 
 | Window | State & boundary rule | Fires | Emission modes | Lateness |
 |---|---|---|---|---|
-| **cron(expr, tz)** | tumbling buckets whose boundaries are successive fire-times of the cron expression, evaluated in the **mandatory** IANA timezone `tz`, over event time; bucket = half-open `[bᵢ, bᵢ₊₁)`. **DST rule (normative):** a local fire-time that occurs twice fires at its **first** occurrence only; one that never occurs fires at the first instant after the gap | `wm ≥ bᵢ₊₁ + allowed_lateness` — **one** fire per bucket, delayed by the allowance; no early fire, no re-fire (append) | on close | drop / allow D |
+| **cron(expr, tz)** | tumbling buckets whose boundaries are successive fire-times of the cron expression, evaluated in the **mandatory** IANA timezone `tz`, over event time; bucket = half-open `[bᵢ, bᵢ₊₁)`. **DST rule (normative):** a local fire-time that occurs twice fires at its **first** occurrence only; one that never occurs fires at the first instant after the gap | `wm ≥ bᵢ₊₁ + allowed_lateness` — **one** fire per bucket, delayed by the allowance; no early fire, no re-fire (append). *(SPEC rev 3: `allow` is not in v0.1, so the allowance is 0; an event behind its stream's admission watermark is dropped even if its bucket is open.)* | on close | drop *(allow D: Phase 2, rev 3)* |
 | **delay(D)** | holds each event; due at `t + D` | per event, `wm ≥ t + D`; emitted with timestamp `t + D`, **before** the watermark punctuation is forwarded (§2.1 — delayed events are never late downstream) | on due (only) | drop |
 | **sort(N, attr, dir)** | top/bottom-N rows by `attr` per key; arrival inserts, overflow evicts the extreme. **Ties on `attr` evict the latest row in §2.2 order**, so a tied newcomer is itself evicted → **no** change rows (no churn on equal values) | on each change | on change (**changelog**: +insert/−evict) | drop |
 | **batch** | groups events sharing one source delivery batch id; boundaries are source-provided punctuations (part of the replay log contract, §10). A batch id already fired is **deduplicated** (redelivery emits nothing) | batch boundary; emits the group as one event carrying the collected events, stamped with the group's **max event time** | on batch end | n/a (arrival-structured; stated in docs as not event-time) |
@@ -169,7 +169,7 @@ MVP legal combinations (anything else is a deploy error):
 | Construct | Trigger | Accumulation | Lateness | Output mode |
 |---|---|---|---|---|
 | Pattern match | on match (watermark-driven) | n/a (single fire) | drop (counted) | append |
-| cron window | on close (delayed by `allow D` — still a single fire, §7) | n/a (single fire) | drop / allow D | append (always; re-fire/changelog variants are P2 with early firing) |
+| cron window | on close (single fire, §7; no allowance in v0.1, SPEC rev 3) | n/a (single fire) | drop (allow D: Phase 2) | append (always; re-fire/changelog variants are P2 with early firing) |
 | delay | on due | n/a | drop | append |
 | sort | on change | n/a (delta stream) | drop | changelog |
 | batch | on batch end | n/a | n/a | append |

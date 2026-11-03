@@ -1,4 +1,4 @@
--- constructs: cron-window emit-on-close late-allow count aggregate-call
+-- constructs: cron-window emit-on-close late-drop count aggregate-call
 language cep/0.1;
 
 stream AgentActions (agentId string, action string, ts timestamp)
@@ -11,6 +11,6 @@ rule DailyDigest
   partition by agentId of AgentActions ttl 36 hour
   from AgentActions window cron('0 0 * * *', 'America/New_York')
   emit on close
-  late events allow 10 min
+  late events drop
   select agentId, count() as actions
   insert into DailyAgentDigest;

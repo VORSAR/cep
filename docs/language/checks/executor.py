@@ -583,8 +583,11 @@ def cron_window(boundaries, stream, wm_delay: float = 0.0, allowed_lateness: flo
     instants — cron parsing, tz and DST evaluation happen upstream; this takes the
     sorted fire-times as input. A bucket fires on close: wm >= b_{i+1} +
     allowed_lateness — ONE fire per bucket, delayed by the allowance; no early
-    fire, no re-fire (append). An arrival into an already-closed bucket is late ->
-    dropped + counted. Returns (fired, late_indices); fired rows are
+    fire, no re-fire (append). Admission is SPEC 6.1's (spec rev 3): an event
+    behind the stream's watermark (t < wm) is late -> dropped + counted, even if
+    its bucket is still open; so is an arrival into an already-closed bucket.
+    `allowed_lateness` is kept for Phase 2: rev 3 removes `late events allow`, so
+    v0.1 always passes 0. Returns (fired, late_indices); fired rows are
     (key, start, end, [events])."""
     fired, late = [], []
     state: Dict[tuple, list] = {}    # (key, start) -> [end, events]
@@ -605,7 +608,7 @@ def cron_window(boundaries, stream, wm_delay: float = 0.0, allowed_lateness: flo
         if j < 0 or j >= len(boundaries) - 1:
             raise DeployError(f"event ts {t} outside the precomputed boundary range")
         s, e = boundaries[j], boundaries[j + 1]
-        if (k, s) in closed:
+        if (k, s) in closed or t < max_ts - wm_delay:
             late.append(i)
         else:
             state.setdefault((k, s), [e, []])[1].append(evt)

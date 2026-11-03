@@ -292,6 +292,18 @@ def _():
     assert fired == [("k", 0, H, [e1]), ("k", H, 2 * H, [e2])], fired
 
 
+@check("7", "rev 3: cron admission is SPEC 6.1's: an event behind the watermark drops even if its bucket is open")
+def _():
+    # SPEC 6.1 pinned for cron (spec rev 3, owner 2026-11-02): admission is the stream's watermark, not the bucket.
+    # wm = max(ts) - 30 min. After e2 (80 min) wm is 50 min: bucket [0, H) is still open (it closes at wm >= H), yet
+    # e3 at 40 min is behind the watermark, so it is dropped and counted, never added to the open bucket.
+    H = 60 * MIN
+    e1, e2, e3 = ev("E", 10 * MIN, key="k"), ev("E", 80 * MIN, key="k"), ev("E", 40 * MIN, key="k")
+    fired, late = cron_window([0, H, 2 * H], [e1, e2, e3], wm_delay=30 * MIN)
+    assert late == [2], late
+    assert fired == [("k", 0, H, [e1]), ("k", H, 2 * H, [e2])], fired
+
+
 @check("7", "sort(2, score, desc) changelog: arrivals 5, 7, 6 -> +5 +7 +6 -5")
 def _():
     events = [ev("S", i * SEC, key="k", score=s) for i, s in enumerate([5, 7, 6])]
