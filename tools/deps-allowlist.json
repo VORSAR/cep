@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "note": "The approved module dependencies (ADR-0009 \u00a71). A go.mod module not listed here fails the deps row (S1.1c). Owner approvals are dated.",
+  "modules": [
+    {
+      "module": "github.com/alecthomas/participle/v2",
+      "version": "v2.1.4",
+      "scope": "runtime",
+      "license": "MIT",
+      "approved": "2026-11-04",
+      "why": "the engine parser (ADR-0002 as amended; docs/language/research/participle-spike.md)"
+    },
+    {
+      "module": "github.com/alecthomas/repr",
+      "version": "v0.4.0",
+      "scope": "runtime (participle's graph)",
+      "license": "MIT",
+      "approved": "2026-11-04",
+      "why": "required by participle"
+    },
+    {
+      "module": "github.com/alecthomas/assert/v2",
+      "version": "v2.11.0",
+      "scope": "participle's graph (its tests)",
+      "license": "MIT",
+      "approved": "2026-11-04",
+      "why": "required by participle's go.mod"
+    },
+    {
+      "module": "github.com/hexops/gotextdiff",
+      "version": "v1.0.3",
+      "scope": "participle's graph (indirect)",
+      "license": "MIT",
+      "approved": "2026-11-04",
+      "why": "required by alecthomas/assert"
+    }
+  ]
+}

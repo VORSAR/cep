@@ -27,6 +27,7 @@
     "bench": ["internal/event", "internal/model", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate", "internal/parser", "internal/playback", "", "rule", "io", "io/*"]
   },
   "external": {
-    "internal/text": ["golang.org/x/text/"]
+    "internal/text": ["golang.org/x/text/"],
+    "internal/parser": ["github.com/alecthomas/participle/v2"]
   }
 }
