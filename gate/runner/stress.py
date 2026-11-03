@@ -20,6 +20,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
@@ -176,7 +177,14 @@ def child(argv: list[str]) -> int:
     return 0
 
 
+# Set by the first SIGTERM (review BA1): a run the pool dequeues after the stop must not start, even though the
+# stop's shutdown cancels only the runs still queued.
+stopping = threading.Event()
+
+
 def _one_run(seed: int, script: str, root: str, modules: Sequence[str], out_dir: str) -> dict | None:
+    if stopping.is_set():
+        return None
     path = os.path.join(out_dir, f"run-{seed}.json")
     argv = [*child_argv(sys.executable, script), str(seed), path, root, *modules]
     with open(f"{path}.stdout", "wb") as out, open(f"{path}.stderr", "wb") as err:
@@ -192,11 +200,26 @@ def _one_run(seed: int, script: str, root: str, modules: Sequence[str], out_dir:
 def stress(modules: Sequence[str], *, runs: int, parallel: int, out_dir: str) -> int:
     script = os.path.abspath(__file__)
     root = os.path.dirname(os.path.dirname(os.path.dirname(script)))
+    # Runs are submitted by this thread only, `parallel` at a time, as earlier ones finish: a pre-filled queue let a
+    # worker start the next run on its own in the moment between a stop's arrival and this thread acting on it
+    # (seen under T4's load, 2026-11-04). Stopped, the running runs finish and nothing else is ever submitted.
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=parallel)
+    reports: list[dict | None] = [None] * runs
     try:
-        reports = list(pool.map(lambda seed: _one_run(seed, script, root, modules, out_dir), range(runs)))
+        seeds = iter(range(runs))
+        in_flight: dict[concurrent.futures.Future, int] = {}
+        while True:
+            for seed in seeds:
+                in_flight[pool.submit(_one_run, seed, script, root, modules, out_dir)] = seed
+                if len(in_flight) >= parallel:
+                    break
+            if not in_flight:
+                break
+            done, _ = concurrent.futures.wait(in_flight, return_when=concurrent.futures.FIRST_COMPLETED)
+            for future in done:
+                reports[in_flight.pop(future)] = future.result()
     finally:
-        pool.shutdown(wait=True, cancel_futures=True)  # stopped: the running runs finish, no other starts
+        pool.shutdown(wait=True, cancel_futures=True)
 
     passes: collections.Counter[str] = collections.Counter()
     why: dict[str, tuple[int, str]] = {}
@@ -230,7 +253,9 @@ def stress(modules: Sequence[str], *, runs: int, parallel: int, out_dir: str) ->
 def main(argv: list[str]) -> int:
     if argv[:1] == ["--child"]:
         return child(argv[1:])
-    term.install()  # review BA1: a TERM ends the run through `hogs`'s finally, never leaving the hogs behind
+    term.install(
+        stopping.set
+    )  # review BA1: a TERM ends the run through `hogs`'s finally, never leaving the hogs behind
     parser = argparse.ArgumentParser(prog="gate/runner/stress.py")
     parser.add_argument("--runs", type=int, default=RUNS)
     parser.add_argument("--parallel", type=int, default=1)

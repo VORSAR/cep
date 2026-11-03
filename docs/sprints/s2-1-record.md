@@ -19,6 +19,8 @@
 - **Error-position conventions**, as QA derived them and the map now follows: a missing clause is reported at the token found where it should start; a wrong token at that token; the missing restart marker at the `=` after the step name (the first token at which a parser must know); the missing pragma at the first statement token; a clause present but out of order (`within` found later in the rule) is E-ORD-001, not the clause's missing code.
 - **Two error-reporting findings fixed in the build:** with bounded lookahead, participle stops at a filter's `[` rather than inside it, so a filter that fails is parsed again alone and the error names the token inside; the spike's misreported absence position (E-PAT-004) does not occur at lookahead 2.
 
+- **A gate race found by T4, fixed at the root** (ground rule 11; not the parser's): under the full gate's load, `gate/runner/tests/test_stop_children.py` showed the stress harness starting four more runs after its stop. The harness pre-filled its work queue, so a worker could begin the next run in the moment between the signal's arrival and the main thread acting on it. Now the harness submits runs itself, `parallel` at a time, as earlier ones finish, and a run dequeued after the stop returns at once (a red-first unit test). Before: 27 of 30 under the stress harness; after: 60 of 60. The test also dumps the program's output on failure now, which is how the cause was read.
+
 ## Placement notes for the validator sprints
 
 - A duration count that is not a whole number of milliseconds (`1.5 ms`) cannot be held by the model, so it is E-DUR-002 at parse time; descending, distinct units stay the validator's E-DUR-002.

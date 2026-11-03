@@ -118,6 +118,18 @@ class Child(support.GateTest):
         self.assertGreater(max(crossings(o) for o in orders.values()), 1)
 
 
+class Stopping(support.GateTest):
+    def test_a_run_dequeued_after_the_stop_does_not_start(self):
+        # A worker can take the next run before the stop's shutdown cancels it (seen under T4's load, 2026-11-04):
+        # a run that starts after the stop returns at once, running nothing.
+        stress.stopping.set()
+        self.addCleanup(stress.stopping.clear)
+        out_dir = os.path.join(self.root, "out")
+        os.mkdir(out_dir)
+        self.assertIsNone(stress._one_run(0, STRESS, support.REPO, [PLANTS], out_dir))
+        self.assertEqual(os.listdir(out_dir), [])
+
+
 class Environment(support.GateTest):
     def test_scrubbed_keeps_only_the_allow_list_and_sets_the_seed(self):
         base = {"PATH": "/p", "HOME": "/h", "PYTHONPATH": "/evil", "PYTHONHOME": "/evil", "GOFLAGS": "-x", "X": "1",

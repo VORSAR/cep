@@ -36,6 +36,19 @@ class StopTest(support.GateTest):
         self.addCleanup(proc.kill)
         return proc
 
+    def output(self) -> str:
+        with open(os.path.join(self.root, "program.out"), "rb") as f:
+            return f.read().decode("utf-8", errors="replace")
+
+    def exit_code(self, proc: subprocess.Popen[bytes]) -> int:
+        """The program's exit code; a program still running at the cap is killed and its output is the failure."""
+        try:
+            return proc.wait(timeout=wait.DEFAULT_CAP_S)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            self.fail(f"the program did not exit within {wait.DEFAULT_CAP_S}s; its output:\n{self.output()}")
+
     def child(self, witness: str, on_term: str = "pass") -> str:
         """A child's code: write the pid, hold the witness, wait for ever; on TERM run `on_term`, then exit."""
         return (
@@ -81,7 +94,7 @@ class DriverRunProcess(StopTest):
         )
         w.started(1)
         proc.send_signal(signal.SIGTERM)
-        self.assertNotEqual(proc.wait(timeout=wait.DEFAULT_CAP_S), 0)
+        self.assertNotEqual(self.exit_code(proc), 0)
         self.assertGone(w)
         self.assertTrue(os.path.exists(termed), "the nested group was killed without the TERM that lets it clean up")
 
@@ -102,8 +115,9 @@ class StressHarness(StopTest):
             "        yield procs\n"
             "def run(seed, *rest):\n"
             f"    open({seeds!r}, 'a').write(f'{{seed}}\\n')\n"
-            f"    os.write(os.open({w.path!r}, os.O_WRONLY), b's')\n"
-            f"    os.read(os.open({go_on!r}, os.O_RDONLY), 1)  # held here until the test lets it go\n"
+            "    if seed == 0:  # only the first run holds; a later one, if it starts, shows in the seeds file\n"
+            f"        os.write(os.open({w.path!r}, os.O_WRONLY), b's')\n"
+            f"        os.read(os.open({go_on!r}, os.O_RDONLY), 1)  # held here until the test lets it go\n"
             "    return None\n"
             "stress.hogs, stress._one_run = one_hog, run\n"
             "sys.exit(stress.main(['--runs', '5', '--parallel', '1', 'gate.x.test_m']))\n"
@@ -113,8 +127,8 @@ class StressHarness(StopTest):
             hog = int(f.read())
         proc.send_signal(signal.SIGTERM)
         support.release(go_on)  # the run in progress ends; the stop must keep the other four from starting
-        self.assertNotEqual(proc.wait(timeout=wait.DEFAULT_CAP_S), 0)
+        self.assertNotEqual(self.exit_code(proc), 0)
         with open(seeds, encoding="ascii") as f:
-            self.assertEqual(f.read(), "0\n")
+            self.assertEqual(f.read(), "0\n", self.output())
         with self.assertRaises(ProcessLookupError):  # the harness reaped it: its pid is free
             os.kill(hog, 0)
