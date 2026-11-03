@@ -6,6 +6,7 @@ GATE_COVERED is the sum of `ruff format --check`'s summary lines, in ruff 0.17.3
 import os
 import shutil
 import sys
+import tomllib
 
 from gate.runner.rows import ruff
 from gate.runner.tests import support
@@ -93,6 +94,53 @@ class Wrapper(support.GateTest):
         with open(short, "wb") as f:
             f.write(b"".join(n + b"\0" for n in names))
         self.assertEqual(self.ruff_row(short), "covered 2 ≠ expected 3")
+
+    def test_every_banned_api_is_red_naming_it(self):
+        # review BA4: each ban in ruff.toml is pinned, so an edit or a ruff bump that drops one goes red.
+        plants = {
+            "time.sleep": "import time\n\ntime.sleep(0)\n",
+            "os.system": 'import os\n\nos.system("true")\n',
+            "os.wait": "import os\n\nos.wait()\n",
+            "os.wait3": "import os\n\nos.wait3(0)\n",
+            "os.wait4": "import os\n\nos.wait4(0, 0)\n",
+            "os.waitpid": "import os\n\nos.waitpid(0, 0)\n",
+            "os.waitid": "import os\n\nos.waitid(os.P_ALL, 0, os.WEXITED)\n",
+            "shutil.move": 'import shutil\n\nshutil.move("a", "b")\n',
+            "signal.SIG_IGN": "import signal\n\nsignal.signal(signal.SIGCHLD, signal.SIG_IGN)\n",
+            "signal.Handlers.SIG_IGN": "import signal\n\nsignal.signal(signal.SIGCHLD, signal.Handlers.SIG_IGN)\n",
+        }
+        with open(os.path.join(support.REPO, "ruff.toml"), "rb") as f:
+            banned = tomllib.load(f)["lint"]["flake8-tidy-imports"]["banned-api"]
+        self.assertEqual(sorted(plants), sorted(banned), "a ban without a plant here is a ban nothing pins")
+        names = {api: f"gate/x/ban_{i:02}.py" for i, api in enumerate(sorted(plants))}
+        for api, path in names.items():
+            self.write(path, plants[api])
+        self.git("add", "--", "gate/x")
+        self.assertTrue(self.ruff_row().startswith("exit 1: gate/x/ban_00.py: ruff check (exit 1)"))
+        out = self.out()
+        for api, path in names.items():
+            with self.subTest(api):
+                self.assertIn(f"failed: {path}: ruff check (exit 1)", out)
+                self.assertIn(f"ruff> TID251 `{api}` is banned", out)
+
+    def test_each_waiver_covers_its_own_file_only(self):
+        # review BA4: every per-file-ignores entry waives its rule in that file, and the same text elsewhere is red.
+        plants = {
+            "TID251": "import time\n\ntime.sleep(0)\n",
+            "BLE001": "def f():\n    try:\n        return 1\n    except Exception:\n        return 2\n",
+        }
+        with open(os.path.join(support.REPO, "ruff.toml"), "rb") as f:
+            waivers = tomllib.load(f)["lint"]["per-file-ignores"]
+        self.assertTrue(all(codes and set(codes) <= set(plants) for codes in waivers.values()), waivers)
+        for i, (path, codes) in enumerate(sorted(waivers.items())):
+            for j, code in enumerate(codes):
+                self.write(path, plants[code])
+                self.write(f"gate/x/elsewhere_{i:02}_{j}.py", plants[code])
+        self.git("add", "--", "gate")
+        self.ruff_row()
+        failed = [line for line in self.out().splitlines() if line.startswith("failed: ")]
+        want = [f"failed: gate/x/elsewhere_{i:02}_0.py: ruff check (exit 1)" for i in range(len(waivers))]
+        self.assertEqual(failed, want)
 
     def test_a_badly_formatted_file_is_red_and_named(self):
         self.clean_files(2)
