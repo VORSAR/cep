@@ -4,11 +4,11 @@ import faulthandler
 import json
 import os
 import platform
-import subprocess
 import sys
 import tempfile
 import unittest
 
+from gate.proofs.drivers.support import read_text, run_process
 from gate.runner import env as runner_env
 
 COVERAGE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -16,6 +16,7 @@ REPO = os.path.dirname(os.path.dirname(COVERAGE))
 TESTDATA = os.path.join(COVERAGE, "testdata")
 MAIN = os.path.join(COVERAGE, "main.py")
 CEILING_S = 300
+RUN_CAP_S = 240  # one command a test runs
 PLATFORMS = {("darwin", "arm64"): "darwin-arm64", ("linux", "x86_64"): "linux-amd64"}
 HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS")
 
@@ -47,12 +48,10 @@ def go_env(**extra: str) -> dict[str, str]:
 
 
 def run(argv: list[str], cwd: str, env: dict[str, str], out_dir: str, name: str) -> tuple[int, str, str]:
-    """Run a command to completion, its output in files (never pipes); give (exit code, stdout, stderr)."""
+    """Run a command in its own group, capped, output in files (never pipes); give (exit code, stdout, stderr)."""
     out, err = os.path.join(out_dir, f"{name}.stdout"), os.path.join(out_dir, f"{name}.stderr")
-    with open(out, "wb") as o, open(err, "wb") as e:
-        code = subprocess.run(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=o, stderr=e).returncode
-    with open(out, "rb") as o, open(err, "rb") as e:
-        return code, o.read().decode("utf-8", errors="replace"), e.read().decode("utf-8", errors="replace")
+    code = run_process(argv, cwd=cwd, env=env, out=out, err=err, cap_s=RUN_CAP_S)
+    return code, read_text(out), read_text(err)
 
 
 class CoverageTest(unittest.TestCase):
