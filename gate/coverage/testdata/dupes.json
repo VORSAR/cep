@@ -1,0 +1,4 @@
+{"Action":"start","Package":"ex.com/m/internal/d"}
+{"Action":"run","Package":"ex.com/m/internal/d","Test":"TestD"}
+{"Action":"pass","Package":"ex.com/m/internal/d","Test":"TestD","Elapsed":0}
+{"Action":"pass","Package":"ex.com/m/internal/d","Elapsed":0.1}
