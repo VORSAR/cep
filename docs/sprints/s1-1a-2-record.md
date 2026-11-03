@@ -26,6 +26,8 @@ The full plan check is [s1-1a-2-plan-check.md](s1-1a-2-plan-check.md) (v2), draf
 
 **The design — the owner, 2026-11-04:** G1 approved: "implement this fast and get it over".
 
+**Review — the owner, 2026-11-04:** no step-7 review or break-it (≠ the G0 answer and the sprint model's step 7): "we don't need to break it as per say. there are utility stuff." A time-boxed reviewer had started; it was stopped before reporting.
+
 ## Measured results
 
 - **The build** (2026-11-04, the coordinator in the main session; QA's 35 red tests first, by a time-boxed agent). Local T4 `make strict-gate`: 11 rows PASS (`proofs` covered 12, `pytests` 51 modules), `wall 73.1s · summed 165.8s · saved 55%`, `exit: 0`.
@@ -71,12 +73,12 @@ Entry (G0)   ☑ card complete and approved (re-sized by the owner, 2026-11-03)
              ☑ test material: making it is an item (the hook, hooks-off and summary proofs)
 Design (G1)  ☑ architecture + the-fool findings resolved ☑ QA testability findings resolved (plan check §10)
              ☑ owner decisions recorded ☑ ADRs: residue noted in design §12.8 — G1 passed 2026-11-04
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
-             ☐ conformance cases for every construct shipped or changed (n/a: no construct)
-             ☐ tests on the real code ☐ every breaker's red test committed
-Review (G3)  ☐ architecture review of the combined diff: no drift
-             ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 strict-gate / CI exit 0, run complete ☐ owner's check passed
+Build (G2)   ☑ T2 (the build runs in the main session) ☑ T4 strict-gate exit 0 (it includes T3's rows)
+             ☑ conformance cases for every construct shipped or changed (n/a: no construct)
+             ☑ tests on the real code ☑ QA's red tests committed — G2 passed
+Review (G3)  ☑ n/a by the owner's decision (2026-11-04: utility code; no step-7 review or break-it)
+             ☑ QA's 35 red tests, written first, all pass; nothing open — G3 passed
+Verify (G4)  ☑ T4 strict-gate and CI exit 0, runs complete (CI 41697865717) ☐ owner's check passed
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main CI green on the merge commit
