@@ -28,7 +28,18 @@ The full plan check is [s1-1a-2-plan-check.md](s1-1a-2-plan-check.md) (v2), draf
 
 ## Measured results
 
-*(filled as the build lands)*
+- **The build** (2026-11-04, the coordinator in the main session; QA's 35 red tests first, by a time-boxed agent). Local T4 `make strict-gate`: 11 rows PASS (`proofs` covered 12, `pytests` 51 modules), `wall 73.1s · summed 165.8s · saved 55%`, `exit: 0`.
+- **The hooks, used for real:**
+  - The sprint's own commit ran T0: parity PASS, `gofmt` SKIP (nothing staged in scope), `ruff` covered 32. `wall 0.3s`.
+  - The push ran T1 on HEAD: 5 rows PASS. `wall 4.4s`.
+- **The first CI run** (run 41697195516, Linux, `ubuntu26 20261026.180.1`): `lint` and `proofs` passed; `test` failed.
+  - **The cause:** one parity witness test. CI's tool cache sat inside the checkout, so `go` found the project's `go.mod` above every tool and followed its toolchain line.
+  - **The fix:** the cache moved to the developer's path, `~/.cache/vorsar/cep/tools`, pinned by a generator test (fd6e661).
+  - `summarize` judged that run correctly: one named FAIL, every other row PASS, `exit: 1`.
+- **The second CI run** (run 41697865717): all four jobs succeeded; `strict-gate` `GATE PASSED`, `exit: 0`.
+- **Exit 1, CI shows the same rows as a local strict-gate:** CI's 13 rows (parity in each of 3 jobs, plus 10 rows) equal the local T4 run's 13 `(job, id)` records, none only on one side. A test pins the same on real runner output (`test_summarize_local.py`).
+- **Exit 4, the parallel saving on CI:** `wall 94.3s · summed 136.2s · saved 30%`, over three concurrent jobs.
+- **Exits 5 and 10:** the hook proof (7 tests) and the hooks-off proof (5) pass inside the `proofs` row, locally and on CI.
 
 **During the build — the coordinator, 2026-11-04** (QA's red tests named eight ambiguities in design §12; the ones that change behaviour, settled here for the owner to overrule):
 - **Two attempts downloaded together ("re-run all jobs"): only the current attempt is judged** (QA ambiguity 7; plan check N33 read this way). Records of an older attempt count only as "stale" when they are all a row has (N32). Otherwise every full re-run would be red.
