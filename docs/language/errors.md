@@ -78,6 +78,10 @@ Fix: `time <attr> watermark bounded <duration>` | `time <attr> watermark ascendi
 Rule: SEMANTICS §2.1 — derived streams carry propagated watermarks; re-declaring is an error.
 Fix: remove the clause; declare clocks on source streams only.
 
+### E-TIME-003 Time attribute is not a timestamp **[static]**
+Rule: SPEC §4.2 (rev 3) — `time <attr>` names the stream's event-time attribute, so `<attr>` is declared `timestamp`.
+Message names the attribute and its declared type. Fix: declare the attribute `timestamp`, or name the stream's timestamp attribute.
+
 ### E-IDLE-001 Missing `idle after` on a timer-feeding stream **[static]**
 Rule: SEMANTICS §2.1 / SPEC §4.2 — every stream consumed by a rule that holds timers (any pattern with an absence, any window rule, any multi-stream rule) declares idleness, or a quiet stream stalls that rule's clock.
 Fix: append `idle after <duration>` to the stream's time clause.
@@ -89,6 +93,10 @@ Fix: add `partition by <key> of <Stream> … ttl <duration>`.
 ### E-PART-002 Consumed stream with no partition key **[static]**
 Rule: SEMANTICS §9 — the partition clause keys every stream used in the rule.
 Fix: add `, <key> of <ThatStream>` to the partition clause.
+
+### E-PART-003 Partition keys of different types **[static]**
+Rule: SPEC §4.4 (rev 3) — one partition block keys every stream on the same value, so its keys share one type.
+Message names both streams and both types. Fix: key each stream on an attribute of the same type, or declare the attributes with one type.
 
 ### E-TTL-002 TTL smaller than a contained bound **[static]**
 Rule: SEMANTICS §9/§11.3 — TTL ≥ every pattern bound, window extent, and rate-limit interval.
@@ -182,9 +190,9 @@ Fix: rename one step.
 Rule: SPEC §3.3 — a capture name must not collide with a stream, table or param name.
 Fix: rename the capture.
 
-### E-LATE-002 Lateness policy not available for the construct **[static]**
-Rule: SEMANTICS §6.5 — patterns admit no late events: `drop` is the only pattern value; `allow` belongs to cron windows.
-Fix: `late events drop`.
+### E-LATE-002 Lateness policy not available **[static]**
+Rule: SPEC §6.3 (rev 3) — `late events allow` is not in v0.1, wherever it appears; `drop` is the only policy.
+Fix: late handling per window arrives in Phase 2; use `late events drop` and set the stream's watermark bound.
 
 ### E-EMIT-002 Emit mode does not match the window kind **[static]**
 Rule: SEMANTICS §8 — legal pairs: cron→close, sort→change, delay→due, batch→batch end.
@@ -204,6 +212,7 @@ Fix: use a positive integer literal.
 
 ### E-GRAPH-001 Cycle in the rule–stream graph **[static]**
 Rule: SPEC §3.3 — the rule→stream graph is a DAG; a rule may not read its own output, directly or transitively.
+**Unreachable in v0.1 (rev 3):** `E-GRAPH-004` already rejects every rule that reads a derived stream, so no cycle can be written. Kept for Phase 2's rule chaining.
 Fix: break the cycle with a separate stream.
 
 ### E-GRAPH-002 Insert into a source stream **[static]**
@@ -213,6 +222,10 @@ Fix: insert into a new derived stream.
 ### E-GRAPH-003 Second producer for a derived stream **[static]**
 Rule: SPEC §3.3 — each derived stream has exactly one producing rule in v0.1 (merging is reserved).
 Fix: give each rule its own output stream.
+
+### E-GRAPH-004 Rule reads a derived stream **[static]**
+Rule: SPEC §3.3 (rev 3) — in v0.1 a rule reads source streams only: its `from`, steps, absences and partition keys may not name another rule's output. Chaining arrives in Phase 2 (ADR-0004 §6).
+Message names the rule, the derived stream and the rule that produces it. Fix: read the source stream the producing rule reads, repeating its filter in this rule.
 
 ### E-SYN-002 SQL equality operator **[parse]**
 Rule: SPEC §2.5 — equality is `==`; SQL `=`/`<>` do not exist here.

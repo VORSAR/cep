@@ -53,7 +53,7 @@ language cep/0.1;
 
 **3.2** Then, in any order: `param` declarations, `stream`/`table` declarations, `rule` statements. Canonical order: params, declarations, rules.
 
-**3.3** Names resolve at deploy time against **closed catalogs**: declared streams/tables/params, built-in functions (Appendix F), window kinds, annotation keys, sink types. An unknown name is `E-NAME-001` with a nearest-name suggestion. Forward references among declarations are allowed within one file; rule names must be unique. **Stream graph:** the rule→stream graph is a DAG (`E-GRAPH-001`); a stream is a source (time clause) **xor** derived — inserting into a source is `E-GRAPH-002`; each derived stream has exactly one producing rule in v0.1 (`E-GRAPH-003`, merging reserved).
+**3.3** Names resolve at deploy time against **closed catalogs**: declared streams/tables/params, built-in functions (Appendix F), window kinds, annotation keys, sink types. An unknown name is `E-NAME-001` with a nearest-name suggestion. Forward references among declarations are allowed within one file; rule names must be unique. **Stream graph:** the rule→stream graph is a DAG (`E-GRAPH-001`); a stream is a source (time clause) **xor** derived — inserting into a source is `E-GRAPH-002`; each derived stream has exactly one producing rule in v0.1 (`E-GRAPH-003`, merging reserved). **A rule reads source streams only (rev 3):** a `from`, step, absence or partition key naming a derived stream is `E-GRAPH-004`; chaining rules arrives in Phase 2. So no cycle can be written in v0.1, and `E-GRAPH-001` is unreachable there (kept for Phase 2).
 
 ```
 language cep/0.1;
@@ -72,7 +72,7 @@ rule Example
 
 **4.1 `param`** — `param name type = literal;` (the literal is the **default**; a deployment **may override it**, and every override is recorded in deploy metadata so reviewers see effective values). Referenced as `${name}`; substitution is token-level into one literal slot after parsing, type-checked against the slot (`E-PARAM-001`). **`${…}` inside a string literal is never substituted — it is inert text**; parameterize annotation values with a bare `${name}` in the value slot instead. A value can never change rule structure.
 
-**4.2 `stream`** — `stream Name (attr type [optional], …) time-clause;` Source streams **must** carry a time clause (`E-TIME-001`): `time <attr> watermark bounded <duration>` | `time <attr> watermark ascending` | `time arrival`. **`idle after <duration>` must appear on every stream consumed by a rule that holds timers** — any pattern with an absence, any window rule, and any multi-stream rule (`E-IDLE-001`; the requirement is triggered by rules but satisfied on the declaration) — because in live mode only idleness advances a quiet stream's contribution to that rule's clock (§6.1); on streams feeding purely stateless rules it is legal and without effect. Derived streams (rule outputs) must not carry any of these clauses (`E-TIME-002`). *Note (informative):* editing a shared stream's `d` or `idle after` retunes the latency, late-drops and absence fire-times of **every** consuming rule with no change to their text — review such edits like rule edits; the canonical formatter renders consumed time clauses as a generated comment on each rule. Choose the watermark bound `d` from the source's observed out-of-orderness; detection latency for absences is `d` past the bound, so smaller is better when the transport allows it — corpus examples use 30 sec–2 min. Attributes default non-null; `optional` marks nullable ones. Sources/sinks attach as typed annotations (`@source`, `@sink`, `@map`) with closed key vocabularies.
+**4.2 `stream`** — `stream Name (attr type [optional], …) time-clause;` Source streams **must** carry a time clause (`E-TIME-001`): `time <attr> watermark bounded <duration>` | `time <attr> watermark ascending` | `time arrival`. The named `<attr>` must be declared `timestamp` (`E-TIME-003`, rev 3). `time arrival` stamps each event at ingestion; a playback log carries that recorded stamp as the event's `ts` (rev 3). **`idle after <duration>` must appear on every stream consumed by a rule that holds timers** — any pattern with an absence, any window rule, and any multi-stream rule (`E-IDLE-001`; the requirement is triggered by rules but satisfied on the declaration) — because in live mode only idleness advances a quiet stream's contribution to that rule's clock (§6.1); on streams feeding purely stateless rules it is legal and without effect. Derived streams (rule outputs) must not carry any of these clauses (`E-TIME-002`). *Note (informative):* editing a shared stream's `d` or `idle after` retunes the latency, late-drops and absence fire-times of **every** consuming rule with no change to their text — review such edits like rule edits; the canonical formatter renders consumed time clauses as a generated comment on each rule. Choose the watermark bound `d` from the source's observed out-of-orderness; detection latency for absences is `d` past the bound, so smaller is better when the transport allows it — corpus examples use 30 sec–2 min. Attributes default non-null; `optional` marks nullable ones. **`text_invisibles` is engine-owned (rev 3):** the name is reserved for §6.6's flag; the engine always computes it, and a payload value under that name is ignored, overwritten and counted; a stream may declare it, as `bool`, for readability. Sources/sinks attach as typed annotations (`@source`, `@sink`, `@map`) with closed key vocabularies.
 
 **4.3 `table`** — `table Name (attrs) primary key (cols);` In-memory keyed sets, loaded programmatically; used via `in` / `not in`.
 
@@ -81,7 +81,8 @@ rule Example
 ```
 rule Name
   intent '<one sentence>'            -- required (E-INT-001)
-  [partition by k of S, … ttl D]     -- required for stateful bodies (E-PART-001/002, E-TTL-001)
+  [partition by k of S, … ttl D]     -- required for stateful bodies (E-PART-001/002, E-TTL-001);
+                                     -- the keys share one type (E-PART-003, rev 3)
   from <body>                        -- §5
   [expect given … then …]            -- optional; executed (E-EXP-001)
   [todo '<open question>']           -- always fails compile (E-TODO-001)
@@ -123,7 +124,7 @@ Every pattern anchors on **at least one positive step** — a pure absence ("no 
 |---|---|---|
 | term | `has_ci has_cs` | whole-token match |
 | substring | `contains_ci contains_cs starts_with_* ends_with_*` | literal substring/prefix/suffix |
-| keyword-set | `has_any_* has_all_* contains_any_* contains_all_*` | any/all of a list, `${param}`, or one-column table |
+| keyword-set | `has_any_* has_all_* contains_any_* contains_all_*` | any/all of a list, `${param}`, or one-column table — a table operand reads the table's per-event snapshot, like `in` (rev 3) |
 | regex (safe) | `matches_*` (whole field), `contains_match_*` (anywhere) | RE2 class; backrefs/lookaround = `E-REGEX-001`; write patterns in raw `'''…'''` strings. **`_ci` on a regex operator means the regex engine's own case-folding (RE2 `(?i)`), defined as distinct from the text operators' simple fold; `_cs` compiles the pattern exactly** *(v0.1 rev 2)* |
 | raw | `raw(attr) <op> …` | bypass normalization for this operand |
 
@@ -154,11 +155,11 @@ from Prompts[text has_any_ci('ignore previous', 'disregard instructions')
 
 **6.2 Derived streams** carry propagated watermark punctuations: a construct forwards `W` only after emitting everything due at `W`; downstream lateness is judged against the propagated value.
 
-**6.3 Windows.** Emit mode is 1:1 with the kind — written anyway (explicitness) and checked (`E-EMIT-002`); `late events allow` belongs to cron only (`E-LATE-002` on patterns and other kinds).
+**6.3 Windows.** Emit mode is 1:1 with the kind — written anyway (explicitness) and checked (`E-EMIT-002`). **`late events allow` is not in v0.1 (rev 3):** it is `E-LATE-002` wherever it appears; `late events drop` is the only policy, and lateness is set by the stream's watermark bound. Admission is §6.1's for every window: an event behind its stream's admission watermark is dropped and counted, even if its cron bucket is still open.
 
 | Kind | State/boundary | Fires | Output |
 |---|---|---|---|
-| `cron(expr, tz)` | half-open buckets `[bᵢ, bᵢ₊₁)` at cron fire-times in `tz`; DST: repeated local time → first occurrence; missing → first instant after gap; expr and tz validated at deploy (`E-WIN-003`) against the **pinned dialect: 5-field Vixie cron, month/DOW names allowed, DOW 0 = Sunday (7 rejected), no seconds field, no `@macros`, no `L/W/#`** | once, `wm ≥ bᵢ₊₁ + allowance`, where **allowance = the rule's `late events allow` duration (0 under `drop`)** | append |
+| `cron(expr, tz)` | half-open buckets `[bᵢ, bᵢ₊₁)` at cron fire-times in `tz`; DST: repeated local time → first occurrence; missing → first instant after gap; expr and tz validated at deploy (`E-WIN-003`) against the **pinned dialect: 5-field Vixie cron, month/DOW names allowed, DOW 0 = Sunday (7 rejected), no seconds field, no `@macros`, no `L/W/#`** | once, `wm ≥ bᵢ₊₁` (rev 3: no allowance in v0.1) | append |
 | `delay(D)` | holds each event, due `t + D` | per event at due, before forwarding `wm` | append, re-timed `t + D` |
 | `sort(n, attr, dir)` | top/bottom-n per key, `n` a positive integer (`E-WIN-004`); tied extremes evict the latest in total order; a tied newcomer emits nothing | on change | changelog |
 | `batch()` | groups events sharing one source batch id **within one partition key**; ids and punctuations come from the source connector (`@source` batching); a non-punctuating source makes `batch()` a deploy error (`E-WIN-002`); fired ids deduplicated | at punctuation | one group event, max event time |
@@ -195,7 +196,7 @@ The identifier exclusion list in `grammar.lark`'s NAME terminal is normative: al
 
 ## Appendix C. Error codes
 
-See [errors.md](errors.md) — 57 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 24 files), 34 static.
+See [errors.md](errors.md) — 60 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 24 files), 37 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`).
 
 ## Appendix D. Go builder API mapping (informative until the API spec lands)
 
@@ -252,6 +253,7 @@ Aggregates beyond `count` (sum, avg, `distinctCount`, …) are **reserved** for 
 ## Appendix E. Change log
 
 - v0.1 draft (2026-10-31): initial MVP surface; adversarially reviewed semantics; grammar machine-checked.
+- v0.1 rev 3 (2026-11-04, pre-release; the owner's decisions of 2026-11-01 and 2026-11-02, applied at sprint S1.2): a rule reads source streams only (`E-GRAPH-004`; `E-GRAPH-001` unreachable in v0.1, kept for Phase 2); a cross-stream partition-key type mismatch is rejected at deploy (`E-PART-003`, naming both streams and both types); `late events allow` removed for v0.1 (`E-LATE-002` wherever it appears; example 02 now `late events drop`); cron admission pinned to §6.1 (an event behind the admission watermark is dropped even if its bucket is open; the reference executor aligned, a new harness check pins it); `text_invisibles` engine-owned; keyword sets over a table read its per-event snapshot like `in`; `time arrival` stays (playback logs carry the recorded stamp as `ts`); a `time <attr>` must name a `timestamp` attribute (`E-TIME-003`). The grammar is unchanged.
 - v0.1 rev 2 (2026-11-01, pre-release; owner-approved at architecture ratification): expect blocks gain `given table <Name> [rows]` seeding (playback logs gain a table-load record); regex `_ci` defined as RE2 folding, distinct from the simple fold of text operators. Grammar re-verified.
 - v0.1 rev 1 (2026-11-01, pre-release): owner reversal — keywords are lowercase-only; non-lowercase keyword spellings are E-KW-002, reserved-in-any-case retained. Verified: full corpus + probes.
 - v0.1 (2026-11-01): L6 red-team round closed — case-insensitive keywords implemented; `for` reserved; raw triple-quoted strings; `not in` null semantics pinned; duration/typing/graph/function-catalog static rules added; expect blocks grew multi-given, empty-then and null; corpus corrected (9 valid / 23 invalid files); **frozen as v0.1**.
