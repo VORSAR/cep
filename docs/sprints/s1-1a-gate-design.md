@@ -456,3 +456,45 @@ The `proofs` row's `min_wants` is **10**. Deleting a driver gives covered 9 < 10
 | L1, L2 | fixed §3 step 5 |
 | L3 | fixed §8 |
 | L4, L5 | noted: the `go` filter relies on the relative-pattern rule for missing directories; the go archive's two non-ASCII names are harmless on APFS and to be re-checked on Linux by Lane B's census |
+
+---
+
+## 12. S1.1a-2: the hooks and CI (design for G1, 2026-11-03)
+
+*Written at S1.1a-2's G0 from its [plan check v2](s1-1a-2-plan-check.md) §2 and §5 (owner's G0 answers: [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0)). Where this section and the plan check differ, this section wins.*
+
+**12.1 The checked tree** (`gate/hooks/tree.py`). A commit is checked by its own gate, in a directory outside the work tree, with git pointed at that commit only.
+- `git_dir = git rev-parse --absolute-git-dir`; `top = git rev-parse --show-toplevel` (a linked worktree gives its own git dir, index and HEAD).
+- **T0:** `index` = `GIT_INDEX_FILE` as git set it, made absolute against `top`, or else `git rev-parse --git-path index` made absolute. **T1:** `index` = `<tmp>/index`, built by `git read-tree --index-output=<tmp>/index <sha>`.
+- `tree = tempfile.mkdtemp(prefix="gate-tree-")`; `GIT_INDEX_FILE=<index> git checkout-index -a -f --prefix=<tree>/`.
+- The environment for the commit's gate: the caller's, minus every inherited `GIT_*` variable, plus `GIT_DIR=<git_dir>`, `GIT_WORK_TREE=<tree>`, `GIT_INDEX_FILE=<index>`.
+- The tree and the temporary index are removed in a `finally`, with `gate/term.py` installed so a TERM still cleans up.
+
+**12.2 Running the commit's gate.** In `<tree>`: `<python> -I -B gate/bootstrap.py install`, then `<python> -I -B gate/bootstrap.py exec -- --tier T0|T1 [--commit <sha>] --run-dir <top>/.gate/runs/<tier>-<UTC>-<hex6>`. Its stdout and stderr pass straight to git, so the user sees the summary. The hook exits with the gate's exit code. A tree with no `gate/bootstrap.py` is refused: `this commit has no gate (gate/bootstrap.py is missing)`, exit 1.
+
+**12.3 Runner changes.**
+- **T0 scope.** A `git` expected scope expands with `git ls-files -z -- <pathspecs>` as at every tier. At T0 it is then cut to the paths in `git diff --cached --name-only -z --diff-filter=ACMR` (no HEAD: every staged path counts). `go` and `go-vet-units` scopes are not allowed at T0 (registry load refuses them).
+- **Skip.** At T0, a row whose cut scope is empty does not start. It is recorded `"verdict": "skip"`, reason `skip: nothing staged in scope (<n> tracked)`, `exit_code` −1. The summary shows `SKIP`. A skip never fails T0. At T1–T4 the runner never skips. Parity never skips.
+- **Options.** `--commit <sha>` (40 or 64 lowercase hex) replaces `git rev-parse HEAD`. `--run-id <id>` (`[A-Za-z0-9._-]{1,64}`) replaces the generated id. Anything else is exit 2.
+- **Subcommands** of `gate/run.py`: `summarize` (12.5) and `generate-ci` (12.6), each with the same last-two-lines contract.
+
+**12.4 The hooks.**
+- **Launchers** `.githooks/pre-commit`, `.githooks/pre-merge-commit`, `.githooks/pre-push`. Each is standalone Python that parses under 3.9, with no import from `gate/`. It looks for the pinned CPython in the tool cache (the same path `gate/run.py:pinned_python` computes; a test pins the two equal), then for its own interpreter if it is ≥ 3.12. With neither it prints `no Python 3.12 or newer: run make tools` and exits 1. It then `exec`s `<python> -I -B <top>/gate/hooks/pre_commit.py` or `pre_push.py`, passing stdin through.
+- `gate/hooks/pre_commit.py` (also run by `pre-merge-commit`): 12.1 at T0, then 12.2.
+- `gate/hooks/pre_push.py`: reads stdin lines `<local ref> <local sha> <remote ref> <remote sha>`. It skips a line whose local sha is all zeros, peels each sha with `git rev-parse <sha>^{commit}`, and drops repeats. It runs 12.1 and 12.2 at T1 with `--commit` for every sha, collect-all. It exits 1 if any run failed, naming each failing sha.
+
+**12.5 `summarize`** (`gate/runner/summarize.py`). Inputs: `--registry`, `--tier T4`, `--artifacts <dir>` (one subdirectory per artifact `records-<job>-<attempt>`, each holding `records/<job>/*.json` and `run.json`), `--run-id`, `--commit`, `--attempt`, `--image`. It applies the plan check's S3 classification (missing, duplicate, malformed, stale, wrong tier, unknown row, inconsistent, foreign registry, skip at T4). Its output is the runner's format plus an `image:` line. It writes its own `run.json` (the records it judged, with each RED reason) beside the summary. Footer: wall = latest `ended_ms` − earliest `started_ms` over every record; summed = the sum of `duration_ms`.
+
+**12.6 CI** (`gate/ci/generate.py` → `.github/workflows/gate.yml`; `make ci-workflow` regenerates it). Triggers: `pull_request`, and `push` to `main`. `concurrency`: per ref, `cancel-in-progress` only for pull requests. `permissions: contents: read`. One job per registry `job` at T4, on `ubuntu-latest`:
+1. checkout (`persist-credentials: false`);
+2. the tool cache, keyed `tools-${{ runner.os }}-${{ hashFiles('tools.json') }}`;
+3. Go's caches, keyed `go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}` with a restore key;
+4. `make setup`, `make tools`;
+5. `python3 -I -B gate/bootstrap.py exec -- --tier T4 --job <job> --run-id <run_id>-<attempt> --commit <sha> --run-dir <dir>`;
+6. upload `records-<job>-<attempt>` with `if: always()`.
+
+A `strict-gate` job (`needs:` every job, `if: always()`) downloads every artifact (`continue-on-error: true`), then runs `summarize` under its own `if: always()`. The four actions are pinned by full SHA, recorded in the generator with their versions.
+
+**12.7 Registry and law data.** `gofmt` and `ruff` gain T0. `ruff`'s expected scope adds the three launchers by path; `ruff.toml` gives them a `py39` target and `gate/hooks/*.py` a `py312` target. `pyfloor` adds `gate/hooks/tests/test_launcher.py`. New rows: `hooks` (lint, T2–T4) and `ci-fresh` (lint, T1–T4). `proofs`' `min_wants` becomes 12, for the hook proof and the hooks-off proof. The `Makefile` gains `setup` and `ci-workflow`.
+
+**12.8 Residue** (beside ADR-0015 §3.6 item 10). `--no-verify` skips the hooks; CI is the net. A commit's own gate decides its own law, as CI does, so a commit that weakens a row passes by that weaker row until LAW Δ (S1.1b) shows it. CI machines' clocks can differ, so the CI footer's wall time is approximate. A restored `GOCACHE` holds Go-built helpers that were not built on the runner that uses them.
