@@ -2,7 +2,7 @@
 
 The toolchain, the gate, and the code rules every change follows. The process that runs them is [00-sprint-model.md](../sprints/00-sprint-model.md); the test rules are [testing.md](testing.md).
 
-> **Not built yet (2026-10-31).** No Go module, gate, hooks or CI exist. This guide is the contract they are built to. The gate is an enabler: it lands before the first feature that needs it ([sprint model §16](../sprints/00-sprint-model.md#16-sequencing)). Command names below are the intended ones; the sprint that builds them updates this file to what exists, and the "proposed" tool choices are settled at that sprint's plan check. *(Annotated 2026-11-02: settled at S1.1a's plan check. The pins are Go 1.27.3, golangci-lint v2.15.0, CPython 3.15.2 and ruff 0.17.3. The gate's own tooling is stdlib Python, never shell (owner decision); see [sprint-plan §5](../sprints/sprint-plan.md#5-decisions).)*
+> **Not built yet (2026-10-31).** No Go module, gate, hooks or CI exist. This guide is the contract they are built to. The gate is an enabler: it lands before the first feature that needs it ([sprint model §16](../sprints/00-sprint-model.md#16-sequencing)). Command names below are the intended ones; the sprint that builds them updates this file to what exists, and the "proposed" tool choices are settled at that sprint's plan check. *(Annotated 2026-11-02: settled at S1.1a's plan check. The pins are Go 1.27.3, golangci-lint v2.15.0, CPython 3.15.2 and ruff 0.17.3. The gate's own tooling is stdlib Python, never shell (owner decision); see [sprint-plan §5](../sprints/sprint-plan.md#5-decisions).)* *(Annotated 2026-11-03, S1.1a-1: built now are the Go module, `tools.json` with parity, the gate runner (`gate/run.py`, rows in `gate/registry.json`) and the T2–T4 targets `make check`, `make combine-check` and `make strict-gate`. Not yet built: the hooks and CI (S1.1a-2), the LAW Δ block and the analyzers (S1.1b).)*
 
 ---
 
@@ -10,7 +10,7 @@ The toolchain, the gate, and the code rules every change follows. The process th
 
 - **One manifest pins every tool** the gate depends on: the Go version (`go.mod`'s `go` and `toolchain` lines) and each gate tool at an exact version, with its checksum. One install script serves the owner's machine and CI, so both run the same binaries.
 - **Parity runs first, always.** The gate's first step compares the tools it will run against the manifest. A mismatch **fails**, locally and in CI, before anything else runs: a verdict from the wrong tools means nothing.
-- **No global installs.** Tools install into a cache keyed by the manifest's hash; the gate puts that directory first on `PATH` itself.
+- **No global installs.** Tools install into a cache keyed by the manifest's hash; the gate puts that directory first on `PATH` itself. *(Annotated 2026-11-03, as built: each tool has its own directory, `<name>-<version>-<archive_sha256[:12]>`, under `~/.cache/vorsar/cep/tools`, or under `VORSAR_CEP_TOOLS_CACHE` when set.)*
 - **A bump is one commit**, `toolchain: bump X a→b`, that changes the manifest **and** fixes what the new version finds. A checksum is never edited to make it pass.
 
 ---
@@ -19,7 +19,7 @@ The toolchain, the gate, and the code rules every change follows. The process th
 
 > The gate's full mechanism catalog — architecture analyzers with planted-failure proofs, suppression liveness, freshness checks, hostility rules — is [ADR-0015](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md); the assurance strategy is [qa-strategy.md](qa-strategy.md).
 
-The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, exclusive, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge.
+The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, exclusive, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge. *(Annotated 2026-11-03: the LAW Δ block lands in S1.1b.)*
 
 **Parallel by default** (owner, 2026-11-02): independent rows run at the same time, each starting as soon as the rows it `needs` finish; only rows marked `exclusive` (benchmarks, latency, stress under load) run alone. Go builds and tests run packages in parallel and share one cache; CI runs its jobs concurrently. The summary stays in registry order, so a parallel run reads exactly like a serial one ([ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)).
 
@@ -27,7 +27,7 @@ The gate is a **registry**, not a script: every check is one row. **The row sche
 1. **Collect-all.** A failing step never stops the run. Every step runs to completion; a skip is recorded with its reason, never as green.
 2. **Every step has a ceiling.** Each step runs under a watchdog that kills its whole process group and names the timeout.
 3. **Zero is a failure.** A step that covers zero files or zero tests fails. (`go test -run` with a misspelt pattern runs nothing and exits 0; the gate turns that into a failure.) *(Annotated 2026-11-02, owner decision: one named exception. At T0 only, a check whose staged scope is empty, such as the Go format check on a docs-only commit, records SKIP with its reason and does not fail the commit. At T1–T4, zero is still a failure.)*
-4. **The exit code is the verdict**, and the summary is the table. The run prints `job | step | verdict | time | reason`, then `GATE PASSED` or `GATE FAILED`, then `exit: <code>`.
+4. **The exit code is the verdict**, and the summary is the table. The run prints `job | step | verdict | time | reason`, then `GATE PASSED` or `GATE FAILED`, then `exit: <code>`. *(Annotated 2026-11-03, S1.1a-1 as built: after the table come `registry: <path>` (only for a registry other than the repository's), `run: <dir>` (each row's own output is in `<dir>/rows/<job>/<id>/`) and the footer `wall … · summed … · saved …%`, then the two closing lines. A red row's reason carries its first failure line. Read the `exit:` line, not `make`'s status: `make` reports any failing recipe as 2, so its status cannot tell "gate failed" (1) from "internal error" (2) (review BA11).)*
 
 | Tier | Command | When | Covers at least *(intent sketch — **the registry is the tier map**; per-instrument tiers are ADR-0015 §2's table, which wins on any difference)* |
 |------|---------|------|------------------------------|
