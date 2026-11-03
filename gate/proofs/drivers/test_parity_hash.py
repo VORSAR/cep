@@ -4,8 +4,12 @@ Planted: a tool cache whose go directory holds real copies (never hard links) of
 hashes, with one byte flipped in pkg/tool/<os>_<arch>/compile; everything else links to the real tree. The copies of
 bin/go, bin/gofmt, asm and cgo, which parity hashes first, are byte-identical, so the one reason names compile.
 Afterwards the real cache re-hashes unchanged.
+
+Beside it, design-QA counter-example 8: a tools.json whose go entry hashes nothing would make this check verify
+nothing, so the real runner refuses it at load, exit 2, and parity never runs, let alone passes.
 """
 
+import json
 import os
 
 from gate.proofs.drivers import support
@@ -44,3 +48,24 @@ class ParityHash(support.ParityDriver):
         real = support.home(support.real_cache(), "go")
         for rel, want in sorted(go.exec_sha256.items()):
             self.assertEqual(manifest.sha256_file(os.path.join(real, rel)), want, f"the real cache's {rel} changed")
+
+    def test_an_empty_exec_map_is_refused_at_load_and_never_passes(self):
+        self.world.copy_gate()
+        path = os.path.join(self.world.repo, "tools.json")
+        with open(path, "rb") as f:
+            doc = json.loads(f.read())
+        (go,) = [t for t in doc["tools"] if t["name"] == "go"]
+        platform = manifest.platform_key()
+        self.assertTrue(go["platforms"][platform]["exec_sha256"])
+        go["platforms"][platform]["exec_sha256"] = {}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(doc, f, indent=2, sort_keys=True)
+            f.write("\n")
+        self.world.commit()
+
+        run = self.world.run()
+
+        lines = run.stdout.split("\n")[:-1]
+        self.assertEqual((run.code, lines[-2:]), (2, ["GATE FAILED", "exit: 2"]), run.stdout)
+        self.assertIn(f"(go) {platform}: field 'exec_sha256' is empty: parity would verify nothing", lines[0])
+        self.assertFalse(os.path.exists(os.path.join(run.run_dir, "records")), "parity ran")

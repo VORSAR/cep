@@ -32,6 +32,15 @@ GRACE_S = 5
 RECOVER = "run make clean-tools tools"  # the fix every parity reason but "not installed" names (Lane B's strings)
 HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS", "VORSAR_CEP_TOOLS_CACHE")
 GIT_IDENTITY = ("-c", "user.name=gate proofs", "-c", "user.email=proofs@gate.invalid", "-c", "commit.gpgsign=false")
+# git's own config, through its environment, for every git a world starts (the nested runner's too): a commit
+# otherwise starts `git maintenance run --auto --detach`, which outlives it and writes into .git during cleanup.
+QUIET_GIT = {
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "maintenance.auto",
+    "GIT_CONFIG_VALUE_0": "false",
+    "GIT_CONFIG_KEY_1": "gc.auto",
+    "GIT_CONFIG_VALUE_1": "0",
+}
 _PYTHON = ("python3.15", "-I", "-B", "-X", "utf8")
 
 # The rows the coverage proofs run. They are exactly the rows this lane asks the coordinator to add to
@@ -198,7 +207,7 @@ class World:
         os.mkdir(self.repo)
         self.runs = 0
         env = {k: v for k, v in os.environ.items() if k not in HIDDEN and not k.startswith(("GATE_", "PYTHON"))}
-        self.env = {**env, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+        self.env = {**env, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", **QUIET_GIT}
         self.git("init", "-q")
 
     def git(self, *args: str) -> str:
