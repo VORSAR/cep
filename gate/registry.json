@@ -69,6 +69,41 @@
       ]
     },
     {
+      "id": "archcheck",
+      "job": "lint",
+      "tiers": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 120,
+      "needs": [],
+      "scope": [
+        "prod",
+        "test",
+        "bench",
+        "generated"
+      ],
+      "expected_scope": [
+        "git",
+        ":(glob)**/*.go",
+        ":(glob,exclude)gate/**",
+        ":(glob,exclude)tools/**"
+      ],
+      "min_wants": 1,
+      "lands_in": "S1.1b",
+      "exclusive": false,
+      "command": [
+        "go",
+        "run",
+        "./tools/archcheck",
+        "{files}"
+      ]
+    },
+    {
       "id": "ruff",
       "job": "lint",
       "tiers": [
