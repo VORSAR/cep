@@ -212,64 +212,64 @@ func TestMembershipOperandError(t *testing.T) {
 }
 
 // TestMembershipSnapshot is exit line 4's proof (design note §2; SEMANTICS §4 as annotated by owner D1): a row
-// pinned to Version v1 keeps v1's answers for `in` and `not in` while the table moves on, including when the
-// write happens inside the row's own Value call in the middle of one evaluation; a row pinned to the new
-// Snapshot() reads the new state.
+// pinned to a Version keeps that Version's answers for `in` and `not in` while the table moves on: when the write
+// happens inside the row's own Value call in the middle of one evaluation, and when it happens between two
+// evaluations. Each write starts while the pinned Version is the table's current one, so a table that changed its
+// current Version in place would show it. A row pinned to the new Snapshot() reads the new state.
 func TestMembershipSnapshot(t *testing.T) {
 	str := func(s string) event.Value { return event.Value{Kind: event.TString, Str: s} }
 	hosts := mTable(t, "Hosts", event.TString, str("a"))
 	v1 := hosts.Snapshot()
-	snaps := mSnapshots(t)
-	snaps[0] = v1
+	pin := func(v *table.Version) []*table.Version {
+		snaps := mSnapshots(t)
+		snaps[0] = v
+		return snaps
+	}
 
 	vals := mValues()
 	vals[0] = str("b") // h: absent from v1, added below
 	vals[1] = str("a") // g: present in v1, deleted below
-	r1 := &pinned{vals: vals, tables: snaps}
+	r1 := &pinned{vals: vals, tables: pin(v1)}
 
 	hIn, hNotIn := mBuild(t, in(a("h"), "Hosts", false)), mBuild(t, in(a("h"), "Hosts", true))
 	gIn, gNotIn := mBuild(t, in(a("g"), "Hosts", false)), mBuild(t, in(a("g"), "Hosts", true))
+	// (h not in Hosts) and (g in Hosts): true under v1, false once b is in or a is out.
+	both := mBuild(t, and(in(a("h"), "Hosts", true), in(a("g"), "Hosts", false)))
+	// (h in Hosts) or (g not in Hosts): false under v1, true once b is in or a is out.
+	either := mBuild(t, or(in(a("h"), "Hosts", false), in(a("g"), "Hosts", true)))
 	v1Answers := func(r expr.Row, when string) {
 		t.Helper()
 		wantBool(t, hIn, r, false, when+": h in Hosts")
 		wantBool(t, hNotIn, r, true, when+": h not in Hosts")
 		wantBool(t, gIn, r, true, when+": g in Hosts")
 		wantBool(t, gNotIn, r, false, when+": g not in Hosts")
+		wantBool(t, both, r, true, when+": (h not in Hosts) and (g in Hosts)")
+		wantBool(t, either, r, false, when+": (h in Hosts) or (g not in Hosts)")
 	}
 	v1Answers(r1, "v1, before any write")
-
-	// v2: an Upsert published between two evaluations.
-	if err := hosts.Upsert([][]event.Value{{str("b")}}); err != nil {
-		t.Fatal(err)
+	if hosts.Snapshot() != v1 {
+		t.Fatal("evaluating published a Version")
 	}
-	if hosts.Snapshot() == v1 {
-		t.Fatal("the Upsert published nothing")
-	}
-	v1Answers(r1, "the row pinned to v1, after v2 was published")
 
-	// v3, v4: written from inside the row's own Value call, in the middle of one evaluation that reads the
-	// table twice. Each read of an attribute writes; every answer of the evaluation is still v1's.
+	// Mid-evaluation: v1 is current when the first read of an attribute deletes a and the second upserts b. The
+	// evaluation reads the table after each write; every answer is still v1's.
 	writes := 0
 	r1.onValue = func() {
 		writes++
 		var err error
-		if writes == 1 {
+		switch writes {
+		case 1:
 			err = hosts.Delete([][]event.Value{{str("a")}})
-		} else {
-			err = hosts.Upsert([][]event.Value{{str("b")}, {str("c")}})
+		case 2:
+			err = hosts.Upsert([][]event.Value{{str("b")}})
 		}
 		if err != nil {
 			t.Errorf("the write inside Value: %v", err)
 		}
 	}
-	// (h not in Hosts) and (g in Hosts): true under v1; false under any later version.
-	both := mBuild(t, and(in(a("h"), "Hosts", true), in(a("g"), "Hosts", false)))
 	wantBool(t, both, r1, true, "(h not in Hosts) and (g in Hosts), written mid-evaluation")
-	// (h in Hosts) or (g not in Hosts): false under v1; true under any later version.
-	either := mBuild(t, or(in(a("h"), "Hosts", false), in(a("g"), "Hosts", true)))
-	wantBool(t, either, r1, false, "(h in Hosts) or (g not in Hosts), written mid-evaluation")
-	if writes < 4 {
-		t.Fatalf("the evaluations read %d attributes, want 4: the mid-evaluation writes did not all happen", writes)
+	if writes != 2 {
+		t.Fatalf("the evaluation read %d attributes, want 2: the mid-evaluation writes did not both happen", writes)
 	}
 	r1.onValue = nil
 	v1Answers(r1, "the row pinned to v1, after the mid-evaluation writes")
@@ -277,18 +277,35 @@ func TestMembershipSnapshot(t *testing.T) {
 		t.Fatalf("v1 changed: Len %d", v1.Len())
 	}
 
-	// The next evaluation, pinned to the table's new snapshot, sees the writes: h in, g out.
-	now := hosts.Snapshot()
-	if now == v1 || !now.Has(str("b")) || now.Has(str("a")) {
-		t.Fatal("the table's current snapshot does not hold the writes")
+	// Between evaluations: pin a row to the current Version v2 (b in, a out), then write a back and remove b.
+	v2 := hosts.Snapshot()
+	if v2 == v1 || !v2.Has(str("b")) || v2.Has(str("a")) {
+		t.Fatal("the table's current snapshot does not hold the mid-evaluation writes")
 	}
-	snaps2 := append([]*table.Version{}, snaps...)
-	snaps2[0] = now
-	r2 := &pinned{vals: vals, tables: snaps2}
-	wantBool(t, hIn, r2, true, "the new snapshot: h in Hosts")
-	wantBool(t, hNotIn, r2, false, "the new snapshot: h not in Hosts")
-	wantBool(t, gIn, r2, false, "the new snapshot: g in Hosts")
-	wantBool(t, gNotIn, r2, true, "the new snapshot: g not in Hosts")
-	wantBool(t, both, r2, false, "the new snapshot: (h not in Hosts) and (g in Hosts)")
-	wantBool(t, either, r2, true, "the new snapshot: (h in Hosts) or (g not in Hosts)")
+	r2 := &pinned{vals: vals, tables: pin(v2)}
+	v2Answers := func(r expr.Row, when string) {
+		t.Helper()
+		wantBool(t, hIn, r, true, when+": h in Hosts")
+		wantBool(t, hNotIn, r, false, when+": h not in Hosts")
+		wantBool(t, gIn, r, false, when+": g in Hosts")
+		wantBool(t, gNotIn, r, true, when+": g not in Hosts")
+		wantBool(t, both, r, false, when+": (h not in Hosts) and (g in Hosts)")
+		wantBool(t, either, r, true, when+": (h in Hosts) or (g not in Hosts)")
+	}
+	v2Answers(r2, "v2")
+	if err := hosts.Upsert([][]event.Value{{str("a")}, {str("c")}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := hosts.Delete([][]event.Value{{str("b")}}); err != nil {
+		t.Fatal(err)
+	}
+	v2Answers(r2, "the row pinned to v2, after later writes")
+	v1Answers(r1, "the row pinned to v1, after every write")
+
+	// The next evaluation, pinned to the table's new snapshot v3 (a and c in, b out), sees the writes.
+	v3 := hosts.Snapshot()
+	if v3 == v2 || v3.Len() != 2 {
+		t.Fatalf("v3: Len %d", v3.Len())
+	}
+	v1Answers(&pinned{vals: vals, tables: pin(v3)}, "a row pinned to v3 (the same membership as v1)")
 }
