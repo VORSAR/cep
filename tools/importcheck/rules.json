@@ -32,5 +32,8 @@
   },
   "fences": {
     "internal/expr": {"internal/model": ["Expr", "Lit", "TextOperand"]}
+  },
+  "test_imports": {
+    "internal/validate": ["internal/parser"]
   }
 }
