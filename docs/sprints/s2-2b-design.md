@@ -1,6 +1,6 @@
 # S2.2b — design note: the validator
 
-A dated reading of `main` at the S2.2a merge (2026-11-04), for the architecture review before the build (G1). The card is [sprint-plan §3, S2.2b](sprint-plan.md); the owner's plan-check answers are [§5, "S2.2a closed; S2.2b's plan check"](sprint-plan.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check). Open questions are marked **A1–A4**, each with a recommendation; A1, A2 and A4 touch a law or a format and go to the owner after the review.
+A dated reading of `main` at the S2.2a merge (2026-11-04), for the architecture review before the build (G1). The card is [sprint-plan §3, S2.2b](sprint-plan.md); the owner's plan-check answers are [§5, "S2.2a closed; S2.2b's plan check"](sprint-plan.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check). Open questions are marked **A1–A5**, each with a recommendation; A1, A2, A4 and A5 touch a law, a format or reachability and go to the owner after the review.
 
 ## 1. The shape
 
@@ -71,10 +71,12 @@ The effective value is the override, parsed as a literal of the declared type, e
 
 `connectors.go` is one closed table, per ADR-0008's Phase 1 slice:
 
-- `@source` types: `http` (punctuates: one POST body is one batch), `memory`, `stdin` (neither punctuates); each with its keys.
+- `@source` types: `http`, `stdin`, `inmemory`; each with its keys and its `punctuates` flag.
 - `@sink` types: `http`, `email` (append only), `log` (accepts a changelog); each with its keys; a nested `@map(type = 'json' | 'text')`.
 - An unknown annotation, type or key is `E-NAME-001` with the nearest name.
 - `E-WIN-002`: `batch()` over a stream whose `@source` type does not punctuate. **No `@source` means the connector is chosen at deployment, and counts as punctuating.**
+
+**A5 — no built-in source fails to punctuate.** ADR-0008 §4 gives all three a batch id: `http` one per POST body, `stdin` one per `--batch-lines` or end of file, `inmemory` through the Go API's `batchID`. So with the built-in table `E-WIN-002` cannot fire. Recommended: all three are `punctuates: true`; the check is proven by a unit test over a table holding a non-punctuating entry, and the code becomes reachable when a sibling-repo adapter registers one. The table test lists `E-WIN-002` as unreachable through the built-in table, as it does `E-GRAPH-001`. *Alternative:* mark `inmemory` non-punctuating — but tests feed batch windows through it.
 - `E-SINK-001`: a changelog producer (a sort window, `emit on change`) inserting into a stream whose `@sink` accepts append only.
 
 The key lists are fixed in `connectors.go` from ADR-0008 and example 01 (`type`, `url`, nested `@map(type)`), each key citing its source.
