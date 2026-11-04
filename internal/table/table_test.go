@@ -612,3 +612,22 @@ func TestReadsAllocateNothing(t *testing.T) {
 	}
 	_, _ = got, n
 }
+
+// TestObjectValuesAreJSONText is the build's ruling on break-it B5 (P3: an object is its JSON text): a non-null object
+// value is a string or a []byte, stored as the table's own string; any other dynamic type is refused.
+func TestObjectValuesAreJSONText(t *testing.T) {
+	for name, o := range map[string]any{"a map": map[string]any{"a": 1}, "nil": nil, "an int": 7, "a pointer": new(string)} {
+		t.Run(name, func(t *testing.T) {
+			tb := hosts(t)
+			err := tb.Upsert(rows(row(s("a"), s("o"), null(event.TInt), event.Value{Kind: event.TObject, Obj: o})))
+			if err == nil || !strings.Contains(err.Error(), "meta") {
+				t.Fatalf("an object value of type %T was accepted (err %v)", o, err)
+			}
+		})
+	}
+	tb := hosts(t)
+	ok(t, tb.Upsert(rows(row(s("a"), s("o"), null(event.TInt), event.Value{Kind: event.TObject, Obj: []byte(`[1]`)}))))
+	if r, _ := tb.Snapshot().Get(row(s("a"))); r[3].Obj != `[1]` {
+		t.Fatalf("a []byte object must be stored as its string: %#v", r[3].Obj)
+	}
+}
