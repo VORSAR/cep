@@ -8,15 +8,16 @@ import (
 	"github.com/vorsar/cep/internal/event"
 )
 
-// All times are int64 ms, as in the harness (SEC, MIN); 10:00 is 0.
+// All times are int64 ms, as in the harness (SEC, MIN); 10:00 is 0. In live tests the wall clock is on the same
+// scale: an arrival stamp of 0 is wall 10:00.
 const (
 	second int64 = 1000
 	minute       = 60 * second
-	negInf int64 = math.MinInt64 // −∞: a contribution before any event, a fresh construct clock
-	posInf int64 = math.MaxInt64 // +∞: an idle stream's contribution (design note §1)
+	negInf int64 = math.MinInt64 // −∞: a contribution before anything moved it, a fresh rule clock
+	posInf int64 = math.MaxInt64 // +∞: every contribution after EndOfInput
 )
 
-// evKey is an event's identity for comparisons: event.Compare's three keys.
+// evKey is an event's identity: event.Compare's three keys.
 type evKey struct {
 	StreamID int
 	Ts       int64
@@ -29,193 +30,143 @@ func ev(sid int, ts int64, seq uint64) event.Event {
 
 func keyOf(e event.Event) evKey { return evKey{e.StreamID, e.Ts, e.Seq} }
 
-// phase is one of Advance's three ordered steps (SEMANTICS §6.4; ADR-0004 §2).
-type phase int
-
-const (
-	phaseEvents  phase = iota // (a) OnEvents
-	phaseTimers               // (b) OnTimers
-	phaseDiscard              // (c) OnDiscard
-)
-
-func (p phase) String() string {
-	return [...]string{"(a) OnEvents", "(b) OnTimers", "(c) OnDiscard"}[p]
+// item is one thing the walk delivered: an event, a fired timer or a discarded ref, with its key's ordinal.
+type item struct {
+	Cb    string // "event" (OnEvent), "timer" (OnTimers) or "discard" (OnDiscard)
+	Key   uint64
+	Ev    evKey
+	Timer clock.Timer
+	Ref   uint64
 }
 
-// call is one callback the test-double operator received.
+func E(key uint64, sid int, ts int64, seq uint64) item {
+	return item{Cb: "event", Key: key, Ev: evKey{sid, ts, seq}}
+}
+
+func T(key uint64, due int64, k clock.TimerKind, ref uint64) item {
+	return item{Cb: "timer", Key: key, Timer: clock.Timer{Due: due, Kind: k, Ref: ref}}
+}
+
+func D(key uint64, ref uint64) item { return item{Cb: "discard", Key: key, Ref: ref} }
+
+// call is one callback invocation, kept to check batching (one OnTimers call per key's inclusive group).
 type call struct {
-	phase  phase
-	events []evKey
-	timers []clock.Timer
-	refs   []uint64
+	Cb     string
+	Key    uint64
+	Timers []clock.Timer
 }
 
-// recorder is the test-double operator: it owns one instance, records every callback in order (copying each
-// batch), and lets a test schedule or cancel from inside a callback, as a real operator does.
+// recorder is the test-double operator for one rule clock: it records every item in order (copying each batch)
+// and lets a test schedule or cancel from inside a callback, as a real operator does.
 type recorder struct {
-	t       *testing.T
-	in      *clock.Instance
-	calls   []call
-	onEvent func(in *clock.Instance, e event.Event)
-	onTimer func(in *clock.Instance, tm clock.Timer)
+	t         *testing.T
+	items     []item
+	calls     []call
+	onEvent   func(in *clock.Instance, e event.Event)
+	onTimer   func(in *clock.Instance, tm clock.Timer)
+	onDiscard func(in *clock.Instance, ref uint64)
 }
 
-func newRecorder(t *testing.T, inputs ...int) *recorder {
-	t.Helper()
-	return &recorder{t: t, in: clock.NewInstance(inputs)}
-}
-
-func (r *recorder) callbacks() clock.AdvanceCallbacks {
-	return clock.AdvanceCallbacks{
-		OnEvents: func(batch []event.Event) {
-			if len(batch) == 0 {
-				r.t.Errorf("OnEvents called with an empty batch; a callback with nothing to receive is not called")
-			}
-			c := call{phase: phaseEvents}
-			for _, e := range batch {
-				c.events = append(c.events, keyOf(e))
-			}
-			r.calls = append(r.calls, c)
+func (r *recorder) callbacks() clock.Callbacks {
+	return clock.Callbacks{
+		OnEvent: func(in *clock.Instance, e event.Event) {
+			r.items = append(r.items, item{Cb: "event", Key: in.Ordinal(), Ev: keyOf(e)})
+			r.calls = append(r.calls, call{Cb: "event", Key: in.Ordinal()})
 			if r.onEvent != nil {
-				for _, e := range batch {
-					r.onEvent(r.in, e)
-				}
+				r.onEvent(in, e)
 			}
 		},
-		OnTimers: func(fires []clock.Timer) {
+		OnTimers: func(in *clock.Instance, fires []clock.Timer) {
 			if len(fires) == 0 {
-				r.t.Errorf("OnTimers called with an empty batch; a callback with nothing to receive is not called")
+				r.t.Errorf("OnTimers called with an empty batch")
 			}
+			r.calls = append(r.calls, call{Cb: "timer", Key: in.Ordinal(), Timers: append([]clock.Timer(nil), fires...)})
 			for _, tm := range fires {
 				if tm.Kind == clock.Discard {
-					r.t.Errorf("OnTimers received a Discard timer %+v; discards arrive only in OnDiscard (c)", tm)
+					r.t.Errorf("OnTimers received a Discard %+v; discards arrive only through OnDiscard", tm)
 				}
+				r.items = append(r.items, item{Cb: "timer", Key: in.Ordinal(), Timer: tm})
 			}
-			r.calls = append(r.calls, call{phase: phaseTimers, timers: append([]clock.Timer(nil), fires...)})
 			if r.onTimer != nil {
 				for _, tm := range fires {
-					r.onTimer(r.in, tm)
+					r.onTimer(in, tm)
 				}
 			}
 		},
-		OnDiscard: func(overrun []uint64) {
-			if len(overrun) == 0 {
-				r.t.Errorf("OnDiscard called with an empty batch; a callback with nothing to receive is not called")
+		OnDiscard: func(in *clock.Instance, refs []uint64) {
+			if len(refs) == 0 {
+				r.t.Errorf("OnDiscard called with an empty batch")
 			}
-			r.calls = append(r.calls, call{phase: phaseDiscard, refs: append([]uint64(nil), overrun...)})
+			r.calls = append(r.calls, call{Cb: "discard", Key: in.Ordinal()})
+			for _, ref := range refs {
+				r.items = append(r.items, item{Cb: "discard", Key: in.Ordinal(), Ref: ref})
+			}
+			if r.onDiscard != nil {
+				for _, ref := range refs {
+					r.onDiscard(in, ref)
+				}
+			}
 		},
 	}
 }
 
-// advance runs one Advance and returns the calls it made, after checking the (a) → (b) → (c) order:
-// phases never go backwards and (a) is at most one chunk (ADR-0004 §2: "as ONE chunk").
-func (r *recorder) advance() []call {
-	r.t.Helper()
-	start := len(r.calls)
-	r.in.Advance(r.callbacks())
-	got := r.calls[start:]
-	nEvents := 0
-	for i, c := range got {
-		if c.phase == phaseEvents {
-			nEvents++
-		}
-		if i > 0 && c.phase < got[i-1].phase {
-			r.t.Errorf("Advance called %v after %v; the order is (a) events, (b) timers, (c) discards: %v",
-				c.phase, got[i-1].phase, phasesOf(got))
-		}
-	}
-	if nEvents > 1 {
-		r.t.Errorf("Advance called OnEvents %d times; (a) is one chunk", nEvents)
-	}
-	return got
+// advance runs one walk and returns the items it delivered.
+func (r *recorder) advance(rc *clock.RuleClock) []item {
+	start := len(r.items)
+	rc.Advance(r.callbacks())
+	return append([]item(nil), r.items[start:]...)
 }
 
-func phasesOf(calls []call) []phase {
-	var ps []phase
-	for _, c := range calls {
-		ps = append(ps, c.phase)
+// to moves a rule clock reading the given streams to exactly t (each stream's contribution set to t).
+func to(rc *clock.RuleClock, t int64, sids ...int) {
+	for _, s := range sids {
+		rc.ApplyAdvance(clock.WMAdvance{StreamID: s, Contribution: t, Moved: true})
 	}
-	return ps
 }
 
-func eventsOf(calls []call) []evKey {
-	var out []evKey
-	for _, c := range calls {
-		out = append(out, c.events...)
-	}
-	return out
-}
-
-func timersOf(calls []call) []clock.Timer {
-	var out []clock.Timer
-	for _, c := range calls {
-		out = append(out, c.timers...)
-	}
-	return out
-}
-
-func discardsOf(calls []call) []uint64 {
-	var out []uint64
-	for _, c := range calls {
-		out = append(out, c.refs...)
-	}
-	return out
-}
-
-// world drives a registry and instances the way a runtime does (ADR-0004 §3): every WMAdvance the registry
-// produces is applied to EVERY instance (the broadcast; an instance ignores a stream it does not read), the
-// arriving event is buffered into its owner instance unless stream-late, then every instance runs Advance.
-// In playback the driver also raises the virtual clock to the event's time (run_pattern_multi's virtual_now).
+// world drives a registry and one rule clock the way a runtime does (ADR-0004 §3 as annotated): every WMAdvance
+// the registry produces is applied to the rule clock; an arriving event is buffered into its key's instance unless
+// stream-late; then the rule clock walks. In playback the driver also raises the virtual clock to the event's time.
 type world struct {
 	t        *testing.T
 	playback bool
 	reg      *clock.StreamRegistry
-	recs     []*recorder
+	rc       *clock.RuleClock
+	rec      *recorder
+	buf      []clock.WMAdvance
 }
 
-func newWorld(t *testing.T, playback bool, specs []clock.StreamSpec, inputs ...[]int) *world {
+func newWorld(t *testing.T, playback bool, specs []clock.StreamSpec, start int64, inputs ...int) *world {
 	t.Helper()
-	w := &world{t: t, playback: playback, reg: clock.NewStreamRegistry(specs)}
-	for _, in := range inputs {
-		w.recs = append(w.recs, newRecorder(t, in...))
-	}
-	return w
+	return &world{t: t, playback: playback, reg: clock.NewStreamRegistry(specs, start), rc: clock.NewRuleClock(inputs),
+		rec: &recorder{t: t}}
 }
 
-func (w *world) broadcast(a clock.WMAdvance) {
-	for _, r := range w.recs {
-		r.in.ApplyAdvance(a)
+func (w *world) apply(advs []clock.WMAdvance) {
+	for _, a := range advs {
+		w.rc.ApplyAdvance(a)
 	}
 }
 
-// arrive is one arrival: ObserveEvent → broadcast → (playback) ObserveVirtual → broadcast → Buffer → Advance.
-func (w *world) arrive(owner int, e event.Event) (streamLate, constructLate bool, calls [][]call) {
+// arrive is one arrival: ObserveEvent → apply → (playback) ObserveVirtual → apply → Buffer → Advance.
+func (w *world) arrive(in *clock.Instance, e event.Event, arrival int64) (streamLate, constructLate bool, got []item) {
 	w.t.Helper()
-	streamLate, adv := w.reg.ObserveEvent(e.StreamID, e.Ts)
-	w.broadcast(adv)
+	streamLate, adv := w.reg.ObserveEvent(e.StreamID, e.Ts, arrival)
+	w.rc.ApplyAdvance(adv)
 	if w.playback {
-		for _, a := range w.reg.ObserveVirtual(e.Ts) {
-			w.broadcast(a)
-		}
+		w.buf = w.reg.ObserveVirtual(e.Ts, w.buf[:0])
+		w.apply(w.buf)
 	}
 	if !streamLate {
-		constructLate = w.recs[owner].in.Buffer(e)
+		constructLate = in.Buffer(e)
 	}
-	return streamLate, constructLate, w.advanceAll()
+	return streamLate, constructLate, w.rec.advance(w.rc)
 }
 
-// idle is a live idle tick: the stream's `idle after` elapsed.
-func (w *world) idle(sid int) [][]call {
+// tick is a live wall tick from the intake: ObserveTick → apply → Advance.
+func (w *world) tick(now int64) []item {
 	w.t.Helper()
-	w.broadcast(w.reg.ObserveIdle(sid))
-	return w.advanceAll()
-}
-
-func (w *world) advanceAll() [][]call {
-	w.t.Helper()
-	out := make([][]call, len(w.recs))
-	for i, r := range w.recs {
-		out[i] = r.advance()
-	}
-	return out
+	w.buf = w.reg.ObserveTick(now, w.buf[:0])
+	w.apply(w.buf)
+	return w.rec.advance(w.rc)
 }
