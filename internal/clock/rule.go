@@ -36,8 +36,8 @@ func (t *timer) before(u *timer) bool {
 		return t.due < u.due
 	case t.phase() != u.phase():
 		return t.phase() < u.phase()
-	case t.in.ordinal != u.in.ordinal:
-		return t.in.ordinal < u.in.ordinal
+	case t.in.birth != u.in.birth:
+		return t.in.birth < u.in.birth
 	case t.kind != u.kind:
 		return t.kind < u.kind
 	case t.ref != u.ref:
@@ -63,6 +63,7 @@ type RuleClock struct {
 	contrib  []int64
 	clock    int64
 	ordinals uint64
+	births   uint64
 	seq      uint64
 	events   []buffered // a min-heap in event.Compare order
 	timers   []*timer   // a min-heap by timer.before
@@ -110,7 +111,7 @@ func (rc *RuleClock) Clock() int64 { return rc.clock }
 
 // NewInstance makes a key's instance; ordinals count up from 0 and are never reused.
 func (rc *RuleClock) NewInstance() *Instance {
-	in := &Instance{rc: rc, ordinal: rc.ordinals, sealed: math.MinInt64, timers: map[timerKey]*timer{}}
+	in := &Instance{rc: rc, ordinal: rc.ordinals, timers: map[timerKey]*timer{}}
 	rc.ordinals++
 	return in
 }
@@ -126,7 +127,13 @@ func (rc *RuleClock) Free(in *Instance) {
 // Advance walks every pending item up to the clock, forward in event time (owner D1): by instant; within one,
 // events in event.Compare order, then the inclusive timers due, then — once the clock is past the instant — the
 // strict ones. A timer a callback schedules joins the walk in order.
+//
+// Keys at one instant go in birth order: a key is born at its first released event or first timer, and born again
+// after its purge's CancelAll (the reference executor's order, SEMANTICS §9). A clock still at −∞ releases nothing.
 func (rc *RuleClock) Advance(cb Callbacks) {
+	if rc.clock == math.MinInt64 {
+		return
+	}
 	for {
 		evAt, evOK := rc.nextEvent()
 		tm := rc.nextTimer()
@@ -134,6 +141,7 @@ func (rc *RuleClock) Advance(cb Callbacks) {
 		case evOK && (tm == nil || evAt <= tm.due):
 			b := rc.popEvent()
 			b.in.buffered--
+			b.in.bear()
 			if cb.OnEvent != nil {
 				cb.OnEvent(b.in, b.e)
 			}
@@ -159,7 +167,8 @@ func (rc *RuleClock) nextTimer() *timer {
 		return nil
 	}
 	t := rc.timers[0]
-	if t.due > rc.clock || (t.kind.strict() && t.due == rc.clock) {
+	// a strict timer needs the clock past its due; +∞ (the end of input) is past every due
+	if t.due > rc.clock || (t.kind.strict() && t.due == rc.clock && rc.clock != math.MaxInt64) {
 		return nil
 	}
 	return t
@@ -181,8 +190,8 @@ func (rc *RuleClock) fireGroup(head *timer, cb Callbacks) {
 			rc.fires = append(rc.fires, Timer{Due: t.due, Kind: t.kind, Ref: t.ref})
 		}
 	}
-	if phase == phaseInclusive {
-		in.sealed = max(in.sealed, due) // owner D7: this key's instant is sealed
+	if phase == phaseInclusive && (!in.hasSeal || due > in.sealed) { // owner D7: this key's instant is sealed
+		in.sealed, in.hasSeal = due, true
 	}
 	switch {
 	case discard && cb.OnDiscard != nil:
@@ -299,19 +308,30 @@ func keyOf(k TimerKind, ref uint64) timerKey {
 type Instance struct {
 	rc       *RuleClock
 	ordinal  uint64
-	sealed   int64 // owner D7: the latest instant this key's inclusive timers fired
+	birth    uint64 // the walk's order across keys; valid while born
+	born     bool
+	sealed   int64 // owner D7: the latest instant this key's inclusive timers fired, when hasSeal
+	hasSeal  bool
 	buffered int
 	timers   map[timerKey]*timer
 	freed    bool
 }
 
-// Ordinal is the key's birth order on this rule clock.
+// Ordinal is the instance's creation order on this rule clock: a stable label, never reused.
 func (in *Instance) Ordinal() uint64 { return in.ordinal }
+
+// bear gives an unborn key its place in the walk's order across keys.
+func (in *Instance) bear() {
+	if !in.born {
+		in.birth, in.born = in.rc.births, true
+		in.rc.births++
+	}
+}
 
 // Buffer holds an admitted event until the walk releases it, or reports it construct-late: behind the rule's clock,
 // or at or before an instant sealed for this key (owner D7). A construct-late event is not kept.
 func (in *Instance) Buffer(e event.Event) (constructLate bool) {
-	if e.Ts < in.rc.clock || e.Ts <= in.sealed {
+	if e.Ts < in.rc.clock || (in.hasSeal && e.Ts <= in.sealed) {
 		return true
 	}
 	in.rc.pushEvent(buffered{e: e, in: in})
@@ -325,6 +345,7 @@ func (in *Instance) Schedule(due int64, k TimerKind, ref uint64) {
 	if old := in.timers[key]; old != nil {
 		in.rc.removeTimer(old)
 	}
+	in.bear()
 	in.rc.seq++
 	t := &timer{due: due, kind: k, ref: ref, seq: in.rc.seq, in: in}
 	in.timers[key] = t
@@ -341,12 +362,17 @@ func (in *Instance) Cancel(k TimerKind, ref uint64) bool {
 	return true
 }
 
-// CancelAll removes every pending timer of the key (the TTL purge's reset); its buffered events stay.
+// CancelAll removes every pending timer of the key (the TTL purge's reset); its buffered events stay, and its next
+// released event or timer is its new birth (a returning key starts fresh, SEMANTICS §9).
 func (in *Instance) CancelAll() {
 	for _, t := range in.timers {
 		in.rc.removeTimer(t)
 	}
+	in.born = false
 }
 
-// Empty says the key has no buffered event and no timer.
-func (in *Instance) Empty() bool { return in.buffered == 0 && len(in.timers) == 0 }
+// Empty says the key holds nothing the shard would lose by freeing it: no buffered event, no timer, and no seal
+// the clock has not yet passed (a sealed instant still drops a late event of the key, owner D7).
+func (in *Instance) Empty() bool {
+	return in.buffered == 0 && len(in.timers) == 0 && !(in.hasSeal && in.sealed >= in.rc.clock)
+}
