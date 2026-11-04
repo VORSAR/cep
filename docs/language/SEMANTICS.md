@@ -66,7 +66,7 @@ Filters and projections are **pure**: no side effects, no wall clock, no externa
 
 ## 4. Tables and membership
 
-A table is a keyed set (primary key mandatory) holding rows, mutated programmatically (Go API) in MVP. *(SPEC rev 3: keyword-set operators over a table operand read the same per-event snapshot as `in`.)* Evaluation sees a **per-event snapshot**: all predicates evaluated for one event read the same table state; a concurrent programmatic update is visible to the next event, never mid-event. `<expr> in <Table>` is true iff a row whose key equals the expression exists (null-strict per §1.1). Rules referencing a missing table: deploy error.
+A table is a keyed set (primary key mandatory) holding rows, mutated programmatically (Go API) in MVP. *(SPEC rev 3: keyword-set operators over a table operand read the same per-event snapshot as `in`.)* Evaluation sees a **per-event snapshot**: all predicates evaluated for one event read the same table state; a concurrent programmatic update is visible to the next event, never mid-event. `<expr> in <Table>` is true iff a row whose key equals the expression exists (null-strict per §1.1). Rules referencing a missing table: deploy error. *(Annotated 2026-11-04, owner decision at S3.1-2's design: the per-event snapshot is **the table state at the event's ingest position** — intake order live, log position in replay — read by every rule that evaluates the event, however long it waits for its watermark; a change made after the event arrived never decides it.)*
 
 ## 5. Text matching
 
