@@ -1,0 +1,18 @@
+-- torture: unary minus binds at atom level — -a * b = (-a) * b; - a - b = (-a) - b; 2 * -3 = 2 * (-3); -(a + b) * c = (-(a + b)) * c
+language cep/0.1;
+
+stream Metrics (host string, delta float, weight float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, value float, ts timestamp);
+
+rule UnaryMinusOverMul
+  intent 'Negated delta scaled: (-delta) * weight; and (-delta) - weight.'
+  from Metrics[-delta * weight > 10 and - delta - weight < 0]
+  select host, 'unary-minus-over-mul' as why, -delta * weight as value
+  insert into Alerts;
+
+rule UnaryMinusOnLiteral
+  intent 'A negative literal on the right of *: 2 * (-3); a negated parenthesised sum then scaled.'
+  from Metrics[delta < 2 * -3 or -(delta + weight) * 2 > 1]
+  select host, 'unary-minus-on-literal' as why, 2 * -3 as value
+  insert into Alerts;

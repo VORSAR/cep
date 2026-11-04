@@ -1,0 +1,20 @@
+-- torture: * above + above comparison — a + b * c > d = (a + (b * c)) > d; the parenthesised twin (a + b) * c > d is a different tree
+language cep/0.1;
+
+param threshold float = 90;
+
+stream Metrics (host string, base float, rate float, secs float, cap float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+
+rule MulAbovePlusAboveCmp
+  intent 'Projected use: (base + (rate * secs)) > cap, and cap - base > threshold / 2.'
+  from Metrics[base + rate * secs > cap and cap - base > ${threshold} / 2]
+  select host, 'mul-above-plus-above-cmp' as why
+  insert into Alerts;
+
+rule PlusParensThenMul
+  intent 'A different tree: ((base + rate) * secs) > cap.'
+  from Metrics[(base + rate) * secs > cap]
+  select host, 'plus-parens-then-mul' as why
+  insert into Alerts;

@@ -1,0 +1,20 @@
+-- torture: a call is an atom — coalesce(a, b) + 1 = (coalesce(a, b)) + 1; math:round(x) * 2 = (math:round(x)) * 2; arguments are full expressions
+language cep/0.1;
+
+param threshold float = 90;
+
+stream Metrics (host string, cpu float optional, mem float, label string optional, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, value float, ts timestamp);
+
+rule CallsAsOperands
+  intent '((coalesce(cpu, 0) + 1) > 2) and ((math:round(mem) * 2) >= threshold).'
+  from Metrics[coalesce(cpu, 0) + 1 > 2 and math:round(mem) * 2 >= ${threshold}]
+  select host, 'calls-as-operands' as why, coalesce(cpu, 0) + 1 as value
+  insert into Alerts;
+
+rule CallArgumentsAreExpressions
+  intent 'Arguments carry their own precedence: math:abs(cpu - mem * 2) / 2 < 1 or coalesce(label, "none") has_ci "x".'
+  from Metrics[math:abs(cpu - mem * 2) / 2 < 1 or coalesce(label, 'none') has_ci 'x']
+  select host, 'call-arguments-are-expressions' as why, math:abs(cpu - mem * 2) / 2 as value
+  insert into Alerts;

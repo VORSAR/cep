@@ -1,0 +1,19 @@
+-- torture: not x in T = not (x in T), a prefix not over membership; x not in T is the single not_in operator; both sit below and
+language cep/0.1;
+
+stream Metrics (host string, cpu float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+table Hosts (host string) primary key (host);
+
+rule PrefixNotOverIn
+  intent 'Fires for hosts outside the table with high cpu: (not (host in Hosts)) and (cpu > 90).'
+  from Metrics[not host in Hosts and cpu > 90]
+  select host, 'prefix-not-over-in' as why
+  insert into Alerts;
+
+rule InfixNotIn
+  intent 'Same meaning spelled with the not_in operator: (host not in Hosts) and (cpu > 90).'
+  from Metrics[host not in Hosts and cpu > 90]
+  select host, 'infix-not-in' as why
+  insert into Alerts;

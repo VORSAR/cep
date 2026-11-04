@@ -1,0 +1,24 @@
+-- torture: text operators sit at comparison level with a string or ${param} right operand; a set operator takes a list, a ${param} or a table name — all above and/or
+language cep/0.1;
+
+param needle string = 'override';
+param risk_terms string = 'ignore previous, disregard instructions';
+
+stream Prompts (sessionId string, text string optional, score float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Flagged (sessionId string, why string, ts timestamp);
+table RiskTerms (term string) primary key (term);
+
+rule TextOpsWithParams
+  intent 'Each text operator is one comparison-level node: (text has_ci needle) and (score > 1) or (text starts_with_cs "sudo").'
+  from Prompts[text has_ci ${needle} and score > 1 or text starts_with_cs 'sudo']
+  select sessionId, 'text-ops-with-params' as why
+  insert into Flagged;
+
+rule SetOpsListParamTable
+  intent 'Three set operands: a literal list, a param, a table name — never confused with membership in.'
+  from Prompts[text has_any_ci('exfiltrate', 'base64 -d')
+               or text contains_all_cs(${risk_terms})
+               or text has_any_ci(RiskTerms) and not text matches_ci '''^\s*$''']
+  select sessionId, 'set-ops-list-param-table' as why
+  insert into Flagged;

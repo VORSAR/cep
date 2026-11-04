@@ -1,0 +1,18 @@
+-- torture: not binds tighter than and — not a and b = (not a) and b; not not a = not (not a); the parenthesised twin is not (a and b)
+language cep/0.1;
+
+stream Metrics (host string, cpu float, mem float, healthy bool, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+
+rule NotBelowAnd
+  intent 'Fires on an unhealthy host with high cpu; the double not folds to healthy.'
+  from Metrics[not healthy and cpu > 90 or not not healthy and mem > 95]
+  select host, 'not-below-and' as why
+  insert into Alerts;
+
+rule NotBelowAndParens
+  intent 'Fires unless the host is both healthy and hot — a different tree.'
+  from Metrics[not (healthy and cpu > 90)]
+  select host, 'not-below-and-parens' as why
+  insert into Alerts;

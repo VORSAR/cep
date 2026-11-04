@@ -1,0 +1,18 @@
+-- torture: long chains are left-nested — a - b - c - d = ((a - b) - c) - d; a / b / c / d = ((a / b) / c) / d; a or b or c and d or e = ((a or b) or (c and d)) or e
+language cep/0.1;
+
+stream Metrics (host string, a float, b float, c float, d float, e float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, value float, ts timestamp);
+
+rule LongMinusAndDivChains
+  intent '(((a - b) - c) - d) < e and (((a / b) / c) / d) > 1.'
+  from Metrics[a - b - c - d < e and a / b / c / d > 1]
+  select host, 'long-minus-and-div-chains' as why, a - b - c - d - e as value
+  insert into Alerts;
+
+rule LongOrAndChain
+  intent '(((a > 1 or b > 1) or (c > 1 and d > 1)) or e > 1) and the mixed chain a + b - c + d = ((a + b) - c) + d.'
+  from Metrics[a > 1 or b > 1 or c > 1 and d > 1 or e > 1]
+  select host, 'long-or-and-chain' as why, a + b - c + d as value
+  insert into Alerts;

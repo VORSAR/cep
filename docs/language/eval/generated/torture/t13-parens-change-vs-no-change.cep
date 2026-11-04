@@ -1,0 +1,18 @@
+-- torture: redundant parentheses build the same tree as none — a or (b and c), a + (b * c), ((a)) — while (a or b) and c and (a + b) * c change it
+language cep/0.1;
+
+stream Metrics (host string, cpu float, mem float, load float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, value float, ts timestamp);
+
+rule ParensNoChange
+  intent 'Every parenthesis here is redundant: same tree as cpu > 90 or mem > 90 and load > 4, and cpu + mem * 2.'
+  from Metrics[((cpu > 90)) or (mem > 90 and (load > 4))]
+  select host, 'parens-no-change' as why, cpu + (mem * 2) as value
+  insert into Alerts;
+
+rule ParensChange
+  intent 'Every parenthesis here changes the tree: (cpu > 90 or mem > 90) and load > 4, and (cpu + mem) * 2.'
+  from Metrics[(cpu > 90 or mem > 90) and load > 4]
+  select host, 'parens-change' as why, (cpu + mem) * 2 as value
+  insert into Alerts;
