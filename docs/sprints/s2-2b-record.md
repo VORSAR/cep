@@ -16,9 +16,9 @@ Entry (G0)   ☑ card complete and approved ☑ dependencies merged, main green 
 Design (G1)  ☑ architecture findings resolved (design v2 §10) ☑ owner decisions recorded (sprint-plan §5) ☑ ADR-0003, errors.md, SPEC §4.1 annotated
 Build (G2)   ☑ T2 ☑ T3 (in T4) ☑ tests on the real code (QA's programs through parse and Check)
 Review (G3)  n/a (lighter)
-Verify (G4)  ☑ T4 strict-gate exit 0 ☐ CI ☐ owner's check passed ☑ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
+Verify (G4)  ☑ T4 strict-gate exit 0 ☑ CI ☑ owner's check (merged) ☑ every acceptance line met by its named proof
+Exit (G5)    ☑ one PR (#7), merged by the owner ☑ main CI green on the merge commit
+             ☑ record + retro ☑ known issues ☑ status line ☑ documents reconciled ☑ memory updated
 ```
 
 ## Measured results
@@ -43,6 +43,11 @@ Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge comm
 - **The connector keys are provisional** (`connectors.go`): ADR-0008 and the corpus name only `type`, `url` and `@map(type)`; the rest (`port`, `path`, `template`, `to`, `subject`, `body`) follow ADR-0008's descriptions and firm up when the connectors are built.
 - **Two known issues opened:** S2.2b-1, the five contradictions QA found in the language documents (none changes a verdict); S2.2b-2, a Go-built zero duration reads as absent.
 
+**Closed (G5), 2026-11-04.** PR #7 merged by the owner (12 commits); CI green on the PR and on the merge commit. Points: 13 SP as carded; duration: one day.
+
 ## Retro
 
-*(at close-out)*
+- **Worked:** QA's programs from the spec alone were the spec — all 52 exact at the first green table run, none changed to fit the build. The design review before code found three blockers (a pinned law the note had missed, empty fix texts, a missed detection) that would each have cost a rework.
+- **Hurt:** my own test programs used a reserved word (`limit`) and miscounted columns; deriving a test's expected column from the source text, not by hand, ended that. A second T4 was needed because a fix landed after the first.
+- **Keep:** QA's material written before and apart from the build, as data the build cannot bend; the design review before code.
+- **No rule change proposed.**
