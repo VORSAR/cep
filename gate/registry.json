@@ -337,6 +337,39 @@
       ]
     },
     {
+      "id": "differential",
+      "job": "test",
+      "tiers": [
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 300,
+      "needs": [],
+      "scope": [
+        "prod",
+        "generated",
+        "tools"
+      ],
+      "expected_scope": [
+        "git",
+        ":(glob)docs/language/examples/**/*.cep",
+        ":(glob)docs/language/eval/generated/**/*.cep",
+        ":(glob)docs/language/invalid/*.cep"
+      ],
+      "min_wants": 63,
+      "lands_in": "S2.2a",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/differential.py",
+        "{files}"
+      ]
+    },
+    {
       "id": "proofs",
       "job": "proofs",
       "tiers": [
@@ -352,7 +385,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 12,
+      "min_wants": 13,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [
