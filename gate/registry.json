@@ -222,9 +222,10 @@
       ],
       "expected_scope": [
         "git",
-        ".github/workflows/gate.yml"
+        ".github/workflows/gate.yml",
+        ".github/workflows/nightly.yml"
       ],
-      "min_wants": 1,
+      "min_wants": 2,
       "lands_in": "S1.1a-2",
       "exclusive": false,
       "command": [
@@ -361,6 +362,35 @@
         "-X",
         "utf8",
         "gate/proofs/row.py",
+        "{files}"
+      ]
+    },
+    {
+      "id": "fuzz-parser",
+      "job": "nightly",
+      "tiers": [
+        "nightly"
+      ],
+      "blocking": false,
+      "timeout_s": 900,
+      "needs": [],
+      "scope": [
+        "test"
+      ],
+      "expected_scope": [
+        "git",
+        "internal/parser/fuzz_test.go"
+      ],
+      "min_wants": 1,
+      "lands_in": "S2.2a",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/gofuzz.py",
         "{files}"
       ]
     }

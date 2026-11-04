@@ -30,9 +30,12 @@ func TestEveryExampleParsesToItsGoldenModel(t *testing.T) {
 			continue
 		}
 		rel := strings.TrimSuffix(filepath.Base(path), ".cep")
-		if strings.Contains(path, "generated") {
+		switch {
+		case strings.Contains(path, "generated") && strings.Contains(path, "torture"):
+			rel = "eval-torture-" + rel
+		case strings.Contains(path, "generated"):
 			rel = "eval-" + rel
-		} else if strings.Contains(path, "torture") {
+		case strings.Contains(path, "torture"):
 			rel = "torture-" + rel
 		}
 		golden := filepath.Join("testdata", "golden", rel+".json")

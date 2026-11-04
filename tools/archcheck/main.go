@@ -4,7 +4,9 @@
 //
 // Four checks, by reading each file's syntax with the standard library only:
 //   - imports: a package imports only the module packages tools/importcheck/rules.json lists for it
-//     (exhaustive, owner 2026-11-02), and third-party packages only where listed;
+//     (exhaustive, owner 2026-11-02), and third-party packages only where listed; where rules.json
+//     fences an import, the package uses only the listed identifiers of that import (owner 2026-11-04:
+//     expr reads the model's expression node, never its params, streams or tables);
 //   - clock: the wall-clock calls stay in internal/runtime, io, internal/playback and cmd; operator
 //     packages do not import time, except internal/window/cron.go;
 //   - purity (non-test files): go statements and channels stay in internal/runtime, io/* and cmd;
@@ -37,9 +39,10 @@ const RulesPath = "tools/importcheck/rules.json"
 
 // Rules is tools/importcheck/rules.json.
 type Rules struct {
-	Module   string              `json:"module"`
-	Imports  map[string][]string `json:"imports"`
-	External map[string][]string `json:"external"`
+	Module   string                         `json:"module"`
+	Imports  map[string][]string            `json:"imports"`
+	External map[string][]string            `json:"external"`
+	Fences   map[string]map[string][]string `json:"fences"` // package -> imported package -> allowed identifier prefixes
 }
 
 // LoadRules reads the import law.
@@ -132,6 +135,7 @@ func CheckSources(rules *Rules, path string, files map[string]string) ([]string,
 	}
 	c := &checker{rules: rules, fset: fset, path: path, dir: dir, file: file, test: strings.HasSuffix(path, "_test.go")}
 	c.imports()
+	c.fences()
 	if !under(dir, "bench") {
 		c.clock()
 		if !c.test {
@@ -177,6 +181,31 @@ func (c *checker) imports() {
 				c.report(spec.Pos(), "imports: %s may not import the third-party package %s (%s)", name(c.dir), p, RulesPath)
 			}
 		}
+	}
+}
+
+// fences: for each fenced import this file has, every selector on it names an allowed identifier.
+func (c *checker) fences() {
+	for target, allowed := range c.rules.Fences[c.dir] {
+		local := c.localName(c.rules.Module + "/" + target)
+		if local == "" {
+			continue
+		}
+		ast.Inspect(c.file, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			x, ok := sel.X.(*ast.Ident)
+			if !ok || x.Name != local {
+				return true
+			}
+			if !slices.ContainsFunc(allowed, func(prefix string) bool { return strings.HasPrefix(sel.Sel.Name, prefix) }) {
+				short := target[strings.LastIndex(target, "/")+1:]
+				c.report(sel.Pos(), "fence: %s may use %s.%s* only (%s), not %s.%s", name(c.dir), short, strings.Join(allowed, "*, "+short+"."), RulesPath, short, sel.Sel.Name)
+			}
+			return true
+		})
 	}
 }
 

@@ -7,7 +7,7 @@ Accepted (owner, 2026-11-01 — conditions in ADR-0015/qa-strategy.md; added 202
 Filters, projections, key expressions, text-operator invocations, `in`-table membership and function calls all evaluate SPEC §2.5/§5.10 expressions. SEMANTICS §10 scopes runtime errors per rule. Siddhi's proven shape (study §5): a compiled tree of executor nodes built once at deploy, reading attributes by precomputed positions — adopted; its 1,583-line `instanceof` builder — rejected for table-driven construction.
 
 ## Decision
-1. New L2 package `internal/expr` (imports: `event`, `text`, `table` — the only operator-layer package allowed these two imports; ARCHITECTURE §3 rule 5 gains this named exception). It owns: the executor tree, typing (E-TYPE-001 checks at build), and the callable registry.
+1. New L2 package `internal/expr` (imports: `event`, `text`, `table` — the only operator-layer package allowed these two imports; ARCHITECTURE §3 rule 5 gains this named exception). *(Annotated 2026-11-04, owner decision at S2.2a: also `model`, which decision 2's `Build(model.Expr, …)` needs and this list forgot — fenced to the model's expression types and enforced by `archcheck`; see [s2-2a-expr-model-edge.md](../../reviews/s2-2a-expr-model-edge.md).)* It owns: the executor tree, typing (E-TYPE-001 checks at build), and the callable registry.
    ```go
    type Expr interface {
        Eval(row Row) (event.Value, error) // error => per-rule event error (SEMANTICS §10)

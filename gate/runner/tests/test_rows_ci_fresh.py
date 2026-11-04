@@ -9,26 +9,36 @@ from gate.runner.tests import support
 
 ROWS = os.path.join(support.GATE, "runner", "rows")
 WORKFLOW = ".github/workflows/gate.yml"
+NIGHTLY = ".github/workflows/nightly.yml"
 
 
 class CiFresh(support.GateTest):
     def setUp(self):
         super().setUp()
-        rows = [self.row("x", tiers=("T2", "T4")), self.row("y", job="test", tiers=("T4",))]
+        rows = [self.row("x", tiers=("T2", "T4")), self.row("y", job="test", tiers=("T4",)),
+                self.row("z", job="nightly", tiers=("nightly",))]  # fmt: skip
         self.reg_path = self.registry_file(rows)
         os.makedirs(os.path.join(self.repo, "gate"))
         with open(self.reg_path, "rb") as f, open(os.path.join(self.repo, "gate", "registry.json"), "wb") as g:
             g.write(f.read())
-        self.track(WORKFLOW, generate.render(registry.load(self.reg_path)))
+        for path, text in generate.targets(registry.load(self.reg_path)):
+            self.track(path, text)
         self.git("add", "--", "gate/registry.json")
 
     def ci_fresh(self):
         command = (sys.executable, "-I", "-B", "-X", "utf8", os.path.join(ROWS, "ci_fresh.py"))
-        self.run_rows([self.row("ci-fresh", command=command, expected_scope=("git", WORKFLOW))])
+        self.run_rows([self.row("ci-fresh", command=command, expected_scope=("git", WORKFLOW, NIGHTLY))])
         return self.reason("ci-fresh")
 
-    def test_a_fresh_workflow_passes(self):
-        self.assertEqual(self.ci_fresh(), "covered 1")
+    def test_fresh_workflows_pass(self):
+        self.assertEqual(self.ci_fresh(), "covered 2")
+
+    def test_a_stale_nightly_workflow_fails(self):
+        with open(os.path.join(self.repo, NIGHTLY), "a", encoding="utf-8") as f:
+            f.write("# edited\n")
+        self.assertEqual(
+            self.ci_fresh(), f"exit 1: {NIGHTLY} is not what gate/registry.json generates: run make ci-workflow"
+        )
 
     def test_a_hand_edit_fails_naming_the_regenerate_command(self):
         # Plan check N6.

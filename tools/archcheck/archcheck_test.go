@@ -74,6 +74,12 @@ func TestImports(t *testing.T) {
 		wantOne(t, check(t, "internal/expr/x.go", "package expr\nimport _ \"golang.org/x/text/unicode/norm\"\n"), "third-party")
 		wantNone(t, check(t, "internal/text/x.go", "package text\nimport _ \"golang.org/x/text/unicode/norm\"\n"))
 	})
+	t.Run("expr may use only the model's expression types", func(t *testing.T) {
+		// Owner, 2026-11-04 (S2.2a): the edge expr -> model is allowed for the IR's expression node only.
+		wantNone(t, check(t, "internal/expr/x.go", "package expr\nimport m \""+mod+"internal/model\"\nfunc f(e m.Expr, l m.Literal, k m.ExprKind, o m.TextOperand) { _ = m.ExprAnd; _ = m.LitInt }\n"))
+		wantOne(t, check(t, "internal/expr/x.go", "package expr\nimport m \""+mod+"internal/model\"\nfunc f(a m.App) {}\n"), "fence: internal/expr may use model.Expr")
+		wantOne(t, check(t, "internal/expr/x.go", "package expr\nimport \""+mod+"internal/model\"\nvar _ = model.Param{}\n"), "fence: internal/expr may use model.Expr")
+	})
 	t.Run("an external test package may import its own package", func(t *testing.T) {
 		wantNone(t, check(t, "internal/event/x_test.go", "package event_test\nimport _ \""+mod+"internal/event\"\n"))
 	})

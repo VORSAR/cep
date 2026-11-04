@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "module": "github.com/vorsar/cep",
-  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red.",
+  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red. 'fences' lists, per package and imported package, the only identifier prefixes it may use from it (Expr covers ExprKind and the ExprX constants; Lit covers Literal and the LitX constants) (owner 2026-11-04: expr reads the model's expression node only).",
   "imports": {
     "internal/event": [],
     "internal/model": ["internal/event"],
@@ -10,7 +10,7 @@
     "internal/text": ["internal/event", "internal/clock", "internal/metrics"],
     "internal/table": ["internal/event", "internal/clock", "internal/metrics"],
     "internal/partition": ["internal/event", "internal/clock", "internal/metrics"],
-    "internal/expr": ["internal/event", "internal/clock", "internal/text", "internal/table", "internal/metrics"],
+    "internal/expr": ["internal/event", "internal/model", "internal/clock", "internal/text", "internal/table", "internal/metrics"],
     "internal/pattern": ["internal/event", "internal/clock", "internal/expr", "internal/metrics"],
     "internal/window": ["internal/event", "internal/clock", "internal/expr", "internal/metrics"],
     "internal/plan": ["internal/event", "internal/model", "internal/expr", "internal/partition", "internal/pattern", "internal/window", "internal/text", "internal/table", "internal/metrics"],
@@ -29,5 +29,8 @@
   "external": {
     "internal/text": ["golang.org/x/text/"],
     "internal/parser": ["github.com/alecthomas/participle/v2"]
+  },
+  "fences": {
+    "internal/expr": {"internal/model": ["Expr", "Lit", "TextOperand"]}
   }
 }
