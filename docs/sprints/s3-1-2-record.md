@@ -31,9 +31,9 @@ Entry (G0)   ☑ card complete and approved (S3.1's) ☑ dependencies merged, ma
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (P1–P8) ☑ test material: QA's tests, an item
 Design (G1)  ☑ architecture review (3 blockers, 12 should-fix, 9 later) resolved: design v2 §9
              ☑ owner decisions recorded (D1–D4; D5 at the build) ☑ SEMANTICS §4, ADR-0007 §2, ADR-0012 §5 annotated
-Build (G2)   ☑ T2 (make check exit 0) ☐ T3 (in T4) ☑ tests on the real code (QA's, red first)
+Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (in T4) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☑ QA break-it (4 blockers, 3 should-fix) ☑ every finding fixed, with its red test committed
-Verify (G4)  ☐ T4 exit 0 ☐ CI ☐ owner's check ☐ every acceptance line met by its named proof
+Verify (G4)  ☑ T4 exit 0 (final tree) ☐ CI ☐ owner's check ☑ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
 ```
@@ -53,7 +53,7 @@ Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge comm
   - so is a dot-import, and `sync/atomic` in event;
   - expr's production code cannot reach `table.New`; its tests can, through `test_fences`.
 - **Coverage:** `internal/table` 92.0%, `internal/text` 100%, `internal/event` 98.0%, `internal/expr` 99.5%.
-- **The gate:** T2 `make check` exit 0 (wall 56.6 s).
+- **The gate:** T2 `make check` exit 0 (wall 56.6 s); T4 `make strict-gate` on the final tree, after the fix round: every row PASS, the grammar differential (63) and `proofs` (14) included, exit 0, wall 84.4 s.
 
 ## The break-it (G3)
 
