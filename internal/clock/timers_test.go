@@ -1,9 +1,9 @@
 package clock_test
 
-// Exit line 2 of S3.1: through the test-double operator (recorder, helpers_test.go), every timer kind fires in due
-// order within (b), discards arrive only in (c), and a pending completion is never discarded.
-// Sources: SEMANTICS §6.4 "Watermark-advance ordering"; ADR-0004 §2 (AdvanceCallbacks), §5 (one TTL timer);
-// design note s3-1-1-design.md §2 ((b) by due, kind, schedule order; (c) by due, schedule order; A3 Cancel).
+// Exit line 2 of S3.1: through the test-double operator (recorder, helpers_test.go), the walk (D1) delivers every
+// timer kind in order, discards arrive only through OnDiscard, strict kinds wait until the clock is past their due,
+// and a match waiting out its absence is never discarded. Sources: SEMANTICS §6.3, §6.4 (as annotated for D1);
+// ADR-0004 §2, §5 (as annotated); s3-1-1-design.md v2 §2–§3; owner decisions D1, D4, D7.
 
 import (
 	"slices"
@@ -13,265 +13,307 @@ import (
 	"github.com/vorsar/cep/internal/event"
 )
 
-// kindOrder is (b)'s order for timers due at one instant — THE OWNER'S CHECK (S3.1 card, "by reading").
+// kindTable — THE OWNER'S CHECK (S3.1 card, "by reading"): every kind, its strictness, its callback, its rank.
 //
-//	rank | kind              | what it is                                  | step
-//	-----+-------------------+---------------------------------------------+---------------------------
-//	  1  | Completion        | a pending completion resolves               | (b) OnTimers
-//	  2  | AbsenceResolution | an absence window elapsed un-defeated       | (b) OnTimers
-//	  3  | CronClose         | a cron bucket closes                        | (b) OnTimers
-//	  4  | DelayDue          | a delay(D) window releases a held event     | (b) OnTimers
-//	  5  | TTLPurge          | the key's idle TTL elapsed (one per key)    | (b) OnTimers
-//	  –  | Discard           | a partial's `within` deadline overran       | (c) OnDiscard, after all (b)
+//	rank | kind       | strict? | fires at its instant t when | callback  | what it is
+//	-----+------------+---------+-----------------------------+-----------+------------------------------------------
+//	  1  | Completion | no      | clock ≥ t                   | OnTimers  | a match waiting out its absence (D4)
+//	  2  | CronClose  | no      | clock ≥ t                   | OnTimers  | a cron bucket's end
+//	  3  | DelayDue   | no      | clock ≥ t                   | OnTimers  | a delayed event's due (t + D)
+//	  4  | BatchClose | no      | clock ≥ t                   | OnTimers  | a batch's close (S8 places it)
+//	  –  | TTLPurge   | yes     | clock > t  (t = t_last+TTL) | OnTimers  | the key idled past its TTL
+//	  –  | Discard    | yes     | clock > t  (t = t_first+D)  | OnDiscard | a partial overran its `within`
 //
-// Every step in one Advance: (a) released events (Ts ≤ clock) as one chunk in event.Compare order, then (b) every
-// due non-discard timer by (due, the rank above, schedule order), then (c) every due Discard by (due, schedule order).
-var kindOrder = []clock.TimerKind{clock.Completion, clock.AbsenceResolution, clock.CronClose, clock.DelayDue, clock.TTLPurge}
-
-// The five kinds and the Discard kind at ONE instant, scheduled in reverse rank with the Discard first: (b) fires
-// them in rank order, then (c) delivers the discard.
-func TestTimerContract_KindOrderAtOneInstant(t *testing.T) {
-	t.Parallel()
-	r := newRecorder(t, 0)
-	r.in.Schedule(100, clock.Discard, 6)
-	for i := len(kindOrder) - 1; i >= 0; i-- {
-		r.in.Schedule(100, kindOrder[i], uint64(i+1))
-	}
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 100, Moved: true})
-	calls := r.advance()
-	var want []clock.Timer
-	for i, k := range kindOrder {
-		want = append(want, clock.Timer{Due: 100, Kind: k, Ref: uint64(i + 1)})
-	}
-	if got := timersOf(calls); !slices.Equal(got, want) {
-		t.Fatalf("(b) fired\n  %v\nwant\n  %v", got, want)
-	}
-	if got := discardsOf(calls); !slices.Equal(got, []uint64{6}) {
-		t.Fatalf("(c) discarded %v, want [6]", got)
-	}
-	if ps := phasesOf(calls); ps[len(ps)-1] != phaseDiscard {
-		t.Fatalf("phases %v: (c) must come last", ps)
-	}
+// The walk (design §3): instant t ascending; within t: (1) events at t, event.Compare order across keys, one OnEvent
+// each; (2) inclusive timers due at t by (key ordinal, rank, ref, schedule order), one OnTimers call per key;
+// (3) only if clock > t: strict timers due at t by (key ordinal, ref, schedule order).
+var kindTable = []struct {
+	kind   clock.TimerKind
+	strict bool
+	cb     string // the recorder's name for the callback it arrives through
+}{
+	{clock.Completion, false, "timer"},
+	{clock.CronClose, false, "timer"},
+	{clock.DelayDue, false, "timer"},
+	{clock.BatchClose, false, "timer"},
+	{clock.TTLPurge, true, "timer"},
+	{clock.Discard, true, "discard"},
 }
 
-// One Advance at clock 150 with every kind, ties on due, ties on kind, timers not yet due, and events out of order.
-func TestTimerContract_OneAdvanceOrder(t *testing.T) {
+// Each row of the table: due 100 at clock 100 fires iff inclusive; at clock 101 every kind has fired, through its
+// callback.
+func TestTimerContract_KindTable_StrictnessAndCallback(t *testing.T) {
 	t.Parallel()
-	r := newRecorder(t, 0, 1)
-
-	// Scheduled in this (deliberately scrambled) order; the schedule index is the tie-break of last resort.
-	sched := []clock.Timer{
-		{Due: 100, Kind: clock.TTLPurge, Ref: 50},          // 0
-		{Due: 100, Kind: clock.Discard, Ref: 60},           // 1
-		{Due: 100, Kind: clock.DelayDue, Ref: 40},          // 2
-		{Due: 100, Kind: clock.CronClose, Ref: 30},         // 3
-		{Due: 100, Kind: clock.AbsenceResolution, Ref: 20}, // 4
-		{Due: 100, Kind: clock.Completion, Ref: 10},        // 5
-		{Due: 30, Kind: clock.Discard, Ref: 61},            // 6
-		{Due: 50, Kind: clock.Completion, Ref: 11},         // 7
-		{Due: 100, Kind: clock.AbsenceResolution, Ref: 21}, // 8
-		{Due: 100, Kind: clock.Discard, Ref: 62},           // 9
-		{Due: 200, Kind: clock.DelayDue, Ref: 41},          // 10: not due at 150
-		{Due: 200, Kind: clock.Discard, Ref: 63},           // 11: not due at 150
-		{Due: 100, Kind: clock.Completion, Ref: 12},        // 12
-		{Due: 150, Kind: clock.Discard, Ref: 64},           // 13: due exactly at the clock
-		{Due: 150, Kind: clock.CronClose, Ref: 31},         // 14: due exactly at the clock
-		{Due: 151, Kind: clock.DelayDue, Ref: 42},          // 15: 1 ms past the clock
-	}
-	for _, s := range sched {
-		r.in.Schedule(s.Due, s.Kind, s.Ref)
-	}
-	// Buffered out of order; the fresh clock is −∞, so none is construct-late.
-	for _, e := range []event.Event{ev(1, 150, 2), ev(0, 100, 2), ev(0, 100, 1), ev(1, 100, 1), ev(0, 151, 3)} {
-		if r.in.Buffer(e) {
-			t.Fatalf("Buffer(%+v) construct-late at clock −∞", keyOf(e))
+	for _, row := range kindTable {
+		rc := clock.NewRuleClock([]int{0})
+		k := rc.NewInstance()
+		r := &recorder{t: t}
+		k.Schedule(100, row.kind, 7)
+		want := T(0, 100, row.kind, 7)
+		if row.cb == "discard" {
+			want = D(0, 7)
+		}
+		to(rc, 100, 0)
+		got := r.advance(rc)
+		if row.strict && len(got) != 0 {
+			t.Errorf("kind %d (strict) fired at clock = due: %v", row.kind, got)
+		}
+		if !row.strict && !slices.Equal(got, []item{want}) {
+			t.Errorf("kind %d (inclusive) at clock = due delivered %v, want %v", row.kind, got, []item{want})
+		}
+		to(rc, 101, 0)
+		got = r.advance(rc)
+		if row.strict && !slices.Equal(got, []item{want}) {
+			t.Errorf("kind %d (strict) at clock = due+1 delivered %v, want %v", row.kind, got, []item{want})
+		}
+		if !row.strict && len(got) != 0 {
+			t.Errorf("kind %d fired twice: %v", row.kind, got)
 		}
 	}
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 150, Moved: true})
-	if c, _ := r.in.ApplyAdvance(clock.WMAdvance{StreamID: 1, Contribution: 150, Moved: true}); c != 150 {
-		t.Fatalf("Clock = %d, want 150", c)
+}
+
+// One walk to clock 150 over two keys (K0 ordinal 0, K1 ordinal 1): every kind, ties on instant, kind, ref and key,
+// strict timers at and before the clock, events out of order across keys.
+func TestTimerContract_WalkOrder(t *testing.T) {
+	t.Parallel()
+	rc := clock.NewRuleClock([]int{0, 1})
+	k0, k1 := rc.NewInstance(), rc.NewInstance()
+	if k0.Ordinal() != 0 || k1.Ordinal() != 1 {
+		t.Fatalf("ordinals %d, %d, want 0, 1", k0.Ordinal(), k1.Ordinal())
+	}
+	r := &recorder{t: t}
+
+	// Scheduled in this scrambled order.
+	k0.Schedule(100, clock.DelayDue, 40)
+	k0.Schedule(100, clock.Discard, 61)
+	k0.Schedule(100, clock.Completion, 10)
+	k1.Schedule(100, clock.Completion, 10) // same (kind, ref) as K0's: another key, another timer
+	k0.Schedule(100, clock.BatchClose, 45)
+	k0.Schedule(100, clock.TTLPurge, 0)
+	k1.Schedule(100, clock.Discard, 5)
+	k0.Schedule(100, clock.CronClose, 30)
+	k0.Schedule(100, clock.Discard, 60)
+	k1.Schedule(100, clock.Completion, 9)
+	k0.Schedule(50, clock.Completion, 11)
+	k1.Schedule(50, clock.Discard, 7)
+	k0.Schedule(150, clock.Completion, 12) // inclusive, due = clock: fires
+	k0.Schedule(150, clock.Discard, 62)    // strict, due = clock: waits
+	k1.Schedule(151, clock.DelayDue, 41)   // past the clock: waits
+	for _, b := range []struct {
+		in *clock.Instance
+		e  event.Event
+	}{
+		{k1, ev(1, 100, 1)}, {k0, ev(0, 100, 2)}, {k0, ev(0, 100, 1)}, {k1, ev(0, 50, 3)}, {k0, ev(1, 150, 2)},
+		{k1, ev(0, 151, 4)},
+	} {
+		if b.in.Buffer(b.e) {
+			t.Fatalf("Buffer(%v) construct-late at clock −∞", keyOf(b.e))
+		}
+	}
+	to(rc, 150, 0, 1)
+	got := r.advance(rc)
+
+	// THE EXPECTED WALK at clock 150.
+	want := []item{
+		// instant 50
+		E(1, 0, 50, 3),                 // (1) event
+		T(0, 50, clock.Completion, 11), // (2) inclusive
+		D(1, 7),                        // (3) strict: 150 > 50
+		// instant 100
+		E(0, 0, 100, 1), E(0, 0, 100, 2), E(1, 1, 100, 1), // (1) (Ts, StreamID, Seq) across keys
+		T(0, 100, clock.Completion, 10), // (2) K0 first (ordinal), then rank 1..4
+		T(0, 100, clock.CronClose, 30),
+		T(0, 100, clock.DelayDue, 40),
+		T(0, 100, clock.BatchClose, 45),
+		T(1, 100, clock.Completion, 9), //     K1: rank 1, ref 9 before ref 10
+		T(1, 100, clock.Completion, 10),
+		T(0, 100, clock.TTLPurge, 0), // (3) K0 by ref: 0, 60, 61
+		D(0, 60),
+		D(0, 61),
+		D(1, 5), //     then K1
+		// instant 150
+		E(0, 1, 150, 2),                 // (1)
+		T(0, 150, clock.Completion, 12), // (2) inclusive at the clock
+		//                                     (3) Discard 62 waits: 150 is not > 150
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("walk to 150 delivered\n  %v\nwant\n  %v", got, want)
+	}
+	// Each key's inclusive group at one instant comes through ONE OnTimers call.
+	for _, g := range [][]clock.Timer{
+		{{Due: 100, Kind: clock.Completion, Ref: 10}, {Due: 100, Kind: clock.CronClose, Ref: 30},
+			{Due: 100, Kind: clock.DelayDue, Ref: 40}, {Due: 100, Kind: clock.BatchClose, Ref: 45}},
+		{{Due: 100, Kind: clock.Completion, Ref: 9}, {Due: 100, Kind: clock.Completion, Ref: 10}},
+	} {
+		if !slices.ContainsFunc(r.calls, func(c call) bool { return c.Cb == "timer" && slices.Equal(c.Timers, g) }) {
+			t.Errorf("no single OnTimers call delivered the group %v", g)
+		}
 	}
 
-	calls := r.advance()
-
-	// THE EXPECTED ORDER at clock 150.
-	wantEvents := []evKey{ // (a) one chunk, (Ts, StreamID, Seq); 151 is not ≤ 150
-		{0, 100, 1},
-		{0, 100, 2},
-		{1, 100, 1},
-		{1, 150, 2},
+	// Clock 200: instant 150's strict discard, then instant 151's event and timer. Then nothing is left.
+	to(rc, 200, 0, 1)
+	if got, want := r.advance(rc), []item{D(0, 62), E(1, 0, 151, 4), T(1, 151, clock.DelayDue, 41)}; !slices.Equal(got, want) {
+		t.Fatalf("walk to 200 delivered %v, want %v", got, want)
 	}
-	wantTimers := []clock.Timer{ // (b) due, then kind rank, then schedule index
-		{Due: 50, Kind: clock.Completion, Ref: 11},         // due 50 first, whatever its schedule index (7)
-		{Due: 100, Kind: clock.Completion, Ref: 10},        // due 100, rank 1, schedule 5
-		{Due: 100, Kind: clock.Completion, Ref: 12},        // due 100, rank 1, schedule 12
-		{Due: 100, Kind: clock.AbsenceResolution, Ref: 20}, // rank 2, schedule 4
-		{Due: 100, Kind: clock.AbsenceResolution, Ref: 21}, // rank 2, schedule 8
-		{Due: 100, Kind: clock.CronClose, Ref: 30},         // rank 3
-		{Due: 100, Kind: clock.DelayDue, Ref: 40},          // rank 4
-		{Due: 100, Kind: clock.TTLPurge, Ref: 50},          // rank 5 (scheduled first of all)
-		{Due: 150, Kind: clock.CronClose, Ref: 31},         // due 150 = clock: inclusive
-	}
-	wantDiscards := []uint64{ // (c) due, then schedule index — after every (b) fire
-		61, // due 30
-		60, // due 100, schedule 1
-		62, // due 100, schedule 9
-		64, // due 150 = clock: inclusive
-	}
-	if got := eventsOf(calls); !slices.Equal(got, wantEvents) {
-		t.Errorf("(a) released\n  %v\nwant\n  %v", got, wantEvents)
-	}
-	if got := timersOf(calls); !slices.Equal(got, wantTimers) {
-		t.Errorf("(b) fired\n  %v\nwant\n  %v", got, wantTimers)
-	}
-	if got := discardsOf(calls); !slices.Equal(got, wantDiscards) {
-		t.Errorf("(c) discarded %v, want %v", got, wantDiscards)
-	}
-	if ps := phasesOf(calls); len(ps) < 3 || ps[0] != phaseEvents || ps[len(ps)-1] != phaseDiscard {
-		t.Errorf("phases %v, want (a) first and (c) last", ps)
-	}
-
-	// Clock 200: what remained fires once, in order; nothing fires twice.
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 200, Moved: true})
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 1, Contribution: 200, Moved: true})
-	calls = r.advance()
-	if got, want := eventsOf(calls), []evKey{{0, 151, 3}}; !slices.Equal(got, want) {
-		t.Errorf("clock 200 released %v, want %v", got, want)
-	}
-	if got, want := timersOf(calls), []clock.Timer{
-		{Due: 151, Kind: clock.DelayDue, Ref: 42},
-		{Due: 200, Kind: clock.DelayDue, Ref: 41},
-	}; !slices.Equal(got, want) {
-		t.Errorf("clock 200 fired %v, want %v", got, want)
-	}
-	if got, want := discardsOf(calls), []uint64{63}; !slices.Equal(got, want) {
-		t.Errorf("clock 200 discarded %v, want %v", got, want)
-	}
-
-	// Again at 200: nothing is due, no callback is called.
-	if calls = r.advance(); len(calls) != 0 {
-		t.Errorf("a second Advance at 200 called %v", phasesOf(calls))
+	if got := r.advance(rc); len(got) != 0 {
+		t.Fatalf("a second walk at 200 delivered %v", got)
 	}
 }
 
-// A timer scheduled by a callback and already due fires in the same Advance (design note §2 (b)): one scheduled
-// in (a) fires in (b); one scheduled in (b) fires in a later OnTimers call of the same Advance; a Discard scheduled
-// in (b) and due arrives in (c); one not yet due waits.
-func TestTimerContract_CallbackScheduledTimerFiresInSameAdvance(t *testing.T) {
+// Design §3 point 3: a timer scheduled by a callback with a due at or after the walk's position joins the walk in
+// order; one with a due before the position fires at the position — always within the same Advance.
+func TestTimerContract_CallbackScheduledTimersJoinTheWalk(t *testing.T) {
 	t.Parallel()
-	r := newRecorder(t, 0)
+	rc := clock.NewRuleClock([]int{0})
+	k := rc.NewInstance()
+	r := &recorder{t: t}
 	r.onEvent = func(in *clock.Instance, e event.Event) {
-		in.Schedule(e.Ts, clock.Completion, 1) // due 100 = clock
+		if e.Seq == 1 { // at instant 100
+			in.Schedule(100, clock.Completion, 1) // due = position: fires at 100, after the events at 100
+			in.Schedule(100, clock.Discard, 2)    // strict at 100; clock 200 > 100: fires at 100's strict step
+			in.Schedule(50, clock.CronClose, 3)   // before the position: fires at the position, before instant 120
+		}
 	}
 	r.onTimer = func(in *clock.Instance, tm clock.Timer) {
 		if tm.Ref == 1 {
-			in.Schedule(100, clock.DelayDue, 2)          // due now
-			in.Schedule(100, clock.Discard, 3)           // due now
-			in.Schedule(101, clock.AbsenceResolution, 4) // 1 ms later: waits
+			in.Schedule(120, clock.DelayDue, 4) // later instant ≤ clock: joins, after the event at 120
+			in.Schedule(201, clock.DelayDue, 5) // past the clock: waits
 		}
 	}
-	r.in.Buffer(ev(0, 100, 1))
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 100, Moved: true})
-	calls := r.advance()
-	if got, want := timersOf(calls), []clock.Timer{
-		{Due: 100, Kind: clock.Completion, Ref: 1},
-		{Due: 100, Kind: clock.DelayDue, Ref: 2},
-	}; !slices.Equal(got, want) {
-		t.Fatalf("fired %v, want %v", got, want)
+	k.Buffer(ev(0, 100, 1))
+	k.Buffer(ev(0, 100, 2))
+	k.Buffer(ev(0, 120, 3))
+	to(rc, 200, 0)
+	got := r.advance(rc)
+	// The CronClose due 50 must come after event 1 (its scheduler) and before anything at instant 120.
+	i3 := slices.Index(got, T(0, 50, clock.CronClose, 3))
+	i1 := slices.Index(got, E(0, 0, 100, 1))
+	i120 := slices.Index(got, E(0, 0, 120, 3))
+	if i3 < 0 || i3 < i1 || i3 > i120 {
+		t.Fatalf("CronClose due 50 scheduled at 100: delivered %v; want it after event 1 and before instant 120", got)
 	}
-	if got, want := discardsOf(calls), []uint64{3}; !slices.Equal(got, want) {
-		t.Fatalf("discarded %v, want %v", got, want)
+	rest := slices.Delete(slices.Clone(got), i3, i3+1)
+	want := []item{
+		E(0, 0, 100, 1), E(0, 0, 100, 2),
+		T(0, 100, clock.Completion, 1),
+		D(0, 2),
+		E(0, 0, 120, 3),
+		T(0, 120, clock.DelayDue, 4),
 	}
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 101, Moved: true})
-	if got, want := timersOf(r.advance()), []clock.Timer{{Due: 101, Kind: clock.AbsenceResolution, Ref: 4}}; !slices.Equal(got, want) {
-		t.Fatalf("clock 101 fired %v, want %v", got, want)
+	if !slices.Equal(rest, want) {
+		t.Fatalf("delivered (without the CronClose)\n  %v\nwant\n  %v", rest, want)
 	}
-}
-
-// RT-10 at the timer level: a Completion and a Discard due at the SAME instant (the Discard scheduled first): the
-// completion fires in (b), the discard arrives after it in (c) — the discard never eats the pending alert.
-func TestTimerContract_RT10_CompletionBeforeDiscardAtOneInstant(t *testing.T) {
-	t.Parallel()
-	r := newRecorder(t, 0)
-	r.in.Schedule(5*minute, clock.Discard, 1)
-	r.in.Schedule(5*minute, clock.Completion, 1)
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 5 * minute, Moved: true})
-	calls := r.advance()
-	if got := phasesOf(calls); !slices.Equal(got, []phase{phaseTimers, phaseDiscard}) {
-		t.Fatalf("phases %v, want [(b) (c)]", got)
-	}
-	if got, want := timersOf(calls), []clock.Timer{{Due: 5 * minute, Kind: clock.Completion, Ref: 1}}; !slices.Equal(got, want) {
-		t.Fatalf("fired %v, want %v", got, want)
-	}
-	if got := discardsOf(calls); !slices.Equal(got, []uint64{1}) {
-		t.Fatalf("discarded %v, want [1]", got)
+	to(rc, 201, 0)
+	if got, want := r.advance(rc), []item{T(0, 201, clock.DelayDue, 5)}; !slices.Equal(got, want) {
+		t.Fatalf("clock 201 delivered %v, want %v", got, want)
 	}
 }
 
-// Cancel (design note A3): a cancelled Discard never arrives; Cancel reports whether a timer was pending; the
-// timer's identity is (kind, ref), so the wrong kind cancels nothing; a fired timer is no longer pending.
-func TestTimerContract_Cancel(t *testing.T) {
+// RT-10 at the timer level: a Completion and a Discard due at the same instant 300000 (the Discard scheduled
+// first). At clock 300000 only the Completion fires (the discard is strict); one jump past it delivers the
+// Completion, then the Discard — the discard never eats the alert.
+func TestTimerContract_RT10_CompletionBeforeDiscard(t *testing.T) {
 	t.Parallel()
-	r := newRecorder(t, 0)
-	r.in.Schedule(100, clock.Discard, 7)
-	r.in.Schedule(100, clock.Discard, 8)
-	r.in.Schedule(100, clock.AbsenceResolution, 9)
-	r.in.Schedule(100, clock.Completion, 10)
-	if !r.in.Cancel(clock.Discard, 7) {
-		t.Fatalf("Cancel(Discard, 7) = false, want true (pending)")
-	}
-	if r.in.Cancel(clock.Discard, 7) {
-		t.Fatalf("second Cancel(Discard, 7) = true, want false (already cancelled)")
-	}
-	if r.in.Cancel(clock.Discard, 99) {
-		t.Fatalf("Cancel(Discard, 99) = true, want false (never scheduled)")
-	}
-	if r.in.Cancel(clock.Completion, 8) {
-		t.Fatalf("Cancel(Completion, 8) = true; ref 8 is a Discard, the kind must match")
-	}
-	if !r.in.Cancel(clock.AbsenceResolution, 9) {
-		t.Fatalf("Cancel(AbsenceResolution, 9) = false, want true")
-	}
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 100, Moved: true})
-	calls := r.advance()
-	if got, want := timersOf(calls), []clock.Timer{{Due: 100, Kind: clock.Completion, Ref: 10}}; !slices.Equal(got, want) {
-		t.Fatalf("fired %v, want %v (9 was cancelled)", got, want)
-	}
-	if got, want := discardsOf(calls), []uint64{8}; !slices.Equal(got, want) {
-		t.Fatalf("discarded %v, want %v (7 was cancelled)", got, want)
-	}
-	if r.in.Cancel(clock.Completion, 10) {
-		t.Fatalf("Cancel(Completion, 10) after it fired = true, want false")
+	for _, jump := range []bool{false, true} {
+		rc := clock.NewRuleClock([]int{0})
+		k := rc.NewInstance()
+		r := &recorder{t: t}
+		k.Schedule(5*minute, clock.Discard, 1)
+		k.Schedule(5*minute, clock.Completion, 1)
+		var got []item
+		if jump {
+			to(rc, 6*minute, 0)
+			got = r.advance(rc)
+		} else {
+			to(rc, 5*minute, 0)
+			if got = r.advance(rc); !slices.Equal(got, []item{T(0, 5*minute, clock.Completion, 1)}) {
+				t.Fatalf("clock 300000 delivered %v, want only the Completion", got)
+			}
+			to(rc, 5*minute+1, 0)
+			got = append(got, r.advance(rc)...)
+		}
+		if want := []item{T(0, 5*minute, clock.Completion, 1), D(0, 1)}; !slices.Equal(got, want) {
+			t.Fatalf("jump=%v delivered %v, want %v", jump, got, want)
+		}
 	}
 }
 
-// ADR-0004 §5: one TTL timer per instance, re-armed on activity — the anti-Siddhi-purge-bug case. Schedule(…,
-// TTLPurge, …) replaces the one TTL timer, so ten re-arms leave exactly ONE; re-arming earlier also replaces;
-// other kinds are never replaced.
-func TestTimerContract_ExactlyOneTTLTimer(t *testing.T) {
+// Cancel, CancelAll and Empty (design §2): a cancelled timer never fires; Cancel reports whether one was pending;
+// identity is (kind, ref); CancelAll clears the key's timers but not its buffered events; Empty sees both.
+func TestTimerContract_CancelCancelAllEmpty(t *testing.T) {
 	t.Parallel()
-	r := newRecorder(t, 0)
+	rc := clock.NewRuleClock([]int{0})
+	k, other := rc.NewInstance(), rc.NewInstance()
+	r := &recorder{t: t}
+	if !k.Empty() {
+		t.Fatalf("a new instance is not Empty")
+	}
+	k.Schedule(100, clock.Discard, 7)
+	k.Schedule(100, clock.Discard, 8)
+	k.Schedule(100, clock.Completion, 9)
+	k.Schedule(100, clock.Completion, 10)
+	other.Schedule(100, clock.Completion, 9)
+	if k.Empty() {
+		t.Fatalf("Empty with four timers")
+	}
+	if !k.Cancel(clock.Discard, 7) || k.Cancel(clock.Discard, 7) || k.Cancel(clock.Discard, 99) {
+		t.Fatalf("Cancel(Discard, 7) twice / Cancel(Discard, 99): want true, false, false")
+	}
+	if k.Cancel(clock.Completion, 8) {
+		t.Fatalf("Cancel(Completion, 8) = true; ref 8 is a Discard: the kind must match")
+	}
+	if !k.Cancel(clock.Completion, 9) {
+		t.Fatalf("Cancel(Completion, 9) = false")
+	}
+	to(rc, 101, 0)
+	if got, want := r.advance(rc), []item{T(0, 100, clock.Completion, 10), T(1, 100, clock.Completion, 9), D(0, 8)}; !slices.Equal(got, want) {
+		t.Fatalf("delivered %v, want %v (K0's 7 and 9 cancelled; K1's 9 untouched)", got, want)
+	}
+	if k.Cancel(clock.Completion, 10) {
+		t.Fatalf("Cancel after it fired = true")
+	}
+	// CancelAll: timers go, the buffered event stays.
+	k.Schedule(300, clock.Completion, 1)
+	k.Schedule(300, clock.TTLPurge, 0)
+	k.Buffer(ev(0, 200, 1))
+	k.CancelAll()
+	if k.Empty() {
+		t.Fatalf("Empty after CancelAll with an event buffered; CancelAll never drops events")
+	}
+	to(rc, 400, 0)
+	if got, want := r.advance(rc), []item{E(0, 0, 200, 1)}; !slices.Equal(got, want) {
+		t.Fatalf("after CancelAll delivered %v, want only the event %v", got, want)
+	}
+	if !k.Empty() {
+		t.Fatalf("not Empty after its last event was released and its timers cancelled")
+	}
+}
+
+// Schedule replaces a repeated (kind, ref) (design §2; F16). ADR-0004 §5's one TTL timer per instance follows when
+// the operator re-arms with one ref: ten re-arms leave exactly ONE (the anti-Siddhi-purge-bug case).
+func TestTimerContract_ScheduleReplacesKindRef_ExactlyOneTTL(t *testing.T) {
+	t.Parallel()
+	rc := clock.NewRuleClock([]int{0})
+	k := rc.NewInstance()
+	r := &recorder{t: t}
 	for i := int64(1); i <= 10; i++ {
-		r.in.Schedule(i*1000, clock.TTLPurge, uint64(i)) // dues 1000, 2000, …, 10000; the last re-arm wins
+		k.Schedule(i*1000, clock.TTLPurge, 0) // 1000 … 10000; the last re-arm wins
 	}
-	r.in.Schedule(1000, clock.DelayDue, 21)
-	r.in.Schedule(2000, clock.DelayDue, 22) // a second DelayDue: added, not a replacement
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 5000, Moved: true})
-	if got, want := timersOf(r.advance()), []clock.Timer{
-		{Due: 1000, Kind: clock.DelayDue, Ref: 21},
-		{Due: 2000, Kind: clock.DelayDue, Ref: 22},
-	}; !slices.Equal(got, want) {
-		t.Fatalf("clock 5000 fired %v, want %v (the TTL timers at 1000..4000 were replaced)", got, want)
+	k.Schedule(1000, clock.DelayDue, 21)
+	k.Schedule(3000, clock.DelayDue, 21) // replaces: one DelayDue 21, due 3000
+	k.Schedule(2000, clock.DelayDue, 22) // another ref: another timer
+	to(rc, 5000, 0)
+	if got, want := r.advance(rc), []item{T(0, 2000, clock.DelayDue, 22), T(0, 3000, clock.DelayDue, 21)}; !slices.Equal(got, want) {
+		t.Fatalf("clock 5000 delivered %v, want %v (TTL 1000..4000 replaced)", got, want)
 	}
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 20000, Moved: true})
-	if got, want := timersOf(r.advance()), []clock.Timer{{Due: 10000, Kind: clock.TTLPurge, Ref: 10}}; !slices.Equal(got, want) {
-		t.Fatalf("clock 20000 fired %v, want exactly one TTL purge %v", got, want)
+	to(rc, 20000, 0)
+	if got, want := r.advance(rc), []item{T(0, 10000, clock.TTLPurge, 0)}; !slices.Equal(got, want) {
+		t.Fatalf("clock 20000 delivered %v, want exactly one TTL purge %v", got, want)
 	}
-	// Re-armed to an EARLIER due: still one timer, the latest schedule.
-	r.in.Schedule(30000, clock.TTLPurge, 11)
-	r.in.Schedule(25000, clock.TTLPurge, 12)
-	r.in.ApplyAdvance(clock.WMAdvance{StreamID: 0, Contribution: 40000, Moved: true})
-	if got, want := timersOf(r.advance()), []clock.Timer{{Due: 25000, Kind: clock.TTLPurge, Ref: 12}}; !slices.Equal(got, want) {
-		t.Fatalf("clock 40000 fired %v, want exactly one TTL purge %v", got, want)
+	k.Schedule(30000, clock.TTLPurge, 0)
+	k.Schedule(25000, clock.TTLPurge, 0) // re-armed EARLIER: still replaces
+	to(rc, 40000, 0)
+	if got, want := r.advance(rc), []item{T(0, 25000, clock.TTLPurge, 0)}; !slices.Equal(got, want) {
+		t.Fatalf("clock 40000 delivered %v, want %v", got, want)
 	}
 }
