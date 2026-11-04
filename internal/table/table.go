@@ -175,6 +175,13 @@ func (t *Table) prepare(rows [][]event.Value) ([][]event.Value, []key, error) {
 			return nil, nil, err
 		}
 		stored[i] = slices.Clone(r)
+		for j := range stored[i] {
+			if v := &stored[i][j]; v.Kind == event.TObject && !v.Null {
+				if b, isBytes := v.Obj.([]byte); isBytes {
+					v.Obj = string(b) // the caller may reuse its buffer: the stored row holds its own text
+				}
+			}
+		}
 		keys[i] = t.keyOf(stored[i])
 	}
 	return stored, keys, nil
@@ -205,7 +212,8 @@ func (t *Table) checkKey(i int, k []event.Value) error {
 }
 
 // checkValue holds one value to attribute j's declaration: its type, null only where optional and never in a key
-// column, and a float finite (NaN and ±Inf never enter the engine — ADR-0005 §3).
+// column, a float finite (NaN and ±Inf never enter the engine — ADR-0005 §3), and an object its JSON text (P3; the
+// table stores it as a string, so no caller can change a published row — S3.1-2 break-it B5).
 func (t *Table) checkValue(j int, v event.Value) error {
 	a := t.attrs[j]
 	switch {
@@ -217,6 +225,12 @@ func (t *Table) checkValue(j int, v event.Value) error {
 		return fmt.Errorf("attribute %d %q: null for an attribute that is not optional", j, a.Name)
 	case !v.Null && v.Kind == event.TFloat && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
 		return fmt.Errorf("attribute %d %q: the float %v is not finite", j, a.Name, v.F)
+	case !v.Null && v.Kind == event.TObject:
+		switch v.Obj.(type) {
+		case string, []byte:
+		default:
+			return fmt.Errorf("attribute %d %q: an object value is its JSON text, a string or []byte; got %T", j, a.Name, v.Obj)
+		}
 	}
 	return nil
 }
