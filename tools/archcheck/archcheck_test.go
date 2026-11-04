@@ -80,6 +80,15 @@ func TestImports(t *testing.T) {
 		wantOne(t, check(t, "internal/expr/x.go", "package expr\nimport m \""+mod+"internal/model\"\nfunc f(a m.App) {}\n"), "fence: internal/expr may use model.Expr")
 		wantOne(t, check(t, "internal/expr/x.go", "package expr\nimport \""+mod+"internal/model\"\nvar _ = model.Param{}\n"), "fence: internal/expr may use model.Expr")
 	})
+	t.Run("validate's tests may import the parser, its production code may not", func(t *testing.T) {
+		// Owner, 2026-11-04 (S2.2b, A4): test_imports, test files only, this one edge only.
+		parser := "import _ \"" + mod + "internal/parser\"\n"
+		wantNone(t, check(t, "internal/validate/x_test.go", "package validate_test\n"+parser))
+		wantOne(t, check(t, "internal/validate/x.go", "package validate\n"+parser), "internal/validate may not import internal/parser")
+		wantOne(t, check(t, "internal/expr/x_test.go", "package expr_test\n"+parser), "internal/expr may not import internal/parser")
+		runtime := "import _ \"" + mod + "internal/runtime\"\n"
+		wantOne(t, check(t, "internal/validate/x_test.go", "package validate_test\n"+runtime), "may not import internal/runtime")
+	})
 	t.Run("an external test package may import its own package", func(t *testing.T) {
 		wantNone(t, check(t, "internal/event/x_test.go", "package event_test\nimport _ \""+mod+"internal/event\"\n"))
 	})

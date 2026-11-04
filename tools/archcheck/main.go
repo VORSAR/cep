@@ -43,6 +43,9 @@ type Rules struct {
 	Imports  map[string][]string            `json:"imports"`
 	External map[string][]string            `json:"external"`
 	Fences   map[string]map[string][]string `json:"fences"` // package -> imported package -> allowed identifier prefixes
+	// TestImports are extra imports a package's _test.go files may have, never its production files (owner,
+	// 2026-11-04, S2.2b: internal/validate's tests read .cep programs through internal/parser).
+	TestImports map[string][]string `json:"test_imports"`
 }
 
 // LoadRules reads the import law.
@@ -171,7 +174,7 @@ func (c *checker) imports() {
 		switch {
 		case p == c.rules.Module || strings.HasPrefix(p, c.rules.Module+"/"):
 			target := strings.TrimPrefix(strings.TrimPrefix(p, c.rules.Module), "/")
-			if allows(c.rules.Imports[key], target) || (c.test && target == c.dir) {
+			if allows(c.rules.Imports[key], target) || (c.test && (target == c.dir || allows(c.rules.TestImports[key], target))) {
 				continue
 			}
 			c.report(spec.Pos(), "imports: %s may not import %s (ARCHITECTURE §3; %s)", name(c.dir), name(target), RulesPath)
