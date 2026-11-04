@@ -11,15 +11,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/vorsar/cep/internal/model"
 	"github.com/vorsar/cep/internal/parser"
 )
-
-// loweringCodes are the codes a grammar-valid file can still fail with after parsing (internal/parser/lower.go):
-// the grammar accepts such a file, so the differential compares it by verdict only.
-var loweringCodes = map[string]bool{"E-TYPE-001": true, "E-DUR-002": true}
 
 type report struct {
 	File    string   `json:"file"`
@@ -54,7 +51,7 @@ func judge(path, src string) report {
 			r.Code = perr.Code
 		}
 		r.Stage = "grammar"
-		if loweringCodes[r.Code] {
+		if slices.Contains(parser.LoweringCodes, r.Code) { // the grammar accepts it: compared by verdict only
 			r.Stage = "lowering"
 		}
 		return r

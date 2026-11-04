@@ -42,7 +42,18 @@ var fixes = map[string]string{
 	"E-SYN-003":  "`a has_any_cs('x', 'y')` for text, or load a table.",
 	"E-SYN-004":  "list the attributes.",
 	"E-CMT-001":  "close with `*/`.",
+
+	// The [static] codes the lowering raises (LoweringCodes), with the catalogue's fix text too.
+	"E-TYPE-001": "cast explicitly, or restructure.",
+	"E-DUR-002":  "rewrite with integer counts in descending units.",
+	"E-STR-002":  "use a listed escape, or a triple-quoted raw string.",
+	"E-WIN-004":  "use a positive integer literal.",
 }
+
+// LoweringCodes are the [static] codes a grammar-valid file can still fail with in the lowering (lower.go): facts
+// about a token's text that the model cannot hold, so no later stage could see them (S2.2b). The grammar accepts
+// such a file, so the differential compares it by verdict only (tools/shape).
+var LoweringCodes = []string{"E-DUR-002", "E-STR-002", "E-TYPE-001", "E-WIN-004"}
 
 // synonyms are the SQL or English spellings a generator reaches for, each with the construct's canonical form
 // (E-SYN-001: the message names it).

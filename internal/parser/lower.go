@@ -28,20 +28,25 @@ func (l *lowerer) fail(code string, pos Position, format string, args ...any) {
 	}
 }
 
-// lower turns the parse tree into the model (ADR-0002 §6): plain data, no positions.
+// lower turns the parse tree into the model (ADR-0002 §6): plain data, with each node's source position in the
+// model's Pos fields for diagnostics (S2.2b).
 func lower(p *Program) (*model.App, *lowerError) {
 	l := &lowerer{}
-	app := &model.App{Language: p.Pragma, Params: []model.Param{}, Streams: []model.Stream{}, Tables: []model.Table{}, Rules: []model.Rule{}}
+	app := &model.App{
+		Language: p.Pragma.Value, LanguagePos: pos(p.Pragma.Pos),
+		Params: []model.Param{}, Streams: []model.Stream{}, Tables: []model.Table{}, Rules: []model.Rule{},
+	}
 	for _, s := range p.Statements {
 		switch {
 		case s.Param != nil:
 			app.Params = append(app.Params, model.Param{
 				Name: name(s.Param.Name), Type: attrType(s.Param.Type), Default: l.signedLiteral(s.Param.Default),
+				Pos: pos(s.Param.Pos),
 			})
 		case s.Stream != nil:
 			app.Streams = append(app.Streams, l.stream(s.Stream))
 		case s.Table != nil:
-			t := model.Table{Name: name(s.Table.Name), Attrs: l.attrs(s.Table.Attrs), PrimaryKey: []string{}}
+			t := model.Table{Name: name(s.Table.Name), Attrs: l.attrs(s.Table.Attrs), PrimaryKey: []string{}, Pos: pos(s.Table.Pos)}
 			for _, k := range s.Table.PrimaryKey {
 				t.PrimaryKey = append(t.PrimaryKey, name(k))
 			}
@@ -59,6 +64,9 @@ var types = map[string]event.Type{
 }
 
 func attrType(s string) event.Type { return types[s] }
+
+// pos is a parse position as the model's: line and column in runes, both 1-based.
+func pos(p Position) model.Pos { return model.Pos{Line: p.Line, Col: p.Column} }
 
 // name strips a backticked name's quotes; a plain identifier is itself.
 func name(s string) string {
@@ -78,37 +86,45 @@ func (l *lowerer) attrs(in []*Attr) []model.Attr {
 }
 
 func (l *lowerer) stream(s *StreamDecl) model.Stream {
-	out := model.Stream{Annotations: []model.Annotation{}, Name: name(s.Name), Attrs: l.attrs(s.Attrs), Time: model.TimeClause{Kind: model.TimeNone}}
+	out := model.Stream{
+		Annotations: []model.Annotation{}, Name: name(s.Name), Attrs: l.attrs(s.Attrs),
+		Time: model.TimeClause{Kind: model.TimeNone}, Pos: pos(s.Pos),
+	}
 	for _, a := range s.Annotations {
 		out.Annotations = append(out.Annotations, l.annotation(a))
 	}
 	if t := s.Time; t != nil {
+		out.Time.Pos = pos(t.Pos)
 		switch {
 		case t.Arrival:
 			out.Time.Kind = model.TimeArrival
 		case t.Bounded != nil:
-			out.Time.Kind, out.Time.Attr, out.Time.Bound = model.TimeBounded, name(t.Attr), l.duration(t.Bounded)
+			out.Time.Kind, out.Time.Attr, out.Time.Bound = model.TimeBounded, name(t.Attr.Value), l.duration(t.Bounded)
 		default:
-			out.Time.Kind, out.Time.Attr = model.TimeAscending, name(t.Attr)
+			out.Time.Kind, out.Time.Attr = model.TimeAscending, name(t.Attr.Value)
+		}
+		if t.Attr != nil {
+			out.Time.AttrPos = pos(t.Attr.Pos)
 		}
 		if t.Idle != nil {
-			out.Time.IdleAfter = l.duration(t.Idle)
+			out.Time.IdleAfter, out.Time.IdlePos = l.duration(t.Idle), pos(t.Idle.Parts[0].Pos)
 		}
 	}
 	return out
 }
 
 func (l *lowerer) annotation(a *Annotation) model.Annotation {
-	out := model.Annotation{Name: name(a.Name), Items: []model.AnnotationItem{}}
+	out := model.Annotation{Name: name(a.Name), Items: []model.AnnotationItem{}, Pos: pos(a.Pos)}
 	for _, it := range a.Items {
-		item := model.AnnotationItem{Nested: []model.Annotation{}}
+		item := model.AnnotationItem{Nested: []model.Annotation{}, Pos: pos(it.Pos)}
 		switch {
 		case it.Nested != nil:
 			item.Nested = append(item.Nested, l.annotation(it.Nested))
-		case it.Param != "":
-			item.Key, item.Value = name(it.Key), model.Literal{Kind: model.LitParam, Param: paramName(it.Param)}
+		case it.Param != nil:
+			item.Key, item.Value = name(it.Key), model.Literal{Kind: model.LitParam, Param: paramName(it.Param.Value)}
+			item.ValuePos = pos(it.Param.Pos)
 		default:
-			item.Key, item.Value = name(it.Key), l.literal(it.Value)
+			item.Key, item.Value, item.ValuePos = name(it.Key), l.literal(it.Value), pos(it.Value.Pos)
 		}
 		out.Items = append(out.Items, item)
 	}
@@ -117,17 +133,24 @@ func (l *lowerer) annotation(a *Annotation) model.Annotation {
 
 func (l *lowerer) rule(r *RuleDecl) model.Rule {
 	out := model.Rule{
-		Name:       name(r.Name),
-		Intent:     l.str(r.Intent, r.Pos),
-		Partition:  model.Partition{Keys: []model.PartitionKey{}},
-		Expects:    []model.Expect{},
-		Todos:      []string{},
-		Select:     []model.SelectItem{},
-		InsertInto: name(r.InsertInto),
+		Name:          name(r.Name),
+		Intent:        l.str(r.Intent.Value, r.Intent.Pos),
+		Partition:     model.Partition{Keys: []model.PartitionKey{}},
+		Expects:       []model.Expect{},
+		Todos:         []string{},
+		Select:        []model.SelectItem{},
+		InsertInto:    name(r.InsertInto.Value),
+		Pos:           pos(r.Pos),
+		SelectPos:     pos(r.Select.Pos),
+		InsertIntoPos: pos(r.InsertInto.Pos),
+		TodoPos:       []model.Pos{},
 	}
 	if p := r.Partition; p != nil {
+		out.Partition.Pos = pos(p.Pos)
 		for _, k := range p.Keys {
-			out.Partition.Keys = append(out.Partition.Keys, model.PartitionKey{Attr: name(k.Attr), Stream: name(k.Stream)})
+			out.Partition.Keys = append(out.Partition.Keys, model.PartitionKey{
+				Attr: name(k.Attr), Stream: name(k.Stream.Value), Pos: pos(k.Pos), StreamPos: pos(k.Stream.Pos),
+			})
 		}
 		out.Partition.TTL = l.durationOrParam(p.TTL)
 	}
@@ -136,11 +159,12 @@ func (l *lowerer) rule(r *RuleDecl) model.Rule {
 		if e.Expect != nil {
 			out.Expects = append(out.Expects, l.expect(e.Expect))
 		} else {
-			out.Todos = append(out.Todos, l.str(e.Todo, r.Pos))
+			out.Todos = append(out.Todos, l.str(e.Todo.Value, e.Todo.Pos))
+			out.TodoPos = append(out.TodoPos, pos(e.Pos))
 		}
 	}
-	for _, s := range r.Select {
-		out.Select = append(out.Select, model.SelectItem{Expr: l.expr(s.Expr), As: name(s.As)})
+	for _, s := range r.Select.Items {
+		out.Select = append(out.Select, model.SelectItem{Expr: l.expr(s.Expr), As: name(s.As), Pos: pos(s.Pos)})
 	}
 	if r.Rate != nil {
 		out.OutputFirstEvery = l.durationOrParam(r.Rate)
@@ -151,32 +175,44 @@ func (l *lowerer) rule(r *RuleDecl) model.Rule {
 func (l *lowerer) body(b *Body) model.Body {
 	switch {
 	case b.Pattern != nil:
-		return model.Body{Kind: model.BodyPattern, Pattern: l.pattern(b.Pattern)}
+		return model.Body{Kind: model.BodyPattern, Pattern: l.pattern(b.Pattern), Pos: pos(b.Pos)}
 	case b.Window != nil:
-		w := model.Window{Source: l.source(b.Source), LateEvents: l.late(b.Late)}
+		w := model.Window{Source: l.source(b.Source), LateEvents: l.late(b.Late), EmitPos: pos(b.Emit.Pos)}
 		switch k := b.Window; {
 		case k.Batch:
 			w.Kind = model.WindowBatch
 		case k.Delay != nil:
 			w.Kind, w.Delay = model.WindowDelay, l.durationOrParam(k.Delay)
-		case k.CronExpr != "":
-			w.Kind, w.CronExpr, w.CronTZ = model.WindowCron, l.str(k.CronExpr, k.Pos), l.str(k.CronTZ, k.Pos)
+		case k.CronExpr != nil:
+			w.Kind = model.WindowCron
+			w.CronExpr, w.CronTZ = l.str(k.CronExpr.Value, k.CronExpr.Pos), l.str(k.CronTZ.Value, k.CronTZ.Pos)
 		default:
-			w.Kind, w.SortAttr, w.SortDir = model.WindowSort, name(k.SortAttr), k.SortDir
-			w.SortN, _ = strconv.ParseInt(k.SortN, 10, 64) // a non-integer n is E-WIN-004, a static rule
+			w.Kind, w.SortAttr, w.SortDir, w.SortAttrPos = model.WindowSort, name(k.SortAttr.Value), k.SortDir, pos(k.SortAttr.Pos)
+			w.SortN = l.sortSize(k.SortN)
 		}
-		w.Emit = b.Emit
-		if strings.HasPrefix(b.Emit, "batch") {
+		w.Emit = b.Emit.Value
+		if strings.HasPrefix(w.Emit, "batch") {
 			w.Emit = "batch end"
 		}
-		return model.Body{Kind: model.BodyWindow, Window: w}
+		return model.Body{Kind: model.BodyWindow, Window: w, Pos: pos(b.Pos)}
 	default:
-		return model.Body{Kind: model.BodyPlain, Source: l.source(b.Source)}
+		return model.Body{Kind: model.BodyPlain, Source: l.source(b.Source), Pos: pos(b.Pos)}
 	}
 }
 
+// sortSize is `sort(n, …)`'s n: SPEC §6.3 wants a positive integer, which the model's int64 must hold exactly
+// (E-WIN-004 here, at the number: the grammar takes any number, and 1.5 or an overflow cannot be seen later).
+func (l *lowerer) sortSize(n *NumTok) int64 {
+	v, err := strconv.ParseInt(n.Value, 10, 64)
+	if err != nil || v < 1 {
+		l.fail("E-WIN-004", n.Pos, "sort size %s is not a positive integer", n.Value)
+		return 0
+	}
+	return v
+}
+
 func (l *lowerer) source(s *Source) model.Source {
-	out := model.Source{Stream: name(s.Stream)}
+	out := model.Source{Stream: name(s.Stream), Pos: pos(s.Pos)}
 	if s.Filter != nil {
 		out.Filter = l.expr(s.Filter)
 	}
@@ -211,14 +247,17 @@ func (l *lowerer) posElem(e *PosElem) model.PatternElement {
 }
 
 func (l *lowerer) step(s *Step) model.Step {
-	return model.Step{Name: name(s.Name), Source: l.source(s.Source)}
+	return model.Step{Name: name(s.Name), Source: l.source(s.Source), Pos: pos(s.Pos)}
 }
 
 func (l *lowerer) late(c *LateClause) model.LateEvents {
-	if c == nil || c.Drop {
+	if c == nil {
 		return model.LateEvents{Mode: "drop"}
 	}
-	return model.LateEvents{Mode: "allow", Allow: l.durationOrParam(c.Allow)}
+	if c.Drop {
+		return model.LateEvents{Mode: "drop", Pos: pos(c.Pos)}
+	}
+	return model.LateEvents{Mode: "allow", Allow: l.durationOrParam(c.Allow), Pos: pos(c.Pos)}
 }
 
 func (l *lowerer) expect(e *ExpectBlock) model.Expect {
@@ -253,7 +292,7 @@ func (l *lowerer) records(in []*Record) []model.Record {
 func (l *lowerer) expr(e *Expr) model.Expr {
 	out := l.andExpr(e.Left)
 	for _, r := range e.Rest {
-		out = model.Expr{Kind: model.ExprOr, Args: []model.Expr{out, l.andExpr(r)}}
+		out = model.Expr{Kind: model.ExprOr, Args: []model.Expr{out, l.andExpr(r)}, Pos: pos(e.Pos)}
 	}
 	return out
 }
@@ -261,22 +300,25 @@ func (l *lowerer) expr(e *Expr) model.Expr {
 func (l *lowerer) andExpr(e *AndExpr) model.Expr {
 	out := l.notExpr(e.Left)
 	for _, r := range e.Rest {
-		out = model.Expr{Kind: model.ExprAnd, Args: []model.Expr{out, l.notExpr(r)}}
+		out = model.Expr{Kind: model.ExprAnd, Args: []model.Expr{out, l.notExpr(r)}, Pos: pos(e.Pos)}
 	}
 	return out
 }
 
 func (l *lowerer) notExpr(e *NotExpr) model.Expr {
 	if e.Not != nil {
-		return model.Expr{Kind: model.ExprNot, Args: []model.Expr{l.notExpr(e.Not)}}
+		return model.Expr{Kind: model.ExprNot, Args: []model.Expr{l.notExpr(e.Not)}, Pos: pos(e.Pos)}
 	}
 	return l.membership(e.Member)
 }
 
 func (l *lowerer) membership(m *Membership) model.Expr {
 	out := l.comparison(m.Cmp)
-	if m.Table != "" {
-		out = model.Expr{Kind: model.ExprIn, Negated: m.NotIn, Table: name(m.Table), Args: []model.Expr{out}}
+	if m.Table != nil {
+		out = model.Expr{
+			Kind: model.ExprIn, Negated: m.NotIn, Table: name(m.Table.Value), Args: []model.Expr{out},
+			Pos: pos(m.Pos), TablePos: pos(m.Table.Pos),
+		}
 	}
 	return out
 }
@@ -287,21 +329,22 @@ func (l *lowerer) comparison(c *Comparison) model.Expr {
 	if t == nil {
 		return left
 	}
+	at := pos(c.Pos)
 	switch {
 	case t.Op != "":
-		return model.Expr{Kind: model.ExprCompare, Op: t.Op, Args: []model.Expr{left, l.sum(t.Right)}}
+		return model.Expr{Kind: model.ExprCompare, Op: t.Op, Args: []model.Expr{left, l.sum(t.Right)}, Pos: at}
 	case t.IsNull || t.NotNull:
-		return model.Expr{Kind: model.ExprIsNull, Negated: t.NotNull, Args: []model.Expr{left}}
+		return model.Expr{Kind: model.ExprIsNull, Negated: t.NotNull, Args: []model.Expr{left}, Pos: at}
 	case t.TextOp != "":
-		operand := model.TextOperand{Strings: []string{}}
+		operand := model.TextOperand{Strings: []string{}, Pos: pos(t.Operand.Pos)}
 		if t.Operand.Param != "" {
 			operand.Param = paramName(t.Operand.Param)
 		} else {
-			operand.Strings = append(operand.Strings, l.str(t.Operand.String, t.Pos))
+			operand.Strings = append(operand.Strings, l.str(t.Operand.String, t.Operand.Pos))
 		}
-		return model.Expr{Kind: model.ExprText, Op: t.TextOp, Operand: operand, Args: []model.Expr{left}}
+		return model.Expr{Kind: model.ExprText, Op: t.TextOp, Operand: operand, Args: []model.Expr{left}, Pos: at}
 	default:
-		operand := model.TextOperand{Strings: []string{}}
+		operand := model.TextOperand{Strings: []string{}, Pos: pos(t.SetArg.Pos)}
 		switch a := t.SetArg; {
 		case a.Param != "":
 			operand.Param = paramName(a.Param)
@@ -309,17 +352,17 @@ func (l *lowerer) comparison(c *Comparison) model.Expr {
 			operand.Table = name(a.Table)
 		default:
 			for _, s := range a.Strings {
-				operand.Strings = append(operand.Strings, l.str(s, t.Pos))
+				operand.Strings = append(operand.Strings, l.str(s.Value, s.Pos))
 			}
 		}
-		return model.Expr{Kind: model.ExprText, Op: t.SetOp, Operand: operand, Args: []model.Expr{left}}
+		return model.Expr{Kind: model.ExprText, Op: t.SetOp, Operand: operand, Args: []model.Expr{left}, Pos: at}
 	}
 }
 
 func (l *lowerer) sum(s *Sum) model.Expr {
 	out := l.term(s.Left)
 	for _, r := range s.Rest {
-		out = model.Expr{Kind: model.ExprArith, Op: r.Op, Args: []model.Expr{out, l.term(r.Term)}}
+		out = model.Expr{Kind: model.ExprArith, Op: r.Op, Args: []model.Expr{out, l.term(r.Term)}, Pos: pos(s.Pos)}
 	}
 	return out
 }
@@ -327,29 +370,30 @@ func (l *lowerer) sum(s *Sum) model.Expr {
 func (l *lowerer) term(t *Term) model.Expr {
 	out := l.atom(t.Left)
 	for _, r := range t.Rest {
-		out = model.Expr{Kind: model.ExprArith, Op: r.Op, Args: []model.Expr{out, l.atom(r.Atom)}}
+		out = model.Expr{Kind: model.ExprArith, Op: r.Op, Args: []model.Expr{out, l.atom(r.Atom)}, Pos: pos(t.Pos)}
 	}
 	return out
 }
 
 func (l *lowerer) atom(a *Atom) model.Expr {
+	at := pos(a.Pos)
 	switch {
 	case a.Literal != nil:
-		return model.Expr{Kind: model.ExprLiteral, Lit: l.literal(a.Literal), Args: []model.Expr{}}
+		return model.Expr{Kind: model.ExprLiteral, Lit: l.literal(a.Literal), Args: []model.Expr{}, Pos: at}
 	case a.Param != "":
-		return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitParam, Param: paramName(a.Param)}, Args: []model.Expr{}}
+		return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitParam, Param: paramName(a.Param)}, Args: []model.Expr{}, Pos: at}
 	case a.Raw != nil:
-		return model.Expr{Kind: model.ExprRaw, Qualifier: name(a.Raw.Qualifier), Name: name(a.Raw.Name), Args: []model.Expr{}}
+		return model.Expr{Kind: model.ExprRaw, Qualifier: name(a.Raw.Qualifier), Name: name(a.Raw.Name), Args: []model.Expr{}, Pos: at}
 	case a.Call != nil:
-		out := model.Expr{Kind: model.ExprCall, Namespace: name(a.Call.Namespace), Name: name(a.Call.Name), Args: []model.Expr{}}
+		out := model.Expr{Kind: model.ExprCall, Namespace: name(a.Call.Namespace), Name: name(a.Call.Name), Args: []model.Expr{}, Pos: at}
 		for _, arg := range a.Call.Args {
 			out.Args = append(out.Args, l.expr(arg))
 		}
 		return out
 	case a.Attr != nil:
-		return model.Expr{Kind: model.ExprAttr, Qualifier: name(a.Attr.Qualifier), Name: name(a.Attr.Name), Args: []model.Expr{}}
+		return model.Expr{Kind: model.ExprAttr, Qualifier: name(a.Attr.Qualifier), Name: name(a.Attr.Name), Args: []model.Expr{}, Pos: at}
 	case a.Neg != nil:
-		return model.Expr{Kind: model.ExprNeg, Args: []model.Expr{l.atom(a.Neg)}}
+		return model.Expr{Kind: model.ExprNeg, Args: []model.Expr{l.atom(a.Neg)}, Pos: at}
 	default:
 		return l.expr(a.Paren)
 	}
@@ -402,19 +446,37 @@ func (l *lowerer) number(text string, pos Position) model.Literal {
 
 var units = map[string]int64{"ms": 1, "sec": 1000, "min": 60_000, "hour": 3_600_000, "day": 86_400_000, "week": 604_800_000}
 
-// duration is the sum of its parts in milliseconds. The grammar is lexically wider than SPEC §2.4 (any number as a
-// count); a count that is not a whole number of milliseconds cannot be held by the model, so it is E-DUR-002 here.
-// Descending, distinct units are the validator's E-DUR-002.
+// unitRank orders the units from small to large: a duration's units are strictly descending (SPEC §2.4).
+var unitRank = map[string]int{"ms": 0, "sec": 1, "min": 2, "hour": 3, "day": 4, "week": 5}
+
+// duration is the sum of its parts in milliseconds. The grammar is lexically wider than SPEC §2.4, which wants
+// integer counts in strictly descending, distinct units; the model keeps only the sum, so every part of E-DUR-002
+// is decided here, at the duration's first token (S2.2b).
 func (l *lowerer) duration(d *Duration) int64 {
+	written := make([]string, len(d.Parts))
+	for i, p := range d.Parts {
+		written[i] = p.Count + " " + p.Unit
+	}
+	text, at := strings.Join(written, " "), d.Parts[0].Pos
 	var total int64
+	prev := len(unitRank)
 	for _, p := range d.Parts {
-		count, err := strconv.ParseFloat(p.Count, 64)
-		ms := count * float64(units[p.Unit])
-		if err != nil || ms != math.Trunc(ms) || ms > math.MaxInt64/2 {
-			l.fail("E-DUR-002", p.Pos, "%s %s is not a whole number of milliseconds", p.Count, p.Unit)
+		count, err := strconv.ParseInt(p.Count, 10, 64)
+		if err != nil || strings.ContainsAny(p.Count, ".eE") {
+			l.fail("E-DUR-002", at, "%s: %s is not a whole-number count", text, p.Count)
 			return 0
 		}
-		total += int64(ms)
+		if r := unitRank[p.Unit]; r >= prev {
+			l.fail("E-DUR-002", at, "%s: units must be strictly descending and distinct", text)
+			return 0
+		} else {
+			prev = r
+		}
+		if count > (math.MaxInt64-total)/units[p.Unit] {
+			l.fail("E-DUR-002", at, "%s is too long", text)
+			return 0
+		}
+		total += count * units[p.Unit]
 	}
 	return total
 }
@@ -424,9 +486,9 @@ func (l *lowerer) durationOrParam(d *DurationOrParam) model.DurationOrParam {
 		return model.DurationOrParam{}
 	}
 	if d.Param != "" {
-		return model.DurationOrParam{Param: paramName(d.Param)}
+		return model.DurationOrParam{Param: paramName(d.Param), Pos: pos(d.Pos)}
 	}
-	return model.DurationOrParam{Ms: l.duration(d.Duration)}
+	return model.DurationOrParam{Ms: l.duration(d.Duration), Pos: pos(d.Pos)}
 }
 
 func (l *lowerer) timestamp(quoted string, pos Position) int64 {
@@ -439,9 +501,10 @@ func (l *lowerer) timestamp(quoted string, pos Position) int64 {
 	return t.UnixMilli()
 }
 
-// str decodes a one-line string literal: SPEC §2.4's escapes, exhaustively. Any other escape stays as written,
-// backslash and all, for the validator to refuse (E-STR-002).
-func (l *lowerer) str(quoted string, pos Position) string {
+// str decodes a string token. A triple-quoted string is raw. A quoted one takes SPEC §2.4's escapes, exhaustively;
+// any other escape is E-STR-002 at the string token (S2.2b: the model keeps decoded text, where an unknown escape
+// could no longer be told from a raw backslash).
+func (l *lowerer) str(quoted string, at Position) string {
 	if len(quoted) >= 6 && (strings.HasPrefix(quoted, "'''") || strings.HasPrefix(quoted, `"""`)) {
 		return quoted[3 : len(quoted)-3]
 	}
@@ -474,8 +537,10 @@ func (l *lowerer) str(quoted string, pos Position) string {
 					continue
 				}
 			}
+			l.fail("E-STR-002", at, "%s: \\u needs four hex digits", quoted)
 			b.WriteString(`\u`)
 		default:
+			l.fail("E-STR-002", at, "%s: \\%c is not an escape", quoted, body[i])
 			b.WriteByte('\\')
 			b.WriteByte(body[i])
 		}
