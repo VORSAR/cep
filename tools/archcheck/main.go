@@ -6,11 +6,13 @@
 //   - imports: a package imports only the module packages tools/importcheck/rules.json lists for it
 //     (exhaustive, owner 2026-11-02), and third-party packages only where listed; where rules.json
 //     fences an import, the package uses only the listed identifiers of that import (owner 2026-11-04:
-//     expr reads the model's expression node, never its params, streams or tables);
+//     expr reads the model's expression node, never its params, streams or tables; S3.1-2: expr reads table
+//     snapshots, and only its tests may also build tables, through test_fences);
 //   - clock: the wall-clock calls stay in internal/runtime, io, internal/playback and cmd; operator
 //     packages do not import time, except internal/window/cron.go;
 //   - purity (non-test files): go statements and channels stay in internal/runtime, io/* and cmd;
-//     sync only there and in internal/event and internal/table; os, net and io only at the boundary;
+//     sync only there, plus the named exceptions: internal/event uses sync.Pool only, internal/table
+//     sync.Mutex and atomic.Pointer only (no other identifier, no dot-import); os, net and io only at the boundary;
 //     unsafe and //go:linkname nowhere;
 //   - globals (non-test files): a package-level var is an error sentinel, a value built at its
 //     declaration by a Must-constructor (regexp.MustCompile, participle.MustBuild: built from
@@ -27,6 +29,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -46,6 +49,9 @@ type Rules struct {
 	// TestImports are extra imports a package's _test.go files may have, never its production files (owner,
 	// 2026-11-04, S2.2b: internal/validate's tests read .cep programs through internal/parser).
 	TestImports map[string][]string `json:"test_imports"`
+	// TestFences are extra identifier prefixes a package's _test.go files may use from a fenced import, never its
+	// production files (owner, 2026-11-04, S3.1-2: internal/expr's tests build tables with table.New).
+	TestFences map[string]map[string][]string `json:"test_fences"`
 }
 
 // LoadRules reads the import law.
@@ -62,9 +68,15 @@ func LoadRules(path string) (*Rules, error) {
 }
 
 var (
-	clockCalls  = []string{"Now", "Since", "Until", "Tick", "After", "AfterFunc", "NewTimer", "NewTicker", "Sleep"}
-	operators   = []string{"internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition"}
-	syncAllowed = []string{"internal/event", "internal/table"}
+	clockCalls = []string{"Now", "Since", "Until", "Tick", "After", "AfterFunc", "NewTimer", "NewTicker", "Sleep"}
+	operators  = []string{"internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition"}
+	// syncNamed is ADR-0015 §2's named purity exceptions: the only packages outside internal/runtime, io and cmd
+	// that may import sync or sync/atomic, and the only identifiers each may use from them (S3.1-2). Moving it to
+	// tools/allowlists/ is S1.1c's (ADR-0015 §3.10).
+	syncNamed = map[string]map[string][]string{
+		"internal/event": {"sync": {"Pool"}},
+		"internal/table": {"sync": {"Mutex"}, "sync/atomic": {"Pointer"}},
+	}
 )
 
 // name is how a module-relative package directory is shown: "" is the root package cep.
@@ -190,6 +202,9 @@ func (c *checker) imports() {
 // fences: for each fenced import this file has, every selector on it names an allowed identifier.
 func (c *checker) fences() {
 	for target, allowed := range c.rules.Fences[c.dir] {
+		if c.test {
+			allowed = append(slices.Clone(allowed), c.rules.TestFences[c.dir][target]...)
+		}
 		local := c.localName(c.rules.Module + "/" + target)
 		if local == "" {
 			continue
@@ -250,15 +265,18 @@ func (c *checker) clock() {
 
 func (c *checker) purity() {
 	goAllowed := under(c.dir, "internal/runtime") || strings.HasPrefix(c.dir, "io/") || under(c.dir, "cmd")
-	syncOK := goAllowed || c.dir == "io" || slices.Contains(syncAllowed, c.dir)
+	syncOK := goAllowed || c.dir == "io"
+	named := syncNamed[c.dir]
 	boundary := under(c.dir, "io") || under(c.dir, "internal/playback") || under(c.dir, "cmd")
 	for _, spec := range c.file.Imports {
 		p := importPath(spec)
 		switch {
 		case p == "unsafe":
 			c.report(spec.Pos(), "purity: unsafe is banned in first-party code (ADR-0015 §2.2)")
-		case (p == "sync" || p == "sync/atomic") && !syncOK:
+		case (p == "sync" || p == "sync/atomic") && !syncOK && named[p] == nil:
 			c.report(spec.Pos(), "purity: %s may not import %s (ADR-0015 §2.2)", name(c.dir), p)
+		case named[p] != nil && spec.Name != nil && spec.Name.Name == ".":
+			c.report(spec.Pos(), "purity: %s may not dot-import %s: its named exception is %s only (ADR-0015 §2.2)", name(c.dir), p, exceptionList(named))
 		case !boundary && (under(p, "os") || under(p, "net") || under(p, "io")):
 			c.report(spec.Pos(), "purity: %s may not import %s: only io, internal/playback and cmd touch the outside (ADR-0015 §2.2)", name(c.dir), p)
 		}
@@ -270,6 +288,7 @@ func (c *checker) purity() {
 			}
 		}
 	}
+	c.namedSync(named)
 	if goAllowed {
 		return
 	}
@@ -288,6 +307,38 @@ func (c *checker) purity() {
 		}
 		return true
 	})
+}
+
+// namedSync holds a named exception's package to its listed identifiers: every selector on sync or sync/atomic names
+// one of them.
+func (c *checker) namedSync(named map[string][]string) {
+	for p, allowed := range named {
+		local := c.localName(p)
+		if local == "" || local == "." || local == "_" {
+			continue
+		}
+		ast.Inspect(c.file, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name == local && !slices.Contains(allowed, sel.Sel.Name) {
+				c.report(sel.Pos(), "purity: %s may use only %s, not %s.%s (ADR-0015 §2.2)", name(c.dir), exceptionList(named), p[strings.LastIndex(p, "/")+1:], sel.Sel.Name)
+			}
+			return true
+		})
+	}
+}
+
+// exceptionList names a package's whole named exception, in import-path order: "sync.Mutex, atomic.Pointer".
+func exceptionList(named map[string][]string) string {
+	var out []string
+	for _, p := range slices.Sorted(maps.Keys(named)) {
+		for _, id := range named[p] {
+			out = append(out, p[strings.LastIndex(p, "/")+1:]+"."+id)
+		}
+	}
+	return strings.Join(out, ", ")
 }
 
 func generated(file *ast.File) bool {
