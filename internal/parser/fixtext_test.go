@@ -8,19 +8,27 @@ import (
 	"testing"
 )
 
-// TestFixTextsMatchTheCatalogue pins every [parse] code's fix text to docs/language/errors.md, both ways: every
-// [parse] code in the catalogue has a fix here, and every fix here is the catalogue's, verbatim.
+// TestFixTextsMatchTheCatalogue pins every fix text here to docs/language/errors.md, both ways: every [parse] code
+// in the catalogue, and every [static] code in LoweringCodes, has a fix here, the catalogue's, verbatim; and every
+// fix here is one of those.
 func TestFixTextsMatchTheCatalogue(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "language", "errors.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	heading := regexp.MustCompile(`^### (E-[A-Z]+-[0-9]{3}) .*\*\*\[parse\]\*\*`)
+	heading := regexp.MustCompile(`^### (E-[A-Z]+-[0-9]{3}) .*\*\*\[(parse|static)\]\*\*`)
+	lowering := map[string]bool{}
+	for _, c := range LoweringCodes {
+		lowering[c] = true
+	}
 	want := map[string]string{}
 	code := ""
 	for _, line := range strings.Split(string(data), "\n") {
 		if m := heading.FindStringSubmatch(line); m != nil {
 			code = m[1]
+			if m[2] == "static" && !lowering[code] {
+				code = ""
+			}
 			continue
 		}
 		if strings.HasPrefix(line, "### ") {
@@ -40,7 +48,7 @@ func TestFixTextsMatchTheCatalogue(t *testing.T) {
 	}
 	for code := range fixes {
 		if _, ok := want[code]; !ok {
-			t.Errorf("%s has a fix here but is not a [parse] code in the catalogue", code)
+			t.Errorf("%s has a fix here but is neither a [parse] code nor a lowering [static] code in the catalogue", code)
 		}
 	}
 }

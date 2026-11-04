@@ -4,11 +4,43 @@ package parser
 // amended). Each struct is one production; each tag is its right-hand side in participle's notation: 'x' a literal
 // token, @@ a sub-production captured into the field, @Name a token of that type, | alternation, ? * + repetition.
 // Left recursion, which participle does not support, is written as "head (op tail)*" and folded left in lower.go.
-// A field named Pos receives the production's first token's position; the model keeps none of them.
+// A field named Pos receives the production's first token's position; the lowering copies it into the model's Pos
+// fields for diagnostics (S2.2b). The *Tok productions hold one token, so that one token's position is kept.
 
 type Program struct {
-	Pragma     string       `parser:"'language' @Pragma ';'"`
+	Pragma     *PragmaTok   `parser:"'language' @@ ';'"`
 	Statements []*Statement `parser:"@@*"`
+}
+
+type PragmaTok struct {
+	Pos   Position
+	Value string `parser:"@Pragma"`
+}
+
+type NameTok struct {
+	Pos   Position
+	Value string `parser:"@(Ident|Backticked)"`
+}
+
+// StrTok is a string in a slot that takes a triple-quoted string too; OneLineStr a slot that takes only a quoted one.
+type StrTok struct {
+	Pos   Position
+	Value string `parser:"@(String|RawString)"`
+}
+
+type OneLineStr struct {
+	Pos   Position
+	Value string `parser:"@String"`
+}
+
+type ParamTok struct {
+	Pos   Position
+	Value string `parser:"@ParamRef"`
+}
+
+type NumTok struct {
+	Pos   Position
+	Value string `parser:"@Number"`
 }
 
 type Statement struct {
@@ -19,12 +51,14 @@ type Statement struct {
 }
 
 type ParamDecl struct {
+	Pos     Position
 	Name    string         `parser:"'param' @(Ident|Backticked)"`
 	Type    string         `parser:"@('string'|'int'|'float'|'bool'|'timestamp'|'duration'|'object')"`
 	Default *SignedLiteral `parser:"'=' @@ ';'"`
 }
 
 type StreamDecl struct {
+	Pos         Position
 	Annotations []*Annotation `parser:"@@*"`
 	Name        string        `parser:"'stream' @(Ident|Backticked)"`
 	Attrs       []*Attr       `parser:"'(' @@ (',' @@)* ')'"`
@@ -38,26 +72,30 @@ type Attr struct {
 }
 
 type TimeClause struct {
+	Pos       Position
 	Arrival   bool      `parser:"'time' ( @'arrival'"`
-	Attr      string    `parser:"| @(Ident|Backticked) 'watermark'"`
+	Attr      *NameTok  `parser:"| @@ 'watermark'"`
 	Bounded   *Duration `parser:"  ( 'bounded' @@"`
 	Ascending bool      `parser:"  | @'ascending' ) )"`
 	Idle      *Duration `parser:"('idle' 'after' @@)?"`
 }
 
 type Annotation struct {
+	Pos   Position
 	Name  string     `parser:"'@' @(Ident|Backticked)"`
 	Items []*AnnItem `parser:"'(' @@ (',' @@)* ')'"`
 }
 
 type AnnItem struct {
+	Pos    Position
 	Nested *Annotation `parser:"  @@"`
 	Key    string      `parser:"| @(Ident|Backticked) '='"`
 	Value  *Literal    `parser:"  ( @@"`
-	Param  string      `parser:"  | @ParamRef )"`
+	Param  *ParamTok   `parser:"  | @@ )"`
 }
 
 type TableDecl struct {
+	Pos        Position
 	Name       string   `parser:"'table' @(Ident|Backticked)"`
 	Attrs      []*Attr  `parser:"'(' @@ (',' @@)* ')'"`
 	PrimaryKey []string `parser:"'primary' 'key' '(' @(Ident|Backticked) (',' @(Ident|Backticked))* ')' ';'"`
@@ -66,31 +104,44 @@ type TableDecl struct {
 type RuleDecl struct {
 	Pos        Position
 	Name       string           `parser:"'rule' @(Ident|Backticked)"`
-	Intent     string           `parser:"'intent' @(String|RawString)"`
+	Intent     *StrTok          `parser:"'intent' @@"`
 	Partition  *Partition       `parser:"@@?"`
 	Body       *Body            `parser:"@@"`
 	Extras     []*Extra         `parser:"@@*"`
-	Select     []*SelItem       `parser:"'select' @@ (',' @@)*"`
+	Select     *SelectClause    `parser:"@@"`
 	Rate       *DurationOrParam `parser:"('output' 'first' 'every' @@)?"`
-	InsertInto string           `parser:"'insert' 'into' @(Ident|Backticked) ';'"`
+	InsertInto *NameTok         `parser:"'insert' 'into' @@ ';'"`
+}
+
+type SelectClause struct {
+	Pos   Position
+	Items []*SelItem `parser:"'select' @@ (',' @@)*"`
 }
 
 type Partition struct {
+	Pos  Position
 	Keys []*PartKey       `parser:"'partition' 'by' @@ (',' @@)*"`
 	TTL  *DurationOrParam `parser:"'ttl' @@"`
 }
 
 type PartKey struct {
-	Attr   string `parser:"@(Ident|Backticked)"`
-	Stream string `parser:"'of' @(Ident|Backticked)"`
+	Pos    Position
+	Attr   string   `parser:"@(Ident|Backticked)"`
+	Stream *NameTok `parser:"'of' @@"`
 }
 
 type Body struct {
+	Pos     Position
 	Pattern *PatternBody `parser:"  'from' @@"`
 	Source  *Source      `parser:"| 'from' @@"`
 	Window  *WindowKind  `parser:"  ( 'window' @@"`
-	Emit    string       `parser:"    'emit' 'on' @('close'|'change'|'due'|'batch' 'end')"`
+	Emit    *EmitTok     `parser:"    'emit' 'on' @@"`
 	Late    *LateClause  `parser:"    'late' 'events' @@ )?"`
+}
+
+type EmitTok struct {
+	Pos   Position
+	Value string `parser:"@('close'|'change'|'due'|'batch' 'end')"`
 }
 
 type PatternBody struct {
@@ -115,34 +166,38 @@ type PosElem struct {
 }
 
 type Step struct {
+	Pos    Position
 	Name   string  `parser:"@(Ident|Backticked) '='"`
 	Source *Source `parser:"@@"`
 }
 
 type Source struct {
+	Pos    Position
 	Stream string `parser:"@(Ident|Backticked)"`
 	Filter *Expr  `parser:"('[' @@ ']')?"`
 }
 
 type WindowKind struct {
 	Pos      Position
-	SortN    string           `parser:"  'sort' '(' @Number"`
-	SortAttr string           `parser:"    ',' @(Ident|Backticked)"`
+	SortN    *NumTok          `parser:"  'sort' '(' @@"`
+	SortAttr *NameTok         `parser:"    ',' @@"`
 	SortDir  string           `parser:"    ',' @('asc'|'desc') ')'"`
-	CronExpr string           `parser:"| 'cron' '(' @String"`
-	CronTZ   string           `parser:"    ',' @String ')'"`
+	CronExpr *OneLineStr      `parser:"| 'cron' '(' @@"`
+	CronTZ   *OneLineStr      `parser:"    ',' @@ ')'"`
 	Delay    *DurationOrParam `parser:"| 'delay' '(' @@ ')'"`
 	Batch    bool             `parser:"| @('batch' '(' ')')"`
 }
 
 type LateClause struct {
+	Pos   Position
 	Drop  bool             `parser:"  @'drop'"`
 	Allow *DurationOrParam `parser:"| 'allow' @@"`
 }
 
 type Extra struct {
+	Pos    Position
 	Expect *ExpectBlock `parser:"  'expect' @@"`
-	Todo   string       `parser:"| 'todo' @String"`
+	Todo   *OneLineStr  `parser:"| 'todo' @@"`
 }
 
 type ExpectBlock struct {
@@ -172,6 +227,7 @@ type Field struct {
 }
 
 type SelItem struct {
+	Pos  Position
 	Expr *Expr  `parser:"@@"`
 	As   string `parser:"('as' @(Ident|Backticked))?"`
 }
@@ -179,27 +235,32 @@ type SelItem struct {
 // ---- expressions: precedence low to high, left-recursion as repetition ----
 
 type Expr struct {
+	Pos  Position
 	Left *AndExpr   `parser:"@@"`
 	Rest []*AndExpr `parser:"('or' @@)*"`
 }
 
 type AndExpr struct {
+	Pos  Position
 	Left *NotExpr   `parser:"@@"`
 	Rest []*NotExpr `parser:"('and' @@)*"`
 }
 
 type NotExpr struct {
+	Pos    Position
 	Not    *NotExpr    `parser:"  'not' @@"`
 	Member *Membership `parser:"| @@"`
 }
 
 type Membership struct {
+	Pos   Position
 	Cmp   *Comparison `parser:"@@"`
 	NotIn bool        `parser:"( @'not'? 'in'"`
-	Table string      `parser:"  @(Ident|Backticked) )?"`
+	Table *NameTok    `parser:"  @@ )?"`
 }
 
 type Comparison struct {
+	Pos  Position
 	Left *Sum     `parser:"@@"`
 	Tail *CmpTail `parser:"@@?"`
 }
@@ -217,17 +278,20 @@ type CmpTail struct {
 }
 
 type TextOperand struct {
+	Pos    Position
 	String string `parser:"  @(String|RawString)"`
 	Param  string `parser:"| @ParamRef"`
 }
 
 type SetOperand struct {
-	Strings []string `parser:"  @(String|RawString) (',' @(String|RawString))*"`
-	Param   string   `parser:"| @ParamRef"`
-	Table   string   `parser:"| @(Ident|Backticked)"`
+	Pos     Position
+	Strings []*StrTok `parser:"  @@ (',' @@)*"`
+	Param   string    `parser:"| @ParamRef"`
+	Table   string    `parser:"| @(Ident|Backticked)"`
 }
 
 type Sum struct {
+	Pos  Position
 	Left *Term      `parser:"@@"`
 	Rest []*SumRest `parser:"@@*"`
 }
@@ -238,6 +302,7 @@ type SumRest struct {
 }
 
 type Term struct {
+	Pos  Position
 	Left *Atom       `parser:"@@"`
 	Rest []*TermRest `parser:"@@*"`
 }
@@ -248,6 +313,7 @@ type TermRest struct {
 }
 
 type Atom struct {
+	Pos     Position
 	Literal *Literal  `parser:"  @@"`
 	Param   string    `parser:"| @ParamRef"`
 	Raw     *AttrRef  `parser:"| 'raw' '(' @@ ')'"`
@@ -296,6 +362,7 @@ type DurPart struct {
 }
 
 type DurationOrParam struct {
+	Pos      Position
 	Duration *Duration `parser:"  @@"`
 	Param    string    `parser:"| @ParamRef"`
 }
