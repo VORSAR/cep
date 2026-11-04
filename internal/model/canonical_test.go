@@ -490,9 +490,10 @@ func TestMarshalCanonicalDeterminism(t *testing.T) {
 	})
 }
 
-// TestMarshalCanonicalNoPositions pins that the canonical JSON carries no source position: no struct reachable from
-// App has a position-like field, and no key in the encoded JSON of three full Apps is position-like. Two models that
-// differ only in source positions therefore cannot exist, and the encoding cannot tell them apart.
+// TestMarshalCanonicalNoPositions pins that the canonical JSON carries no source position (ADR-0003 §1 as annotated
+// at S2.2b): positions live only in fields of type model.Pos or []model.Pos named "…Pos"; no other field reachable
+// from App is position-like; no key in the encoded JSON of three full Apps is position-like; and an App whose every
+// position is set encodes byte for byte as the same App with none.
 func TestMarshalCanonicalNoPositions(t *testing.T) {
 	t.Parallel()
 	positional := func(name string) bool {
@@ -504,34 +505,81 @@ func TestMarshalCanonicalNoPositions(t *testing.T) {
 		return strings.HasSuffix(n, "pos") || strings.HasSuffix(n, "line") || strings.HasSuffix(n, "col") ||
 			strings.HasSuffix(n, "offset")
 	}
+	posType, posSlice := reflect.TypeFor[model.Pos](), reflect.TypeFor[[]model.Pos]()
 	seen := map[reflect.Type]bool{}
+	positions := 0
 	var walk func(reflect.Type)
 	walk = func(t2 reflect.Type) {
 		switch t2.Kind() {
 		case reflect.Slice, reflect.Array, reflect.Pointer:
 			walk(t2.Elem())
 		case reflect.Struct:
-			if seen[t2] {
+			if seen[t2] || t2 == posType {
 				return
 			}
 			seen[t2] = true
 			for i := range t2.NumField() {
 				f := t2.Field(i)
-				if positional(f.Name) {
-					t.Errorf("%s.%s is a position-like field", t2.Name(), f.Name)
+				isPos := f.Type == posType || f.Type == posSlice
+				switch {
+				case isPos && !strings.HasSuffix(f.Name, "Pos"):
+					t.Errorf("%s.%s holds a position but is not named …Pos", t2.Name(), f.Name)
+				case isPos:
+					positions++
+				case positional(f.Name):
+					t.Errorf("%s.%s is a position-like field of type %s, not model.Pos", t2.Name(), f.Name, f.Type)
 				}
 				walk(f.Type)
 			}
 		}
 	}
 	walk(reflect.TypeFor[model.App]())
+	if positions == 0 {
+		t.Fatal("no model.Pos field is reachable from App: the walk is not looking at the model")
+	}
 	for _, app := range []model.App{smallApp(), patternApp(), windowApp()} {
-		for _, k := range allKeys(t, mustEncode(t, app)) {
+		plain := mustEncode(t, app)
+		for _, k := range allKeys(t, plain) {
 			if positional(k) {
 				t.Errorf("encoded JSON has a position-like key %q", k)
 			}
 		}
+		stamped := app
+		if n := stampPositions(reflect.ValueOf(&stamped).Elem()); n == 0 {
+			t.Fatal("stamping set no position: the comparison below would prove nothing")
+		}
+		if reflect.DeepEqual(stamped, app) {
+			t.Fatal("the stamped App equals the plain one: stamping changed nothing")
+		}
+		assertBytes(t, mustEncode(t, stamped), string(plain))
 	}
+}
+
+// stampPositions sets every model.Pos reachable from v to a non-zero position and counts them. Slices are copied
+// first, so the App v was copied from keeps its own positions.
+func stampPositions(v reflect.Value) int {
+	n := 0
+	switch v.Kind() {
+	case reflect.Struct:
+		if v.Type() == reflect.TypeFor[model.Pos]() {
+			v.Set(reflect.ValueOf(model.Pos{Line: 7, Col: 9}))
+			return 1
+		}
+		for i := range v.NumField() {
+			n += stampPositions(v.Field(i))
+		}
+	case reflect.Slice:
+		if v.Len() == 0 {
+			return 0
+		}
+		cp := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+		reflect.Copy(cp, v)
+		v.Set(cp)
+		for i := range v.Len() {
+			n += stampPositions(v.Index(i))
+		}
+	}
+	return n
 }
 
 // patternApp holds one pattern rule:

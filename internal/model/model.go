@@ -1,8 +1,9 @@
 // Package model is the rule model: the one IR both front-ends produce (ADR-0003).
 //
 // The DSL parser and the Go builder each build an App and nothing else; the validator and the planner read only an
-// App. The IR is plain data: no behaviour, no source positions (diagnostics keep positions in a side table of their
-// own), no pointers to runtime objects. Every field mirrors one SPEC clause by name, so a reviewer can diff an App's
+// App. The IR is plain data: no behaviour, no pointers to runtime objects, and no source position in its canonical
+// form: positions ride in fields of type Pos, filled by the DSL front-end for diagnostics and skipped by
+// MarshalCanonical (ADR-0003 §1 as annotated at S2.2b). Every field mirrors one SPEC clause by name, so a reviewer can diff an App's
 // canonical JSON (MarshalCanonical) against the rule text by eye. Durations and timestamps are int64 milliseconds
 // (SEMANTICS §1). A ${param} reference stays unresolved in its exact slot (ADR-0003 §5).
 package model
@@ -22,14 +23,21 @@ import (
 	"github.com/vorsar/cep/internal/event"
 )
 
+// Pos is a source position: line and column in runes, both 1-based. The DSL front-end fills it; a model built
+// through the Go API leaves it zero. MarshalCanonical skips every field of type Pos or []Pos.
+type Pos struct {
+	Line, Col int
+}
+
 // App is one rule file (SPEC §3): its version pragma, then params, streams, tables and rules in declaration order.
 // Order is kept: stream declaration order breaks event-time ties (SPEC §6.4).
 type App struct {
-	Language string // the pragma's id, e.g. "cep/0.1" (SPEC §3.1)
-	Params   []Param
-	Streams  []Stream
-	Tables   []Table
-	Rules    []Rule
+	Language    string // the pragma's id, e.g. "cep/0.1" (SPEC §3.1)
+	LanguagePos Pos    // the pragma's id
+	Params      []Param
+	Streams     []Stream
+	Tables      []Table
+	Rules       []Rule
 }
 
 // Param is `param name type = literal;` (SPEC §4.1). Default is the literal; a deployment may override it.
@@ -37,6 +45,7 @@ type Param struct {
 	Name    string
 	Type    event.Type
 	Default Literal
+	Pos     Pos // `param`
 }
 
 // Attr is one attribute of a stream or table: `name type [optional]` (SPEC §4.2).
@@ -53,6 +62,7 @@ type Stream struct {
 	Name        string
 	Attrs       []Attr
 	Time        TimeClause
+	Pos         Pos // the declaration's first token
 }
 
 // TimeKind names the time clause's form (SPEC §4.2).
@@ -72,19 +82,25 @@ type TimeClause struct {
 	Attr      string // empty for TimeArrival and TimeNone
 	Bound     int64  // ms; TimeBounded only
 	IdleAfter int64  // ms; 0 when absent
+	Pos       Pos    // `time`
+	AttrPos   Pos    // the time attribute
+	IdlePos   Pos    // the `idle after` duration
 }
 
 // Annotation is `@name(item, …)` (SPEC §4.2: @source, @sink, @map).
 type Annotation struct {
 	Name  string
 	Items []AnnotationItem
+	Pos   Pos // `@`
 }
 
 // AnnotationItem is `key = literal`, `key = ${param}`, or a nested annotation (then Key is empty).
 type AnnotationItem struct {
-	Key    string
-	Value  Literal
-	Nested []Annotation // one nested annotation, or none
+	Key      string
+	Value    Literal
+	Nested   []Annotation // one nested annotation, or none
+	Pos      Pos          // the key, or the nested annotation's `@`
+	ValuePos Pos          // the value
 }
 
 // Table is `table Name (attrs) primary key (cols);` (SPEC §4.3).
@@ -92,6 +108,7 @@ type Table struct {
 	Name       string
 	Attrs      []Attr
 	PrimaryKey []string
+	Pos        Pos // `table`
 }
 
 // LiteralKind names a literal's type (SPEC §2.4), or a ${param} reference standing in a literal slot.
@@ -125,6 +142,7 @@ type Literal struct {
 type DurationOrParam struct {
 	Ms    int64
 	Param string
+	Pos   Pos // the duration's first token, or the ${param}
 }
 
 // Rule is one `rule` statement, its clauses in SPEC §4.4's fixed order.
@@ -138,18 +156,25 @@ type Rule struct {
 	Select           []SelectItem
 	OutputFirstEvery DurationOrParam // absent: Ms 0, no Param
 	InsertInto       string
+	Pos              Pos   // `rule`
+	SelectPos        Pos   // `select`
+	InsertIntoPos    Pos   // the target's name
+	TodoPos          []Pos // each `todo`, in order
 }
 
 // Partition is `partition by k of S, … ttl D` (SPEC §4.4).
 type Partition struct {
 	Keys []PartitionKey
 	TTL  DurationOrParam
+	Pos  Pos // `partition`
 }
 
 // PartitionKey is `k of S`.
 type PartitionKey struct {
-	Attr   string
-	Stream string
+	Attr      string
+	Stream    string
+	Pos       Pos // the attribute
+	StreamPos Pos // the stream after `of`
 }
 
 // BodyKind names the rule body's form (SPEC §5).
@@ -168,12 +193,14 @@ type Body struct {
 	Source  Source  // plain and window
 	Pattern Pattern // pattern
 	Window  Window  // window
+	Pos     Pos     // `from`
 }
 
 // Source is `Stream[filter]`; a zero Filter (Kind "") means no filter.
 type Source struct {
 	Stream string
 	Filter Expr
+	Pos    Pos // the stream's name
 }
 
 // Pattern is a pattern body (SPEC §5.2), its mandatory elements in order.
@@ -208,12 +235,14 @@ type PatternElement struct {
 type Step struct {
 	Name   string
 	Source Source
+	Pos    Pos // the capture's name
 }
 
 // LateEvents is `late events drop` or `late events allow D` (the grammar's late-clause).
 type LateEvents struct {
 	Mode  string          // "drop" or "allow"
 	Allow DurationOrParam // allow only
+	Pos   Pos             // `drop` or `allow`
 }
 
 // WindowKind names the window (SPEC §6.3).
@@ -230,22 +259,25 @@ const (
 // Window is a windowed body: `from Source window kind(…) emit on … late events …`. Only the fields of its Kind are
 // set.
 type Window struct {
-	Source     Source
-	Kind       WindowKind
-	SortN      int64  // sort
-	SortAttr   string // sort
-	SortDir    string // sort: "asc" or "desc"
-	CronExpr   string // cron
-	CronTZ     string // cron
-	Delay      DurationOrParam
-	Emit       string // "close", "change", "due" or "batch end"
-	LateEvents LateEvents
+	Source      Source
+	Kind        WindowKind
+	SortN       int64  // sort
+	SortAttr    string // sort
+	SortDir     string // sort: "asc" or "desc"
+	CronExpr    string // cron
+	CronTZ      string // cron
+	Delay       DurationOrParam
+	Emit        string // "close", "change", "due" or "batch end"
+	LateEvents  LateEvents
+	SortAttrPos Pos // sort: the attribute
+	EmitPos     Pos // the emit mode
 }
 
 // SelectItem is `expr [as name]`.
 type SelectItem struct {
 	Expr Expr
 	As   string
+	Pos  Pos // the item's first token
 }
 
 // Expect is one `expect` block (SPEC §6.8): given sections, then the expected outputs.
@@ -310,6 +342,8 @@ type Expr struct {
 	Table     string
 	Operand   TextOperand
 	Args      []Expr
+	Pos       Pos // the expression's first token
+	TablePos  Pos // in: the table's name
 }
 
 // TextOperand is a text operator's right side: one string or ${param} for a text or regex operator; for a set
@@ -318,12 +352,13 @@ type TextOperand struct {
 	Strings []string
 	Param   string
 	Table   string
+	Pos     Pos // the operand's first token
 }
 
 // MarshalCanonical encodes the App as its canonical JSON (ADR-0003 §2). The rules, exactly:
 //
 //   - Every struct is a JSON object holding every one of its fields, always, zero values included ("explicit
-//     defaults"). A key is the Go field name in lowerCamelCase: its first letter lowercased, or a whole leading
+//     defaults"), except the source positions: a field of type Pos or []Pos is never encoded. A key is the Go field name in lowerCamelCase: its first letter lowercased, or a whole leading
 //     initialism (OutputFirstEvery is "outputFirstEvery", TTL is "ttl", CronTZ is "cronTZ"). Keys are sorted
 //     bytewise. There is no whitespace and no trailing newline.
 //   - A slice is an array in its order; a nil slice is []. A string is a JSON string escaped as encoding/json
@@ -390,8 +425,11 @@ func encodeStruct(buf *bytes.Buffer, v reflect.Value, path string) error {
 	}
 	fields := make([]field, 0, v.NumField())
 	for i := range v.NumField() {
-		name := v.Type().Field(i).Name
-		fields = append(fields, field{lowerCamel(name), v.Field(i)})
+		f := v.Type().Field(i)
+		if f.Type == reflect.TypeFor[Pos]() || f.Type == reflect.TypeFor[[]Pos]() {
+			continue // positions are never canonical (ADR-0003 §1 as annotated)
+		}
+		fields = append(fields, field{lowerCamel(f.Name), v.Field(i)})
 	}
 	slices.SortFunc(fields, func(a, b field) int { return strings.Compare(a.key, b.key) })
 	stamp := v.Type() == reflect.TypeFor[Literal]() && v.Interface().(Literal).Kind == LitTimestamp
