@@ -125,12 +125,15 @@ def _():
     spec = PatternSpec(steps=[Step("a", "A"), Step("b", "B")],
                        within=10 * MIN, key=lambda e: "k")
     delays = {"S1": 0, "S2": 0}
+    # Owner 2026-11-04 (S3.1-1 D3/D5): a quiet stream's floor moves from its own last
+    # event at wall speed; a wall tick (from the intake) moves it. Events arrive on time.
     arrivals = [("S1", ev("A", 0)),
                 ("S2", ev("X", 0)),
-                ("idle", "S2"),                  # live: S2 excluded from the min
-                ("S1", ev("X", 10 * MIN)),       # wm_construct advances to 10:10
+                ("tick", 10 * MIN),              # live: both quiet; floors reach 10:10
+                ("S1", ev("X", 10 * MIN)),       # wm_construct at 10:10
                 ("S2", ev("B", 5 * MIN))]        # resume behind the clamped wm
-    ms, sl, cl = run_pattern_multi(spec, arrivals, delays, mode="live")
+    ms, sl, cl = run_pattern_multi(spec, arrivals, delays, mode="live",
+                                   idle_after={"S1": 1 * MIN, "S2": 1 * MIN})
     assert sl == [], sl                          # admitted by its own stream's wm
     assert cl == [4], cl                         # construct-late: counted separately
     assert ms == [], ms                          # the dropped B completes nothing
@@ -150,6 +153,86 @@ def _():
     assert late == [], late                      # judged against the PROPAGATED wm
     assert len(ms) == 1 and ms[0]["d"]["ts"] == 20 * MIN, ms
 
+
+
+# ------------------------- owner decisions of 2026-11-04 (S3.1-1, sprint-plan §5)
+
+@check("2.1 · quiet", "every input quiet: the absence still fires on time — a quiet "
+                      "stream's floor moves from its own last event at wall speed (D3, D5)")
+def _():
+    spec = PatternSpec(steps=[Step("a", "A"), Step("n", "B", negated=True, bound=5 * MIN)],
+                       within=10 * MIN, key=lambda e: "k")
+    quiet = {"S1": 1 * MIN, "S2": 1 * MIN}
+    base = [("S1", ev("A", 0)), ("tick", 2 * MIN), ("tick", 4 * MIN)]
+    ms, _, _ = run_pattern_multi(spec, base, {"S1": 0, "S2": 0}, mode="live",
+                                 eos=False, idle_after=quiet)
+    assert ms == [], ms                          # floors at 10:04: not yet due
+    ms, sl, cl = run_pattern_multi(spec, base + [("tick", 6 * MIN)], {"S1": 0, "S2": 0},
+                                   mode="live", eos=False, idle_after=quiet)
+    assert sl == [] and cl == [], (sl, cl)
+    assert len(ms) == 1 and ms[0]["match_end"] == 5 * MIN, ms   # fired by a tick, on time
+
+
+@check("2.1 · quiet", "a source that always delivers 2 s late (d = 0) loses nothing after a "
+                      "quiet spell: its floor runs from its own last event, not the wall (D5)")
+def _():
+    spec = PatternSpec(steps=[Step("a", "A"), Step("b", "B")],
+                       within=10 * MIN, key=lambda e: "k")
+    arrivals = [("S1", ev("A", 0, arrival=2 * SEC)),
+                ("tick", 10 * MIN + 2 * SEC),               # quiet: floor = 0 + 10:00 = 10:10:00
+                ("S1", ev("B", 10 * MIN, arrival=10 * MIN + 2 * SEC))]
+    ms, sl, cl = run_pattern_multi(spec, arrivals, {"S1": 0}, mode="live", eos=False,
+                                   idle_after={"S1": 1 * MIN})
+    assert sl == [] and cl == [], (sl, cl)       # "wall − d" would make B construct-late
+    assert len(ms) == 1, ms
+
+
+@check("2.1 · seal", "once a key's timers at an instant have fired, that key's later event "
+                     "at the same instant is construct-late: dropped and counted (D7)")
+def _():
+    spec = PatternSpec(steps=[Step("a", "A"), Step("n", "B", negated=True, bound=5 * MIN)],
+                       within=10 * MIN, key=lambda e: "k")
+    arrivals = [("S1", ev("A", 0)),
+                ("S1", ev("X", 5 * MIN)),        # the clock reaches 10:05: the absence fires
+                ("S2", ev("B", 5 * MIN))]        # admitted by S2, but 10:05 is sealed for k
+    ms, sl, cl = run_pattern_multi(spec, arrivals, {"S1": 0, "S2": 0}, eos=False)
+    assert len(ms) == 1 and sl == [] and cl == [2], (ms, sl, cl)
+
+
+@check("6.4 · walk", "an unrelated event never changes a result: one advance or many, the "
+                     "same matches — overrun partials go at their instant (D1)")
+def _():
+    def once(evs, d=0):
+        spec = PatternSpec(steps=[Step("a", "A"), Step("b", "B")], within=10,
+                           key=lambda e: "k", for_each=False, wm_delay=d)
+        return len(run_pattern(spec, evs)[0])
+    plain = [ev("A", 0), ev("A", 20), ev("B", 25)]
+    noisy = [ev("A", 0), ev("X", 15), ev("A", 20), ev("B", 25)]
+    # A@0's partial is gone at 10+, so A@20 opens a fresh one and B@25 completes it.
+    assert once(plain) == once(noisy) == once(noisy, d=30) == once(plain, d=30) == 1, (
+        once(plain), once(noisy), once(noisy, d=30), once(plain, d=30))
+
+
+@check("9 · walk", "a TTL purge due inside one advance comes before the key's later event: "
+                   "the returning key starts fresh and matches again (D1)")
+def _():
+    spec = PatternSpec(steps=[Step("e1", "A"), Step("e2", "B")], within=2 * MIN,
+                       key=lambda e: e["k"], for_each=False, ttl=5 * MIN, wm_delay=6 * MIN)
+    evs = [ev("A", 0, k="a"), ev("B", 1 * MIN, k="a"), ev("X", 10 * MIN, k="other"),
+           ev("A", 11 * MIN, k="a"), ev("B", 12 * MIN, k="a")]
+    ms, _ = run_pattern(spec, evs)
+    assert [(m["key"], m["match_start"]) for m in ms] == [("a", 0), ("a", 11 * MIN)], ms
+
+
+@check("6.5 · skip", "skip-past-last compares in 2.2 order: a partial that began after the "
+                     "completed match's last event survives, though both share its instant (D8)")
+def _():
+    spec = PatternSpec(steps=[Step("a", "A"), Step("b", "B"),
+                              Step("n", "C", negated=True, bound=5 * MIN)],
+                       within=5 * MIN, key=lambda e: "k")
+    # match 1 = A@0 B@2 waits out its absence until 10:05 (a timer); A@2 arrives after B@2.
+    ms, _ = run_pattern(spec, [ev("A", 0), ev("B", 2 * MIN), ev("A", 2 * MIN), ev("B", 3 * MIN)])
+    assert [(m["match_start"], m["match_end"]) for m in ms] == [(0, 5 * MIN), (2 * MIN, 7 * MIN)], ms
 
 # ----------------------------------------------------------------- 6 patterns
 
