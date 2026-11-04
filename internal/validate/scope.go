@@ -69,18 +69,26 @@ func (s *scope) Capture(name string) (int, bool) {
 	return slot, ok
 }
 
-// TableKey is a single-column key's type; a composite key never reaches Build (E-TBL-001 comes first).
-func (s *scope) TableKey(table string) (event.Type, bool) {
-	t := s.c.tables[table]
+// Table resolves a table to its index in the app's declaration order and its single-column key's type; a composite
+// key never reaches Build (E-TBL-001 comes first).
+func (s *scope) Table(name string) (int, event.Type, bool) {
+	t := s.c.tables[name]
 	if t == nil || len(t.PrimaryKey) != 1 {
-		return event.TInvalid, false
+		return 0, event.TInvalid, false
+	}
+	id := -1
+	for i := range s.c.app.Tables {
+		if &s.c.app.Tables[i] == t {
+			id = i
+			break
+		}
 	}
 	for _, a := range t.Attrs {
 		if a.Name == t.PrimaryKey[0] {
-			return a.Type, true
+			return id, a.Type, true
 		}
 	}
-	return event.TInvalid, false
+	return 0, event.TInvalid, false
 }
 
 // attr resolves an attribute reference to its declaration, or nil.
