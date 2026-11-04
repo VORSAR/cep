@@ -19,7 +19,40 @@ const (
 )
 
 // IngestFlags reports whether any non-null string value holds an invisible code point (SEMANTICS §5.1 stage 1):
-// category Cf, Co or Cn, or Cc other than TAB, LF and CR. It strips nothing and allocates nothing.
+// category Cf, Co or Cn, or Cc other than TAB, LF and CR. Values of other kinds are skipped (an object's text is not
+// a string attribute). Malformed UTF-8 reads as U+FFFD, which is visible (P8: whether it flags is S7's question).
+// It strips nothing, allocates nothing and stops at the first invisible.
 func IngestFlags(values []event.Value) bool {
-	panic("text.IngestFlags: not built yet (S3.1-2 stub)")
+	for i := range values {
+		v := &values[i]
+		if v.Kind != event.TString || v.Null {
+			continue
+		}
+		for _, r := range v.Str {
+			if invisible(r) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// invisible is SEMANTICS §5.1 stage 1's class, as the reference executor's _strip_invisibles reads it.
+func invisible(r rune) bool {
+	if r < 0x80 { // ASCII: the controls other than TAB, LF and CR, and DEL
+		return (r < 0x20 && r != '\t' && r != '\n' && r != '\r') || r == 0x7F
+	}
+	switch {
+	case unicode.Is(unicode.Cf, r), unicode.Is(unicode.Co, r), unicode.Is(unicode.Cc, r):
+		return true
+	}
+	return unassigned(r)
+}
+
+// unassigned is category Cn: in no other category. Go's unicode.C holds every unassigned code point too (review
+// F2), so the test names C's assigned parts, Cc, Cf, Co and Cs, never C itself.
+func unassigned(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsMark(r) && !unicode.IsNumber(r) && !unicode.IsPunct(r) &&
+		!unicode.IsSymbol(r) && !unicode.Is(unicode.Z, r) && !unicode.Is(unicode.Cc, r) &&
+		!unicode.Is(unicode.Cf, r) && !unicode.Is(unicode.Co, r) && !unicode.Is(unicode.Cs, r)
 }
