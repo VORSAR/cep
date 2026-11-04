@@ -1,0 +1,16 @@
+-- expect: E-WIN-004 (sort size 1.5) @ 12:27
+language cep/0.1;
+
+stream Scores (k string, score float, ts timestamp)
+  time ts watermark bounded 30 sec idle after 1 min;
+
+stream Top (k string, score float, ts timestamp);
+
+rule R
+  intent 'Keep the highest scores per key; emit every change.'
+  partition by k of Scores ttl 2 hour
+  from Scores window sort(1.5, score, desc)
+  emit on change
+  late events drop
+  select k, score
+  insert into Top;

@@ -1,0 +1,16 @@
+-- expect: E-SEL-002 (action is neither key, aggregate nor constant) @ 15:19
+language cep/0.1;
+
+stream AgentActions (agentId string, action string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+
+stream Digest (agentId string, action string, actions int, ts timestamp);
+
+rule DailyDigest
+  intent 'One digest event per agent per New-York day.'
+  partition by agentId of AgentActions ttl 36 hour
+  from AgentActions window cron('0 0 * * *', 'America/New_York')
+  emit on close
+  late events drop
+  select agentId, action, count() as actions
+  insert into Digest;

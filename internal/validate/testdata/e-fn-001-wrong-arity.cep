@@ -1,0 +1,13 @@
+-- expect: E-FN-001 (abs takes one argument) @ 11:10
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[abs(n, 1) > 3]
+  select k
+  insert into Out;

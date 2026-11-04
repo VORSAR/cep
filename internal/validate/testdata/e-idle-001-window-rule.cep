@@ -1,0 +1,16 @@
+-- expect: E-IDLE-001 (a stream feeding a window rule declares idle after) @ 5:3
+language cep/0.1;
+
+stream S (k string, kind string, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream Out (k string, kind string, ts timestamp);
+
+rule R
+  intent 'Re-time every event later.'
+  partition by k of S ttl 1 hour
+  from S window delay(10 min)
+  emit on due
+  late events drop
+  select k, kind
+  insert into Out;

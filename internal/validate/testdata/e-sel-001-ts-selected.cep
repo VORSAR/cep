@@ -1,0 +1,13 @@
+-- expect: E-SEL-001 (ts is auto-filled and must not be selected) @ 12:13
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k, ts
+  insert into Out;

@@ -1,0 +1,16 @@
+-- expect: E-EMIT-002 (sort emits on change) @ 13:11
+language cep/0.1;
+
+stream Scores (k string, score float, ts timestamp)
+  time ts watermark bounded 30 sec idle after 1 min;
+
+stream Top (k string, score float, ts timestamp);
+
+rule R
+  intent 'Keep the highest scores per key; emit every change.'
+  partition by k of Scores ttl 2 hour
+  from Scores window sort(2, score, desc)
+  emit on due
+  late events drop
+  select k, score
+  insert into Top;

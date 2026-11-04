@@ -1,0 +1,13 @@
+-- expect: E-DUR-002 (sec before min) @ 5:29
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 30 sec 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k
+  insert into Out;

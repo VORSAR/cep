@@ -1,0 +1,13 @@
+-- expect: E-PRAG-002 (a v0.1 engine accepts cep/0.1 only) @ 2:10
+language cep/0.2;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k
+  insert into Out;
