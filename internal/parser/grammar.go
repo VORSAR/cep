@@ -22,15 +22,10 @@ type NameTok struct {
 	Value string `parser:"@(Ident|Backticked)"`
 }
 
-// StrTok is a string in a slot that takes a triple-quoted string too; OneLineStr a slot that takes only a quoted one.
+// StrTok is one string: quoted, or triple-quoted (raw), as grammar.lark's STRING is in every string slot.
 type StrTok struct {
 	Pos   Position
 	Value string `parser:"@(String|RawString)"`
-}
-
-type OneLineStr struct {
-	Pos   Position
-	Value string `parser:"@String"`
 }
 
 type ParamTok struct {
@@ -182,8 +177,8 @@ type WindowKind struct {
 	SortN    *NumTok          `parser:"  'sort' '(' @@"`
 	SortAttr *NameTok         `parser:"    ',' @@"`
 	SortDir  string           `parser:"    ',' @('asc'|'desc') ')'"`
-	CronExpr *OneLineStr      `parser:"| 'cron' '(' @@"`
-	CronTZ   *OneLineStr      `parser:"    ',' @@ ')'"`
+	CronExpr *StrTok          `parser:"| 'cron' '(' @@"`
+	CronTZ   *StrTok          `parser:"    ',' @@ ')'"`
 	Delay    *DurationOrParam `parser:"| 'delay' '(' @@ ')'"`
 	Batch    bool             `parser:"| @('batch' '(' ')')"`
 }
@@ -197,7 +192,7 @@ type LateClause struct {
 type Extra struct {
 	Pos    Position
 	Expect *ExpectBlock `parser:"  'expect' @@"`
-	Todo   *OneLineStr  `parser:"| 'todo' @@"`
+	Todo   *StrTok      `parser:"| 'todo' @@"`
 }
 
 type ExpectBlock struct {
@@ -342,7 +337,7 @@ type Literal struct {
 	Number    string    `parser:"| @Number"`
 	True      bool      `parser:"| @'true'"`
 	False     bool      `parser:"| @'false'"`
-	Timestamp string    `parser:"| 'timestamp' @String"`
+	Timestamp string    `parser:"| 'timestamp' @(String|RawString)"`
 }
 
 type SignedLiteral struct {
