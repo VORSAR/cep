@@ -26,9 +26,10 @@ import (
 type Row interface {
 	Value(slot, attr int) event.Value
 	Invisibles() bool
-	// Table is the snapshot of table id that this evaluation reads. The caller takes every snapshot once per event,
-	// before the first expression of that event runs, and returns the same *table.Version for every call until the
-	// next event (SEMANTICS §4: all predicates evaluated for one event read the same table state).
+	// Table is table id as it was at the ingest position of the event being evaluated (SEMANTICS §4, owner D1 of
+	// S3.1-2): the runtime takes one snapshot of every table of the app per event, when the event is ingested, and
+	// every rule and shard that evaluates the event reads that snapshot, however late the evaluation runs. Only the
+	// runtime layer takes snapshots; an operator's row embeds the runtime's Row.
 	Table(id int) *table.Version
 }
 
@@ -45,7 +46,8 @@ type Scope interface {
 	// Capture resolves a capture name to its slot (chain's arguments); ok false when unknown.
 	Capture(name string) (slot int, ok bool)
 	// Table resolves a table name: its id, the table's index in the app's declaration order (the index Row.Table
-	// takes), and its single-column key's type; ok false when the table is unknown or its key is composite.
+	// takes), and its single-column key's type. ok is false when the table is unknown or its key is composite; the
+	// validator reports E-TBL-001 for a composite key before Build runs, so false reads as unknown only there.
 	Table(name string) (id int, key event.Type, ok bool)
 }
 
@@ -293,5 +295,16 @@ type member struct {
 func (m *member) Type() event.Type { return event.TBool }
 
 func (m *member) Eval(row Row) (event.Value, error) {
-	panic("expr: membership: not built yet (S3.1-2 stub)")
+	v, err := m.x.Eval(row)
+	if err != nil {
+		return v, err
+	}
+	if v.Null {
+		return boolean(false), nil
+	}
+	snap := row.Table(m.table)
+	if snap == nil {
+		return event.Value{Kind: event.TBool, Null: true}, runtimeErr("membership: no snapshot of table %d for this evaluation", m.table)
+	}
+	return boolean(snap.Has(v) != m.negated), nil
 }
