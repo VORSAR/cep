@@ -33,12 +33,12 @@ Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge comm
 - **Break-it (G3):** a fresh QA agent found 4 findings (5 red tests): a freed key forgot its seal; keys walked in arrival order, not the oracle's birth order (first release, and again after a purge); an event at `MinInt64` was construct-late on a fresh key; a strict timer at `MaxInt64` never fired after `EndOfInput`. All fixed, the red tests now green. It also kept, as guards, 3,000 random scenarios (the walk is the same however the advances split; every event released once; no timer early) and 2,000 registry runs against a direct model of the design. One guard written against creation order follows the findings' birth order.
 - **The oracle:** the reference executor changed first (D1–D8); 47 harness checks pass, 6 of them new and red first.
 - **Coverage:** `internal/clock` 98.2%, `internal/metrics` 100%.
-- **The gate:** T4 green on the final tree (`make strict-gate`: every row PASS, exit 0, wall 79.3 s).
+- **The gate:** T4 green on the final tree, the `semantics` row included (`make strict-gate`: every row PASS, exit 0, wall 86.9 s; `proofs` 14).
 
 ## For the owner
 
 - **The clock's design changed substantially from ADR-0004 as accepted**, by your D1–D8; the ADRs and SEMANTICS carry dated annotations, and the contract freezes at S3.3 (`api/clock.golden`).
-- **The semantics harness is not a gate row:** its 47 checks were run by hand for this sprint. A gate row for `docs/language/checks/` would keep the oracle green on every change. Recommendation: add it in S3.1-2 (a small row).
+- **The semantics harness is now a gate row** (owner, 2026-11-04): `semantics` runs its 47 checks at T2–T4; a failing check fails the row naming it, and every declared check must report OK. Its proof plants a failing check into a real copy of the harness (proofs: 14).
 - **Forwarded:** where a batch close sits in the walk (S8); the ticks' source, their passage through the intake and their stop before the sources at Stop (S3.2a, S4.2).
 
 ## Retro
