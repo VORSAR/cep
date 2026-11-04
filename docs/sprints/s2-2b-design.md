@@ -59,7 +59,7 @@ The position fields: `App.LanguagePos`; `Param.Pos`; `Stream.Pos` (the declarati
 | E-PART-002 | `partition` |
 | E-PART-003 | the key that disagrees with the first key |
 | E-TTL-002 | the ttl's duration (one finding per bound it is below) |
-| E-NAME-001 | the unknown name: attribute, function, stream, table, capture qualifier, annotation name, key or value |
+| E-NAME-001 | the unknown name: attribute, function, stream, table, capture qualifier, annotation key or value (an unknown annotation: its `@`) |
 | E-NAME-002, E-PAT-006 | the capture (for E-PAT-006, the later one) |
 | E-NULL-001, E-NULL-002 | the comparison's first token |
 | E-REGEX-001 | the pattern's string token; the message names the construct and its offset in the pattern |
@@ -75,7 +75,7 @@ The position fields: `App.LanguagePos`; `Param.Pos`; `Stream.Pos` (the declarati
 | E-TYPE-001, E-FN-001 | the expression's first token (stamped by `expr`) |
 | E-DUR-003 | the zero duration |
 
-**Not in this sprint** (`skip: not-implemented(<sprint>)` in the table test): E-EXP-001 (S3.3, with the names in `given`/`then`), E-TXT-002 (S7), E-WIN-003 and the cron part of E-TTL-002 (S9.1). **Unreachable in v0.1** (errors.md says so): E-GRAPH-001 (a graph function with its own unit test; through Check a cycle reports E-GRAPH-004), E-WIN-002 (owner: every built-in source punctuates; a unit test over a planted non-punctuating table entry).
+**Not in this sprint** (`skip: not-implemented(<sprint>)` in the table test): E-EXP-001 (S3.3, with the names in `given`/`then`), E-TXT-002 (S7), E-WIN-003 and the cron part of E-TTL-002 (S9.1). **Unreachable in v0.1** (errors.md says so): E-GRAPH-001 (a graph function with its own unit test; through Check a cycle reports E-GRAPH-002 or E-GRAPH-004, one of which every v0.1 cycle has), E-WIN-002 (owner: every built-in source punctuates; a unit test over a planted non-punctuating table entry).
 
 ## 4. Stream kinds (owner A2)
 
@@ -113,7 +113,7 @@ Findings come from ordered walks only (declaration order; the registry's sorted 
 ## 9. Tests
 
 - **The static table test** over QA's 52 programs: each yields exactly its one finding, code and position, with a non-empty fix equal to errors.md's. The owner's helper: `go test ./internal/validate -run 'TestStatic/<file>' -v`.
-- **Corpus-clean:** every file in `examples/` and `eval/generated/` validates with zero findings, lints included.
+- **Corpus-clean:** every file in `examples/` validates with zero findings, lints included (the card's "corpus example"). *(As built: the twelve programs of the 2026-11-01 evaluation in `eval/generated/` are a dated record, pinned as they stand — four raise findings under rules made since: SPEC §4.2's `idle after` for window rules, and rev 3's removal of `late events allow`. Its `torture/` set is grammar material for the differential, not valid programs.)*
 - **One story per defect:** a test per pair in §5's list.
 - **Harness ports:** RT-14 (E-NULL-001 names the offending attributes only, and both fix forms); "9 · TTL" and RT-07's pattern and rate parts (E-TTL-002 names both numbers, and "rate-limit interval").
 - **docsync (b):** errors.md's `[static]` headings and `catalog.go` name the same codes with equal fix text; a planted drift goes red.
