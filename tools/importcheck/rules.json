@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "module": "github.com/vorsar/cep",
-  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red. 'fences' lists, per package and imported package, the only identifier prefixes it may use from it (Expr covers ExprKind and the ExprX constants; Lit covers Literal and the LitX constants) (owner 2026-11-04: expr reads the model's expression node only).",
+  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red. 'fences' lists, per package and imported package, the only identifier prefixes it may use from it (Expr covers ExprKind and the ExprX constants; Lit covers Literal and the LitX constants) (owner 2026-11-04: expr reads the model's expression node only; S3.1-2: expr reads table snapshots, never writes a table). 'test_fences' lists, per package and fenced import, the extra identifier prefixes its _test.go files only may use (owner 2026-11-04, S3.1-2: expr's tests build tables).",
   "imports": {
     "internal/event": [],
     "internal/model": ["internal/event"],
@@ -31,9 +31,12 @@
     "internal/parser": ["github.com/alecthomas/participle/v2"]
   },
   "fences": {
-    "internal/expr": {"internal/model": ["Expr", "Lit", "TextOperand"]}
+    "internal/expr": {"internal/model": ["Expr", "Lit", "TextOperand"], "internal/table": ["Version"]}
   },
   "test_imports": {
     "internal/validate": ["internal/parser"]
+  },
+  "test_fences": {
+    "internal/expr": {"internal/table": ["New", "Table"]}
   }
 }
