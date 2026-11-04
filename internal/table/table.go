@@ -340,3 +340,38 @@ func (v *Version) Has(k event.Value) bool {
 	_, ok := v.rows[scalar(k)]
 	return ok
 }
+
+// Set is an app's tables in declaration order: a table's index is its id, the id expr.Scope.Table gives (design
+// note s3-2a-1 §2).
+type Set struct {
+	tables []*Table
+	last   *Snapshot
+}
+
+// NewSet holds tables in declaration order.
+func NewSet(tables []*Table) *Set { panic("table: NewSet: not implemented (S3.2a-1 stub)") }
+
+// Len is the number of tables.
+func (s *Set) Len() int { panic("table: Set.Len: not implemented (S3.2a-1 stub)") }
+
+// Table is table id.
+func (s *Set) Table(id int) *Table { panic("table: Set.Table: not implemented (S3.2a-1 stub)") }
+
+// Snapshot is every table's current Version (SEMANTICS §4, owner D1 of S3.1-2). When no table has published a
+// Version since the last call it returns the same *Snapshot, so a steady-state ingest step allocates nothing. One
+// goroutine only — the router or the playback driver: it takes no lock.
+func (s *Set) Snapshot() *Snapshot { panic("table: Set.Snapshot: not implemented (S3.2a-1 stub)") }
+
+// Snapshot is one immutable read view of an app's tables.
+type Snapshot struct {
+	versions []*Version
+}
+
+// Table is table id's Version in this view: never nil for an id in range; an id out of range panics like a slice
+// index.
+func (s *Snapshot) Table(id int) *Version {
+	panic("table: Snapshot.Table: not implemented (S3.2a-1 stub)")
+}
+
+// Len is the number of tables in the view.
+func (s *Snapshot) Len() int { panic("table: Snapshot.Len: not implemented (S3.2a-1 stub)") }

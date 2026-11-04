@@ -166,6 +166,10 @@ type Event struct {
 	Values     []Value
 	Invisibles bool
 	BatchID    string
+	// Tables is the app's table snapshot at this event's ingest position (a *table.Snapshot; SEMANTICS §4 as
+	// annotated, owner D1 of S3.1-2). Set by ingest only, before the event is routed, and never written after.
+	// Opaque here, since event imports nothing; the runtime's expr.Row reads it.
+	Tables any
 }
 
 // Compare orders events by (Ts, StreamID, Seq) and returns -1, 0 or +1. Both arguments must be non-nil.
