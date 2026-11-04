@@ -290,11 +290,21 @@ class _Partial:
     last_pos_ts: float   # timestamp of the last CAPTURED (positive) event
     pos_idx: int         # next positive step to match; == len(positives) -> pending
     seq: int             # spawn sequence (6.5 tie-break of last resort)
+    first_ord: tuple = ()     # 2.2 order (ts, stream id, seq) of the first event
+    last_pos_ord: tuple = ()  # 2.2 order of the last captured event (6.5 skip, D8)
 
 
 class _PatternEngine:
     """Core matcher (6.4/6.5): fed buffered events + externally supplied watermarks
     by a driver (run_pattern / run_pattern_multi / run_pattern_punctuated).
+
+    Owner decisions 2026-11-04 (S3.1-1, sprint-plan §5): an advance WALKS FORWARD IN
+    EVENT TIME (D1) — everything at an instant before anything later; within an
+    instant, released events, then inclusive timers due then (completions), then,
+    once the watermark is past it, strict deadlines (the `within` discard, the TTL
+    purge). Keys are walked in birth order (D2-2). Once a key's completion fires at an
+    instant, that instant is sealed for the key (D7). Skip-past-last compares in 2.2
+    order (D8).
 
     Absence steps are CONSTRAINTS active from the match start over their whole
     window (6.4, RT-03), not positional steps. A match completes when all positive
@@ -315,6 +325,7 @@ class _PatternEngine:
         self.partials: Dict[object, List[_Partial]] = {}
         self.done: set = set()
         self.last_act: Dict[object, float] = {}
+        self.sealed: Dict[object, float] = {}   # D7: the latest instant a key's timers fired
         self._spawn = 0
         self.wm = -math.inf
 
@@ -336,46 +347,64 @@ class _PatternEngine:
         self.matches.append(m)
         if self.spec.skip_past_last:
             # 6.5 skip-past-last (RT-04): discard EVERY partial whose first event is
-            # at or before the completed match's last event, captured or not.
+            # at or before the completed match's last event, captured or not — in 2.2
+            # order, so a partial begun after that event at the same instant survives
+            # however the match completed (owner 2026-11-04, D8).
             self.partials[k] = [q for q in self.partials.get(k, [])
-                                if q.first_ts > p.last_pos_ts]
+                                if q.first_ord > p.last_pos_ord]
         if not self.spec.for_each:    # 6.5: unmarked = at most once per key INSTANCE
             self.done.add(k)
 
-    # -- timers: completions, then TTL purge (6.4 step 2 / 9) -------------------
+    # -- the walk: timers in event-time order (6.4 / 9; owner D1) -----------------
 
-    def _fire(self, upto: float, strict: bool):
-        """Fire due completions (all positives matched, every absence deadline
-        elapsed un-defeated), then TTL-purge idle keys. strict=True: due strictly
-        before the next event to be processed (buffered events at an instant are
-        released before timers at that instant, 6.4); strict=False: due <= wm."""
-        for k in sorted(set(self.last_act), key=str):
-            pd = (self.last_act[k] + self.spec.ttl
-                  if self.spec.ttl is not None else math.inf)
-            while True:
-                ripe = [p for p in self.partials.get(k, [])
-                        if p.pos_idx == len(self.pos)
-                        and (self._due(p) < upto if strict else self._due(p) <= upto)
-                        and self._due(p) <= pd]   # a purge due earlier silences it (9)
-                if not ripe:
-                    break
-                # deterministic firing order; start ties broken by 2.2 anchor order
-                # then spawn sequence (6.5, RT-20)
-                ripe.sort(key=lambda p: (self._due(p), p.first_ts, p.seq))
-                p = ripe[0]
+    def _next_timer(self, upto: float, inclusive: bool):
+        """The earliest pending timer item before `upto` (at it too, for an inclusive
+        item, when `inclusive`): (time, phase, key order, kind, first_ord, seq, action).
+        Phase 0 = inclusive (a pending completion fires once wm >= its due); phase 1 =
+        strict, at the instant just after its time (the TTL purge once wm - t_last >
+        ttl; the within discard once wm > t_first + within). Keys in birth order."""
+        best = None
+        for order, k in enumerate(self.last_act):
+            items = []
+            for p in self.partials.get(k, []):
+                if p.pos_idx == len(self.pos):
+                    items.append((self._due(p), 0, order, 0, p.first_ord, p.seq, ("complete", k, p)))
+                else:
+                    items.append((p.first_ts + self.spec.within, 1, order, 2, p.first_ord, p.seq,
+                                  ("discard", k, p)))
+            if self.spec.ttl is not None:
+                items.append((self.last_act[k] + self.spec.ttl, 1, order, 1, (), 0, ("purge", k, None)))
+            for it in items:
+                t, phase = it[0], it[1]
+                ripe = t <= upto if (phase == 0 and inclusive) else t < upto
+                if ripe and (best is None or it[:6] < best[:6]):
+                    best = it
+        return best
+
+    def _walk(self, upto: float, inclusive: bool):
+        while True:
+            it = self._next_timer(upto, inclusive)
+            if it is None:
+                return
+            what, k, p = it[6]
+            if what == "complete":
                 self.partials[k].remove(p)
                 self._emit(k, p)
-            if pd < upto:
+                self.sealed[k] = max(self.sealed.get(k, -math.inf), it[0])
+            elif what == "discard":
+                self.partials[k].remove(p)    # 6.3: overrun, at its instant
+            else:
                 # 9 (RT-07 context): purge destroys ALL per-key state — partials,
                 # pending completions, at-most-once marks; a returning key starts a
                 # fresh instance.
                 self.partials.pop(k, None)
                 self.done.discard(k)
+                self.sealed.pop(k, None)
                 del self.last_act[k]
 
     # -- one event, in 2.2 order -------------------------------------------------
 
-    def _process(self, ev: dict):
+    def _process(self, ev: dict, ordk: tuple):
         spec = self.spec
         k = spec.key(ev)
         self.last_act[k] = ev["ts"]     # 9: activity = any event routed to this key
@@ -400,6 +429,7 @@ class _PatternEngine:
             if ev["type"] == st.etype and st.pred(ev, p.caps):
                 p.caps[st.name] = ev
                 p.last_pos_ts = ev["ts"]
+                p.last_pos_ord = ordk
                 p.pos_idx += 1
                 if p.pos_idx == len(self.pos):
                     # 6.4 completion: every absence deadline strictly before this
@@ -430,26 +460,29 @@ class _PatternEngine:
             if spec.for_each or (not self.partials.get(k) and k not in self.done):
                 self._spawn += 1
                 self.partials.setdefault(k, []).append(
-                    _Partial({s0.name: ev}, ev["ts"], ev["ts"], 1, self._spawn))
+                    _Partial({s0.name: ev}, ev["ts"], ev["ts"], 1, self._spawn, ordk, ordk))
 
     # -- watermark advance (6.4 normative ordering) ------------------------------
 
     def drain(self, wm: float):
+        """Walk forward in event time up to wm (owner 2026-11-04, D1): for each instant
+        holding buffered events, first every timer item strictly before it, then its
+        events in 2.2 order; then every timer item up to wm. Completions come before
+        discards at one instant (RT-10), and a pending completion is never discarded."""
         self.wm = max(self.wm, wm)          # clamped monotonic
         wm = self.wm
         self.buffer.sort(key=lambda b: (b[0], b[1]))
         while self.buffer and self.buffer[0][0] <= wm:
-            ts, _, ev = self.buffer.pop(0)
-            self._fire(ts, strict=True)     # timers due strictly before this event
-            self._process(ev)               # (1) release buffered events in order
-        self._fire(wm, strict=False)        # (2) fire due completions (wm >= due)
-        # (3) discard overrun partials — AFTER completions (RT-10). A match whose
-        # positives are complete and is only waiting out an absence window is no
-        # longer discardable by `within`.
-        for k in list(self.partials):
-            self.partials[k] = [p for p in self.partials[k]
-                                if p.pos_idx == len(self.pos)
-                                or wm <= p.first_ts + self.spec.within]
+            ts = self.buffer[0][0]
+            self._walk(ts, inclusive=False)
+            while self.buffer and self.buffer[0][0] == ts:
+                _, tok, ev = self.buffer.pop(0)
+                self._process(ev, (ts, tok))
+        self._walk(wm, inclusive=True)
+
+    def sealed_for(self, ev: dict) -> bool:
+        """D7: the event's instant is sealed for its key (a timer of the key fired then)."""
+        return ev["ts"] <= self.sealed.get(self.spec.key(ev), -math.inf)
 
 
 def run_pattern(spec: PatternSpec, stream: List[dict], eos: bool = True):
@@ -465,7 +498,7 @@ def run_pattern(spec: PatternSpec, stream: List[dict], eos: bool = True):
     late: List[int] = []
     max_ts = -math.inf
     for i, ev in enumerate(stream):
-        if ev["ts"] < max_ts - spec.wm_delay:   # 6.5: t < wm -> late, dropped + counted
+        if ev["ts"] < max_ts - spec.wm_delay or eng.sealed_for(ev):   # 6.5 / D7: late, counted
             late.append(i)
             continue
         max_ts = max(max_ts, ev["ts"])
@@ -477,14 +510,18 @@ def run_pattern(spec: PatternSpec, stream: List[dict], eos: bool = True):
 
 
 def run_pattern_multi(spec: PatternSpec, arrivals, delays: Dict[str, float],
-                      mode: str = "playback", eos: bool = True):
+                      mode: str = "playback", eos: bool = True,
+                      idle_after: Optional[Dict[str, float]] = None, start: float = 0):
     """2.1 multi-stream construct (RT-01): wm_construct = max(previous,
     min(per-input wms)) — clamped monotonic, never retreats even when an idle
     stream resumes behind it.
 
-    arrivals: the merged log in arrival order — (stream_name, event) pairs; in
-    live mode an entry ("idle", stream_name) marks that stream idle (its
-    `idle after D` elapsed), excluding it from the min until its next event.
+    arrivals: the merged log in arrival order — (stream_name, event) pairs; an event
+    may carry "arrival" (its intake stamp; default its ts). In live mode an entry
+    ("tick", now) is a wall tick from the intake (owner 2026-11-04, D3/D5): a stream
+    whose `idle after D` (idle_after) has elapsed since its last arrival is QUIET, and
+    its floor moves to its own last event time plus the wall time since that event
+    arrived, minus d — monotone; a stream with no event yet uses start for both.
     delays: {stream_name: d} for every DECLARED input stream (declaration order =
     2.2 stream id). spec.wm_delay is unused here.
 
@@ -507,20 +544,25 @@ def run_pattern_multi(spec: PatternSpec, arrivals, delays: Dict[str, float],
     stream_wm = {n: -math.inf for n in names}
     stream_max = {n: -math.inf for n in names}
     stream_seq = {n: 0 for n in names}
-    idle = {n: False for n in names}
+    quiet_after = dict(idle_after or {})
+    last_ts = {n: start for n in names}         # D5: a stream's own last event time
+    last_arrival = {n: start for n in names}    # ... and when it arrived (wall)
+    floor = {n: -math.inf for n in names}       # D5: the quiet floor (live), monotone
     virtual_now = -math.inf
     wm_c = -math.inf
     stream_late: List[int] = []
     construct_late: List[int] = []
     for i, item in enumerate(arrivals):
         if item[0] == "idle":
+            raise DeployError("idle markers were replaced by ticks (owner 2026-11-04, D3)")
+        if item[0] == "tick":
             if mode != "live":
-                raise DeployError("idle markers apply to live mode only (2.1)")
-            idle[item[1]] = True
-            # the idle stream leaves the min; other-stream traffic advances wm_c
-            active = [n for n in names if not idle[n]]
-            if active:
-                wm_c = max(wm_c, min(stream_wm[n] for n in active))
+                raise DeployError("ticks apply to live mode only (2.1)")
+            now = item[1]
+            for n in names:
+                if n in quiet_after and now - last_arrival[n] >= quiet_after[n]:
+                    floor[n] = max(floor[n], last_ts[n] + (now - last_arrival[n]) - delays[n])
+            wm_c = max(wm_c, min(max(stream_wm[n], floor[n]) for n in names))
             eng.drain(wm_c)
             continue
         name, ev = item
@@ -528,18 +570,16 @@ def run_pattern_multi(spec: PatternSpec, arrivals, delays: Dict[str, float],
         virtual_now = max(virtual_now, ev["ts"])
         stream_max[name] = max(stream_max[name], ev["ts"])
         stream_wm[name] = max(stream_wm[name], stream_max[name] - delays[name])
-        if mode == "live":
-            idle[name] = False
+        last_ts[name] = stream_max[name]
+        last_arrival[name] = ev.get("arrival", ev["ts"])
         if ev["ts"] < adm_before:              # stream-level lateness: identical in both modes (2.1)
             stream_late.append(i)
             continue
         if mode == "playback":                 # virtual clock raises CONTRIBUTIONS only
             wm_c = max(wm_c, min(max(stream_wm[n], virtual_now - delays[n]) for n in names))
-        else:
-            active = [n for n in names if not idle[n]]
-            if active:
-                wm_c = max(wm_c, min(stream_wm[n] for n in active))
-        if ev["ts"] < wm_c:                    # 2.1 construct-late: counted separately
+        else:                                  # live: contributions rise only (D3, D5)
+            wm_c = max(wm_c, min(max(stream_wm[n], floor[n]) for n in names))
+        if ev["ts"] < wm_c or eng.sealed_for(ev):   # 2.1 construct-late / D7 sealed: counted
             construct_late.append(i)
             continue
         stream_seq[name] += 1
@@ -565,7 +605,7 @@ def run_pattern_punctuated(spec: PatternSpec, items, eos: bool = True):
             wm = max(wm, val)
             eng.drain(wm)
         elif kind == "ev":
-            if val["ts"] < wm:
+            if val["ts"] < wm or eng.sealed_for(val):
                 late.append(i)
                 continue
             eng.buffer.append((val["ts"], i, val))
