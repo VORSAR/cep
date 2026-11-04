@@ -153,6 +153,7 @@ api/exports.golden                        the hand-written public-export law fil
    | `expr → table` | `in`-membership nodes read table snapshots (ADR-0011 §1) |
    | `pattern → expr`, `window → expr` | interface type only — they receive compiled `expr.Expr`/`Row` values from the planner |
    | any `internal/*` → `metrics` | counters are L0 data (round-2 F16) |
+   | `expr → model` | *(added 2026-11-04, owner decision at S2.2a after an adversarial review)* `expr.Build` compiles the IR's expression node (ADR-0011 §2); fenced in `rules.json` to the model's expression types only, enforced by `archcheck` |
    | `cep → parser` (L4 same-layer) | the Deploy pipeline's front end (§2a; consistency review S4 — the edge was named in §2a but missing here) |
    | `cep → playback` (L4 same-layer) | the Deploy pipeline's expect sandbox (ADR-0005 §4) |
    | `cep → io` (L4 same-layer) | the facade's API (`Table.Upsert`, `InputHandler.SendRow`, source/sink registration) is written in the connector contracts' types; `io` is a leaf, so no cycle (owner decision 2026-11-02 — replaces the former `io → cep` row, which with this edge formed an import cycle) |

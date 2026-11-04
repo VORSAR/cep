@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 SCHEMA = 1
-TIERS = ("T0", "T1", "T2", "T3", "T4")
+TIERS = ("T0", "T1", "T2", "T3", "T4", "nightly")
 SCOPE_CLASSES = frozenset({"prod", "test", "bench", "tools", "proofs", "generated"})
 SCOPE_KINDS = frozenset({"git", "go", "go-vet-units"})
 PARITY_ID = "parity"

@@ -19,6 +19,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 REGISTRY = "gate/registry.json"
 WORKFLOW = ".github/workflows/gate.yml"
 TIER = "T4"
+# Each tier with rows of its own gets a workflow: the gate on pull requests and main, nightly on a schedule
+# (owner, 2026-11-04: rows marked nightly never run on a pull request).
+WORKFLOWS = {"T4": WORKFLOW, "nightly": ".github/workflows/nightly.yml"}
 
 # name: (repository, full commit SHA, the release it is). Licences: all MIT (checked 2026-11-04).
 ACTIONS = {
@@ -58,7 +61,7 @@ def _setup_steps() -> list[str]:
     ]
 
 
-def _job(job: str, timeout_min: int) -> list[str]:
+def _job(job: str, timeout_min: int, tier: str) -> list[str]:
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
@@ -66,7 +69,7 @@ def _job(job: str, timeout_min: int) -> list[str]:
         f"    timeout-minutes: {timeout_min}",
         "    steps:",
         *_setup_steps(),
-        f"      - run: python3 -I -B gate/bootstrap.py exec -- --tier {TIER} --job {job} "
+        f"      - run: python3 -I -B gate/bootstrap.py exec -- --tier {tier} --job {job} "
         f"--run-id {RUN_ID} --commit ${{{{ github.sha }}}} --run-dir {run_dir}",
         f"      - {_uses('upload')}",
         "        if: always()",
@@ -77,7 +80,7 @@ def _job(job: str, timeout_min: int) -> list[str]:
     ]
 
 
-def _strict_gate(jobs: Sequence[str]) -> list[str]:
+def _strict_gate(jobs: Sequence[str], tier: str) -> list[str]:
     return [
         "  strict-gate:",
         "    runs-on: ubuntu-latest",
@@ -92,28 +95,34 @@ def _strict_gate(jobs: Sequence[str]) -> list[str]:
         "          pattern: records-*",
         "          path: .gate/artifacts",
         "      - if: always()",
-        f"        run: python3 -I -B gate/bootstrap.py exec -- summarize --registry {REGISTRY} --tier {TIER} "
+        f"        run: python3 -I -B gate/bootstrap.py exec -- summarize --registry {REGISTRY} --tier {tier} "
         f"--artifacts .gate/artifacts --run-id {RUN_ID} --commit ${{{{ github.sha }}}} "
         '--attempt ${{ github.run_attempt }} --image "$ImageOS $ImageVersion"',
     ]
 
 
-def render(rows: Sequence[Row]) -> str:
-    """The workflow's exact bytes for these registry rows."""
-    chosen = registry.select(list(rows), TIER, None)
+def render(rows: Sequence[Row], tier: str = TIER) -> str:
+    """The workflow's exact bytes for the registry rows at one tier."""
+    chosen = registry.select(list(rows), tier, None)
     jobs = list(dict.fromkeys(r.job for r in chosen))
+    nightly = tier == "nightly"
     lines = [
         f"# Generated from {REGISTRY} by make ci-workflow. Do not edit: the ci-fresh row checks it.",
-        "name: gate",
+        f"name: {'nightly' if nightly else 'gate'}",
         "on:",
-        "  pull_request:",
-        "  push:",
-        "    branches: [main]",
+        *(
+            ["  schedule:", "    - cron: '0 3 * * *'", "  workflow_dispatch:"]
+            if nightly
+            else ["  pull_request:", "  push:", "    branches: [main]"]
+        ),
         "permissions:",
         "  contents: read",
         "concurrency:",
-        "  group: gate-${{ github.ref }}",
-        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        *(
+            ["  group: nightly", "  cancel-in-progress: false"]
+            if nightly
+            else ["  group: gate-${{ github.ref }}", "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}"]
+        ),
         "env:",
         "  CGO_ENABLED: '0'",
         "jobs:",
@@ -121,9 +130,18 @@ def render(rows: Sequence[Row]) -> str:
     for job in jobs:
         # A job's cap: its rows' watchdogs summed, plus a margin for setup (ADR-0015 §1.2: + 20%, at least 60 s).
         seconds = sum(r.timeout_s for r in chosen if r.job == job)
-        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10))
-    lines += _strict_gate(jobs)
+        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier)
+    lines += _strict_gate(jobs, tier)
     return "\n".join(lines) + "\n"
+
+
+def targets(rows: Sequence[Row]) -> list[tuple[str, str]]:
+    """Every workflow the registry calls for, as (path, bytes): one per tier in WORKFLOWS that has rows."""
+    out = []
+    for tier, path in WORKFLOWS.items():
+        if any(tier in r.tiers for r in rows):
+            out.append((path, render(rows, tier)))
+    return out
 
 
 def main(argv: Sequence[str]) -> int:
@@ -132,12 +150,12 @@ def main(argv: Sequence[str]) -> int:
         print("GATE FAILED")
         print("exit: 2")
         return 2
-    text = render(registry.load(os.path.join(REPO, REGISTRY)))
-    path = os.path.join(REPO, WORKFLOW)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
-    print(f"wrote {WORKFLOW}")
+    for rel, text in targets(registry.load(os.path.join(REPO, REGISTRY))):
+        path = os.path.join(REPO, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"wrote {rel}")
     print("GATE PASSED")
     print("exit: 0")
     return 0

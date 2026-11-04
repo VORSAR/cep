@@ -13,6 +13,7 @@ var corpus = []string{
 	filepath.Join("..", "..", "docs", "language", "examples", "*.cep"),
 	filepath.Join("..", "..", "docs", "language", "examples", "torture", "*.cep"),
 	filepath.Join("..", "..", "docs", "language", "eval", "generated", "*.cep"),
+	filepath.Join("..", "..", "docs", "language", "eval", "generated", "torture", "*.cep"),
 }
 
 func corpusFiles(t *testing.T) []string {

@@ -14,6 +14,7 @@ def row(row_id, job, tiers=("T2", "T3", "T4")):
 
 
 ROWS = [row("gofmt", "lint"), row("unit", "test"), row("proofs", "proofs", ("T4",)), row("t0only", "early", ("T0",))]
+NIGHTLY = [*ROWS, row("fuzz-parser", "nightly", ("nightly",))]
 
 
 class Render(unittest.TestCase):
@@ -44,6 +45,23 @@ class Render(unittest.TestCase):
         self.assertNotIn("VORSAR_CEP_TOOLS_CACHE", self.text)
         self.assertNotIn(".tools-cache", self.text)
         self.assertIn("path: ~/.cache/vorsar/cep/tools", self.text)
+
+    def test_a_nightly_tier_gives_a_second_scheduled_workflow_with_only_its_rows(self):
+        # Owner, 2026-11-04 (S2.2a): the nightly workflow is generated like the gate's, from the registry.
+        targets = dict(generate.targets(NIGHTLY))
+        self.assertEqual(sorted(targets), [".github/workflows/gate.yml", ".github/workflows/nightly.yml"])
+        gate, nightly = targets[".github/workflows/gate.yml"], targets[".github/workflows/nightly.yml"]
+        self.assertEqual(gate, generate.render(ROWS))  # the pull-request workflow never sees a nightly row
+        jobs = re.findall(r"^  ([a-z][a-z0-9-]*):$", nightly[nightly.index("\njobs:\n") :], re.M)
+        self.assertEqual(jobs, ["nightly", "strict-gate"])
+        for needle in ("name: nightly", "schedule:", "workflow_dispatch:", "--tier nightly --job nightly",
+                       "summarize --registry gate/registry.json --tier nightly"):  # fmt: skip
+            with self.subTest(needle):
+                self.assertIn(needle, nightly)
+        self.assertNotIn("pull_request", nightly)
+
+    def test_without_nightly_rows_there_is_one_workflow(self):
+        self.assertEqual([p for p, _ in generate.targets(ROWS)], [".github/workflows/gate.yml"])
 
     def test_the_posture(self):
         needles = (

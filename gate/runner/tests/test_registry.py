@@ -215,6 +215,16 @@ class Select(unittest.TestCase):
         self.assertIn("zero", str(caught.exception))
 
 
+class NightlyTier(unittest.TestCase):
+    def test_nightly_is_a_tier_of_its_own(self):
+        # Owner, 2026-11-04 (S2.2a): rows marked nightly run only in the scheduled workflow, never on a pull request.
+        doc = {"schema": 1, "rows": [row(id="fuzz", tiers=["nightly"], blocking=False)]}
+        rows = registry.loads(json.dumps(doc))
+        self.assertEqual([r.id for r in registry.select(rows, "nightly", None)], ["fuzz"])
+        with self.assertRaisesRegex(registry.RegistryError, "zero"):
+            registry.select(rows, "T4", None)
+
+
 class T0Kinds(unittest.TestCase):
     def test_a_t0_row_must_use_a_git_scope(self):
         # gate design §12.3: T0 cuts scopes to staged paths, which only a git scope has.
