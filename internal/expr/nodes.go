@@ -495,7 +495,13 @@ func (r *round) Eval(row Row) (event.Value, error) {
 	if err != nil || v.Null {
 		return v, err
 	}
-	return event.Value{Kind: event.TFloat, F: math.Floor(v.F + 0.5)}, nil
+	// Half-up, exactly: x - floor(x) has no rounding error, where x + 0.5 does (0.49999999999999994 + 0.5 is 1,
+	// and above 2^52 the sum rounds to the next even float — S3.1-2 break-it B6).
+	t := math.Floor(v.F)
+	if v.F-t >= 0.5 {
+		t++
+	}
+	return event.Value{Kind: event.TFloat, F: t}, nil
 }
 
 // cast(x, 'string'|'int'|'float'|'bool'): a failed cast is a runtime error (SPEC Appendix F, §5.6).
@@ -534,6 +540,11 @@ func (c *cast) Eval(row Row) (event.Value, error) {
 		case event.TFloat:
 			if v.F != math.Trunc(v.F) || math.IsNaN(v.F) || math.IsInf(v.F, 0) {
 				return event.Value{Kind: c.to, Null: true}, runtimeErr("cast: %v is not a whole number", v.F)
+			}
+			// Go's conversion of a float outside int64 is machine-dependent; an exact range check keeps replay the
+			// same on every machine (S3.1-2 break-it B4): -2^63 converts, 2^63 does not.
+			if v.F < -(1<<63) || v.F >= 1<<63 {
+				return event.Value{Kind: c.to, Null: true}, runtimeErr("cast: %v is outside the int range", v.F)
 			}
 			out.I = int64(v.F)
 		case event.TString:
