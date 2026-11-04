@@ -18,12 +18,22 @@ from dataclasses import dataclass
 from typing import Any
 
 SUPPORTED_PLATFORMS = ("darwin-arm64", "linux-amd64")
+GATE_PYTHON = "python"  # the tools.json entry the gate itself runs under
+
+# The kinds of entry (owner, 2026-11-04, S2.2a). An executable goes on PATH and answers `version_argv`. A
+# python-package is a pure-Python library the gate's Python side imports: it has a `module` in place of
+# `command` and `version_argv`, its `path_dir` goes on sys.path, never on PATH, and parity checks its version
+# by importing it under the pinned interpreter (`<module>.__version__` must equal `version_line`).
+EXECUTABLE = "executable"
+PYTHON_PACKAGE = "python-package"
+KINDS = (EXECUTABLE, PYTHON_PACKAGE)
 
 _PLATFORMS = {("darwin", "arm64"): "darwin-arm64", ("linux", "x86_64"): "linux-amd64"}
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _FILE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9.+_-]*")
 _TOP_FIELDS = frozenset({"schema", "tools"})
 _TOOL_FIELDS = frozenset({"command", "name", "path_dir", "platforms", "version", "version_argv", "version_line"})
+_PACKAGE_FIELDS = frozenset({"kind", "module", "name", "path_dir", "platforms", "version", "version_line"})
 _ENTRY_FIELDS = frozenset({"archive_sha256", "exec_sha256", "strip", "tree_sha256", "url"})
 
 
@@ -46,6 +56,8 @@ class Tool:
     strip: str
     exec_sha256: Mapping[str, str]
     tree_sha256: str
+    kind: str = EXECUTABLE
+    module: str = ""  # python-package only: the import name
 
 
 def _platform_key(sys_platform: str, machine: str) -> str:
@@ -153,8 +165,26 @@ def _entry(value: Any, where: str) -> dict[str, Any]:
     }
 
 
+def _identifier(value: Any, field: str, where: str) -> str:
+    if not _text(value, field, where).isidentifier():
+        raise ManifestError(f"{where}: field {field!r} must be an import name, not {value!r}")
+    return value
+
+
+def _kind(value: Any, where: str) -> str:
+    if type(value) is not dict:
+        raise ManifestError(f"{where}: expected an object")
+    kind = value.get("kind", EXECUTABLE)
+    if kind not in KINDS:
+        raise ManifestError(f"{where}: field 'kind' must be one of {', '.join(KINDS)}, not {kind!r}")
+    return kind
+
+
 def _tool(value: Any, platform: str, where: str) -> Tool:
-    fields = _fields(value, _TOOL_FIELDS, where)
+    kind = _kind(value, where)
+    package = kind == PYTHON_PACKAGE
+    want = _PACKAGE_FIELDS if package else _TOOL_FIELDS | ({"kind"} if "kind" in value else set())
+    fields = _fields(value, want, where)
     name = _file_name(fields["name"], "name", where)
     where = f"{where} ({name})"
     platforms = fields["platforms"]
@@ -169,10 +199,12 @@ def _tool(value: Any, platform: str, where: str) -> Tool:
     return Tool(
         name=name,
         version=_file_name(fields["version"], "version", where),
-        command=_file_name(fields["command"], "command", where),
+        command="" if package else _file_name(fields["command"], "command", where),
         path_dir=_relative_path(fields["path_dir"], "path_dir", where),
-        version_argv=_argv(fields["version_argv"], where),
+        version_argv=() if package else _argv(fields["version_argv"], where),
         version_line=_text(fields["version_line"], "version_line", where),
+        kind=kind,
+        module=_identifier(fields["module"], "module", where) if package else "",
         **entries[platform],
     )
 
@@ -203,8 +235,17 @@ def tool_home(cache: str, tool: Tool) -> str:
 
 
 def path_dirs(cache: str, tools: list[Tool]) -> list[str]:
-    """The PATH prefix: each tool's home joined with its path_dir, in tools.json order."""
-    return [os.path.normpath(os.path.join(tool_home(cache, tool), tool.path_dir)) for tool in tools]
+    """The PATH prefix: each executable's home joined with its path_dir, in tools.json order."""
+    return [_dir(cache, tool) for tool in tools if tool.kind == EXECUTABLE]
+
+
+def python_paths(cache: str, tools: list[Tool]) -> list[str]:
+    """The sys.path prefix: each python-package's home joined with its path_dir, in tools.json order."""
+    return [_dir(cache, tool) for tool in tools if tool.kind == PYTHON_PACKAGE]
+
+
+def _dir(cache: str, tool: Tool) -> str:
+    return os.path.normpath(os.path.join(tool_home(cache, tool), tool.path_dir))
 
 
 def sha256_file(path: str | bytes) -> str:

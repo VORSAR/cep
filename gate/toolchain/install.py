@@ -30,7 +30,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 FLOOR = (3, 12)
 FLOOR_FIX = "install Python 3.12+ (e.g. brew install python)"
 USAGE = "usage: bootstrap.py install | exec -- <args> | clean-tools"
-GATE_PYTHON = "python"  # the tools.json entry the gate itself runs under
+GATE_PYTHON = manifest.GATE_PYTHON
 DOWNLOAD_TIMEOUT_S = 60  # a socket read with no data for this long is a hang, not a slow link
 REINSTALL = "run make clean-tools, then run make tools"
 

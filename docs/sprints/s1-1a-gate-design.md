@@ -135,6 +135,8 @@ QA's red tables are written **on Lane D's branch**. The integration tip never ca
 - `path_dir`: the directory, relative to the tool directory, that goes on `PATH`;
 - per platform: `url`, `archive_sha256`, `strip` (a prefix removed from every member), and `exec_sha256`.
 
+*(Annotated 2026-11-04, S2.2a, owner's decision: an entry may carry `kind`: `executable` (the default, everything above) or `python-package`, a pure-Python library the gate's Python side imports. A package entry has `module` (its import name) in place of `command` and `version_argv`; its `path_dir` is the directory put on `sys.path` by whoever imports it (`manifest.python_paths`), never on `PATH`; parity's version check imports the module under the pinned interpreter and compares `<module>.__version__` with `version_line`; `exec_sha256` and `tree_sha256` are checked as for any tool. First use: `lark` 1.3.1 for the grammar differential, one sdist pinned for both platforms.)*
+
 **`exec_sha256`** lists the executables the archive ships that the gate runs:
 - **Go:** the 10 regular files under `bin/` and `pkg/tool/<os>_<arch>/`: `go`, `gofmt`, `asm`, `cgo`, `compile`, `cover`, `fix`, `link`, `preprofile`, `vet` (re-check claim 4).
 - **Each Python:** `bin/python3.x`. On darwin it is static and loads no `libpython` (`otool -L`). Linux is checked by Lane B's census.

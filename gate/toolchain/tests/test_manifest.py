@@ -43,6 +43,26 @@ def good_doc() -> dict:
     return {"schema": 1, "tools": [good_tool()]}
 
 
+def good_package() -> dict:
+    return {
+        "kind": "python-package",
+        "module": "demo",
+        "name": "demo-pkg",
+        "path_dir": ".",
+        "platforms": {
+            PLATFORM: {
+                "archive_sha256": GOOD_DIGEST,
+                "exec_sha256": {"demo/__init__.py": GOOD_DIGEST},
+                "strip": "demo-pkg/",
+                "tree_sha256": GOOD_DIGEST,
+                "url": "https://example.invalid/demo-pkg.tar.gz",
+            }
+        },
+        "version": "1.0",
+        "version_line": "1.0",
+    }
+
+
 class Platform(unittest.TestCase):
     def test_the_two_supported_platforms(self):
         self.assertEqual(manifest._platform_key("darwin", "arm64"), "darwin-arm64")
@@ -106,9 +126,24 @@ class Load(support.ToolchainTest):
             ("go", "go1.27.3", "go", "bin", "go-go1.27.3"),
             ("golangci-lint", "v2.15.0", "golangci-lint", ".", "golangci-lint-v2.15.0"),
             ("ruff", "0.17.3", "ruff", ".", "ruff-0.17.3"),
+            ("lark", "1.3.1", "", ".", "lark-1.3.1"),  # a python-package: one sdist for both platforms
         ]
-        darwin_archives = ("285a6b924713", "fbf4afef53c2", "dd3908cf2095", "d1e409481a8c", "118f7121aa83")
-        linux_archives = ("08d4ae9024a7", "6a79e922e500", "65efbc80fdc1", "9b7fe6a6bf63", "2b0890f5a559")
+        darwin_archives = (
+            "285a6b924713",
+            "fbf4afef53c2",
+            "dd3908cf2095",
+            "d1e409481a8c",
+            "118f7121aa83",
+            "b426a7a6d6d5",
+        )
+        linux_archives = (
+            "08d4ae9024a7",
+            "6a79e922e500",
+            "65efbc80fdc1",
+            "9b7fe6a6bf63",
+            "2b0890f5a559",
+            "b426a7a6d6d5",
+        )
         for platform, prefixes in (("darwin-arm64", darwin_archives), ("linux-amd64", linux_archives)):
             with self.subTest(platform=platform):
                 tools = manifest.load(os.path.join(support.REPO, "tools.json"), platform)
@@ -119,6 +154,9 @@ class Load(support.ToolchainTest):
                     [f"/c/{w[4]}-{p}" for w, p in zip(want, prefixes, strict=True)],
                 )
                 self.assertEqual(len(tools[2].exec_sha256), 10)
+                lark = tools[5]
+                self.assertEqual((lark.kind, lark.module, lark.version_argv), ("python-package", "lark", ()))
+                self.assertEqual([t.kind for t in tools[:5]], ["executable"] * 5)
 
     def test_the_fields_arrive_on_the_tool(self):
         tool = self.load_doc(good_doc())[0]
@@ -298,6 +336,50 @@ class Load(support.ToolchainTest):
         doc = good_doc()
         doc["tools"].append(good_tool())
         self.assert_refused(doc, "demo", "twice")
+
+    # The python-package kind (owner, 2026-11-04, S2.2a).
+
+    def test_a_package_has_a_module_and_neither_command_nor_probe(self):
+        tool = self.load_doc({"schema": 1, "tools": [good_package()]})[0]
+        self.assertEqual(
+            (tool.kind, tool.name, tool.module, tool.command, tool.version_argv, tool.path_dir, tool.version_line),
+            ("python-package", "demo-pkg", "demo", "", (), ".", "1.0"),
+        )
+        self.assertEqual(dict(tool.exec_sha256), {"demo/__init__.py": GOOD_DIGEST})
+
+    def test_an_executable_is_the_default_kind_and_may_say_so(self):
+        self.assertEqual(self.load_doc(good_doc())[0].kind, "executable")
+        doc = good_doc()
+        doc["tools"][0]["kind"] = "executable"
+        self.assertEqual((self.load_doc(doc)[0].kind, self.load_doc(doc)[0].module), ("executable", ""))
+
+    def test_an_unknown_kind_is_refused(self):
+        doc = good_doc()
+        doc["tools"][0]["kind"] = "npm"
+        self.assert_refused(doc, "kind", "npm", "executable, python-package")
+
+    def test_a_package_refuses_a_command_or_a_probe(self):
+        for field, value in (("command", "demo"), ("version_argv", ["demo/x", "--version"])):
+            with self.subTest(field=field):
+                self.assert_refused({"schema": 1, "tools": [good_package() | {field: value}]}, field)
+
+    def test_a_package_needs_its_import_name(self):
+        doc = {"schema": 1, "tools": [good_package()]}
+        del doc["tools"][0]["module"]
+        self.assert_refused(doc, "module")
+        for value in ("", "a-b", "a.b", "a/b", 1, ["a"]):
+            with self.subTest(value=value):
+                self.assert_refused({"schema": 1, "tools": [good_package() | {"module": value}]}, "module")
+
+    def test_an_executable_refuses_a_module(self):
+        doc = good_doc()
+        doc["tools"][0]["module"] = "demo"
+        self.assert_refused(doc, "module")
+
+    def test_path_dirs_skip_packages_and_python_paths_list_them(self):
+        tools = self.load_doc({"schema": 1, "tools": [good_package(), good_tool()]})
+        self.assertEqual(manifest.path_dirs("/c", tools), ["/c/demo-1.0-abababababab/bin"])
+        self.assertEqual(manifest.python_paths("/c", tools), ["/c/demo-pkg-1.0-abababababab"])
 
 
 class Locate(unittest.TestCase):

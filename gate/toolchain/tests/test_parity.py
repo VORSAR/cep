@@ -9,6 +9,7 @@ import contextlib
 import dataclasses
 import hashlib
 import os
+import platform
 import select
 import shutil
 import signal
@@ -34,12 +35,16 @@ def prints(line: str, marker: str | None = None) -> bytes:
     return script(f"{touch}print({line!r})")
 
 
-def tree_by_hand(files: dict[str, bytes]) -> str:
-    """The design note's digest, written out for a tree of read-only executable files."""
+def tree_by_hand(files: dict[str, bytes], kind: str = "x") -> str:
+    """The design note's digest, written out for a tree of read-only files, executable (x) or plain (f)."""
     directories = {"/".join(path.split("/")[:i]) for path in files for i in range(1, path.count("/") + 1)}
     entries = {d: f"d {d} -\n".encode() for d in directories}
-    entries |= {path: f"x {path} {support.sha256(data)}\n".encode() for path, data in files.items()}
+    entries |= {path: f"{kind} {path} {support.sha256(data)}\n".encode() for path, data in files.items()}
     return hashlib.sha256(b"".join(line for _, line in sorted(entries.items()))).hexdigest()
+
+
+# A fake `python` tool that is the real interpreter: parity probes a package through the pinned python.
+PROXY = script("import os, sys\nos.execv(sys.executable, [sys.executable, *sys.argv[1:]])")
 
 
 def write_file(path: str, data: bytes, mode: int = 0o555) -> None:
@@ -495,6 +500,69 @@ class Ordering(ParityTest):
 
     def test_no_tools_is_no_reasons(self):
         self.assertEqual(self.check(), [])
+
+
+class Packages(ParityTest):
+    """The python-package kind (owner, 2026-11-04, S2.2a): no command, version by import, files and tree as usual."""
+
+    def python(self) -> manifest.Tool:
+        return self.tool("python", source=PROXY, version_line=f"Python {platform.python_version()}")
+
+    def package(self, name: str = "pkg", body: str = '__version__ = "1.0"\n') -> manifest.Tool:
+        tree = {f"{name}/__init__.py": body.encode()}
+        home = self.home(name)
+        for path, data in tree.items():
+            write_file(os.path.join(home, path), data, 0o444)
+        write_file(os.path.join(home, ".complete"), f"{ARCHIVE_DIGEST}\n".encode(), 0o444)
+        return manifest.Tool(
+            name=name,
+            version="1.0",
+            command="",
+            path_dir=".",
+            version_argv=(),
+            version_line="1.0",
+            url="file:///unused",
+            archive_sha256=ARCHIVE_DIGEST,
+            strip=f"{name}/",
+            exec_sha256={path: support.sha256(data) for path, data in tree.items()},
+            tree_sha256=tree_by_hand(tree, "f"),
+            kind=manifest.PYTHON_PACKAGE,
+            module=name,
+        )
+
+    def test_a_package_passes_by_import_hash_and_tree(self):
+        self.assertEqual(self.check(self.python(), self.package(), full_tree=True), [])
+
+    def test_a_wrong_version_is_named(self):
+        pkg = self.package(body='__version__ = "0.9"\n')
+        self.assertEqual(self.check(self.python(), pkg), [f"pkg: version: want '1.0', got '0.9': {RECOVER}"])
+
+    def test_a_package_that_does_not_import_is_named(self):
+        pkg = self.package(body="raise ImportError('broken')\n")
+        reasons = self.check(self.python(), pkg)
+        self.assertEqual(len(reasons), 1, reasons)
+        self.assertTrue(reasons[0].startswith("pkg: version: want '1.0', got ''"), reasons)
+
+    def test_without_the_python_tool_the_package_cannot_be_probed(self):
+        self.assertEqual(
+            self.check(self.package()),
+            ["pkg: version: tools.json has no tool named 'python' to import it: fix tools.json"],
+        )
+
+    def test_a_changed_package_file_is_seen(self):
+        pkg = self.package()
+        write_file(os.path.join(self.home("pkg"), "pkg", "__init__.py"), b'__version__ = "1.0"  # changed\n', 0o444)
+        self.assertEqual(self.check(self.python(), pkg), [f"pkg: sha256 of pkg/__init__.py differs: {RECOVER}"])
+
+    def test_a_package_path_leading_outside_is_refused_before_any_import(self):
+        pkg = self.package()
+        elsewhere = os.path.join(self.world, "elsewhere")
+        os.makedirs(elsewhere)
+        os.chmod(self.home("pkg"), 0o755)
+        os.symlink(elsewhere, os.path.join(self.home("pkg"), "lib"))
+        outside = dataclasses.replace(pkg, path_dir="lib")
+        want = f"pkg: path: {elsewhere} is outside the cache: {RECOVER}"
+        self.assertEqual(self.check(self.python(), outside), [want])
 
 
 class RealCache(support.ToolchainTest):
