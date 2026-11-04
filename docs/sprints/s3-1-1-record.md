@@ -19,9 +19,9 @@ Design (G1)  ☑ architecture findings resolved (design v2 §8; two reviews) ☑
              ☑ ADR-0004/0006/0012/0013 and SEMANTICS annotated ☑ the oracle changed first (47 checks, 6 new, red first)
 Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (in T4) ☑ tests on the real code (QA's 26 pass at the first run)
 Review (G3)  ☑ QA break-it of the clock (4 findings) ☑ every finding fixed, with its test
-Verify (G4)  ☑ T4 exit 0 ☐ CI ☐ owner's check ☑ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
+Verify (G4)  ☑ T4 exit 0 ☑ CI (PR #8) ☑ owner's check (merged) ☑ every acceptance line met by its named proof
+Exit (G5)    ☑ one PR (#8), merged by the owner ☑ main CI green on the merge commit
+             ☑ record + retro ☑ known issues ☑ status line ☑ documents reconciled ☑ memory updated
 ```
 
 ## Measured results
@@ -41,6 +41,11 @@ Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge comm
 - **The semantics harness is now a gate row** (owner, 2026-11-04): `semantics` runs its 47 checks at T2–T4; a failing check fails the row naming it, and every declared check must report OK. Its proof plants a failing check into a real copy of the harness (proofs: 14).
 - **Forwarded:** where a batch close sits in the walk (S8); the ticks' source, their passage through the intake and their stop before the sources at Stop (S3.2a, S4.2).
 
+**Closed (G5), 2026-11-04.** PR #8 merged by the owner (14 commits); CI green on the PR and on the merge commit. Points: about 8.5 of S3.1's 13 (6.5 carded + D1–D8); duration: one day.
+
 ## Retro
 
-*(at close-out)*
+- **Worked:** the design review before code found the clock's three sources of truth (ADR-0004, the reference executor, SEMANTICS) disagreeing; asking the owner the questions with small examples, options ordered by accuracy, turned eight structural decisions into clear choices. The oracle changed first, red first, so the engine had an executable target. QA's tests (written, then revised, apart from the build) passed at the first run; the break-it found what they could not (cross-key order, the int64 extremes).
+- **Hurt:** the first round of questions was too technical; the owner asked twice for simpler wording with examples. My decision-3 wording ("wall clock minus the bound") would have lost a lagging source's events; the impact review caught it.
+- **Keep:** ask in plain words, a tiny timeline per option, most accurate option first; an impact review of the owner's choices before building on them.
+- **Lasting rule proposed (for the owner):** decision questions to the owner come as a small timeline example with options ordered by accuracy (now the session's practice; recorded in memory).
