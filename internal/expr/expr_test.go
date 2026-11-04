@@ -3,6 +3,7 @@ package expr_test
 import (
 	"errors"
 	"math"
+	"sync"
 	"testing"
 
 	"github.com/vorsar/cep/internal/event"
@@ -49,12 +50,42 @@ func key(q, n string) string {
 }
 
 type row struct {
-	slots [][]event.Value
+	slots  [][]event.Value
+	tables func() []*table.Version // the snapshots the row reads, by table id; nil: none (a wiring fault)
 }
 
 func (r row) Value(slot, index int) event.Value { return r.slots[slot][index] }
 func (r row) Invisibles() bool                  { return false }
-func (r row) Table(int) *table.Version          { return nil }
+func (r row) Table(id int) *table.Version {
+	if r.tables == nil {
+		return nil
+	}
+	if ts := r.tables(); id >= 0 && id < len(ts) {
+		return ts[id]
+	}
+	return nil
+}
+
+// testTables are the test scope's tables as testRow reads them: Hosts (id 0, key host string) holds "abc" and
+// "db1"; Ports (id 1, key port int) holds 7 and 443. They are built on first use, so that a test that reads no
+// table never needs internal/table.
+var testTables = sync.OnceValue(func() []*table.Version {
+	hosts, err := table.New("Hosts", []event.Attr{{Name: "host", Type: event.TString}}, []string{"host"})
+	if err != nil {
+		panic(err)
+	}
+	if err := hosts.Upsert([][]event.Value{{{Kind: event.TString, Str: "abc"}}, {{Kind: event.TString, Str: "db1"}}}); err != nil {
+		panic(err)
+	}
+	ports, err := table.New("Ports", []event.Attr{{Name: "port", Type: event.TInt}}, []string{"port"})
+	if err != nil {
+		panic(err)
+	}
+	if err := ports.Upsert([][]event.Value{{{Kind: event.TInt, I: 7}}, {{Kind: event.TInt, I: 443}}}); err != nil {
+		panic(err)
+	}
+	return []*table.Version{hosts.Snapshot(), ports.Snapshot()}
+})
 
 // The event: n int, f float, s string, b bool, ts timestamp, d duration, o object, x nullable int, nb nullable bool.
 var testScope = scope{
@@ -79,7 +110,7 @@ var testRow = &row{slots: [][]event.Value{{
 	{Kind: event.TObject, Obj: nil},
 	{Kind: event.TInt, Null: true},
 	{Kind: event.TBool, Null: true},
-}, {{Kind: event.TInt, I: 3}}}}
+}, {{Kind: event.TInt, I: 3}}}, tables: testTables}
 
 // ---- small constructors for model trees ----
 
@@ -354,7 +385,8 @@ func TestArithmetic(t *testing.T) {
 	}
 }
 
-// TestNullStrict ports the semantics harness's check 1.1 (its scalar assertions; the `in` one lands in S3.1).
+// TestNullStrict ports the semantics harness's check 1.1, its scalar assertions and (S3.1-2) its `in` one:
+// membership is null-strict and atomic, so `x in T` and `x not in T` are both false for a null x (SPEC §5.6).
 func TestNullStrict(t *testing.T) {
 	cases := []struct {
 		name string
@@ -374,6 +406,12 @@ func TestNullStrict(t *testing.T) {
 		{"and short-circuits", and(lit(false), cmp("<", a("x"), lit(1))), false},
 		{"or short-circuits", or(lit(true), cmp("<", a("x"), lit(1))), true},
 		{"strings compare", cmp("<", a("s"), lit("abd")), true},
+		{"membership: x null: x in Ports is false", in(a("x"), "Ports", false), false},
+		{"membership: x null: x not in Ports is false", in(a("x"), "Ports", true), false},
+		{"membership: x null: not(x in Ports) is true", not(in(a("x"), "Ports", false)), true},
+		{"membership: x null: not(x not in Ports) is true", not(in(a("x"), "Ports", true)), true},
+		{"membership: n is 7: n in Ports is true", in(a("n"), "Ports", false), true},
+		{"membership: n is 7: n not in Ports is false", in(a("n"), "Ports", true), false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -414,6 +452,32 @@ func TestAllocgateScalarEval(t *testing.T) {
 			t.Fatalf("%s allocated %v times per run", fn.Name, allocs)
 		}
 	}
+	// S3.1-2 (design note §2): membership reads the row's snapshot and allocates nothing, hit, miss or null.
+	t.Run("membership", func(t *testing.T) {
+		for _, c := range []struct {
+			node model.Expr
+			want bool
+		}{
+			{in(a("n"), "Ports", false), true},
+			{in(a("s"), "Hosts", true), false},
+			{in(lit("nope"), "Hosts", false), false},
+			{in(a("x"), "Ports", true), false},
+			{and(in(a("s"), "Hosts", false), cmp(">", a("n"), lit(1))), true},
+		} {
+			e, err := expr.Build(c.node, testScope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var v event.Value
+			var err2 error
+			if allocs := testing.AllocsPerRun(1000, func() { v, err2 = e.Eval(testRow) }); allocs != 0 {
+				t.Fatalf("%+v allocated %v times per run", c.node, allocs)
+			}
+			if err2 != nil || v.B != c.want {
+				t.Fatalf("%+v evaluated to %+v, %v; want %v", c.node, v, err2, c.want)
+			}
+		}
+	})
 }
 
 func TestRegistryHoldsExactlyAppendixF(t *testing.T) {
