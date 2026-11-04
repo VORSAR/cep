@@ -825,4 +825,10 @@ The review ([s3-1-2-design-architecture.md](../reviews/s3-1-2-design-architectur
 4. **Timestamps are read by a strict RFC 3339 reader** (review F5, QA A1; refines P1): exactly the standard's grammar — lowercase `t` and `z` accepted; a leap second `:60` read as the last millisecond of that minute; a comma fraction, `+24:00` and a one-digit hour are event errors. Hand-written in `internal/event`, which does not import `time`.
 5. **Fences bind production code; a narrow override lets tests build fixtures** (≠ R: the recommendation was to check fences on production files only, as purity and globals are): `rules.json` gains `test_fences`, the twin of `test_imports` — `internal/expr`'s tests may also use `table.New` and `table.Table`, which exit 4's snapshot test needs; every other fence, the model one included, still binds expr's tests.
 
+### Owner decisions, 2026-11-04 — S3.1-2's break-it
+
+The break-it ([s3-1-2-breakit-qa.md](../reviews/s3-1-2-breakit-qa.md): 4 blockers, 3 should-fix) found two defects older than S3.1-2 in `internal/expr`:
+
+1. **Both are fixed in this sprint's fix round** (as recommended; +0.5 point): an out-of-range float-to-int `cast` is a runtime error, not a machine-dependent value (B4, a replay-determinism blocker), and `math:round` is exactly half-up (B6).
+
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
