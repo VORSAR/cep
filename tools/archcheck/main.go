@@ -205,9 +205,9 @@ func (c *checker) fences() {
 		if c.test {
 			allowed = append(slices.Clone(allowed), c.rules.TestFences[c.dir][target]...)
 		}
-		local := c.localName(c.rules.Module + "/" + target)
-		if local == "" {
-			continue
+		locals := c.localNames(c.rules.Module + "/" + target)
+		if slices.Contains(locals, ".") {
+			c.report(c.file.Package, "fence: %s may not dot-import %s: a dot-import hides which identifiers it uses (%s)", name(c.dir), target, RulesPath)
 		}
 		ast.Inspect(c.file, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
@@ -215,7 +215,7 @@ func (c *checker) fences() {
 				return true
 			}
 			x, ok := sel.X.(*ast.Ident)
-			if !ok || x.Name != local {
+			if !ok || x.Name == "." || !slices.Contains(locals, x.Name) {
 				return true
 			}
 			if !slices.ContainsFunc(allowed, func(prefix string) bool { return strings.HasPrefix(sel.Sel.Name, prefix) }) {
@@ -227,17 +227,22 @@ func (c *checker) fences() {
 	}
 }
 
-// localName is the name a file uses for an imported package, or "" when it does not import it.
-func (c *checker) localName(p string) string {
+// localNames are every name a file imports a package under ("." for a dot-import), blank imports left out: Go
+// accepts one path imported twice under two names, and each name must be checked (S3.1-2 break-it B1, B2, B7).
+func (c *checker) localNames(p string) []string {
+	var names []string
 	for _, spec := range c.file.Imports {
-		if importPath(spec) == p {
-			if spec.Name != nil {
-				return spec.Name.Name
-			}
-			return p[strings.LastIndex(p, "/")+1:]
+		if importPath(spec) != p {
+			continue
+		}
+		switch {
+		case spec.Name == nil:
+			names = append(names, p[strings.LastIndex(p, "/")+1:])
+		case spec.Name.Name != "_":
+			names = append(names, spec.Name.Name)
 		}
 	}
-	return ""
+	return names
 }
 
 func (c *checker) clock() {
@@ -249,13 +254,16 @@ func (c *checker) clock() {
 			c.report(spec.Pos(), "clock: %s may not import time (only internal/window/cron.go may; ADR-0015 §2.2)", c.dir)
 		}
 	}
-	timeName := c.localName("time")
-	if timeName == "" || callsAllowed {
+	timeNames := c.localNames("time")
+	if len(timeNames) == 0 || callsAllowed {
 		return
+	}
+	if slices.Contains(timeNames, ".") {
+		c.report(c.file.Package, "clock: %s may not dot-import time: a dot-import hides the wall-clock calls (ADR-0015 §2.2)", name(c.dir))
 	}
 	ast.Inspect(c.file, func(n ast.Node) bool {
 		if sel, ok := n.(*ast.SelectorExpr); ok {
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name == timeName && slices.Contains(clockCalls, sel.Sel.Name) {
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(timeNames, x.Name) && slices.Contains(clockCalls, sel.Sel.Name) {
 				c.report(sel.Pos(), "clock: time.%s reads the wall clock: only internal/runtime, io, internal/playback and cmd may (ADR-0015 §2.2)", sel.Sel.Name)
 			}
 		}
@@ -313,8 +321,8 @@ func (c *checker) purity() {
 // one of them.
 func (c *checker) namedSync(named map[string][]string) {
 	for p, allowed := range named {
-		local := c.localName(p)
-		if local == "" || local == "." || local == "_" {
+		locals := c.localNames(p)
+		if len(locals) == 0 {
 			continue
 		}
 		ast.Inspect(c.file, func(n ast.Node) bool {
@@ -322,7 +330,7 @@ func (c *checker) namedSync(named map[string][]string) {
 			if !ok {
 				return true
 			}
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name == local && !slices.Contains(allowed, sel.Sel.Name) {
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(locals, x.Name) && !slices.Contains(allowed, sel.Sel.Name) {
 				c.report(sel.Pos(), "purity: %s may use only %s, not %s.%s (ADR-0015 §2.2)", name(c.dir), exceptionList(named), p[strings.LastIndex(p, "/")+1:], sel.Sel.Name)
 			}
 			return true
