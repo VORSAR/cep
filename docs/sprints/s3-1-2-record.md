@@ -33,9 +33,11 @@ Design (G1)  ☑ architecture review (3 blockers, 12 should-fix, 9 later) resolv
              ☑ owner decisions recorded (D1–D4; D5 at the build) ☑ SEMANTICS §4, ADR-0007 §2, ADR-0012 §5 annotated
 Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (in T4) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☑ QA break-it (4 blockers, 3 should-fix) ☑ every finding fixed, with its red test committed
-Verify (G4)  ☑ T4 exit 0 (final tree) ☐ CI ☐ owner's check ☑ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
+Verify (G4)  ☑ T4 exit 0 (final tree) ☑ CI (PR #9: lint, test, proofs, strict-gate) ☑ owner's check (merged)
+             ☑ every acceptance line met by its named proof
+Exit (G5)    ☑ one PR (#9, 73 commits), merged by the owner ☑ main CI green on the merge commit
+             ☑ record + retro ☑ known issues (none new: every forward sits on the S3.2a, S3.2b or S3.3 card)
+             ☑ status line ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
 
 ## Measured results
@@ -81,3 +83,12 @@ What held, kept as guard tests: about 120 decoder edge payloads against the orac
   - S3.2b: one home for `text_invisibles` and the validator's questions about it (F6, F7); the decoder's allocation budget and ADR-0010 §1 (F12).
   - S3.3: the deploy error for `optional` or `object` key columns (D3); the Go API refusing non-finite floats (D2).
 - **Not linted:** the fixture generator `internal/text/testdata/gen_invisibles.py` sits outside the `ruff` row's scope (`gate/**/*.py`), as the reference executor does.
+
+**Closed (G5), 2026-11-04.** PR #9 merged by the owner (73 commits); CI green on the PR and on the merge commit. Points: 8 (6.5 carded + D2, D4, break-it B4/B6); duration: one day.
+
+## Retro
+
+- **Worked:** the review before code caught two errors of mine in design v1: the table snapshot's moment was undefined (F1), and the unassigned-character rule would have flagged nothing (F2). QA's tests, written apart from the build, held the decoder to `encoding/json` exactly; the fuzzer found a real defect in 30 seconds; the break-it found a hole in `archcheck` older than this sprint, also present in the clock rule.
+- **Hurt:** two design claims about library behaviour were wrong until a program checked them: Go's `unicode.C` holds the unassigned code points, and `time.Parse` is not strict RFC 3339. The `expr → table` fence went into the design without a check that exit 4's test could live with it, so the question reached the owner at the build. Two QA agents ran past their time box.
+- **Keep:** QA's tests first and apart; the fuzzer as soon as the decoder passes; fixing older defects found in the files a sprint touches, with the owner's consent.
+- **Lasting rule proposed (for the owner):** a design claim about a library's behaviour (a standard table, a parser's grammar, a conversion's range) is checked with a scratch program before the design goes to review.
