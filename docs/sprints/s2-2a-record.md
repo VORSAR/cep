@@ -29,6 +29,11 @@
 
 Slim routine: decisions above · tests before code · build · `make check` green · T4 green · CI green on the PR · owner merges. Owner's check by reading: `shapes.txt`'s t01 pair, `(or (cmp > name literal) (and (cmp > name literal) (cmp > name literal)))` on both sides.
 
+**Closed (G5), 2026-11-04.** PR #6 merged by the owner (rebased onto S2.1's merge, 9 commits); main CI green on the merge commit. The owner accepted both deviations above. Points: 13 SP as carded; duration: one day.
+
 ## Retro
 
-*(at close-out)*
+- **Worked:** the differential's two sides were written from the mapping, never from each other, and agreed on all 63 files at the first run; the planted swap went red with the pair written down beforehand. Tests before code kept `internal/expr` at 99.5% with no fix round.
+- **Hurt:** a proof hard-coded the list of pinned tools and went red when lark joined (T4 caught it, before the push). A proof world copies only tracked files, so a new driver failed until it was staged. #5's rebase-merge forced a rebase of this branch with one doc conflict.
+- **Keep:** run `make strict-gate` before any push that touches the registry, the tools or the proofs (it caught the first of the above).
+- **No rule change proposed.**
