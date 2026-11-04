@@ -169,3 +169,108 @@ func TestGlobals(t *testing.T) {
 		wantNone(t, check(t, "internal/model/x_test.go", "package model\nvar seen int\n"))
 	})
 }
+
+// wantOneAll: exactly one finding, containing every needle.
+func wantOneAll(t *testing.T, got []string, needles ...string) {
+	t.Helper()
+	if len(got) != 1 {
+		t.Fatalf("want one finding containing %q, got %q", needles, got)
+	}
+	for _, n := range needles {
+		if !strings.Contains(got[0], n) {
+			t.Fatalf("want one finding containing %q, got %q", needles, got)
+		}
+	}
+}
+
+// TestPurityNamedExceptions: S3.1-2 design note §5 (ADR-0015 §2): internal/table may use only sync.Mutex and
+// atomic.Pointer, internal/event only sync.Pool; any other identifier of sync or sync/atomic there, sync/atomic in
+// internal/event, and a dot-import of either in either package are purity findings naming the allowed identifiers
+// and ADR-0015 §2. Every other package stays as before.
+func TestPurityNamedExceptions(t *testing.T) {
+	const adr = "ADR-0015 §2"
+	t.Run("table may use sync.Mutex and atomic.Pointer", func(t *testing.T) {
+		src := "package table\nimport (\n\"sync\"\n\"sync/atomic\"\n)\ntype V struct{}\ntype T struct {\nmu sync.Mutex\ncur atomic.Pointer[V]\n}\nfunc (t *T) f() *V { t.mu.Lock(); defer t.mu.Unlock(); return t.cur.Load() }\n"
+		wantNone(t, check(t, "internal/table/x.go", src))
+	})
+	t.Run("table: each other sync or sync/atomic identifier is red", func(t *testing.T) {
+		for ident, src := range map[string]string{
+			"RWMutex":   "package table\nimport \"sync\"\ntype T struct{ mu sync.RWMutex }\n",
+			"Once":      "package table\nimport \"sync\"\nfunc f() { var o sync.Once; o.Do(f) }\n",
+			"WaitGroup": "package table\nimport \"sync\"\nfunc f() { var wg sync.WaitGroup; wg.Wait() }\n",
+			"Pool":      "package table\nimport \"sync\"\ntype T struct{ p sync.Pool }\n",
+			"Int64":     "package table\nimport \"sync/atomic\"\ntype T struct{ n atomic.Int64 }\n",
+			"Value":     "package table\nimport \"sync/atomic\"\ntype T struct{ v atomic.Value }\n",
+			"AddInt64":  "package table\nimport \"sync/atomic\"\nfunc f(p *int64) { atomic.AddInt64(p, 1) }\n",
+		} {
+			t.Run(ident, func(t *testing.T) {
+				wantOneAll(t, check(t, "internal/table/x.go", src), "purity:", ident, "Mutex", "Pointer", adr)
+			})
+		}
+	})
+	t.Run("table: an allowed and a banned identifier in one file give one finding", func(t *testing.T) {
+		src := "package table\nimport \"sync\"\ntype T struct {\nmu sync.Mutex\nrw sync.RWMutex\n}\n"
+		wantOneAll(t, check(t, "internal/table/x.go", src), "purity:", "RWMutex")
+	})
+	t.Run("table: an aliased import is still read", func(t *testing.T) {
+		wantOneAll(t, check(t, "internal/table/x.go", "package table\nimport s \"sync\"\ntype T struct{ mu s.RWMutex }\n"), "purity:", "RWMutex")
+		wantNone(t, check(t, "internal/table/x.go", "package table\nimport s \"sync\"\ntype T struct{ mu s.Mutex }\n"))
+	})
+	t.Run("event may use sync.Pool", func(t *testing.T) {
+		src := "package event\nimport \"sync\"\nvar pool = sync.Pool{New: func() any { return new([]byte) }}\nfunc get() any { return pool.Get() }\n"
+		wantNone(t, check(t, "internal/event/x.go", src))
+	})
+	t.Run("event: any other sync identifier is red", func(t *testing.T) {
+		for ident, src := range map[string]string{
+			"Mutex":     "package event\nimport \"sync\"\ntype T struct{ mu sync.Mutex }\n",
+			"Once":      "package event\nimport \"sync\"\nfunc f() { var o sync.Once; o.Do(f) }\n",
+			"WaitGroup": "package event\nimport \"sync\"\nfunc f() { var wg sync.WaitGroup; wg.Wait() }\n",
+		} {
+			t.Run(ident, func(t *testing.T) {
+				wantOneAll(t, check(t, "internal/event/x.go", src), "purity:", ident, "Pool", adr)
+			})
+		}
+	})
+	t.Run("event may not import sync/atomic", func(t *testing.T) {
+		wantOneAll(t, check(t, "internal/event/x.go", "package event\nimport _ \"sync/atomic\"\n"), "purity:", "sync/atomic", adr)
+	})
+	t.Run("a dot-import of sync or sync/atomic is red in table and event", func(t *testing.T) {
+		wantOneAll(t, check(t, "internal/table/x.go", "package table\nimport . \"sync\"\ntype T struct{ mu Mutex }\n"), "purity:", adr)
+		wantOneAll(t, check(t, "internal/table/x.go", "package table\nimport . \"sync/atomic\"\ntype V struct{}\ntype T struct{ p Pointer[V] }\n"), "purity:", adr)
+		wantOneAll(t, check(t, "internal/event/x.go", "package event\nimport . \"sync\"\nvar pool = Pool{}\n"), "purity:", adr)
+		// sync/atomic is banned in event twice over (the import and the dot); one or two findings, all purity.
+		got := check(t, "internal/event/x.go", "package event\nimport . \"sync/atomic\"\ntype T struct{ n Int64 }\n")
+		if len(got) == 0 || len(got) > 2 {
+			t.Fatalf("want one or two purity findings, got %q", got)
+		}
+		for _, f := range got {
+			if !strings.Contains(f, "purity:") {
+				t.Fatalf("want purity findings only, got %q", got)
+			}
+		}
+	})
+	t.Run("any other package importing sync stays red", func(t *testing.T) {
+		wantOne(t, check(t, "internal/pattern/x.go", "package pattern\nimport \"sync\"\ntype T struct{ mu sync.Mutex }\n"), "purity: internal/pattern may not import sync")
+		wantOne(t, check(t, "internal/text/x.go", "package text\nimport \"sync/atomic\"\ntype V struct{}\ntype T struct{ p atomic.Pointer[V] }\n"), "purity: internal/text may not import sync/atomic")
+		wantOne(t, check(t, "internal/expr/x.go", "package expr\nimport \"sync\"\nvar _ = sync.Pool{}\n"), "purity: internal/expr may not import sync")
+	})
+	t.Run("tests in table and event are not held to it", func(t *testing.T) {
+		wantNone(t, check(t, "internal/table/x_test.go", "package table_test\nimport \"sync\"\nfunc f() { var wg sync.WaitGroup; wg.Wait() }\n"))
+		wantNone(t, check(t, "internal/event/x_test.go", "package event_test\nimport \"sync/atomic\"\nfunc f() { var n atomic.Int64; n.Add(1) }\n"))
+	})
+}
+
+// TestExprTableFence: S3.1-2 design note §2 (review F21): internal/expr reads tables through table.Version only and
+// never builds or writes one.
+func TestExprTableFence(t *testing.T) {
+	imp := "import \"" + mod + "internal/table\"\n"
+	t.Run("table.Version is allowed", func(t *testing.T) {
+		wantNone(t, check(t, "internal/expr/x.go", "package expr\n"+imp+"func f(v *table.Version) int { return v.Len() }\n"))
+	})
+	t.Run("table.New is red", func(t *testing.T) {
+		wantOne(t, check(t, "internal/expr/x.go", "package expr\n"+imp+"func f() { _, _ = table.New(\"T\", nil, nil) }\n"), "fence: internal/expr may use table.Version")
+	})
+	t.Run("table.Table is red", func(t *testing.T) {
+		wantOne(t, check(t, "internal/expr/x.go", "package expr\n"+imp+"func f(t *table.Table) error { return t.Upsert(nil) }\n"), "fence: internal/expr may use table.Version")
+	})
+}
