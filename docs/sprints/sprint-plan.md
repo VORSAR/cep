@@ -799,4 +799,17 @@ The design review ([s3-1-1-design-architecture.md](../reviews/s3-1-1-design-arch
 7. **Seal the instant:** once a key's timers at an instant have fired, a later-arriving event at that instant for that key is construct-late — dropped and counted — so live and replay differ only as counted drops (SEMANTICS §2.1).
 8. **Skip-past-last compares in §2.2 order** `(ts, stream id, seq)`, not by timestamp alone (SEMANTICS §6.5): a partial that began after the completed match's last event survives, however the match completed.
 
+### Owner decisions, 2026-11-04 — S3.1-2's plan check
+
+S3.1-2 runs S3.1's routine (owner, above). All eight as recommended:
+
+1. **A `timestamp` attribute arrives as RFC 3339 text** (the replay log's form): any UTC offset is converted to UTC; digits finer than a millisecond are rounded down to the millisecond; a JSON number is an event error.
+2. **A `duration` attribute arrives as integer milliseconds**, under an `int` attribute's rules (no fraction or exponent, the full int64 range).
+3. **An `object` attribute is a JSON object or array**, kept as its original JSON text and passed through; any other JSON type is an event error.
+4. **A repeated key: the last one wins** (as `encoding/json`, `JSON.parse` and Python's `json`).
+5. **The Unicode tables must match exactly**: the Go toolchain's `unicode.Version` equals x/text's `norm.Version` (≠ ADR-0007 §2's "major version", annotated there). Both are 17.0.0 with Go 1.27.3 and x/text v0.43.0.
+6. **That check is a Go test in `internal/text`**, run by the `unit` row (as `docsync` and `allocgate`).
+7. **The decoder's fuzz target runs in a second nightly row**, `fuzz-decoder`, shaped like `fuzz-parser`.
+8. **Malformed UTF-8 in a JSON string becomes U+FFFD**, as `encoding/json` does; whether it also sets `text_invisibles` is decided in S7, with the rest of the text pipeline.
+
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
