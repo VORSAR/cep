@@ -3,13 +3,13 @@
 // shard, with each key's release buffer and timers. RuleClock.Advance walks pending work forward in event time —
 // the only place that order exists. All times are int64 milliseconds; no time.Time and no clock read appear here.
 // Design: docs/sprints/s3-1-1-design.md (v2).
-//
-// STUB (S3.1-1, before G1): the API QA's tests are written against; every body panics until the build.
 package clock
 
-import "github.com/vorsar/cep/internal/event"
+import (
+	"math"
 
-const notBuilt = "clock: S3.1-1 not built yet"
+	"github.com/vorsar/cep/internal/event"
+)
 
 // StreamSpec describes one stream to the registry; its id is its index (SPEC §6.4's declaration order).
 type StreamSpec struct {
@@ -26,31 +26,142 @@ type WMAdvance struct {
 	Moved        bool
 }
 
-// StreamRegistry holds every stream's admission watermark, floors and contribution.
-type StreamRegistry struct{}
-
-// NewStreamRegistry registers the streams in declaration order; start is the deployment's start (wall ms).
-func NewStreamRegistry(specs []StreamSpec, start int64) *StreamRegistry { panic(notBuilt) }
-
-// ObserveEvent judges an event's stream lateness and moves its stream's watermark; arrival is its intake stamp.
-func (r *StreamRegistry) ObserveEvent(sid int, ts, arrival int64) (streamLate bool, advance WMAdvance) {
-	panic(notBuilt)
+// sub is a − b, saturating at the int64 bounds.
+func sub(a, b int64) int64 {
+	if b > 0 && a < math.MinInt64+b {
+		return math.MinInt64
+	}
+	if b < 0 && a > math.MaxInt64+b {
+		return math.MaxInt64
+	}
+	return a - b
 }
 
-// ObserveTick moves every quiet stream's floor to its own last event time plus the wall time elapsed (live).
-func (r *StreamRegistry) ObserveTick(now int64, buf []WMAdvance) []WMAdvance { panic(notBuilt) }
+// add is a + b, saturating at the int64 bounds.
+func add(a, b int64) int64 {
+	if b > 0 && a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	if b < 0 && a < math.MinInt64-b {
+		return math.MinInt64
+	}
+	return a + b
+}
 
-// ObserveVirtual raises every source stream's virtual floor to now − d_s (playback).
-func (r *StreamRegistry) ObserveVirtual(now int64, buf []WMAdvance) []WMAdvance { panic(notBuilt) }
+type stream struct {
+	spec        StreamSpec
+	maxTs       int64 // the largest event time admitted
+	adm         int64 // admission watermark: maxTs − d
+	lastTs      int64 // own last event time (the deployment's start before any event)
+	lastArrival int64 // that event's intake stamp
+	floor       int64 // live: the quiet floor
+	vfloor      int64 // playback: the virtual floor
+	punct       int64 // derived: the latest punctuation
+	ended       bool
+	contrib     int64
+}
+
+// StreamRegistry holds every stream's admission watermark, floors and contribution. Every quantity only rises, so a
+// contribution never falls.
+type StreamRegistry struct {
+	streams []stream
+}
+
+// NewStreamRegistry registers the streams in declaration order; start is the deployment's start (wall ms).
+func NewStreamRegistry(specs []StreamSpec, start int64) *StreamRegistry {
+	r := &StreamRegistry{streams: make([]stream, len(specs))}
+	for i, sp := range specs {
+		r.streams[i] = stream{
+			spec: sp, maxTs: math.MinInt64, adm: math.MinInt64, lastTs: start, lastArrival: start,
+			floor: math.MinInt64, vfloor: math.MinInt64, punct: math.MinInt64, contrib: math.MinInt64,
+		}
+	}
+	return r
+}
+
+// raise recomputes a stream's contribution and reports the advance when it rose.
+func (r *StreamRegistry) raise(sid int) WMAdvance {
+	s := &r.streams[sid]
+	c := max(s.adm, s.floor, s.vfloor, s.punct)
+	if s.ended {
+		c = math.MaxInt64
+	}
+	if c <= s.contrib {
+		return WMAdvance{}
+	}
+	s.contrib = c
+	return WMAdvance{StreamID: sid, Contribution: c, Moved: true}
+}
+
+// ObserveEvent judges an event's stream lateness and moves its stream's watermark; arrival is its intake stamp.
+// A stream-late event (ts < the admission watermark before it, strictly) moves nothing but its arrival time.
+func (r *StreamRegistry) ObserveEvent(sid int, ts, arrival int64) (streamLate bool, advance WMAdvance) {
+	s := &r.streams[sid]
+	s.lastArrival = arrival
+	if ts < s.adm {
+		return true, WMAdvance{}
+	}
+	s.maxTs = max(s.maxTs, ts)
+	s.lastTs = s.maxTs
+	s.adm = max(s.adm, sub(s.maxTs, s.spec.Delay))
+	return false, r.raise(sid)
+}
+
+// ObserveTick moves every quiet stream's floor to its own last event time plus the wall time since that event
+// arrived, minus its bound (live; owner D3, D5). A stream is quiet once IdleAfter has elapsed since its last arrival.
+func (r *StreamRegistry) ObserveTick(now int64, buf []WMAdvance) []WMAdvance {
+	for sid := range r.streams {
+		s := &r.streams[sid]
+		if s.spec.Derived || s.spec.IdleAfter <= 0 {
+			continue
+		}
+		elapsed := sub(now, s.lastArrival)
+		if elapsed < s.spec.IdleAfter {
+			continue
+		}
+		s.floor = max(s.floor, sub(add(s.lastTs, elapsed), s.spec.Delay))
+		if a := r.raise(sid); a.Moved {
+			buf = append(buf, a)
+		}
+	}
+	return buf
+}
+
+// ObserveVirtual raises every source stream's virtual floor to now − d_s (playback; ADR-0004: every stream).
+func (r *StreamRegistry) ObserveVirtual(now int64, buf []WMAdvance) []WMAdvance {
+	for sid := range r.streams {
+		s := &r.streams[sid]
+		if s.spec.Derived {
+			continue
+		}
+		s.vfloor = max(s.vfloor, sub(now, s.spec.Delay))
+		if a := r.raise(sid); a.Moved {
+			buf = append(buf, a)
+		}
+	}
+	return buf
+}
 
 // ObservePunctuation records a derived stream's punctuation.
-func (r *StreamRegistry) ObservePunctuation(sid int, w int64) WMAdvance { panic(notBuilt) }
+func (r *StreamRegistry) ObservePunctuation(sid int, w int64) WMAdvance {
+	s := &r.streams[sid]
+	s.punct = max(s.punct, w)
+	return r.raise(sid)
+}
 
 // EndOfInput raises every contribution to +∞.
-func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance { panic(notBuilt) }
+func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance {
+	for sid := range r.streams {
+		r.streams[sid].ended = true
+		if a := r.raise(sid); a.Moved {
+			buf = append(buf, a)
+		}
+	}
+	return buf
+}
 
 // Contribution is a stream's current contribution.
-func (r *StreamRegistry) Contribution(sid int) int64 { panic(notBuilt) }
+func (r *StreamRegistry) Contribution(sid int) int64 { return r.streams[sid].contrib }
 
 // TimerKind names a timer; for one key at one instant the inclusive kinds fire in this order.
 type TimerKind uint8
@@ -65,6 +176,8 @@ const (
 	Discard
 )
 
+func (k TimerKind) strict() bool { return k == TTLPurge || k == Discard }
+
 // Timer is one timer that fired.
 type Timer struct {
 	Due  int64
@@ -72,51 +185,9 @@ type Timer struct {
 	Ref  uint64
 }
 
-// Callbacks receive the walk's items in order.
+// Callbacks receive the walk's items in order. A nil callback ignores its items.
 type Callbacks struct {
 	OnEvent   func(in *Instance, e event.Event)
 	OnTimers  func(in *Instance, fires []Timer)
 	OnDiscard func(in *Instance, refs []uint64)
 }
-
-// RuleClock is one rule's construct clock on one shard, shared by its keys' instances.
-type RuleClock struct{}
-
-// NewRuleClock makes a rule clock reading the given streams.
-func NewRuleClock(inputs []int) *RuleClock { panic(notBuilt) }
-
-// ApplyAdvance takes a stream's new contribution; the clock never retreats.
-func (rc *RuleClock) ApplyAdvance(a WMAdvance) (clock int64, advanced bool) { panic(notBuilt) }
-
-// Clock is the construct clock.
-func (rc *RuleClock) Clock() int64 { panic(notBuilt) }
-
-// NewInstance makes a key's instance; ordinals count up from 0.
-func (rc *RuleClock) NewInstance() *Instance { panic(notBuilt) }
-
-// Advance walks every pending item up to the clock, forward in event time.
-func (rc *RuleClock) Advance(cb Callbacks) { panic(notBuilt) }
-
-// Free drops a key's instance; the instance must be Empty.
-func (rc *RuleClock) Free(in *Instance) { panic(notBuilt) }
-
-// Instance is one key's release buffer and timers under its rule clock.
-type Instance struct{}
-
-// Ordinal is the key's birth order on this rule clock.
-func (in *Instance) Ordinal() uint64 { panic(notBuilt) }
-
-// Buffer holds an admitted event until the walk releases it, or reports it construct-late.
-func (in *Instance) Buffer(e event.Event) (constructLate bool) { panic(notBuilt) }
-
-// Schedule adds a timer; a second Schedule of the same (kind, ref) replaces it.
-func (in *Instance) Schedule(due int64, k TimerKind, ref uint64) { panic(notBuilt) }
-
-// Cancel removes a pending timer; false when there was none.
-func (in *Instance) Cancel(k TimerKind, ref uint64) bool { panic(notBuilt) }
-
-// CancelAll removes every pending timer of the key (the TTL purge's reset).
-func (in *Instance) CancelAll() { panic(notBuilt) }
-
-// Empty says the key has no buffered event and no timer.
-func (in *Instance) Empty() bool { panic(notBuilt) }

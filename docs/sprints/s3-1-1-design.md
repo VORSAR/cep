@@ -34,7 +34,8 @@ Per source stream `s`, every quantity is monotone, so a contribution never falls
 - **Virtual floor (playback).** `ObserveVirtual(now)`: `vfloor(s) = max(vfloor(s), now − d_s)` for every source stream of the app (ADR-0004: "EVERY stream"; the playback driver passes the log's time).
 - **Contribution** `contrib(s) = max(adm(s), floor(s), vfloor(s))`; +∞ only after `EndOfInput`. `Moved` is true exactly when it rose. Subtractions saturate at `math.MinInt64`; additions at `math.MaxInt64`.
 - **Punctuation (derived):** `contrib(s) = max(contrib(s), w)`; kept for Phase 2.
-- `ObserveTick`, `ObserveVirtual` and `EndOfInput` append to the caller's `buf` (no allocation on the clock path) and return it.
+- `ObserveTick`, `ObserveVirtual` and `EndOfInput` append to the caller's `buf` only the advances that moved (no allocation on the clock path) and return it.
+- *As built:* a quiet floor runs from the largest event time seen; any event, a stream-late one included, is an arrival and ends a quiet spell (both as the executor does). Instance ordinals are never reused; a timer scheduled with a due before the walk's position fires next.
 
 ## 2. The rule clock and its instances (per rule per shard; D2)
 
@@ -64,7 +65,7 @@ func (in *Instance) Empty() bool                               // no buffered ev
 `Advance` processes every pending item with time `≤ clock`, in this order — the only place the order exists (ADR-0004 §2 as annotated):
 
 1. by **instant** `t`, ascending;
-2. within `t`: **events** with `Ts = t`, in `event.Compare` order across all keys, each through `OnEvent`; then **timers** due at `t` of the inclusive kinds, by (key ordinal, kind, ref, schedule order), each key's group through one `OnTimers` call; then, **only if `clock > t`**, the **strict** timers due at `t` — `Discard` through `OnDiscard`, `TTLPurge` through `OnTimers` — by (key ordinal, ref, schedule order);
+2. within `t`: **events** with `Ts = t`, in `event.Compare` order across all keys, each through `OnEvent`; then **timers** due at `t` of the inclusive kinds, by (key ordinal, kind, ref, schedule order), each key's group through one `OnTimers` call; then, **only if `clock > t`**, the **strict** timers due at `t` — `TTLPurge` through `OnTimers`, then `Discard` through `OnDiscard` — by (key ordinal, kind, ref, schedule order), so a purge precedes a discard at one instant whatever their refs (the executor's order);
 3. a timer scheduled by a callback with a due at or after the current position joins the walk in order; one with a due before it fires at the current position.
 
 ```go
