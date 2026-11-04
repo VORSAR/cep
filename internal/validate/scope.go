@@ -76,16 +76,14 @@ func (s *scope) Table(name string) (int, event.Type, bool) {
 	if t == nil || len(t.PrimaryKey) != 1 {
 		return 0, event.TInvalid, false
 	}
-	id := -1
-	for i := range s.c.app.Tables {
-		if &s.c.app.Tables[i] == t {
-			id = i
-			break
+	for id := range s.c.app.Tables {
+		if &s.c.app.Tables[id] != t {
+			continue
 		}
-	}
-	for _, a := range t.Attrs {
-		if a.Name == t.PrimaryKey[0] {
-			return id, a.Type, true
+		for _, a := range t.Attrs {
+			if a.Name == t.PrimaryKey[0] {
+				return id, a.Type, true
+			}
 		}
 	}
 	return 0, event.TInvalid, false

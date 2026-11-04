@@ -212,6 +212,10 @@ func cmpF(a, b float64) int {
 	return 0
 }
 
+// finite reports whether f is neither NaN nor ±Inf: a float result that is not finite is an expression error
+// (ADR-0005 §3; owner, 2026-11-04, S3.1-2 D2), so NaN never reaches a comparison, where it would equal everything.
+func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
+
 func b2i(b bool) int64 {
 	if b {
 		return 1
@@ -309,6 +313,9 @@ func (a *arith) Eval(row Row) (event.Value, error) {
 				return event.Value{Kind: a.typ, Null: true}, runtimeErr("division by zero")
 			}
 			f = x / y
+		}
+		if !finite(f) {
+			return event.Value{Kind: a.typ, Null: true}, runtimeErr("float result is not finite (%c over %v and %v)", a.op, x, y)
 		}
 		return event.Value{Kind: event.TFloat, F: f}, nil
 	case arithTsDur:
@@ -546,8 +553,8 @@ func (c *cast) Eval(row Row) (event.Value, error) {
 			out.F = v.F
 		case event.TString:
 			f, err := strconv.ParseFloat(v.Str, 64)
-			if err != nil {
-				return event.Value{Kind: c.to, Null: true}, runtimeErr("cast: %q is not a float", v.Str)
+			if err != nil || !finite(f) {
+				return event.Value{Kind: c.to, Null: true}, runtimeErr("cast: %q is not a finite float", v.Str)
 			}
 			out.F = f
 		default:
