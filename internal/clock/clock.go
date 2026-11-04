@@ -163,6 +163,12 @@ func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance {
 // Contribution is a stream's current contribution.
 func (r *StreamRegistry) Contribution(sid int) int64 { return r.streams[sid].contrib }
 
+// Walk yields each stream's state, component "stream" and key its name: the registry is a state holder
+// (ADR-0006 §2(b); design note s3-2a-1 §4).
+func (r *StreamRegistry) Walk(fn func(component, key string, state any)) {
+	panic("clock: StreamRegistry.Walk: not implemented (S3.2a-1 stub)")
+}
+
 // TimerKind names a timer; for one key at one instant the inclusive kinds fire in this order.
 type TimerKind uint8
 

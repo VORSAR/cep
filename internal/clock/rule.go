@@ -371,6 +371,17 @@ func (in *Instance) CancelAll() {
 	in.born = false
 }
 
+// Timers appends the key's pending timers in walk order (design note s3-2a-1 §4).
+func (in *Instance) Timers(dst []Timer) []Timer {
+	panic("clock: Instance.Timers: not implemented (S3.2a-1 stub)")
+}
+
+// Events appends the key's buffered events in event.Compare order (design note s3-2a-1 §4). Cold path: it scans the
+// rule clock's buffer.
+func (in *Instance) Events(dst []event.Event) []event.Event {
+	panic("clock: Instance.Events: not implemented (S3.2a-1 stub)")
+}
+
 // Empty says the key holds nothing the shard would lose by freeing it: no buffered event, no timer, and no seal
 // the clock has not yet passed (a sealed instant still drops a late event of the key, owner D7).
 func (in *Instance) Empty() bool {

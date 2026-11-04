@@ -226,6 +226,7 @@ func TestDeclarationsMatchTheSurface(t *testing.T) {
 		{"Optional", boolT},
 	})
 	// design §1; ARCH §4: type Event struct { StreamID int; Ts int64; Seq uint64; Values []Value; Invisibles bool; BatchID string }
+	// + Tables any, the per-event table snapshot (s3-2a-1 design §2; owner D1 of S3.1-2)
 	checkFields(t, reflect.TypeFor[Event](), []field{
 		{"StreamID", reflect.TypeFor[int]()},
 		{"Ts", i64},
@@ -233,5 +234,6 @@ func TestDeclarationsMatchTheSurface(t *testing.T) {
 		{"Values", reflect.TypeFor[[]Value]()},
 		{"Invisibles", boolT},
 		{"BatchID", str},
+		{"Tables", reflect.TypeFor[any]()},
 	})
 }
