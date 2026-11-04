@@ -29,7 +29,7 @@ Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green on the merge comm
 - **One finding per defect:** a test per pair of the design's list, plus a version stop (`cep/0.2` with a second defect gives E-PRAG-002 alone).
 - **Harness ports:** RT-14 (offenders only, both fix forms), "9 · TTL deploy check" and RT-07's pattern and rate parts (both numbers in ms; "rate-limit interval"; the 2 min bound unnamed).
 - **Coverage:** `internal/validate` 97.9%, `internal/parser` 96.2%, `internal/expr` 99.5%; the 39 goldens byte-identical after positions joined the model.
-- **The gate:** T4 green before the docs commit (`make strict-gate`: every row PASS, exit 0, wall 81.7 s; `differential` 63, `proofs` 13).
+- **The gate:** T4 green on the final tree, after the parser fix (`make strict-gate`: every row PASS, exit 0, wall 84.6 s; `differential` 63, `proofs` 13).
 
 ## Found and fixed in the build
 
