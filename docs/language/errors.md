@@ -76,6 +76,7 @@ Fix: `time <attr> watermark bounded <duration>` | `time <attr> watermark ascendi
 
 ### E-TIME-002 Time clause on a derived stream **[static]**
 Rule: SEMANTICS §2.1 — derived streams carry propagated watermarks; re-declaring is an error.
+*(Owner, 2026-11-04, S2.2b: a stream with a time clause that a rule inserts into is this error when nothing uses it as a source — no rule reads it and it has no `@source`; otherwise it is `E-GRAPH-002`. Never both.)*
 Fix: remove the clause; declare clocks on source streams only.
 
 ### E-TIME-003 Time attribute is not a timestamp **[static]**
@@ -152,10 +153,12 @@ Fix: aggregate the attribute, or wait for `group by` (reserved).
 
 ### E-TBL-001 Membership against a composite key **[static]**
 Rule: SPEC §5.9 — `in` compares against a single-column primary key in v0.1.
+*(Owner, 2026-11-04, S2.2b: also a keyword-set operator — `has_any_*`, `has_all_*`, `contains_any_*`, `contains_all_*` — whose operand names a table with more than one column; SPEC §5.3 requires a one-column table.)*
 Fix: restructure the table, or wait for composite-key membership (reserved).
 
 ### E-WIN-002 batch() on a non-punctuating source **[static]**
 Rule: SPEC §6.3 — batch ids and punctuations come from the source connector.
+**Unreachable in v0.1 (owner, 2026-11-04, S2.2b):** every built-in source marks batches (ADR-0008 §4: `http` per request, `stdin` per `--batch-lines` or end of input, `inmemory` through the Go API's batch id), and a stream with no `@source` has its connector chosen at deployment and counts as punctuating. The check exists for a connector that cannot batch.
 Fix: enable source batching, or use another window kind.
 
 ### E-WIN-003 Invalid cron expression or timezone **[static]**
@@ -217,6 +220,7 @@ Fix: break the cycle with a separate stream.
 
 ### E-GRAPH-002 Insert into a source stream **[static]**
 Rule: SPEC §3.3 — a stream is a source (has a time clause) or derived (rule output), never both.
+*(Owner, 2026-11-04, S2.2b: this error when the stream is used as a source — some rule reads it, or it has `@source`; a time-clause stream that is only ever inserted into is `E-TIME-002`. Never both, and its reader gets no `E-GRAPH-004`.)*
 Fix: insert into a new derived stream.
 
 ### E-GRAPH-003 Second producer for a derived stream **[static]**
