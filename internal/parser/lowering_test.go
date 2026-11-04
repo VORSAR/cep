@@ -70,6 +70,42 @@ func TestLoweringCodes(t *testing.T) {
 	}
 }
 
+// TestTripleQuotedStringsWhereTheGrammarTakesThem: grammar.lark's STRING includes the triple-quoted form in every
+// string slot; the engine took only a quoted string in todo, cron and timestamp (found in S2.2b: the differential's
+// corpus has no such program). Each is now accepted, and raw.
+func TestTripleQuotedStringsWhereTheGrammarTakesThem(t *testing.T) {
+	t.Parallel()
+	const head = "language cep/0.1;\nstream S (k string, ts timestamp) time ts watermark bounded 1 min idle after 1 min;\n" +
+		"stream Out (k string, n int, ts timestamp);\n"
+	cases := map[string]string{
+		"todo":      `rule R intent 'x' from S todo '''a\q''' select k insert into Out;`,
+		"cron":      `rule R intent 'x' partition by k of S ttl 1 hour from S window cron('''0 * * * *''', """UTC""") emit on close late events drop select k, count() as n insert into Out;`,
+		"timestamp": `rule R intent 'x' from S[ts > timestamp '''2026-01-01T00:00:00Z'''] select k insert into Out;`,
+	}
+	for name, rule := range cases {
+		res, err := parser.Parse(name+".cep", head+rule+"\n")
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		r := res.App.Rules[0]
+		switch name {
+		case "todo":
+			if r.Todos[0] != `a\q` {
+				t.Errorf("todo: %q, want the raw text", r.Todos[0])
+			}
+		case "cron":
+			if w := r.Body.Window; w.CronExpr != "0 * * * *" || w.CronTZ != "UTC" {
+				t.Errorf("cron: %q, %q", w.CronExpr, w.CronTZ)
+			}
+		case "timestamp":
+			if ms := r.Body.Source.Filter.Args[1].Lit.Ms; ms != 1_767_225_600_000 {
+				t.Errorf("timestamp: %d ms", ms)
+			}
+		}
+	}
+}
+
 // TestPositionsReachTheModel: the lowering copies each node's first token into the model (S2.2b, ADR-0003 §1 as
 // annotated); a few anchors spot-checked.
 func TestPositionsReachTheModel(t *testing.T) {
