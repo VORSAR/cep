@@ -14,6 +14,7 @@
 package expr
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vorsar/cep/internal/event"
@@ -42,10 +43,15 @@ type Scope interface {
 	TableKey(table string) (event.Type, bool)
 }
 
-// Error is a deploy-time finding: a catalogue code and a message naming the operand.
+// Error is a deploy-time finding: a catalogue code and a message naming the operand, at the position of the node
+// Build rejected (zero for a model built through the Go API). For E-NAME-001, Name is the unknown name and What
+// says what it names ("attribute", "function", "table", "capture"), so the caller can suggest the nearest one.
 type Error struct {
-	Code string
-	Msg  string
+	Code      string
+	Msg       string
+	Line, Col int
+	Name      string
+	What      string
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Msg }
@@ -58,8 +64,8 @@ func fnErr(format string, args ...any) error {
 	return &Error{Code: "E-FN-001", Msg: fmt.Sprintf(format, args...)}
 }
 
-func nameErr(format string, args ...any) error {
-	return &Error{Code: "E-NAME-001", Msg: fmt.Sprintf(format, args...)}
+func nameErr(what, name string) error {
+	return &Error{Code: "E-NAME-001", Msg: "unknown " + what + " " + name, Name: name, What: what}
 }
 
 // RuntimeError is an evaluation failure that drops the event for the rule (SEMANTICS §5.6, §10).
@@ -98,14 +104,25 @@ type builder struct {
 	scope Scope
 }
 
+// build compiles one node; an error that carries no position yet takes this node's, so the innermost node that
+// failed names the place.
 func (b *builder) build(n model.Expr) (Expr, error) {
+	e, err := b.node(n)
+	var xe *Error
+	if err != nil && errors.As(err, &xe) && xe.Line == 0 && xe.Col == 0 {
+		xe.Line, xe.Col = n.Pos.Line, n.Pos.Col
+	}
+	return e, err
+}
+
+func (b *builder) node(n model.Expr) (Expr, error) {
 	switch n.Kind {
 	case model.ExprLiteral:
 		return literalNode(n.Lit)
 	case model.ExprAttr, model.ExprRaw:
 		slot, index, typ, ok := b.scope.Attr(n.Qualifier, n.Name)
 		if !ok {
-			return nil, nameErr("unknown attribute %s", dotted(n.Qualifier, n.Name))
+			return nil, nameErr("attribute", dotted(n.Qualifier, n.Name))
 		}
 		return &attr{slot: slot, index: index, typ: typ, raw: n.Kind == model.ExprRaw}, nil
 	case model.ExprNeg:
@@ -157,7 +174,7 @@ func (b *builder) build(n model.Expr) (Expr, error) {
 		}
 		key, ok := b.scope.TableKey(n.Table)
 		if !ok {
-			return nil, nameErr("unknown table %s", n.Table)
+			return nil, at(nameErr("table", n.Table), n.TablePos.Line, n.TablePos.Col)
 		}
 		if x.Type() != key || x.Type() == event.TObject {
 			return nil, typeErr("in %s needs the key's type %s, got %s", n.Table, key, x.Type())
@@ -173,7 +190,7 @@ func (b *builder) build(n model.Expr) (Expr, error) {
 		}
 		if n.Operand.Table != "" {
 			if _, ok := b.scope.TableKey(n.Operand.Table); !ok {
-				return nil, nameErr("unknown table %s", n.Operand.Table)
+				return nil, at(nameErr("table", n.Operand.Table), n.Operand.Pos.Line, n.Operand.Pos.Col)
 			}
 		}
 		return &later{typ: event.TBool, what: "text operators (S7)"}, nil
@@ -202,7 +219,7 @@ func (b *builder) call(n model.Expr) (Expr, error) {
 	}
 	d, ok := b.reg.descriptors[full]
 	if !ok {
-		return nil, nameErr("unknown function %s", full)
+		return nil, nameErr("function", full)
 	}
 	if len(n.Args) < d.MinArgs || len(n.Args) > d.MaxArgs {
 		return nil, fnErr("%s takes %s, got %d", full, d.arity(), len(n.Args))
@@ -228,10 +245,16 @@ func (b *builder) chain(d *Descriptor, n model.Expr) (Expr, error) {
 			return nil, fnErr("chain takes capture names, got %s", a.Kind)
 		}
 		if _, ok := b.scope.Capture(a.Name); !ok {
-			return nil, nameErr("unknown capture %s", a.Name)
+			return nil, at(nameErr("capture", a.Name), a.Pos.Line, a.Pos.Col)
 		}
 	}
 	return &later{typ: event.TObject, what: "chain (S4.1)"}, nil
+}
+
+// at places err at line:col.
+func at(err error, line, col int) error {
+	err.(*Error).Line, err.(*Error).Col = line, col
+	return err
 }
 
 func dotted(q, n string) string {
