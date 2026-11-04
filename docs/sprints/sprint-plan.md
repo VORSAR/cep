@@ -771,4 +771,14 @@ The plan check ([s1-1a-2-plan-check.md](s1-1a-2-plan-check.md), v2) was reviewed
 3. **A stream with no `@source` can mark batches** (as recommended): its connector is chosen at deployment, and the replay log carries batch boundaries (SEMANTICS §10). `E-WIN-002` fires only when `@source` names a connector type that cannot mark batches. Example 04 and eval file t07 stay as written.
 4. **A `string` param in a keyword-set slot is a comma-separated list** (as recommended): split at each comma, trim surrounding spaces; an empty item is `E-PARAM-001`. A term containing a comma needs a table operand. SPEC §4.1 gains this one-line clarification.
 
+### Owner decisions, 2026-11-04 — S2.2b's design
+
+After the architecture review and QA's test programs ([s2-2b-design.md](s2-2b-design.md) v2):
+
+1. **Positions live on the model nodes** (A1, as recommended; the model's doc had said "in a side table"): fields of type `model.Pos`, filled by the lowering and skipped by `MarshalCanonical`, so the canonical JSON and the goldens do not change. `TestMarshalCanonicalNoPositions` is rewritten to pin that; ADR-0003 §1 is annotated; Apps compare by canonical JSON only.
+2. **Which code fires for a stream with a time clause that a rule inserts into depends on its use** (A2, as recommended): read by a rule or carrying `@source` → `E-GRAPH-002` at the insert target; otherwise → `E-TIME-002` at its `time`. Never both.
+3. **Test files of `internal/validate` may import `internal/parser`** (A4, as recommended): `rules.json` gains `test_imports`, enforced by `archcheck`; production code stays forbidden.
+4. **`E-WIN-002` is unreachable in v0.1** (as recommended): every built-in source punctuates; errors.md says so, and a unit test over a planted entry proves the check.
+5. **`E-TBL-001` also covers a keyword-set operand naming a table with more than one column** (as recommended).
+
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
