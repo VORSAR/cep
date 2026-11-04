@@ -212,3 +212,41 @@ func TestRegistryArityAndLookup(t *testing.T) {
 		t.Fatal("a registry without abs built abs")
 	}
 }
+
+// TestErrorsCarryThePosition: an error is placed at the innermost node that failed; an unknown name is structured
+// (S2.2b: the validator reports Line:Col and suggests the nearest name from Name and What).
+func TestErrorsCarryThePosition(t *testing.T) {
+	at := func(e model.Expr, line, col int) model.Expr { e.Pos.Line, e.Pos.Col = line, col; return e } // inside the fence
+	cases := []struct {
+		name               string
+		node               model.Expr
+		line, col          int
+		code, nameOf, what string
+	}{
+		{"a type error at the comparison", at(cmp("<", at(a("s"), 3, 5), at(a("n"), 3, 9)), 3, 5), 3, 5, "E-TYPE-001", "", ""},
+		{"an unknown attribute at itself, not its parent",
+			at(cmp("<", at(a("n"), 4, 2), at(a("nope"), 4, 6)), 4, 2), 4, 6, "E-NAME-001", "nope", "attribute"},
+		{"an unknown table at the table's name",
+			func() model.Expr {
+				e := at(in(at(a("s"), 5, 3), "Nope", false), 5, 3)
+				e.TablePos.Line, e.TablePos.Col = 5, 8
+				return e
+			}(),
+			5, 8, "E-NAME-001", "Nope", "table"},
+		{"an unknown function", at(call("ns:nope", lit(1)), 6, 1), 6, 1, "E-NAME-001", "ns:nope", "function"},
+		{"an unknown capture in chain", at(call("chain", at(a("ghost"), 7, 7)), 7, 1), 7, 7, "E-NAME-001", "ghost", "capture"},
+		{"no position: a Go-API model", cmp("<", a("s"), a("n")), 0, 0, "E-TYPE-001", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := expr.Build(c.node, testScope)
+			var e *expr.Error
+			if !errors.As(err, &e) {
+				t.Fatalf("want an *expr.Error, got %v", err)
+			}
+			if e.Code != c.code || e.Line != c.line || e.Col != c.col || e.Name != c.nameOf || e.What != c.what {
+				t.Fatalf("got %s at %d:%d name %q what %q", e.Code, e.Line, e.Col, e.Name, e.What)
+			}
+		})
+	}
+}
