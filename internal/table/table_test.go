@@ -437,6 +437,21 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+// TestLoadNothingEmpties is QA's A2, ruled at the build: Load's new content is exactly its rows, so loading none
+// empties the table and publishes a new Version; the "publishes nothing" rule is Upsert's and Delete's.
+func TestLoadNothingEmpties(t *testing.T) {
+	tb := hosts(t)
+	ok(t, tb.Upsert(rows(host("a", "1"))))
+	before := tb.Snapshot()
+	ok(t, tb.Load(nil))
+	if v := tb.Snapshot(); v == before || v.Len() != 0 || v.Has(s("a")) {
+		t.Fatalf("Load(nil) must publish an empty Version: same %v, Len %d", v == before, v.Len())
+	}
+	if before.Len() != 1 || !before.Has(s("a")) {
+		t.Fatal("the old Version changed")
+	}
+}
+
 // ---- publishing (design note §1) ----
 
 func TestPublishing(t *testing.T) {

@@ -89,6 +89,16 @@ func TestImports(t *testing.T) {
 		runtime := "import _ \"" + mod + "internal/runtime\"\n"
 		wantOne(t, check(t, "internal/validate/x_test.go", "package validate_test\n"+runtime), "may not import internal/runtime")
 	})
+	t.Run("expr's tests may also build tables, its production code may not", func(t *testing.T) {
+		// Owner, 2026-11-04 (S3.1-2, ≠ R): test_fences, test files only, these identifiers only.
+		imp := "import \"" + mod + "internal/table\"\n"
+		build := "func f() (*table.Table, error) { return table.New(\"T\", nil, nil) }\n"
+		wantNone(t, check(t, "internal/expr/x_test.go", "package expr_test\n"+imp+build))
+		wantOne(t, check(t, "internal/expr/x.go", "package expr\n"+imp+"var _ = table.New\nvar _ *table.Version\n"), "fence: internal/expr may use table.Version")
+		wantOne(t, check(t, "internal/expr/x_test.go", "package expr_test\n"+imp+"var _ = table.Walk\n"), "fence: internal/expr may use table.Version")
+		model := "import \"" + mod + "internal/model\"\nvar _ = model.Param{}\n"
+		wantOne(t, check(t, "internal/expr/x_test.go", "package expr_test\n"+model), "fence: internal/expr may use model.Expr")
+	})
 	t.Run("an external test package may import its own package", func(t *testing.T) {
 		wantNone(t, check(t, "internal/event/x_test.go", "package event_test\nimport _ \""+mod+"internal/event\"\n"))
 	})
