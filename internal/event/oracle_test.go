@@ -6,17 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
-	"time"
+	"unicode/utf8"
 
 	"github.com/vorsar/cep/internal/event"
 )
 
 // Sources cited in the decoder's tests:
-//   §4.1     - docs/sprints/s3-1-2-design.md §4.1: the rule, stated as an oracle over encoding/json
-//   §4.2     - the same note §4.2: Offset points into b; Msg names the attribute, echoes <= 64 payload bytes
-//   P1-P4,P8 - sprint-plan §5, "Owner decisions, 2026-11-04 - S3.1-2's plan check"
+//   §4.1     - docs/sprints/s3-1-2-design.md (v2) §4.1: the rule, stated as an oracle over encoding/json; fault
+//              precedence (syntax, then schema order); exact values; on error a nil slice and a zero Decoded
+//   §4.2     - the same note §4.2: the strict RFC 3339 reader (owner D4), here rfc3339Ms
+//   §4.3     - the same note §4.3: Offset (the value's first byte; the offending byte or len(b); the closing
+//              brace for DecodeMissing); Msg names the attribute and the offset, quotes <= 64 payload bytes with %q
+//   P1-P4,P8 - sprint-plan §5, "Owner decisions, 2026-11-04 - S3.1-2's plan check"; D4 - "S3.1-2's design"
 //   SEM §1.1 - a null or absent event timestamp is an event-level error, optional or not
 //   SPEC §4.2 - text_invisibles is engine-owned: a payload value under it is ignored and counted
 
@@ -27,15 +31,20 @@ type outcome struct {
 	dec    event.Decoded
 	reason event.DecodeReason // when !ok
 	attr   string             // when !ok: the attribute named; "" for DecodeSyntax
+	offset int                // when !ok: the Offset §4.3 fixes; -1 for DecodeSyntax, where only bounds are checked
 }
 
-func rejected(r event.DecodeReason, attr string) outcome { return outcome{reason: r, attr: attr} }
+func rejected(r event.DecodeReason, attr string, offset int) outcome {
+	return outcome{reason: r, attr: attr, offset: offset}
+}
 
 // parsed is the schema-independent half of the oracle: §4.1 step 1, and every top-level key occurrence.
 type parsed struct {
 	syntaxOK bool
 	m        map[string]json.RawMessage
-	keys     []string // every top-level key occurrence, unescaped, in payload order
+	keys     []string       // every top-level key occurrence, unescaped, in payload order
+	lastAt   map[string]int // each key's last occurrence: the offset of its value's first byte
+	closeAt  int            // the offset of the object's closing brace
 }
 
 // oracleParse is §4.1 step 1: json.Unmarshal into map[string]json.RawMessage; an error or a nil map (the document
@@ -51,6 +60,7 @@ func oracleParse(b []byte) parsed {
 		panic(fmt.Sprintf("oracle: Unmarshal accepted %q but its first token is %v, %v", clip(b), tok, err))
 	}
 	var keys []string
+	lastAt := map[string]int{}
 	for dec.More() {
 		tok, err := dec.Token()
 		k, ok := tok.(string)
@@ -62,14 +72,24 @@ func oracleParse(b []byte) parsed {
 			panic(fmt.Sprintf("oracle: Unmarshal accepted %q but the value of %q does not decode: %v", clip(b), k, err))
 		}
 		keys = append(keys, k)
+		// After Decode the decoder stands at the value's end; RawMessage holds the value's bytes exactly.
+		lastAt[k] = int(dec.InputOffset()) - len(raw)
 	}
-	return parsed{syntaxOK: true, m: m, keys: keys}
+	// The document is valid, so after the closing brace there is only JSON whitespace.
+	closeAt := len(b) - 1
+	for closeAt >= 0 && strings.IndexByte(" \t\r\n", b[closeAt]) >= 0 {
+		closeAt--
+	}
+	if closeAt < 0 || b[closeAt] != '}' {
+		panic(fmt.Sprintf("oracle: Unmarshal accepted %q but it does not end with '}'", clip(b)))
+	}
+	return parsed{syntaxOK: true, m: m, keys: keys, lastAt: lastAt, closeAt: closeAt}
 }
 
 // oracle is §4.1 for schema s over the parsed payload p.
 func oracle(s event.Schema, p parsed) outcome {
 	if !p.syntaxOK {
-		return rejected(event.DecodeSyntax, "")
+		return rejected(event.DecodeSyntax, "", -1)
 	}
 	declared := make(map[string]bool, s.NumAttrs())
 	for i := range s.NumAttrs() {
@@ -98,20 +118,20 @@ func oracle(s event.Schema, p parsed) outcome {
 		switch {
 		case !present:
 			if !a.Optional || isTime {
-				return rejected(event.DecodeMissing, a.Name)
+				return rejected(event.DecodeMissing, a.Name, p.closeAt)
 			}
 			values[i] = event.Value{Kind: a.Type, Null: true}
 			continue
 		case string(raw) == "null": // json.Unmarshal of null into a Go scalar is a no-op: check it first
 			if !a.Optional || isTime {
-				return rejected(event.DecodeNull, a.Name)
+				return rejected(event.DecodeNull, a.Name, p.lastAt[a.Name])
 			}
 			values[i] = event.Value{Kind: a.Type, Null: true}
 			continue
 		}
 		v, ok := oracleValue(a.Type, raw)
 		if !ok {
-			return rejected(event.DecodeType, a.Name)
+			return rejected(event.DecodeType, a.Name, p.lastAt[a.Name])
 		}
 		values[i] = v
 		if isTime {
@@ -153,11 +173,11 @@ func oracleValue(t event.Type, raw json.RawMessage) (event.Value, bool) {
 		if json.Unmarshal(raw, &s) != nil {
 			return event.Value{}, false
 		}
-		tm, err := time.Parse(time.RFC3339, s)
-		if err != nil {
+		ms, ok := rfc3339Ms(s) // §4.2, owner D4: not time.Parse
+		if !ok {
 			return event.Value{}, false
 		}
-		return event.Value{Kind: t, T: tm.UnixMilli()}, true
+		return event.Value{Kind: t, T: ms}, true
 	case event.TDuration:
 		var n int64
 		if json.Unmarshal(raw, &n) != nil {
@@ -228,12 +248,13 @@ func showValue(v event.Value) string {
 		v.Kind, v.Null, v.Str, v.I, v.F, math.Float64bits(v.F), v.B, v.T, v.D)
 }
 
-// echoLimit is §4.2's bound: a message never echoes more than this many payload bytes.
+// echoLimit is §4.3's bound: a message quotes at most this many payload bytes.
 const echoLimit = 64
 
-// errorShape checks a decoder rejection against the DecodeError contract (§4, §4.2): a *DecodeError with a known
+// errorShape checks a decoder rejection against the DecodeError contract (§4.3): a *DecodeError with a known
 // reason; Attr "" exactly for DecodeSyntax, otherwise a declared attribute that Msg names; 0 <= Offset <= len(b);
-// and no run of more than echoLimit payload bytes in Msg. It returns "" or what is wrong.
+// Msg names the offset, holds no raw control byte, newline or invalid UTF-8 (payload bytes appear only through
+// %q), and no run of more than echoLimit payload bytes, raw or %q-quoted. It returns "" or what is wrong.
 func errorShape(s event.Schema, b []byte, err error) (string, *event.DecodeError) {
 	var de *event.DecodeError
 	if !errors.As(err, &de) || de == nil {
@@ -263,20 +284,44 @@ func errorShape(s event.Schema, b []byte, err error) (string, *event.DecodeError
 	if de.Msg == "" {
 		faults = append(faults, "Msg is empty")
 	}
+	if !strings.Contains(de.Msg, strconv.Itoa(de.Offset)) {
+		faults = append(faults, fmt.Sprintf("Msg %q does not name the offset %d", de.Msg, de.Offset))
+	}
+	if !utf8.ValidString(de.Msg) {
+		faults = append(faults, fmt.Sprintf("Msg holds invalid UTF-8: %q", de.Msg))
+	}
+	if i := strings.IndexFunc(de.Msg, func(r rune) bool { return r < 0x20 || r == 0x7f }); i >= 0 {
+		faults = append(faults, fmt.Sprintf("Msg holds a raw control byte %#x at %d: %q", de.Msg[i], i, de.Msg))
+	}
 	if i := echoes(de.Msg, b); i >= 0 {
 		faults = append(faults, fmt.Sprintf("Msg echoes more than %d payload bytes (from offset %d): %q", echoLimit, i, de.Msg))
 	}
 	return strings.Join(faults, "; "), de
 }
 
-// echoes returns the first offset i where b[i:i+echoLimit+1] appears in msg, or -1.
+// echoes returns the first offset i where b[i:i+echoLimit+1] appears in msg, raw or as %q quotes it, or -1. A
+// window is quoted only when it holds a byte %q may change (a control byte, a quote, a backslash or a non-ASCII
+// byte); otherwise its quoted form is its raw form.
 func echoes(msg string, b []byte) int {
 	if len(msg) <= echoLimit {
 		return -1
 	}
+	special := make([]int, len(b)+1) // special[i]: how many of b[:i] %q may change
+	for i, c := range b {
+		special[i+1] = special[i]
+		if c < 0x20 || c >= 0x7f || c == '"' || c == '\\' {
+			special[i+1]++
+		}
+	}
 	for i := 0; i+echoLimit < len(b); i++ {
-		if strings.Contains(msg, string(b[i:i+echoLimit+1])) {
+		w := string(b[i : i+echoLimit+1])
+		if strings.Contains(msg, w) {
 			return i
+		}
+		if special[i+echoLimit+1] > special[i] {
+			if q := strconv.Quote(w); strings.Contains(msg, q[1:len(q)-1]) {
+				return i
+			}
 		}
 	}
 	return -1
@@ -293,6 +338,10 @@ func disagreement(s event.Schema, b []byte, want outcome, got decodeResult) stri
 		if shape != "" {
 			return "a malformed rejection: " + shape
 		}
+		if got.values != nil || got.dec != (event.Decoded{}) {
+			return fmt.Sprintf("a rejection returned %d values (nil: %v) and Decoded %+v; §4.1: a nil slice and a zero Decoded",
+				len(got.values), got.values == nil, got.dec)
+		}
 		if want.ok {
 			return fmt.Sprintf("the decoder rejects (%v %q: %s); the oracle accepts with %s",
 				reasonName(de.Reason), de.Attr, de.Msg, showOutcome(want))
@@ -300,6 +349,9 @@ func disagreement(s event.Schema, b []byte, want outcome, got decodeResult) stri
 		if de.Reason != want.reason || de.Attr != want.attr {
 			return fmt.Sprintf("the decoder rejects as %v on %q (%s); the oracle as %v on %q",
 				reasonName(de.Reason), de.Attr, de.Msg, reasonName(want.reason), want.attr)
+		}
+		if want.offset >= 0 && de.Offset != want.offset {
+			return fmt.Sprintf("%v on %q at Offset %d; §4.3 wants %d", reasonName(de.Reason), de.Attr, de.Offset, want.offset)
 		}
 		return ""
 	}

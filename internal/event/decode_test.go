@@ -66,15 +66,22 @@ func vNull(t event.Type) event.Value {
 
 // Epoch milliseconds, computed independently (Python's datetime, not Go's time):
 const (
-	ms20261104T10     = 1793786400000   // 2026-11-04T10:00:00Z
-	ms20261104T08_123 = 1793779200123   // 2026-11-04T08:00:00.123Z
-	ms20240229        = 1709164800000   // 2024-02-29T00:00:00Z
-	ms00010101        = -62135596800000 // 0001-01-01T00:00:00Z
-	ms99991231        = 253402300799999 // 9999-12-31T23:59:59.999Z
+	ms20261104T10         = 1793786400000   // 2026-11-04T10:00:00Z
+	ms20261104T08_123     = 1793779200123   // 2026-11-04T08:00:00.123Z
+	ms20240229            = 1709164800000   // 2024-02-29T00:00:00Z
+	ms00010101            = -62135596800000 // 0001-01-01T00:00:00Z
+	ms99991231            = 253402300799999 // 9999-12-31T23:59:59.999Z
+	ms20161231T235959_999 = 1483228799999   // 2016-12-31T23:59:59.999Z
+	ms20161231T225959_999 = 1483225199999   // 2016-12-31T22:59:59.999Z
+	ms20261104T235959_999 = 1793836799999   // 2026-11-04T23:59:59.999Z
+	ms20000229            = 951782400000    // 2000-02-29T00:00:00Z
+	ms00000101            = -62167219200000 // 0000-01-01T00:00:00Z (year 0 is a leap year: 366 days before 0001)
+	ms99991231m2359       = 253402387139000 // 9999-12-31T23:59:59-23:59 = 10000-01-01T23:58:59Z
 )
 
-// hcase is one hand-written case. A nil want is a rejection with reason and attr; at, when set, is the text the
-// error's Offset must point at (b[Offset:] starts with it), "$" for the end of the payload.
+// hcase is one hand-written case. A nil want is a rejection with reason and attr. at fixes the error's Offset
+// (§4.3): b[Offset:] starts with at; "$" is len(b); "}end" is the object's closing brace (the last '}'); withOff
+// gives an exact offset. An empty at with no withOff checks bounds only.
 type hcase struct {
 	name     string
 	schema   string
@@ -86,6 +93,8 @@ type hcase struct {
 	reason   event.DecodeReason
 	attr     string
 	at       string
+	off      int
+	hasOff   bool
 }
 
 func ok(name, schema, in string, want ...event.Value) hcase {
@@ -99,6 +108,33 @@ func bad(name, schema, in string, r event.DecodeReason, attr, at string) hcase {
 func (c hcase) withTs(ts int64) hcase   { c.ts = ts; return c }
 func (c hcase) withUnknown(n int) hcase { c.unknown = n; return c }
 func (c hcase) withReserved() hcase     { c.reserved = true; return c }
+func (c hcase) withOff(n int) hcase     { c.off, c.hasOff = n, true; return c }
+
+// offsetFault checks an Offset against the case's expectation; it returns "" or what is wrong.
+func (c hcase) offsetFault(b []byte, off int) string {
+	if off < 0 || off > len(b) {
+		return fmt.Sprintf("Offset %d is outside the payload's %d bytes", off, len(b))
+	}
+	switch {
+	case c.hasOff:
+		if off != c.off {
+			return fmt.Sprintf("Offset %d; want %d", off, c.off)
+		}
+	case c.at == "$":
+		if off != len(b) {
+			return fmt.Sprintf("Offset %d; want %d, the end of the payload", off, len(b))
+		}
+	case c.at == "}end":
+		if want := strings.LastIndexByte(string(b), '}'); off != want {
+			return fmt.Sprintf("Offset %d; want %d, the object's closing brace", off, want)
+		}
+	case c.at != "":
+		if !strings.HasPrefix(string(b[off:]), c.at) {
+			return fmt.Sprintf("Offset %d, at %q; want the fault's start, at %q", off, clipStr(string(b[off:])), c.at)
+		}
+	}
+	return ""
+}
 
 const (
 	syn  = event.DecodeSyntax
@@ -139,13 +175,13 @@ var handCases = []hcase{
 	ok("string/invisible code point kept", "S", `{"v":"a​b"}`, vStr("a​b")),
 	bad("string/raw control character", "S", "{\"v\":\"a\x01b\"}", syn, "", "\x01"),
 	bad("string/raw newline", "S", "{\"v\":\"a\nb\"}", syn, "", "\n"),
-	bad("string/unknown escape", "S", `{"v":"\x41"}`, syn, "", ""),
-	bad("string/short u escape", "S", `{"v":"\u12"}`, syn, "", ""),
+	bad("string/unknown escape", "S", `{"v":"\x41"}`, syn, "", "x41"),
+	bad("string/short u escape", "S", `{"v":"\u12"}`, syn, "", `"}`),
 	bad("string/number", "S", `{"v":5}`, typ, "v", "5}"),
 	bad("string/bool", "S", `{"v":true}`, typ, "v", "true"),
 	bad("string/object", "S", `{"v":{"x":"y"}}`, typ, "v", `{"x"`),
 	bad("string/null", "S", `{"v":null}`, null, "v", "null"),
-	bad("string/absent", "S", `{}`, miss, "v", ""),
+	bad("string/absent", "S", `{}`, miss, "v", "}end"),
 
 	// int (§4.1 row 2)
 	ok("int/plain", "I", `{"n":42}`, vInt(42)),
@@ -162,8 +198,8 @@ var handCases = []hcase{
 	bad("int/huge", "I", `{"n":123456789012345678901234567890}`, typ, "n", "123456789012345678901234567890"),
 	bad("int/string, no coercion", "I", `{"n":"5"}`, typ, "n", `"5"`),
 	bad("int/bool", "I", `{"n":true}`, typ, "n", "true"),
-	bad("int/leading zero is syntax", "I", `{"n":01}`, syn, "", ""),
-	bad("int/plus sign is syntax", "I", `{"n":+1}`, syn, "", ""),
+	bad("int/leading zero is syntax", "I", `{"n":01}`, syn, "", "1}"),
+	bad("int/plus sign is syntax", "I", `{"n":+1}`, syn, "", "+1"),
 
 	// float (§4.1 row 3)
 	ok("float/plain", "F", `{"f":1.5}`, vFloat(1.5)),
@@ -180,15 +216,15 @@ var handCases = []hcase{
 	bad("float/negative overflow", "F", `{"f":-1e400}`, typ, "f", "-1e400"),
 	bad("float/just above max", "F", `{"f":1.7976931348623159e308}`, typ, "f", "1.79"),
 	bad("float/string", "F", `{"f":"1.5"}`, typ, "f", `"1.5"`),
-	bad("float/NaN is syntax", "F", `{"f":NaN}`, syn, "", ""),
-	bad("float/leading dot is syntax", "F", `{"f":.5}`, syn, "", ""),
+	bad("float/NaN is syntax", "F", `{"f":NaN}`, syn, "", "NaN"),
+	bad("float/leading dot is syntax", "F", `{"f":.5}`, syn, "", ".5"),
 
 	// bool (§4.1 row 4)
 	ok("bool/true", "B", `{"b":true}`, vBool(true)),
 	ok("bool/false", "B", `{"b":false}`, vBool(false)),
 	bad("bool/string", "B", `{"b":"true"}`, typ, "b", `"true"`),
 	bad("bool/number", "B", `{"b":1}`, typ, "b", "1}"),
-	bad("bool/capitalised is syntax", "B", `{"b":True}`, syn, "", ""),
+	bad("bool/capitalised is syntax", "B", `{"b":True}`, syn, "", "True"),
 
 	// timestamp (§4.1 row 5; P1; SEM §1.1)
 	ok("timestamp/Z", "T", `{"ts":"2026-11-04T10:00:00Z"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
@@ -209,19 +245,47 @@ var handCases = []hcase{
 	bad("timestamp/a number is an error", "T", `{"ts":1762243200123}`, typ, "ts", "1762243200123"),
 	bad("timestamp/Feb 30", "T", `{"ts":"2026-02-30T00:00:00Z"}`, typ, "ts", `"2026-02-30`),
 	bad("timestamp/Feb 29 outside a leap year", "T", `{"ts":"2023-02-29T00:00:00Z"}`, typ, "ts", `"2023`),
-	bad("timestamp/lowercase t", "T", `{"ts":"2026-11-04t10:00:00Z"}`, typ, "ts", `"2026`),
-	bad("timestamp/lowercase z", "T", `{"ts":"2026-11-04T10:00:00z"}`, typ, "ts", `"2026`),
+	ok("timestamp/lowercase t", "T", `{"ts":"2026-11-04t10:00:00Z"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
+	ok("timestamp/lowercase z", "T", `{"ts":"2026-11-04T10:00:00z"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
+	ok("timestamp/lowercase t and z with a fraction", "T", `{"ts":"2026-11-04t10:00:00.5z"}`, vTs(ms20261104T10+500)).withTs(ms20261104T10 + 500),
+	ok("timestamp/escaped lowercase t", "T", `{"ts":"2026-11-04\u007410:00:00Z"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
+	ok("timestamp/minus zero offset is UTC", "T", `{"ts":"2026-11-04T10:00:00-00:00"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
+	ok("timestamp/offset +23:59", "T", `{"ts":"2026-11-04T10:00:00+23:59"}`, vTs(ms20261104T10-86340000)).withTs(ms20261104T10 - 86340000),
+	ok("timestamp/leap second reads as :59.999", "T", `{"ts":"2016-12-31T23:59:60Z"}`, vTs(ms20161231T235959_999)).withTs(ms20161231T235959_999),
+	ok("timestamp/leap second with a fraction and an offset", "T", `{"ts":"2016-12-31T23:59:60.5+01:00"}`,
+		vTs(ms20161231T225959_999)).withTs(ms20161231T225959_999),
+	ok("timestamp/leap second, any fraction", "T", `{"ts":"2016-12-31T23:59:60.0001Z"}`, vTs(ms20161231T235959_999)).withTs(ms20161231T235959_999),
+	ok("timestamp/leap second in any minute", "T", `{"ts":"2026-11-04T23:59:60Z"}`, vTs(ms20261104T235959_999)).withTs(ms20261104T235959_999),
+	ok("timestamp/ten fraction digits, past the third dropped", "T", `{"ts":"2026-11-04T10:00:00.9999999999Z"}`,
+		vTs(ms20261104T10+999)).withTs(ms20261104T10 + 999),
+	ok("timestamp/year 0, a leap year", "T", `{"ts":"0000-01-01T00:00:00Z"}`, vTs(ms00000101)).withTs(ms00000101),
+	ok("timestamp/Feb 29 of 2000", "T", `{"ts":"2000-02-29T00:00:00Z"}`, vTs(ms20000229)).withTs(ms20000229),
+	ok("timestamp/year 9999 west of UTC", "T", `{"ts":"9999-12-31T23:59:59-23:59"}`, vTs(ms99991231m2359)).withTs(ms99991231m2359),
+	bad("timestamp/offset +24:00", "T", `{"ts":"2026-11-04T10:00:00+24:00"}`, typ, "ts", `"2026`),
+	bad("timestamp/offset minute 60", "T", `{"ts":"2026-11-04T10:00:00+00:60"}`, typ, "ts", `"2026`),
+	bad("timestamp/offset without a colon", "T", `{"ts":"2026-11-04T10:00:00+0200"}`, typ, "ts", `"2026`),
+	bad("timestamp/comma fraction", "T", `{"ts":"2026-11-04T10:00:00,5Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/one-digit hour", "T", `{"ts":"2026-11-04T1:00:00Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/one-digit minute", "T", `{"ts":"2026-11-04T10:0:00Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/one-digit month", "T", `{"ts":"2026-1-04T10:00:00Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/five-digit year", "T", `{"ts":"12026-11-04T10:00:00Z"}`, typ, "ts", `"1202`),
+	bad("timestamp/empty fraction", "T", `{"ts":"2026-11-04T10:00:00.Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/leading space", "T", `{"ts":" 2026-11-04T10:00:00Z"}`, typ, "ts", `" 2026`),
+	bad("timestamp/trailing space", "T", `{"ts":"2026-11-04T10:00:00Z "}`, typ, "ts", `"2026`),
+	bad("timestamp/Feb 29 of 1900", "T", `{"ts":"1900-02-29T00:00:00Z"}`, typ, "ts", `"1900`),
+	bad("timestamp/April 31", "T", `{"ts":"2026-04-31T00:00:00Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/second 61", "T", `{"ts":"2026-11-04T10:00:61Z"}`, typ, "ts", `"2026`),
+	bad("timestamp/fullwidth digit", "T", `{"ts":"２026-11-04T10:00:00Z"}`, typ, "ts", `"２`),
 	bad("timestamp/no seconds", "T", `{"ts":"2026-11-04T10:00Z"}`, typ, "ts", `"2026`),
 	bad("timestamp/no offset", "T", `{"ts":"2026-11-04T10:00:00"}`, typ, "ts", `"2026`),
 	bad("timestamp/space for T", "T", `{"ts":"2026-11-04 10:00:00Z"}`, typ, "ts", `"2026`),
 	bad("timestamp/hour 24", "T", `{"ts":"2026-11-04T24:00:00Z"}`, typ, "ts", `"2026`),
-	bad("timestamp/leap second", "T", `{"ts":"2026-11-04T23:59:60Z"}`, typ, "ts", `"2026`),
 	bad("timestamp/empty", "T", `{"ts":""}`, typ, "ts", `""`),
 	bad("timestamp/malformed UTF-8 inside", "T", "{\"ts\":\"2026-11-04T10:00:00\xffZ\"}", typ, "ts", `"2026`),
 	bad("timestamp/bool", "T", `{"ts":true}`, typ, "ts", "true"),
 	bad("timestamp/time attribute null", "T", `{"ts":null}`, null, "ts", "null"),
-	bad("timestamp/time attribute absent", "T", `{"x":1}`, miss, "ts", ""),
-	bad("timestamp/optional time attribute absent", "Topt", `{"msg":"hi"}`, miss, "ts", ""),
+	bad("timestamp/time attribute absent", "T", `{"x":1}`, miss, "ts", "}end"),
+	bad("timestamp/optional time attribute absent", "Topt", `{"msg":"hi"}`, miss, "ts", "}end"),
 	bad("timestamp/optional time attribute null", "Topt", `{"ts":null,"msg":"hi"}`, null, "ts", "null"),
 	ok("timestamp/optional time attribute present", "Topt", `{"ts":"2026-11-04T10:00:00Z"}`,
 		vTs(ms20261104T10), vNull(event.TString)).withTs(ms20261104T10),
@@ -247,14 +311,14 @@ var handCases = []hcase{
 	ok("object/inner repeated keys kept", "O", `{"o":{"a":1,"a":2}}`, vObj(`{"a":1,"a":2}`)),
 	ok("object/nesting at the limit", "O", `{"o":`+deep(9999)+`}`, vObj(deep(9999))),
 	ok("object/object nesting at the limit", "O", `{"o":`+deepObj(9999)+`}`, vObj(deepObj(9999))),
-	bad("object/nesting past the limit", "O", `{"o":`+deep(10000)+`}`, syn, "", ""),
-	bad("object/object nesting past the limit", "O", `{"o":`+deepObj(10000)+`}`, syn, "", ""),
+	bad("object/nesting past the limit", "O", `{"o":`+deep(10000)+`}`, syn, "", "").withOff(5 + 9999),
+	bad("object/object nesting past the limit", "O", `{"o":`+deepObj(10000)+`}`, syn, "", "").withOff(5 + 9999*5),
 	bad("object/string", "O", `{"o":"x"}`, typ, "o", `"x"`),
 	bad("object/JSON text in a string", "O", `{"o":"{}"}`, typ, "o", `"{}"`),
 	bad("object/number", "O", `{"o":1}`, typ, "o", "1}"),
 	bad("object/bool", "O", `{"o":false}`, typ, "o", "false"),
 	bad("object/null", "O", `{"o":null}`, null, "o", "null"),
-	bad("object/trailing comma inside is syntax", "O", `{"o":[1,]}`, syn, "", ""),
+	bad("object/trailing comma inside is syntax", "O", `{"o":[1,]}`, syn, "", "]}"),
 
 	// optional attributes (§4.1 step 3)
 	ok("optional/all absent", "Opt", `{}`, vNull(event.TString), vNull(event.TInt), vNull(event.TObject)),
@@ -270,16 +334,16 @@ var handCases = []hcase{
 	ok("repeat/escaped key repeats the plain one", "U", `{"user":"alice","user":"root"}`, vStr("root")),
 	bad("repeat/valid then invalid", "I", `{"n":5,"n":"oops"}`, typ, "n", `"oops"`),
 	bad("repeat/valid then null", "I", `{"n":5,"n":null}`, null, "n", "null"),
-	bad("repeat/an earlier occurrence is still syntax-checked", "I", `{"n":01,"n":5}`, syn, "", ""),
-	bad("repeat/an earlier occurrence past the depth limit", "O", `{"o":`+deep(10000)+`,"o":{}}`, syn, "", ""),
+	bad("repeat/an earlier occurrence is still syntax-checked", "I", `{"n":01,"n":5}`, syn, "", `1,"n"`),
+	bad("repeat/an earlier occurrence past the depth limit", "O", `{"o":`+deep(10000)+`,"o":{}}`, syn, "", "").withOff(5 + 9999),
 
 	// unknown keys (§4.1 step 2), counted per occurrence
 	ok("unknown/counted per occurrence", "S", `{"v":"a","extra":1,"extra":{"x":[1]},"V":true}`, vStr("a")).withUnknown(3),
 	ok("unknown/nested at the limit", "S", `{"x":`+deep(9999)+`,"v":"a"}`, vStr("a")).withUnknown(1),
 	ok("unknown/malformed UTF-8 in the key", "S", "{\"v\":\"a\",\"k\xff\":1}", vStr("a")).withUnknown(1),
 	ok("unknown/escaped key matches a declared name", "S", `{"v":"a"}`, vStr("a")),
-	bad("unknown/nested past the limit", "S", `{"x":`+deep(10000)+`,"v":"a"}`, syn, "", ""),
-	bad("unknown/names are case-sensitive", "S", `{"V":"a"}`, miss, "v", ""),
+	bad("unknown/nested past the limit", "S", `{"x":`+deep(10000)+`,"v":"a"}`, syn, "", "").withOff(5 + 9999),
+	bad("unknown/names are case-sensitive", "S", `{"V":"a"}`, miss, "v", "}end"),
 
 	// text_invisibles (SPEC §4.2; §4.1 step 2)
 	ok("invisibles/ignored and noted", "S", `{"v":"a","text_invisibles":true}`, vStr("a")).withReserved(),
@@ -295,12 +359,12 @@ var handCases = []hcase{
 	// the document (§4.1 step 1)
 	ok("document/whitespace around", "S", " \t\r\n{ \"v\" : \"a\" }\n ", vStr("a")),
 	bad("document/empty", "S", ``, syn, "", "$"),
-	bad("document/only whitespace", "S", "  \n", syn, "", ""),
-	bad("document/null", "S", `null`, syn, "", ""),
-	bad("document/array", "S", `[{"v":"a"}]`, syn, "", ""),
-	bad("document/string", "S", `"v"`, syn, "", ""),
-	bad("document/number", "S", `5`, syn, "", ""),
-	bad("document/true", "S", `true`, syn, "", ""),
+	bad("document/only whitespace", "S", "  \n", syn, "", "$"),
+	bad("document/null", "S", `null`, syn, "", "").withOff(0),
+	bad("document/array", "S", `[{"v":"a"}]`, syn, "", "").withOff(0),
+	bad("document/string", "S", `"v"`, syn, "", "").withOff(0),
+	bad("document/number", "S", `5`, syn, "", "").withOff(0),
+	bad("document/true", "S", `true`, syn, "", "").withOff(0),
 	bad("document/BOM", "S", "\xef\xbb\xbf{\"v\":\"a\"}", syn, "", "\xef"),
 	bad("document/trailing data", "S", `{"v":"a"}x`, syn, "", "x"),
 	bad("document/a second object", "S", `{"v":"a"} {}`, syn, "", "{}"),
@@ -308,12 +372,12 @@ var handCases = []hcase{
 	bad("document/form feed is not whitespace", "S", "\f{\"v\":\"a\"}", syn, "", "\f"),
 	bad("document/truncated", "S", `{"v":"a"`, syn, "", "$"),
 	bad("document/truncated in a string", "S", `{"v":"a`, syn, "", "$"),
-	bad("document/trailing comma", "S", `{"v":"a",}`, syn, "", ""),
-	bad("document/unquoted key", "S", `{v:"a"}`, syn, "", ""),
-	bad("document/single quotes", "S", `{"v":'a'}`, syn, "", ""),
+	bad("document/trailing comma", "S", `{"v":"a",}`, syn, "", "}"),
+	bad("document/unquoted key", "S", `{v:"a"}`, syn, "", `v:`),
+	bad("document/single quotes", "S", `{"v":'a'}`, syn, "", "'a'"),
 
 	// which fault is reported: syntax first, then the first attribute in schema order (§4.1 steps 1 and 3)
-	bad("precedence/missing before a later type error", "Two", `{"b":5}`, miss, "a", ""),
+	bad("precedence/missing before a later type error", "Two", `{"b":5}`, miss, "a", "}end"),
 	bad("precedence/schema order, not payload order", "Two", `{"b":5,"a":"x"}`, typ, "a", `"x"`),
 	bad("precedence/null after a valid attribute", "Two", `{"a":1,"b":null}`, null, "b", "null"),
 	bad("precedence/syntax over an earlier type error", "Two", `{"a":"x","b":5`, syn, "", "$"),
@@ -323,6 +387,10 @@ var handCases = []hcase{
 	bad("message/long string for an int", "I", `{"n":"`+long200+`"}`, typ, "n", `"qz`),
 	bad("message/long unknown key then a fault", "I", `{"`+long200+`":1,"n":true}`, typ, "n", "true"),
 	bad("message/long garbage", "S", `{"v":"a"}`+long200, syn, "", "qz"),
+	bad("message/long control bytes", "S", `{"v":"`+strings.Repeat("\x01", 200)+`"}`, syn, "", "\x01").withOff(6),
+	bad("message/long malformed UTF-8 for an int", "I", `{"n":"`+strings.Repeat("\xff", 200)+`"}`, typ, "n", "\"\xff"),
+	bad("message/newlines and escapes for an int", "I", "{\"n\":\""+strings.Repeat("a\\n\\u0000\\\"", 30)+"\"}", typ, "n", `"a\n`),
+	bad("message/raw newline in a string", "S", "{\"v\":\"a\nb\n\"}", syn, "", "\nb"),
 }
 
 // TestDecodeCases runs the hand-written cases: one sub-test per row of §4.1's table and per rule.
@@ -338,7 +406,7 @@ func TestDecodeCases(t *testing.T) {
 			t.Parallel()
 			s := schemas[c.schema]
 			b := []byte(c.in)
-			got := decodeSafe(decoders[c.schema], b, nil)
+			got := decodeSafe(decoders[c.schema], b, make([]event.Value, 2, 8))
 			if got.panicked != nil {
 				t.Fatalf("Decode(%s) panicked: %v", clip(b), got.panicked)
 			}
@@ -378,15 +446,13 @@ func checkRejection(t *testing.T, s event.Schema, b []byte, got decodeResult, c 
 	if de.Reason != c.reason || de.Attr != c.attr {
 		t.Errorf("Decode(%s) = %s on %q (%s); want %s on %q", clip(b), reasonName(de.Reason), de.Attr, de.Msg, reasonName(c.reason), c.attr)
 	}
-	switch {
-	case c.at == "$":
-		if de.Offset != len(b) {
-			t.Errorf("Decode(%s) Offset = %d; want %d, the end of the payload", clip(b), de.Offset, len(b))
-		}
-	case c.at != "":
-		if !strings.HasPrefix(string(b[de.Offset:]), c.at) {
-			t.Errorf("Decode(%s) Offset = %d, at %q; want the fault's start, at %q", clip(b), de.Offset, clipStr(string(b[de.Offset:])), c.at)
-		}
+	if f := c.offsetFault(b, de.Offset); f != "" {
+		t.Errorf("Decode(%s): %s (§4.3)", clip(b), f)
+	}
+	// §4.1: on error the returned slice is nil and Decoded is zero, whatever dst was.
+	if got.values != nil || got.dec != (event.Decoded{}) {
+		t.Errorf("Decode(%s) rejected but returned %d values (nil: %v) and Decoded %+v; want nil and zero",
+			clip(b), len(got.values), got.values == nil, got.dec)
 	}
 }
 
@@ -408,6 +474,10 @@ func TestDecodeOracleSelfCheck(t *testing.T) {
 		if c.want == nil {
 			if got.ok || got.reason != c.reason || got.attr != c.attr {
 				t.Errorf("%s: the oracle gives %s; the case wants %s on %q", c.name, showOutcome(got), reasonName(c.reason), c.attr)
+			} else if got.offset >= 0 {
+				if f := c.offsetFault([]byte(c.in), got.offset); f != "" {
+					t.Errorf("%s: the oracle's offset disagrees with the case: %s", c.name, f)
+				}
 			}
 			continue
 		}
