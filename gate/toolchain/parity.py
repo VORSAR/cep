@@ -18,6 +18,12 @@ from gate.toolchain.manifest import Tool
 
 RECOVER = "run make clean-tools tools"
 
+# A python-package's version probe, run by the pinned interpreter: argv[1] is the package's sys.path directory,
+# argv[2] its import name.
+PROBE = (
+    "import importlib, sys; sys.path.insert(0, sys.argv[1]); print(importlib.import_module(sys.argv[2]).__version__)"
+)
+
 
 @dataclass(frozen=True)
 class Timing:
@@ -37,13 +43,15 @@ def check(tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: b
     Per tool, short-circuit in order: not installed → path (shutil.which(command) under env["PATH"],
     realpath-compared) → version (version_argv run in `env`, first stdout line exact) → sha256 of every
     exec_sha256 entry → (only if full_tree, i.e. T2 and above) tree_sha256. Never runs a binary that
-    lies outside the cache.
+    lies outside the cache. A python-package has no command: its path check is that its path_dir stays
+    inside its home, and its version is `<module>.__version__` imported by the pinned interpreter.
     """
     return _check(tools, cache, env, full_tree=full_tree, timing=Timing())
 
 
 def _check(tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: bool, timing: Timing) -> list[str]:
     goos, goarch = manifest.platform_key().split("-")
+    python = next((tool for tool in tools if tool.name == manifest.GATE_PYTHON), None)
     reasons = []
     with tempfile.TemporaryDirectory(prefix="gate-parity-") as scratch:
         for tool in tools:
@@ -52,12 +60,13 @@ def _check(tools: list[Tool], cache: str, env: Mapping[str, str], *, full_tree: 
                 reasons.append(f"{tool.name}: not installed: run make tools")
                 continue
             want = tool.version_line.replace("{goos}", goos).replace("{goarch}", goarch)
-            reason = (
-                _path_failure(tool, home, env)
-                or _version_failure(tool, home, want, env, scratch, timing)
-                or _hash_failure(tool, home)
-                or (_tree_failure(tool, home) if full_tree else None)
-            )
+            if tool.kind == manifest.PYTHON_PACKAGE:
+                first = _package_path_failure(tool, home) or _import_failure(
+                    tool, home, want, python, cache, env, scratch, timing
+                )
+            else:
+                first = _path_failure(tool, home, env) or _version_failure(tool, home, want, env, scratch, timing)
+            reason = first or _hash_failure(tool, home) or (_tree_failure(tool, home) if full_tree else None)
             if reason is not None:
                 reasons.append(reason)
     return reasons
@@ -104,10 +113,45 @@ def _run(argv: list[str], cwd: str, env: Mapping[str, str], scratch: str, timing
         return code, f.read()
 
 
+def _package_path_failure(tool: Tool, home: str) -> str | None:
+    resolved = os.path.realpath(os.path.join(home, tool.path_dir))
+    if resolved != os.path.realpath(home) and not _inside(resolved, home):
+        return f"{tool.name}: path: {resolved} is outside the cache: {RECOVER}"
+    return None
+
+
+def _import_failure(
+    tool: Tool,
+    home: str,
+    want: str,
+    python: Tool | None,
+    cache: str,
+    env: Mapping[str, str],
+    scratch: str,
+    timing: Timing,
+) -> str | None:
+    if python is None:
+        gate_python = manifest.GATE_PYTHON
+        return f"{tool.name}: version: tools.json has no tool named {gate_python!r} to import it: fix tools.json"
+    python_home = manifest.tool_home(cache, python)
+    interpreter = os.path.join(python_home, python.path_dir, python.command)
+    if not _inside(os.path.realpath(interpreter), python_home):
+        return f"{tool.name}: version: {interpreter} is outside the cache: {RECOVER}"
+    path = os.path.normpath(os.path.join(home, tool.path_dir))
+    argv = [interpreter, "-I", "-B", "-X", "utf8", "-c", PROBE, path, tool.module]
+    return _probe(tool, argv, home, want, env, scratch, timing)
+
+
 def _version_failure(
     tool: Tool, home: str, want: str, env: Mapping[str, str], scratch: str, timing: Timing
 ) -> str | None:
     argv = [os.path.join(home, tool.version_argv[0]), *tool.version_argv[1:]]
+    return _probe(tool, argv, home, want, env, scratch, timing)
+
+
+def _probe(
+    tool: Tool, argv: list[str], home: str, want: str, env: Mapping[str, str], scratch: str, timing: Timing
+) -> str | None:
     try:
         code, stdout = _run(argv, home, env, scratch, timing)
     except OSError as e:
