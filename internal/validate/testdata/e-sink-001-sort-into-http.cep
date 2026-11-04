@@ -1,0 +1,17 @@
+-- expect: E-SINK-001 (a sort changelog into the append-only http sink) @ 17:15
+language cep/0.1;
+
+stream Scores (k string, score float, ts timestamp)
+  time ts watermark bounded 30 sec idle after 1 min;
+
+@sink(type = 'http', url = 'http://localhost:9000/hook', @map(type = 'json'))
+stream Top (k string, score float, ts timestamp);
+
+rule R
+  intent 'Keep the highest scores per key; emit every change.'
+  partition by k of Scores ttl 2 hour
+  from Scores window sort(2, score, desc)
+  emit on change
+  late events drop
+  select k, score
+  insert into Top;

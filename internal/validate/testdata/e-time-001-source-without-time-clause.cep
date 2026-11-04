@@ -1,0 +1,12 @@
+-- expect: E-TIME-001 (a source stream names its clock) @ 4:1
+language cep/0.1;
+
+stream S (k string, kind string, ts timestamp);
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k
+  insert into Out;

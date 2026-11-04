@@ -1,0 +1,20 @@
+-- expect: E-GRAPH-004 (Consumer reads Mid, which Producer writes) @ 18:8
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Mid (k string, ts timestamp);
+stream Out (k string, ts timestamp);
+
+rule Producer
+  intent 'Keep the x events.'
+  from S[kind == 'x']
+  select k
+  insert into Mid;
+
+rule Consumer
+  intent 'Forward what Producer kept.'
+  from Mid
+  select k
+  insert into Out;

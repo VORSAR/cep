@@ -1,0 +1,13 @@
+-- expect: E-TIME-003 (the time attribute is declared string) @ 5:8
+language cep/0.1;
+
+stream S (k string, seen string, ts timestamp)
+  time seen watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[seen == 'x']
+  select k
+  insert into Out;

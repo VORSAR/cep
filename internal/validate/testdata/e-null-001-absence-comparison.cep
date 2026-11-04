@@ -1,0 +1,18 @@
+-- expect: E-NULL-001 (note is optional and compared inside an absence) @ 13:14
+language cep/0.1;
+
+stream S (k string, kind string, note string optional, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'A start with no stop on the same key in time.'
+  partition by k of S ttl 1 hour
+  from every s = S[kind == 'start']
+   and not S[note == 'approved'] for 5 min
+  within 5 min
+  after match skip past last
+  late events drop
+  select s.k
+  insert into Out;

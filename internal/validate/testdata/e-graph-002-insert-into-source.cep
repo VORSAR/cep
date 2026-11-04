@@ -1,0 +1,22 @@
+-- expect: E-GRAPH-002 (a rule inserts into a stream with a time clause) @ 16:15
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream T (k string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule Writer
+  intent 'Copy matching S events into T.'
+  from S[kind == 'x']
+  select k
+  insert into T;
+
+rule Reader
+  intent 'Forward every T event.'
+  from T
+  select k
+  insert into Out;

@@ -1,0 +1,18 @@
+-- expect: E-TTL-002 (ttl 10 min is smaller than the rate-limit interval 30 min) @ 11:27
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'An open, then a close on the same key.'
+  partition by k of S ttl 10 min
+  from every o = S[kind == 'open'] -> c = S[kind == 'close']
+  within 5 min
+  after match skip past last
+  late events drop
+  select o.k
+  output first every 30 min
+  insert into Out;

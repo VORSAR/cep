@@ -1,0 +1,14 @@
+-- expect: E-NAME-001 (the http sink has no key colour) @ 7:58
+language cep/0.1;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+@sink(type = 'http', url = 'http://localhost:9000/hook', colour = 'red', @map(type = 'json'))
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k
+  insert into Out;

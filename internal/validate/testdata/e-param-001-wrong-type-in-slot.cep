@@ -1,0 +1,16 @@
+-- expect: E-PARAM-001 (a bool param in a duration slot) @ 15:22
+language cep/0.1;
+
+param quiet bool = true;
+
+stream S (k string, kind string, n int, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k
+  output first every ${quiet}
+  insert into Out;

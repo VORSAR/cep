@@ -1,0 +1,20 @@
+-- expect: E-NAME-002 (capture Logins shadows the stream Logins) @ 15:14
+language cep/0.1;
+
+stream Logins (user string, ok bool, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Resets (user string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (user string, ts timestamp);
+
+rule R
+  intent 'A failed login, then a successful one for the same user.'
+  partition by user of Logins ttl 1 hour
+  from every Logins = Logins[ok == false] -> r = Logins[ok == true]
+  within 5 min
+  after match skip past last
+  late events drop
+  select r.user
+  insert into Out;
