@@ -12,8 +12,9 @@
 ```
 Sprint S3.1-1 — the clock service · routine: lighter (QA first + architecture review + break-it) · SP 6.5 · cap 2 weeks
 Entry (G0)   ☑ card complete and approved ☑ dependencies merged, main green (S2.2b's merge) ☑ fits the cap, no lanes
-             ☑ plan check answered by the owner (2026-11-04) ☐ test material exists, or making it is an item (QA, first)
-Design (G1)  ☐ architecture findings resolved ☐ owner decisions recorded (A1–A3) ☐ ADR-0004 annotated
+             ☑ plan check answered by the owner (2026-11-04) ☑ test material exists (QA's tests, first; revised to v2)
+Design (G1)  ☑ architecture findings resolved (design v2 §8; two reviews) ☑ owner decisions recorded (D1–D8, sprint-plan §5)
+             ☑ ADR-0004/0006/0012/0013 and SEMANTICS annotated ☑ the oracle changed first (47 checks, 6 new, red first)
 Build (G2)   ☐ T2 ☐ T3 ☐ tests on the real code
 Review (G3)  ☐ QA break-it of the clock ☐ every finding fixed, forwarded or rejected
 Verify (G4)  ☐ T4 / CI exit 0 ☐ owner's check passed ☐ every acceptance line met by its named proof

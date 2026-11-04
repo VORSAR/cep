@@ -48,7 +48,8 @@ func (rc *RuleClock) Free(in *Instance)                        // the shard drop
 
 func (in *Instance) Ordinal() uint64
 func (in *Instance) Buffer(e event.Event) (constructLate bool)
-func (in *Instance) Schedule(due int64, k TimerKind, ref uint64) // (k, ref) unique: a second Schedule replaces
+func (in *Instance) Schedule(due int64, k TimerKind, ref uint64) // (k, ref) unique: a second Schedule replaces;
+                                                               // a key has one TTLPurge, whatever its ref (ADR-0004 §5)
 func (in *Instance) Cancel(k TimerKind, ref uint64) bool
 func (in *Instance) CancelAll()                                // the TTL purge's reset (D1)
 func (in *Instance) Empty() bool                               // no buffered event and no timer
