@@ -1,0 +1,20 @@
+-- torture: raw(attr) is an atom — raw(score) * 2 + 1 > t = (((raw(score)) * 2) + 1) > t; raw(text) contains_cs s is one text node
+language cep/0.1;
+
+param threshold float = 10;
+
+stream Prompts (sessionId string, text string optional, score int, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Flagged (sessionId string, why string, value float, ts timestamp);
+
+rule RawInsideArithmetic
+  intent 'raw() is an operand like any attribute: ((raw(score) * 2) + 1) > threshold.'
+  from Prompts[raw(score) * 2 + 1 > ${threshold}]
+  select sessionId, 'raw-inside-arithmetic' as why, raw(score) * 2 + 1 as value
+  insert into Flagged;
+
+rule RawTextThenArithmetic
+  intent '(raw(text) contains_cs zero-width) or ((raw(score) - 1) < 0).'
+  from Prompts[raw(text) contains_cs '​' or raw(score) - 1 < 0]
+  select sessionId, 'raw-text-then-arithmetic' as why, raw(score) - 1 as value
+  insert into Flagged;

@@ -1,0 +1,20 @@
+-- torture: not x not in T = not (x not in T) — prefix not wraps the not_in operator; in binds tighter than and and or
+language cep/0.1;
+
+stream Metrics (host string, cpu float, mem float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+table Hosts (host string) primary key (host);
+table Quiet (host string) primary key (host);
+
+rule NotOverNotIn
+  intent 'Fires for hosts in the table: not (host not in Hosts).'
+  from Metrics[not host not in Hosts]
+  select host, 'not-over-not-in' as why
+  insert into Alerts;
+
+rule InAboveAndOr
+  intent 'Fires as ((host in Hosts) and (cpu > 90)) or ((host not in Quiet) and (mem > 95)).'
+  from Metrics[host in Hosts and cpu > 90 or host not in Quiet and mem > 95]
+  select host, 'in-above-and-or' as why
+  insert into Alerts;

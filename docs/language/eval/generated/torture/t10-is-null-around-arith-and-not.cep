@@ -1,0 +1,18 @@
+-- torture: is [not] null takes a whole sum — a + b is null = (a + b) is null; not a is not null = not (a is not null)
+language cep/0.1;
+
+stream Metrics (host string, cpu float optional, mem float optional, label string optional, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+
+rule IsNullOverSum
+  intent 'Null-propagating sum: (cpu + mem) is null, or (cpu * 2) is not null and label is null.'
+  from Metrics[cpu + mem is null or cpu * 2 is not null and label is null]
+  select host, 'is-null-over-sum' as why
+  insert into Alerts;
+
+rule NotOverIsNotNull
+  intent 'Prefix not wraps the null test: (not (label is not null)) and (not (cpu is null)).'
+  from Metrics[not label is not null and not cpu is null]
+  select host, 'not-over-is-not-null' as why
+  insert into Alerts;

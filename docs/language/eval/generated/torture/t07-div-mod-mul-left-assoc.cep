@@ -1,0 +1,18 @@
+-- torture: * / % share one level and are left-associative — a / b * c = (a / b) * c; a % b * c = (a % b) * c
+language cep/0.1;
+
+stream Metrics (host string, bytes float, secs float, factor float, slot int, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, value float, ts timestamp);
+
+rule DivThenMul
+  intent 'Rate scaled: (bytes / secs) * factor, not bytes / (secs * factor).'
+  from Metrics[bytes / secs * factor > 1000]
+  select host, 'div-then-mul' as why, bytes / secs * factor as value
+  insert into Alerts;
+
+rule ModThenMul
+  intent 'Bucket arithmetic: (slot % 4) * 10, not slot % (4 * 10).'
+  from Metrics[slot % 4 * 10 == 30 or bytes / secs / factor > 1]
+  select host, 'mod-then-mul' as why, slot % 4 * 10 as value
+  insert into Alerts;

@@ -1,0 +1,18 @@
+-- torture: and binds tighter than or — a or b and c = a or (b and c); the parenthesised twin is (a or b) and c
+language cep/0.1;
+
+stream Metrics (host string, cpu float, mem float, load float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+
+rule OrBelowAnd
+  intent 'Fires on high cpu, or on high memory together with high load.'
+  from Metrics[cpu > 90 or mem > 90 and load > 4]
+  select host, 'or-below-and' as why
+  insert into Alerts;
+
+rule OrBelowAndParens
+  intent 'Fires on high load together with either high cpu or high memory — a different tree.'
+  from Metrics[(cpu > 90 or mem > 90) and load > 4]
+  select host, 'or-below-and-parens' as why
+  insert into Alerts;

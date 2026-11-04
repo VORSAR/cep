@@ -1,0 +1,27 @@
+-- torture: a qualified capture a.b is one atom — read.sessionId == egress.sessionId and ... = (read.sessionId == egress.sessionId) and (...); ts - read.ts < 5 min = (ts - read.ts) < 5 min
+language cep/0.1;
+
+param kill_window duration = 5 min;
+
+stream AgentActions (agentId string, sessionId string, action string,
+                     resource string, destination string optional, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+stream HumanApprovals (agentId string, sessionId string, ts timestamp)
+  time ts watermark bounded 2 min idle after 1 min;
+stream AgentKillSwitch (agentId string, sessionId string, reason string, ts timestamp);
+table SensitiveResources (resource string) primary key (resource);
+table ApprovedDestinations (destination string) primary key (destination);
+
+rule QualifiedCaptures
+  intent 'Qualified names on both sides of == and inside not in, under and/or.'
+  partition by agentId of AgentActions, agentId of HumanApprovals ttl 15 min
+  from every read = AgentActions[action == 'read' and resource in SensitiveResources]
+    -> egress = AgentActions[sessionId == read.sessionId
+                             and coalesce(destination, 'unknown') not in ApprovedDestinations
+                             or read.agentId == agentId and not read.resource in ApprovedDestinations]
+   and not HumanApprovals[sessionId == read.sessionId and agentId == read.agentId] for ${kill_window}
+  within ${kill_window}
+  after match skip past last
+  late events drop
+  select read.agentId, read.sessionId, 'qualified-captures' as reason
+  insert into AgentKillSwitch;

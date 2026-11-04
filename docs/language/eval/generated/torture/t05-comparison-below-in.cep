@@ -1,0 +1,19 @@
+-- torture: comparison binds tighter than in — a + 1 > b in T = ((a + 1) > b) in T; grammar-valid, typed-invalid (bool in table), parse tree only
+language cep/0.1;
+
+stream Metrics (host string, cpu float, load float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, ts timestamp);
+table Hosts (host string) primary key (host);
+
+rule ComparisonBelowIn
+  intent 'The whole comparison is the left operand of in: ((cpu + 1) > load) in Hosts.'
+  from Metrics[cpu + 1 > load in Hosts]
+  select host, 'comparison-below-in' as why
+  insert into Alerts;
+
+rule ComparisonBelowNotIn
+  intent 'The whole comparison is the left operand of not in: ((cpu * 2) == load) not in Hosts.'
+  from Metrics[cpu * 2 == load not in Hosts]
+  select host, 'comparison-below-not-in' as why
+  insert into Alerts;

@@ -1,0 +1,18 @@
+-- torture: minus is left-associative — a - b - c = (a - b) - c; the parenthesised twin a - (b - c) is a different tree
+language cep/0.1;
+
+stream Metrics (host string, total float, used float, cached float, ts timestamp)
+  time ts watermark bounded 30 sec;
+stream Alerts (host string, why string, free float, ts timestamp);
+
+rule MinusLeftAssoc
+  intent 'Free memory as (total - used) - cached.'
+  from Metrics[total - used - cached < 100]
+  select host, 'minus-left-assoc' as why, total - used - cached as free
+  insert into Alerts;
+
+rule MinusRightParens
+  intent 'A different tree: total - (used - cached).'
+  from Metrics[total - (used - cached) < 100]
+  select host, 'minus-right-parens' as why, total - (used - cached) as free
+  insert into Alerts;
