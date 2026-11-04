@@ -8,6 +8,7 @@ import (
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/expr"
 	"github.com/vorsar/cep/internal/model"
+	"github.com/vorsar/cep/internal/table"
 )
 
 // ---- a scope and a row for the tests: slot 0 holds the plain event ----
@@ -30,7 +31,15 @@ func (s scope) Attr(q, n string) (int, int, event.Type, bool) {
 
 func (s scope) Capture(n string) (int, bool) { slot, ok := s.captures[n]; return slot, ok }
 
-func (s scope) TableKey(t string) (event.Type, bool) { typ, ok := s.tables[t]; return typ, ok }
+func (s scope) Table(t string) (int, event.Type, bool) {
+	for i, name := range []string{"Hosts", "Ports"} {
+		if name == t {
+			typ, ok := s.tables[t]
+			return i, typ, ok
+		}
+	}
+	return 0, event.TInvalid, false
+}
 
 func key(q, n string) string {
 	if q == "" {
@@ -45,6 +54,7 @@ type row struct {
 
 func (r row) Value(slot, index int) event.Value { return r.slots[slot][index] }
 func (r row) Invisibles() bool                  { return false }
+func (r row) Table(int) *table.Version          { return nil }
 
 // The event: n int, f float, s string, b bool, ts timestamp, d duration, o object, x nullable int, nb nullable bool.
 var testScope = scope{
@@ -296,15 +306,14 @@ func TestFunctionsPerAppendixF(t *testing.T) {
 
 func TestRuntimeErrorsAreCountedNotPanics(t *testing.T) {
 	cases := map[string]model.Expr{
-		"cast of a non-number string":   call("cast", lit("x"), lit("int")),
-		"cast of a fractional float":    call("cast", lit(2.5), lit("int")),
-		"cast of a non-bool string":     call("cast", lit("yes"), lit("bool")),
-		"cast of an int to bool":        call("cast", lit(1), lit("bool")),
-		"integer division by zero":      ar("/", a("n"), lit(0)),
-		"modulo by zero":                ar("%", a("n"), lit(0)),
-		"float division by zero":        ar("/", a("f"), lit(0.0)),
-		"ifThenElse with a null cond":   call("ifThenElse", a("nb"), lit(1), lit(2)),
-		"table membership is not built": in(a("s"), "Hosts", false),
+		"cast of a non-number string": call("cast", lit("x"), lit("int")),
+		"cast of a fractional float":  call("cast", lit(2.5), lit("int")),
+		"cast of a non-bool string":   call("cast", lit("yes"), lit("bool")),
+		"cast of an int to bool":      call("cast", lit(1), lit("bool")),
+		"integer division by zero":    ar("/", a("n"), lit(0)),
+		"modulo by zero":              ar("%", a("n"), lit(0)),
+		"float division by zero":      ar("/", a("f"), lit(0.0)),
+		"ifThenElse with a null cond": call("ifThenElse", a("nb"), lit(1), lit(2)),
 	}
 	for name, node := range cases {
 		t.Run(name, func(t *testing.T) {

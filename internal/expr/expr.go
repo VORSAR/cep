@@ -9,8 +9,8 @@
 //
 // Build reads only the model's expression node (the fenced edge expr → model, owner 2026-11-04): names resolve
 // through the planner's Scope, ${param} references are resolved before Build, and tables are handed in by the
-// planner. The membership, text, chain and count nodes are typed here and become executable in their own
-// sprints (S3.1, S7, S4.1, S8); until then their Eval reports that.
+// planner. The text, chain and count nodes are typed here and become executable in their own sprints (S7, S4.1,
+// S8); until then their Eval reports that.
 package expr
 
 import (
@@ -19,12 +19,17 @@ import (
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/model"
+	"github.com/vorsar/cep/internal/table"
 )
 
 // Row is what an expression reads: slot 0 is the plain event, later slots are a pattern's captures.
 type Row interface {
 	Value(slot, attr int) event.Value
 	Invisibles() bool
+	// Table is the snapshot of table id that this evaluation reads. The caller takes every snapshot once per event,
+	// before the first expression of that event runs, and returns the same *table.Version for every call until the
+	// next event (SEMANTICS §4: all predicates evaluated for one event read the same table state).
+	Table(id int) *table.Version
 }
 
 // Expr is one compiled expression.
@@ -39,8 +44,9 @@ type Scope interface {
 	Attr(qualifier, name string) (slot, index int, typ event.Type, ok bool)
 	// Capture resolves a capture name to its slot (chain's arguments); ok false when unknown.
 	Capture(name string) (slot int, ok bool)
-	// TableKey is a table's primary-key type, for membership; ok false when the table is unknown.
-	TableKey(table string) (event.Type, bool)
+	// Table resolves a table name: its id, the table's index in the app's declaration order (the index Row.Table
+	// takes), and its single-column key's type; ok false when the table is unknown or its key is composite.
+	Table(name string) (id int, key event.Type, ok bool)
 }
 
 // Error is a deploy-time finding: a catalogue code and a message naming the operand, at the position of the node
@@ -172,14 +178,14 @@ func (b *builder) node(n model.Expr) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		key, ok := b.scope.TableKey(n.Table)
+		id, key, ok := b.scope.Table(n.Table)
 		if !ok {
 			return nil, at(nameErr("table", n.Table), n.TablePos.Line, n.TablePos.Col)
 		}
 		if x.Type() != key || x.Type() == event.TObject {
 			return nil, typeErr("in %s needs the key's type %s, got %s", n.Table, key, x.Type())
 		}
-		return &later{typ: event.TBool, what: "table membership (S3.1)"}, nil
+		return &member{x: x, table: id, negated: n.Negated}, nil
 	case model.ExprText:
 		x, err := b.build(n.Args[0])
 		if err != nil {
@@ -189,7 +195,7 @@ func (b *builder) node(n model.Expr) (Expr, error) {
 			return nil, typeErr("%s needs a string left operand, got %s", n.Op, x.Type())
 		}
 		if n.Operand.Table != "" {
-			if _, ok := b.scope.TableKey(n.Operand.Table); !ok {
+			if _, _, ok := b.scope.Table(n.Operand.Table); !ok {
 				return nil, at(nameErr("table", n.Operand.Table), n.Operand.Pos.Line, n.Operand.Pos.Col)
 			}
 		}
@@ -275,3 +281,17 @@ func (l *later) Eval(Row) (event.Value, error) {
 }
 
 func (l *later) Type() event.Type { return l.typ }
+
+// member is `x in T` / `x not in T` (SEMANTICS §1.1, §4; SPEC §5.6): null-strict and atomic, so a null operand gives
+// false for both; otherwise it reads the evaluation's snapshot of the table.
+type member struct {
+	x       Expr
+	table   int
+	negated bool
+}
+
+func (m *member) Type() event.Type { return event.TBool }
+
+func (m *member) Eval(row Row) (event.Value, error) {
+	panic("expr: membership: not built yet (S3.1-2 stub)")
+}
