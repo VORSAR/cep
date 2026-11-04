@@ -17,7 +17,7 @@
 - **Exit 4 — allocations:** `TestAllocgateScalarEval`: `testing.AllocsPerRun` is 0 over an `and/or/compare/arith/coalesce/abs/is null` tree and over `math:round`, `minimum` of timestamps and `ifThenElse` of durations. (`cast` to string is the listed exclusion.)
 - **Exit 5 — docsync:** (b) `TestKeywordDriftIsSeen`: an extra word, a swapped pair and a missing exclusion list are each named; (c) `TestDocsyncSeesPlantedDrift`: a function only the spec has, one only the registry has, and a kind that differs are each named; the real SPEC and `grammar.lark` are in sync.
 - **The 1.1 null-strict port:** `TestNullStrict` carries the harness check's scalar assertions (`x != 5` and `x == 5` false for a null `x`; `not (x == 5)` true; `3 < null` false; `is [not] null`; null booleans read as false; short-circuits); the `in` assertion follows in S3.1.
-- **Coverage:** `internal/expr` 99.5%; `make check` green; T4 green (see below).
+- **Coverage and the gate:** `internal/expr` 99.5%; `make check` green; T4 green on `def907e` (`make strict-gate`: every row PASS, `exit: 0`, wall 76.7 s; `proofs` covered 13, `differential` covered 63).
 - **The gate:** parity now covers six tools (lark through the package kind: version by import, three listed files, whole tree); the proofs row runs 13 drivers.
 
 ## Deviations for the owner
