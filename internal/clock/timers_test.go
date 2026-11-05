@@ -1,9 +1,10 @@
 package clock_test
 
 // Exit line 2 of S3.1: through the test-double operator (recorder, helpers_test.go), the walk (D1) delivers every
-// timer kind in order, discards arrive only through OnDiscard, strict kinds wait until the clock is past their due,
-// and a match waiting out its absence is never discarded. Sources: SEMANTICS §6.3, §6.4 (as annotated for D1);
-// ADR-0004 §2, §5 (as annotated); s3-1-1-design.md v2 §2–§3; owner decisions D1, D4, D7.
+// timer kind in order, discards arrive only through OnDiscard, every kind waits until the clock is past its due
+// (owner D1, 2026-11-05), and a match waiting out its absence is never discarded. Sources: SEMANTICS §6.3, §6.4 (as
+// annotated for D1); ADR-0004 §2, §5 (as annotated); s3-1-1-design.md v2 §2–§3; s3-2a-1-design.md v2 §4.1; owner
+// decisions D1, D4 of S3.1-1 and D1 of S3.2a-1.
 
 import (
 	"slices"
@@ -13,23 +14,26 @@ import (
 	"github.com/vorsar/cep/internal/event"
 )
 
-// kindTable — THE OWNER'S CHECK (S3.1 card, "by reading"): every kind, its strictness, its callback, its rank.
+// kindTable — THE OWNER'S CHECK (S3.1 card, "by reading"): every kind, its place at its instant, its callback, its
+// rank. Owner D1 (2026-11-05): every kind fires at its instant t only once the clock is past t (clock > t); at +∞
+// (the end of input) every due. "Inclusive" and "strict" now name only the order within one instant.
 //
-//	rank | kind       | strict? | fires at its instant t when | callback  | what it is
-//	-----+------------+---------+-----------------------------+-----------+------------------------------------------
-//	  1  | Completion | no      | clock ≥ t                   | OnTimers  | a match waiting out its absence (D4)
-//	  2  | CronClose  | no      | clock ≥ t                   | OnTimers  | a cron bucket's end
-//	  3  | DelayDue   | no      | clock ≥ t                   | OnTimers  | a delayed event's due (t + D)
-//	  4  | BatchClose | no      | clock ≥ t                   | OnTimers  | a batch's close (S8 places it)
-//	  –  | TTLPurge   | yes     | clock > t  (t = t_last+TTL) | OnTimers  | the key idled past its TTL
-//	  –  | Discard    | yes     | clock > t  (t = t_first+D)  | OnDiscard | a partial overran its `within`
+//	rank | kind       | order at t | fires at its instant t when | callback  | what it is
+//	-----+------------+------------+-----------------------------+-----------+------------------------------------------
+//	  1  | Completion | inclusive  | clock > t                   | OnTimers  | a match waiting out its absence (D4)
+//	  2  | CronClose  | inclusive  | clock > t                   | OnTimers  | a cron bucket's end
+//	  3  | DelayDue   | inclusive  | clock > t                   | OnTimers  | a delayed event's due (t + D)
+//	  4  | BatchClose | inclusive  | clock > t                   | OnTimers  | a batch's close (S8 places it)
+//	  –  | TTLPurge   | strict     | clock > t  (t = t_last+TTL) | OnTimers  | the key idled past its TTL
+//	  –  | Discard    | strict     | clock > t  (t = t_first+D)  | OnDiscard | a partial overran its `within`
 //
-// The walk (design §3): instant t ascending; within t: (1) events at t, event.Compare order across keys, one OnEvent
-// each; (2) inclusive timers due at t by (key ordinal, rank, ref, schedule order), one OnTimers call per key;
-// (3) only if clock > t: strict timers due at t by (key ordinal, ref, schedule order).
+// The walk (design §3; s3-2a-1-design.md §4.1): instant t ascending, only while clock > t (every t at +∞); within t:
+// (1) events at t, event.Compare order across keys, one OnEvent each; (2) inclusive timers due at t by (key ordinal,
+// rank, ref, schedule order), one OnTimers call per key; (3) strict timers due at t by (key ordinal, kind, ref,
+// schedule order): TTLPurge, then Discard.
 var kindTable = []struct {
 	kind   clock.TimerKind
-	strict bool
+	strict bool   // the order within an instant only (D1)
 	cb     string // the recorder's name for the callback it arrives through
 }{
 	{clock.Completion, false, "timer"},
@@ -40,8 +44,9 @@ var kindTable = []struct {
 	{clock.Discard, true, "discard"},
 }
 
-// Each row of the table: due 100 at clock 100 fires iff inclusive; at clock 101 every kind has fired, through its
-// callback.
+// Each row of the table (owner D1, 2026-11-05): due 100 at clock 100 fires for NO kind — the clock is on 100, not
+// past it; at clock 101 every kind has fired, through its callback. And a due at +∞ fires at +∞ (the end of input is
+// past every instant).
 func TestTimerContract_KindTable_StrictnessAndCallback(t *testing.T) {
 	t.Parallel()
 	for _, row := range kindTable {
@@ -54,26 +59,31 @@ func TestTimerContract_KindTable_StrictnessAndCallback(t *testing.T) {
 			want = D(0, 7)
 		}
 		to(rc, 100, 0)
-		got := r.advance(rc)
-		if row.strict && len(got) != 0 {
-			t.Errorf("kind %d (strict) fired at clock = due: %v", row.kind, got)
-		}
-		if !row.strict && !slices.Equal(got, []item{want}) {
-			t.Errorf("kind %d (inclusive) at clock = due delivered %v, want %v", row.kind, got, []item{want})
+		if got := r.advance(rc); len(got) != 0 {
+			t.Errorf("kind %d fired at clock = due 100: %v; D1: only once the clock is past it", row.kind, got)
 		}
 		to(rc, 101, 0)
-		got = r.advance(rc)
-		if row.strict && !slices.Equal(got, []item{want}) {
-			t.Errorf("kind %d (strict) at clock = due+1 delivered %v, want %v", row.kind, got, []item{want})
+		if got := r.advance(rc); !slices.Equal(got, []item{want}) {
+			t.Errorf("kind %d at clock = due+1 delivered %v, want %v", row.kind, got, []item{want})
 		}
-		if !row.strict && len(got) != 0 {
+		if got := r.advance(rc); len(got) != 0 {
 			t.Errorf("kind %d fired twice: %v", row.kind, got)
+		}
+		k.Schedule(posInf, row.kind, 8)
+		wantInf := T(0, posInf, row.kind, 8)
+		if row.cb == "discard" {
+			wantInf = D(0, 8)
+		}
+		to(rc, posInf, 0)
+		if got := r.advance(rc); !slices.Equal(got, []item{wantInf}) {
+			t.Errorf("kind %d due +∞ at clock +∞ delivered %v, want %v", row.kind, got, []item{wantInf})
 		}
 	}
 }
 
 // One walk to clock 150 over two keys (K0 ordinal 0, K1 ordinal 1): every kind, ties on instant, kind, ref and key,
-// strict timers at and before the clock, events out of order across keys.
+// events out of order across keys. Owner D1 (2026-11-05): the instants 50 and 100 are past the clock and finalized
+// whole; the instant 150 (= the clock) waits whole — its event, its inclusive timer and its strict one.
 func TestTimerContract_WalkOrder(t *testing.T) {
 	t.Parallel()
 	rc := clock.NewRuleClock([]int{0, 1})
@@ -96,8 +106,8 @@ func TestTimerContract_WalkOrder(t *testing.T) {
 	k1.Schedule(100, clock.Completion, 9)
 	k0.Schedule(50, clock.Completion, 11)
 	k1.Schedule(50, clock.Discard, 7)
-	k0.Schedule(150, clock.Completion, 12) // inclusive, due = clock: fires
-	k0.Schedule(150, clock.Discard, 62)    // strict, due = clock: waits
+	k0.Schedule(150, clock.Completion, 12) // inclusive kind, due = clock: waits (D1)
+	k0.Schedule(150, clock.Discard, 62)    // strict kind, due = clock: waits
 	k1.Schedule(151, clock.DelayDue, 41)   // past the clock: waits
 	for _, b := range []struct {
 		in *clock.Instance
@@ -115,11 +125,11 @@ func TestTimerContract_WalkOrder(t *testing.T) {
 
 	// THE EXPECTED WALK at clock 150.
 	want := []item{
-		// instant 50
+		// instant 50 (50 < 150)
 		E(1, 0, 50, 3),                 // (1) event
 		T(0, 50, clock.Completion, 11), // (2) inclusive
-		D(1, 7),                        // (3) strict: 150 > 50
-		// instant 100
+		D(1, 7),                        // (3) strict
+		// instant 100 (100 < 150)
 		E(0, 0, 100, 1), E(0, 0, 100, 2), E(1, 1, 100, 1), // (1) (Ts, StreamID, Seq) across keys
 		T(0, 100, clock.Completion, 10), // (2) K0 first (ordinal), then rank 1..4
 		T(0, 100, clock.CronClose, 30),
@@ -131,10 +141,7 @@ func TestTimerContract_WalkOrder(t *testing.T) {
 		D(0, 60),
 		D(0, 61),
 		D(1, 5), //     then K1
-		// instant 150
-		E(0, 1, 150, 2),                 // (1)
-		T(0, 150, clock.Completion, 12), // (2) inclusive at the clock
-		//                                     (3) Discard 62 waits: 150 is not > 150
+		// instant 150 = the clock: E(0, 1, 150, 2), Completion 12 and Discard 62 all wait (150 < 150 is false)
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("walk to 150 delivered\n  %v\nwant\n  %v", got, want)
@@ -150,9 +157,10 @@ func TestTimerContract_WalkOrder(t *testing.T) {
 		}
 	}
 
-	// Clock 200: instant 150's strict discard, then instant 151's event and timer. Then nothing is left.
+	// Clock 200: instant 150 whole (event, inclusive, strict), then instant 151's event and timer. Then nothing.
 	to(rc, 200, 0, 1)
-	if got, want := r.advance(rc), []item{D(0, 62), E(1, 0, 151, 4), T(1, 151, clock.DelayDue, 41)}; !slices.Equal(got, want) {
+	want = []item{E(0, 1, 150, 2), T(0, 150, clock.Completion, 12), D(0, 62), E(1, 0, 151, 4), T(1, 151, clock.DelayDue, 41)}
+	if got := r.advance(rc); !slices.Equal(got, want) {
 		t.Fatalf("walk to 200 delivered %v, want %v", got, want)
 	}
 	if got := r.advance(rc); len(got) != 0 {
@@ -161,7 +169,8 @@ func TestTimerContract_WalkOrder(t *testing.T) {
 }
 
 // Design §3 point 3: a timer scheduled by a callback with a due at or after the walk's position joins the walk in
-// order; one with a due before the position fires at the position — always within the same Advance.
+// order; one with a due before the position fires at the position — always within the same Advance. Owner D1
+// (2026-11-05): one scheduled at the clock's own instant waits for the clock to pass it.
 func TestTimerContract_CallbackScheduledTimersJoinTheWalk(t *testing.T) {
 	t.Parallel()
 	rc := clock.NewRuleClock([]int{0})
@@ -170,14 +179,14 @@ func TestTimerContract_CallbackScheduledTimersJoinTheWalk(t *testing.T) {
 	r.onEvent = func(in *clock.Instance, e event.Event) {
 		if e.Seq == 1 { // at instant 100
 			in.Schedule(100, clock.Completion, 1) // due = position: fires at 100, after the events at 100
-			in.Schedule(100, clock.Discard, 2)    // strict at 100; clock 200 > 100: fires at 100's strict step
+			in.Schedule(100, clock.Discard, 2)    // strict at 100; 100 < clock 200: fires at 100's strict step
 			in.Schedule(50, clock.CronClose, 3)   // before the position: fires at the position, before instant 120
 		}
 	}
 	r.onTimer = func(in *clock.Instance, tm clock.Timer) {
 		if tm.Ref == 1 {
-			in.Schedule(120, clock.DelayDue, 4) // later instant ≤ clock: joins, after the event at 120
-			in.Schedule(201, clock.DelayDue, 5) // past the clock: waits
+			in.Schedule(120, clock.DelayDue, 4) // later instant < clock: joins, after the event at 120
+			in.Schedule(200, clock.DelayDue, 5) // due = the clock 200: waits (D1)
 		}
 	}
 	k.Buffer(ev(0, 100, 1))
@@ -203,15 +212,16 @@ func TestTimerContract_CallbackScheduledTimersJoinTheWalk(t *testing.T) {
 	if !slices.Equal(rest, want) {
 		t.Fatalf("delivered (without the CronClose)\n  %v\nwant\n  %v", rest, want)
 	}
-	to(rc, 201, 0)
-	if got, want := r.advance(rc), []item{T(0, 201, clock.DelayDue, 5)}; !slices.Equal(got, want) {
+	to(rc, 201, 0) // 200 < 201: the DelayDue at 200 fires
+	if got, want := r.advance(rc), []item{T(0, 200, clock.DelayDue, 5)}; !slices.Equal(got, want) {
 		t.Fatalf("clock 201 delivered %v, want %v", got, want)
 	}
 }
 
 // RT-10 at the timer level: a Completion and a Discard due at the same instant 300000 (the Discard scheduled
-// first). At clock 300000 only the Completion fires (the discard is strict); one jump past it delivers the
-// Completion, then the Discard — the discard never eats the alert.
+// first). Owner D1 (2026-11-05): at clock 300000 neither fires — the clock is on the instant, not past it. Whether
+// the clock steps to 300001 or jumps to 360000, one walk delivers the Completion, then the Discard — the discard
+// never eats the alert.
 func TestTimerContract_RT10_CompletionBeforeDiscard(t *testing.T) {
 	t.Parallel()
 	for _, jump := range []bool{false, true} {
@@ -226,11 +236,11 @@ func TestTimerContract_RT10_CompletionBeforeDiscard(t *testing.T) {
 			got = r.advance(rc)
 		} else {
 			to(rc, 5*minute, 0)
-			if got = r.advance(rc); !slices.Equal(got, []item{T(0, 5*minute, clock.Completion, 1)}) {
-				t.Fatalf("clock 300000 delivered %v, want only the Completion", got)
+			if got = r.advance(rc); len(got) != 0 {
+				t.Fatalf("clock 300000 delivered %v, want nothing (D1: 300000 is not past 300000)", got)
 			}
 			to(rc, 5*minute+1, 0)
-			got = append(got, r.advance(rc)...)
+			got = r.advance(rc)
 		}
 		if want := []item{T(0, 5*minute, clock.Completion, 1), D(0, 1)}; !slices.Equal(got, want) {
 			t.Fatalf("jump=%v delivered %v, want %v", jump, got, want)

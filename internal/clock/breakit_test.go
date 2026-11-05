@@ -68,8 +68,8 @@ func (o *bkOp) at(instant int64, phase int, what string) {
 func (o *bkOp) callbacks() clock.Callbacks {
 	return clock.Callbacks{
 		OnEvent: func(in *clock.Instance, e event.Event) {
-			if e.Ts > o.rc.Clock() {
-				o.t.Errorf("event %+v released with Ts > clock %d", keyOf(e), o.rc.Clock())
+			if e.Ts >= o.rc.Clock() && o.rc.Clock() != math.MaxInt64 { // owner D1 (2026-11-05): only once past it
+				o.t.Errorf("event %+v released with Ts ≥ clock %d", keyOf(e), o.rc.Clock())
 			}
 			o.at(e.Ts, bkPhaseEvent, "event")
 			o.seen[keyOf(e)]++
@@ -96,11 +96,9 @@ func (o *bkOp) callbacks() clock.Callbacks {
 				ph := bkPhaseInclusive
 				if tm.Kind == clock.TTLPurge {
 					ph = bkPhaseStrict
-					if tm.Due >= o.rc.Clock() {
-						o.t.Errorf("strict %+v fired with clock %d (needs clock > due)", tm, o.rc.Clock())
-					}
-				} else if tm.Due > o.rc.Clock() {
-					o.t.Errorf("inclusive %+v fired with clock %d (needs clock >= due)", tm, o.rc.Clock())
+				}
+				if tm.Due >= o.rc.Clock() && o.rc.Clock() != math.MaxInt64 { // owner D1: every kind needs clock > due
+					o.t.Errorf("%+v fired with clock %d (needs clock > due, or +∞)", tm, o.rc.Clock())
 				}
 				if tm.Kind == clock.Discard {
 					o.t.Errorf("Discard through OnTimers: %+v", tm)
@@ -251,8 +249,9 @@ func TestBreakit_D1_GranularityRandom(t *testing.T) {
 	}
 }
 
-// TestBreakit_PartialAdvanceHoldsTheRest: an advance to x releases exactly the events with Ts ≤ x and leaves the rest
-// buffered (Empty false while one is held), whatever x.
+// TestBreakit_PartialAdvanceHoldsTheRest: an advance to x releases exactly the events with Ts < x (owner D1,
+// 2026-11-05: an instant is finalized only once the clock is past it) and leaves the rest buffered (Empty false
+// while one is held), whatever x.
 func TestBreakit_PartialAdvanceHoldsTheRest(t *testing.T) {
 	for seed := uint64(0); seed < 500; seed++ {
 		sc := bkGen(seed)
@@ -261,7 +260,7 @@ func TestBreakit_PartialAdvanceHoldsTheRest(t *testing.T) {
 			want := 0
 			held := make([]int, sc.keys)
 			for _, b := range sc.events {
-				if b.e.Ts <= x {
+				if b.e.Ts < x {
 					want++
 				} else {
 					held[b.key]++
@@ -307,7 +306,7 @@ func TestBreakit_CancelAllInsidePurgeDropsSameInstantDiscard(t *testing.T) {
 // same instant; it joins the walk in order. Keys go in BIRTH order (the oracle's, as the two findings below pin):
 // key 1 was born first, by its own timer; key 0 is born only when the callback schedules for it. (Coordinator,
 // 2026-11-04: this guard was written while the walk still ordered keys by creation; its expectation follows the
-// findings' birth order.)
+// findings' birth order.) Owner D1 (2026-11-05): the instant 5 goes once the clock is past it, at 6.
 func TestBreakit_ScheduleForAnotherKeyFromACallback(t *testing.T) {
 	rc := clock.NewRuleClock([]int{0})
 	k0, k1 := rc.NewInstance(), rc.NewInstance()
@@ -315,6 +314,10 @@ func TestBreakit_ScheduleForAnotherKeyFromACallback(t *testing.T) {
 	k1.Schedule(5, clock.Completion, 0)
 	rec := &recorder{t: t, onEvent: func(in *clock.Instance, e event.Event) { k0.Schedule(5, clock.DelayDue, 3) }}
 	to(rc, 5, 0)
+	if got := rec.advance(rc); len(got) != 0 {
+		t.Fatalf("clock 5 delivered %+v; D1: the instant 5 waits for the clock to pass it", got)
+	}
+	to(rc, 6, 0)
 	got := rec.advance(rc)
 	want := []item{E(1, 0, 5, 1), T(1, 5, clock.Completion, 0), T(0, 5, clock.DelayDue, 3)}
 	if !reflect.DeepEqual(got, want) {
@@ -322,23 +325,35 @@ func TestBreakit_ScheduleForAnotherKeyFromACallback(t *testing.T) {
 	}
 }
 
-// TestBreakit_D7_SealIsPerKeyAndOnlyAfterInclusive: an inclusive timer seals its key's instant; a strict timer
-// does not seal; another key's event at the sealed instant is kept.
-func TestBreakit_D7_SealIsPerKeyAndOnlyAfterInclusive(t *testing.T) {
+// TestBreakit_D1_SealRetired_EveryKeyKeepsItsEventAtTheTimersInstant (was TestBreakit_D7_SealIsPerKeyAndOnlyAfter
+// Inclusive): owner D1 (2026-11-05) retires S3.1-1's D7 seal. At clock 5 key c's Discard due 4 fires (4 < 5) and
+// key a's Completion due 5 waits; then an event at 5 is kept for every key — a, whose timer is pending at 5, b,
+// which has none, and c, whose strict timer just fired. At clock 6 the instant 5 goes: the three events in
+// event.Compare order, then a's Completion. Then 5 < 6 makes an event at 5 construct-late for every key alike.
+func TestBreakit_D1_SealRetired_EveryKeyKeepsItsEventAtTheTimersInstant(t *testing.T) {
 	rc := clock.NewRuleClock([]int{0})
 	a, b, c := rc.NewInstance(), rc.NewInstance(), rc.NewInstance()
 	a.Schedule(5, clock.Completion, 0)
 	c.Schedule(4, clock.Discard, 0)
+	rec := &recorder{t: t}
 	to(rc, 5, 0)
-	(&recorder{t: t}).advance(rc)
-	if !a.Buffer(ev(0, 5, 1)) {
-		t.Fatalf("key a: event at its sealed instant 5 kept (D7: construct-late)")
+	if got, want := rec.advance(rc), []item{D(2, 0)}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("clock 5: got %+v, want %+v (only the Discard due 4)", got, want)
 	}
-	if b.Buffer(ev(0, 5, 2)) {
-		t.Fatalf("key b: event at instant 5 dropped; only key a's instant is sealed (D7)")
+	for i, in := range []*clock.Instance{a, b, c} {
+		if in.Buffer(ev(0, 5, uint64(i+1))) {
+			t.Fatalf("key %d: event at 5 = clock construct-late; D1: kept (the seal is retired)", i)
+		}
 	}
-	if c.Buffer(ev(0, 5, 3)) {
-		t.Fatalf("key c: a strict timer fired at 4; instant 5 is not sealed for c")
+	to(rc, 6, 0)
+	want := []item{E(0, 0, 5, 1), E(1, 0, 5, 2), E(2, 0, 5, 3), T(0, 5, clock.Completion, 0)}
+	if got := rec.advance(rc); !reflect.DeepEqual(got, want) {
+		t.Fatalf("clock 6: got %+v, want %+v", got, want)
+	}
+	for i, in := range []*clock.Instance{a, b, c} {
+		if !in.Buffer(ev(0, 5, uint64(i+4))) {
+			t.Fatalf("key %d: event at 5 with the clock at 6 kept, want construct-late", i)
+		}
 	}
 }
 
@@ -388,30 +403,40 @@ func TestBreakit_StrictAtTheClockWaitsAndASameInstantEventGoesFirst(t *testing.T
 
 // ---- findings (red) ----
 
-// TestBreakit_FreeingAnEmptyKeyForgetsItsSeal — FINDING. Design §2 "Freeing (D1): a key's instance is freed by the
-// shard only when it is Empty()"; §2 "Construct-late (D7)"; owner D7: "once a key's timers at an instant have
-// fired, a later-arriving event at that instant for that key is construct-late". The executor keeps the seal per
-// key until a TTL purge (executor.py `_walk`: sealed.pop only on purge). Here a key's Completion fires at the clock's
-// own instant and leaves the key Empty; the shard may then Free it, and the next event for that key at that instant
-// (Ts == clock, not clock-late) lands in a fresh instance and is kept. Empty() must not be true while the seal can
-// still reject an event (sealed ≥ clock), or freeing must not forget it.
-func TestBreakit_FreeingAnEmptyKeyForgetsItsSeal(t *testing.T) {
+// TestBreakit_D1_FreeingAnEmptyKeyLosesNothing (was TestBreakit_FreeingAnEmptyKeyForgetsItsSeal, a finding on the
+// D7 seal, which owner D1 of 2026-11-05 retires). A key's Completion due 5 waits at clock 5 (the key is not Empty:
+// its timer is pending), so its event at 5 is kept; at clock 6 the event, then the Completion, and the key is
+// Empty. The shard frees it; a fresh instance for the same key rejects an event at 5 by the clock alone (5 < 6) and
+// keeps one at 6 = clock — nothing the seal held is lost by freeing.
+func TestBreakit_D1_FreeingAnEmptyKeyLosesNothing(t *testing.T) {
 	rc := clock.NewRuleClock([]int{0})
 	a := rc.NewInstance()
 	a.Schedule(5, clock.Completion, 0)
+	rec := &recorder{t: t}
 	to(rc, 5, 0)
-	(&recorder{t: t}).advance(rc)
-	if !a.Buffer(ev(0, 5, 1)) {
-		t.Fatalf("precondition: key a's instant 5 is sealed")
+	if got := rec.advance(rc); len(got) != 0 {
+		t.Fatalf("clock 5 delivered %+v; D1: the Completion due 5 waits", got)
 	}
 	if a.Empty() {
-		// The shard frees an Empty key (design §2) and makes a fresh instance for its next event.
-		rc.Free(a)
-		reborn := rc.NewInstance()
-		if !reborn.Buffer(ev(0, 5, 2)) {
-			t.Errorf("Empty() was true with key a's instant 5 still sealed at clock 5; after Free the key's next " +
-				"event at 5 is kept (D7 says construct-late; the executor drops it: sealed is kept until a purge)")
-		}
+		t.Fatalf("Empty with its Completion due 5 pending")
+	}
+	if a.Buffer(ev(0, 5, 1)) {
+		t.Fatalf("event at 5 = clock construct-late, want kept")
+	}
+	to(rc, 6, 0)
+	if got, want := rec.advance(rc), []item{E(0, 0, 5, 1), T(0, 5, clock.Completion, 0)}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("clock 6: got %+v, want %+v", got, want)
+	}
+	if !a.Empty() {
+		t.Fatalf("not Empty after its event and timer went (D1: no seal to keep)")
+	}
+	rc.Free(a)
+	reborn := rc.NewInstance()
+	if !reborn.Buffer(ev(0, 5, 2)) {
+		t.Fatalf("fresh instance: event at 5 with the clock at 6 kept, want construct-late")
+	}
+	if reborn.Buffer(ev(0, 6, 3)) {
+		t.Fatalf("fresh instance: event at 6 = clock construct-late, want kept")
 	}
 }
 

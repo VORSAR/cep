@@ -170,3 +170,11 @@ func (w *world) tick(now int64) []item {
 	w.apply(w.buf)
 	return w.rec.advance(w.rc)
 }
+
+// end is the end of input: EndOfInput → apply (every contribution +∞) → Advance.
+func (w *world) end() []item {
+	w.t.Helper()
+	w.buf = w.reg.EndOfInput(w.buf[:0])
+	w.apply(w.buf)
+	return w.rec.advance(w.rc)
+}
