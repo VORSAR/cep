@@ -78,6 +78,10 @@ A fresh QA agent ([s3-2a-1-breakit-qa.md](../reviews/s3-2a-1-breakit-qa.md)) fou
 - table snapshots stay race-free under `-race`;
 - D4 matches `json.Compact` on 3,000 generated objects.
 
+**T4's first run** failed one row: `pytests`, on S1.1a-1's `test_breakit_leak` (QB4), a test of the gate itself.
+- **The cause:** a load-dependent race in the test's own planted module. It passed 3 of 3 alone and 4 of 4 under parallel Go load, and failed every time with the module delayed 3 s.
+- **The fix (owner: here):** the helper waits for a go-ahead that follows the kill's registration. With the same 3 s delay, the fixed test passes.
+
 **Not filed, forwarded:** an unknown attribute in a hand-written expect block should be a fault in S3.3's conformance runner.
 
 **The oracle fixtures (review F8)** are in:
