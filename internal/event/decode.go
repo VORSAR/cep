@@ -186,11 +186,79 @@ func (d *Decoder) value(b []byte, i int, sp span, closing int) (Value, error) {
 		return Value{}, typeErr(a, sp.start, "an RFC 3339 timestamp string", raw)
 	case TObject:
 		if raw[0] == '{' || raw[0] == '[' {
-			return Value{Kind: TObject, Obj: string(raw)}, nil
+			return Value{Kind: TObject, Obj: cleanObject(raw)}, nil
 		}
 		return Value{}, typeErr(a, sp.start, "a JSON object or array", raw)
 	}
 	return Value{}, typeErr(a, sp.start, "a value of a declared type", raw)
+}
+
+// cleanObject is an object value's stored text (owner D4 of S3.2a-1): raw, already valid JSON syntax, in compact form
+// — every whitespace byte outside a string removed, member order and every token's text kept, a string's escapes as
+// written — with malformed UTF-8 inside a string replaced by U+FFFD, as for a string attribute (P8). Every reader then
+// sees one form, and a log line holding it never breaks.
+func cleanObject(raw []byte) string {
+	if compactAndValid(raw) {
+		return string(raw)
+	}
+	out := make([]byte, 0, len(raw))
+	inStr := false
+	for i := 0; i < len(raw); {
+		c := raw[i]
+		switch {
+		case !inStr:
+			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+				out = append(out, c)
+				inStr = c == '"'
+			}
+			i++
+		case c == '\\':
+			out = append(out, c, raw[i+1]) // an escape, kept as written; a \u's hex digits follow as plain bytes
+			i += 2
+		case c == '"':
+			out = append(out, c)
+			inStr = false
+			i++
+		case c < utf8.RuneSelf:
+			out = append(out, c)
+			i++
+		default:
+			r, size := utf8.DecodeRune(raw[i:])
+			if r == utf8.RuneError && size == 1 {
+				out = append(out, "\uFFFD"...)
+			} else {
+				out = append(out, raw[i:i+size]...)
+			}
+			i += size
+		}
+	}
+	return string(out)
+}
+
+// compactAndValid says raw has no whitespace outside its strings and no malformed UTF-8: it is stored as it is.
+func compactAndValid(raw []byte) bool {
+	inStr := false
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		switch {
+		case !inStr:
+			if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+				return false
+			}
+			inStr = c == '"'
+		case c == '\\':
+			i++
+		case c == '"':
+			inStr = false
+		case c >= utf8.RuneSelf:
+			r, size := utf8.DecodeRune(raw[i:])
+			if r == utf8.RuneError && size == 1 {
+				return false
+			}
+			i += size - 1
+		}
+	}
+	return true
 }
 
 func timeNote(isTime bool) string {
