@@ -37,7 +37,10 @@ func ldExit1Rules(t *testing.T) []ldRuleSpec {
 		{Name: "R3", Inputs: []int{0, 2}, Key: "k", Sched: func(e event.Event, n uint64) []clock.Timer {
 			return []clock.Timer{{Due: e.Ts + 5*ldSec, Kind: clock.Completion, Ref: n}}
 		}, OnEvent: func(w *ldWorld, rule string, in *partition.Instance, e event.Event) {
-			if x := e.Values[2]; !x.Null && e.StreamID == 0 {
+			if e.StreamID != 0 { // only stream A has x (index 2); C's events have two values
+				return
+			}
+			if x := e.Values[2]; !x.Null {
 				w.note(rule, in, "x_in_T", event.Value{Kind: event.TBool, B: ldHasX(t, e.Tables, x.Str)})
 			}
 		}, OnTimers: func(w *ldWorld, rule string, in *partition.Instance, fires []clock.Timer, tables any) {
