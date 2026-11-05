@@ -354,7 +354,7 @@ As stubbed: `AppendValue`, `AppendEvent`.
 
 As stubbed: `NewTrace`, `Step`, `Released`, `ConstructLate`, `Fired`, `Discarded`, `Purged`, `Note`, `Bytes`.
 - **The lines.** One canonical JSON line per entry, in the order recorded.
-- **The keys.** Every entry carries `"at"` (the line of the step whose processing produced it; for `end`, the last line + 1) and `"k"`:
+- **The keys.** Every entry carries `"at"` (the line of the step whose processing produced it; for `end`, the last record's line + 1, since trailing blank lines are not steps — break-it K3) and `"k"`:
 
 | `k` | Other keys |
 |---|---|
