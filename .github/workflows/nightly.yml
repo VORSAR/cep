@@ -14,7 +14,7 @@ env:
 jobs:
   nightly:
     runs-on: ubuntu-latest
-    timeout-minutes: 47
+    timeout-minutes: 83
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         continue-on-error: true
         with:
-          pattern: records-*
-          path: .gate/artifacts
+          name: records-nightly-${{ github.run_attempt }}
+          path: .gate/artifacts/records-nightly-${{ github.run_attempt }}
       - if: always()
         run: python3 -I -B gate/bootstrap.py exec -- summarize --registry gate/registry.json --tier nightly --artifacts .gate/artifacts --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --attempt ${{ github.run_attempt }} --image "$ImageOS $ImageVersion"
