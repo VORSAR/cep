@@ -36,6 +36,8 @@ type Rule struct {
 	KeyType event.Type // the keys' type; TString for a key-less rule
 	TTL     int64      // ms; 0 for a key-less rule
 	NewBody func(emit Emit) partition.Body
+	// OnArrival: a plain rule's body sees each event as its stream accepts it (owner Q1 of S3.2b; design s3-2b-1 §3).
+	OnArrival bool
 }
 
 // Sink receives one derived stream's outputs on its own flusher goroutine. An error is counted.
@@ -89,6 +91,7 @@ type DrainResult struct {
 // RuleStats are one rule's counters, summed over the shards.
 type RuleStats struct {
 	ConstructLate, Purged, KeyErrors, Panics int64
+	Suppressed, Errored                      int64 // from each body's plan.Counted (design s3-2b-1 §4)
 }
 
 // Stats is a consistent cut of the runtime's counters at one intake position.
