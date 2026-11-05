@@ -21,11 +21,20 @@
   5. A second output inside the rate-limit interval is suppressed and counted; a key-less rule uses one global anchor — the three §8 ports.
 
   Exits 2, 3, 4, 6, 7 and 8 are S3.2b-2's.
+- **The design (G1, 2026-11-06):** [s3-2b-1-design.md](s3-2b-1-design.md) v2.
+  - **v1's review** ([s3-2b-1-design-architecture.md](../reviews/s3-2b-1-design-architecture.md)) found 2 blockers, 7 should-fix and 3 later, each proven with a scratch program (the coordinator re-ran F2 and F4 on a fresh copy: 2 alerts where the rule gives 1; 1–2 allocations per routed event):
+    - F1: a plain rule using an expression that cannot run yet (text operators, `count`, `chain`) was built and never fired;
+    - F2: purging an on-arrival key on the rule clock re-opened a suppression in multi-stream replays and live after idleness.
+  - **QA's tests first** (34, red on the stub; every existing test green; `go vet` clean) raised gaps G1–G7.
+  - **The owner's decisions** ([sprint-plan §5, "S3.2b-1's design"](sprint-plan.md#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review)): test imports for `plan` and `playback`; D1 (purge on the stream's admission); D2 (07 per tenant); D3 (a derived `ts` must be a timestamp, E-TYPE-001); D4 (≠ R: a nullable select into a non-optional attribute is a deploy error, E-NULL-003); D5 (both here).
+  - **The rate anchor** stays in the body's per-key state, as ADR-0006 §2 records (review F5); design v1 had moved it.
+  - **Annotated:** SEMANTICS §8 and §9, SPEC §5.1, ARCHITECTURE §5, ADR-0005 §3, ADR-0006 §2.
 - **Forwards this sprint carries:** the routing-table type `internal/runtime` defines, which the planner now produces (S3.2a's plan-check reading 2); `runtime.Rule`, written "as S3.2b's planner will describe it".
 
 ## Scope changes
 
 - **2026-11-06 (owner, plan check):** the on-arrival path for plain rules (Q1), +0.5. S3.2b-1 6.5 → about 7 points; nothing moved out.
+- **2026-11-06 (owner, design):** D3 and D4 in the validator (+2, D5), D1's admission purge (+0.5), the review's other fixes (about +0.5). About 7 → about 10 points, under the cap; nothing moved out.
 
 ## Measured results
 
