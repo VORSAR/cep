@@ -377,9 +377,9 @@ func TestBreakit_TTLOneTimerWhateverRef(t *testing.T) {
 	}
 }
 
-// TestBreakit_StrictAtTheClockWaitsAndASameInstantEventGoesFirst: a strict timer due at the clock does not fire
-// (§3 "only if clock > t"); the key is not sealed by it, so an event at that instant is kept, and on the next
-// advance it is released before the strict timer (events, then inclusive, then strict at one instant).
+// TestBreakit_StrictAtTheClockWaitsAndASameInstantEventGoesFirst: a timer due at the clock does not fire, of any
+// kind (owner D1 of S3.2a-1: an instant is finalized only once the clock is past it), so an event at that instant is
+// kept, and on the next advance it is released before the timer (events, then inclusive, then strict at one instant).
 func TestBreakit_StrictAtTheClockWaitsAndASameInstantEventGoesFirst(t *testing.T) {
 	rc := clock.NewRuleClock([]int{0})
 	a := rc.NewInstance()
