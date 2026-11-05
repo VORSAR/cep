@@ -42,7 +42,7 @@ type Body interface {
 
 // Instance is one key of one rule on one shard.
 type Instance struct {
-	Key          event.Value     // the first event's key value
+	Key          event.Value     // the first event's key value; a float zero is stored as +0.0 (break-it K1)
 	Clock        *clock.Instance // the key's release buffer and timers
 	Op           OpState         // nil until birth, and from a purge until rebirth
 	LastActivity int64           // the event time of the key's last released event; math.MinInt64 before any
@@ -173,6 +173,9 @@ func (r *Rule) Offer(key event.Value, e event.Event) (constructLate bool) {
 	k := keyOf(key)
 	in, resident := r.byKey[k]
 	if !resident {
+		if key.Kind == event.TFloat && key.F == 0 {
+			key.F = 0 // -0.0 and +0.0 are one key, stored as +0.0, whichever arrives first (break-it K1)
+		}
 		in = &Instance{Key: key, Clock: r.clock.NewInstance(), LastActivity: math.MinInt64}
 	}
 	if in.Clock.Buffer(e) {

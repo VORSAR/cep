@@ -166,8 +166,9 @@ func TestApplyReportsTheClockAndDoesNotWalk(t *testing.T) {
 	}
 }
 
-// -0.0 and +0.0 are one key (design §3: looked up by value, IEEE ==, as table's key). Instance.Key is the first
-// event's key value, so the sign of -0 is kept. Events at 0:00 (-0) and 0:01 (+0); clock 0:01.001 releases both.
+// -0.0 and +0.0 are one key (design §3: looked up by value, IEEE ==, as table's key). Instance.Key is stored as +0.0,
+// whichever zero arrives first (break-it K1: otherwise the key a body sees depends on how often the rule walks).
+// Events at 0:00 (-0) and 0:01 (+0); clock 0:01.001 releases both.
 func TestKeys_NegativeAndPositiveZeroAreOneKey(t *testing.T) {
 	t.Parallel()
 	b := &body{}
@@ -179,9 +180,9 @@ func TestKeys_NegativeAndPositiveZeroAreOneKey(t *testing.T) {
 	if w.r.Len() != 1 {
 		t.Fatalf("Len %d, want 1: -0.0 and +0.0 are one key", w.r.Len())
 	}
-	wantLog(t, b, N("-0", 0), Ev("-0", 0, 0), Ev("-0", 0, second))
-	if in := instances(w.r)[0]; !math.Signbit(in.Key.F) {
-		t.Errorf("Instance.Key %v: want the first event's key (-0)", in.Key.F)
+	wantLog(t, b, N("0", 0), Ev("0", 0, 0), Ev("0", 0, second))
+	if in := instances(w.r)[0]; math.Signbit(in.Key.F) {
+		t.Errorf("Instance.Key %v: want +0.0 (break-it K1)", in.Key.F)
 	}
 }
 
