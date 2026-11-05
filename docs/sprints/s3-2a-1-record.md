@@ -60,6 +60,31 @@
 - **Coverage:** `internal/clock` 98.0%, `internal/partition` 94.9%, `internal/table` 98.1%, `internal/playback` 93.8%, `internal/event` 99.0%.
 - **The gate:** T2 `make check` exit 0.
 
+## The break-it (G3)
+
+A fresh QA agent ([s3-2a-1-breakit-qa.md](../reviews/s3-2a-1-breakit-qa.md)) found 0 blockers, 2 should-fix and 1 later, each committed as a red test and handled in one batched round:
+
+| id | severity | finding | disposition |
+|---|---|---|---|
+| K1 | should-fix | with a float key, the key value a body sees (`-0` or `0`) depended on how often the rule walked | fixed: a float zero is stored as +0.0 |
+| K2 | should-fix | the RFC 3339 reader accepted a timestamp whose UTC instant lies outside 0000–9999, which the encoder refuses | fixed (owner: refuse at decode) |
+| K3 | later | the end entry's line ignores trailing blank lines | the design was annotated (last record's line + 1); the test became a guard |
+
+**What held, kept as guard tests:**
+- 300 randomized seeds gave identical callbacks, stats and verdicts whether the clock walked per message, per random chunk or only at the end, with `CheckTimers` holding throughout;
+- 0 allocations for Offer + Advance on a resident key, for `AppendEvent` and for a steady `Set.Snapshot`;
+- every reader edge tried behaved as designed (16 MiB lines, BOM and NUL mid-file, records after stop);
+- 3,000 randomized lines round-trip bit-exact;
+- table snapshots stay race-free under `-race`;
+- D4 matches `json.Compact` on 3,000 generated objects.
+
+**Not filed, forwarded:** an unknown attribute in a hand-written expect block should be a fault in S3.3's conformance runner.
+
+**The oracle fixtures (review F8)** are in:
+- **Fixture 1:** stream-late and construct-late lines match `run_pattern_multi` over 300 events on three streams.
+- **Fixture 2:** all 88 absence completions match by line, key and due, over 200 events.
+- **Checks on the fixtures:** rerunning the generator reproduces the fixtures exactly, and two planted faults turn the tests red.
+
 ## Done-done
 
 ```
@@ -68,7 +93,7 @@ Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merge
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (2026-11-05) ☑ test material: QA's tests, an item
 Design (G1)  ☑ architecture review resolved (design v2 §9) ☑ owner decisions recorded (D1–D7) ☑ ADRs and SEMANTICS annotated
 Build (G2)   ☑ T2 (make check exit 0) ☐ T3 (in T4) ☑ tests on the real code (QA's, red first)
-Review (G3)  ☐ QA break-it ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
+Review (G3)  ☑ QA break-it (0 blockers, 2 should-fix, 1 later) ☑ every finding fixed or dispositioned, each with its test
 Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
