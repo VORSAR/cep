@@ -103,10 +103,10 @@ Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merge
 Design (G1)  ☑ architecture review resolved (design v2 §10) ☑ owner decisions recorded (F5, F10, F14) ☑ ADRs and SEMANTICS annotated
 Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (in T4) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☑ QA break-it (1 blocker, 1 should-fix, 3 later) ☑ every finding fixed, each with its red test
-Verify (G4)  ☑ T4 exit 0 (final tree) ☐ CI on the PR ☐ owner's check ☑ exit 3: the saturation run, 50/50 under -race and a CPU hog
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
-             ☐ worktrees removed ☐ points and duration
+Verify (G4)  ☑ T4 exit 0 (final tree) ☑ CI (PR #11) ☑ owner's check (merged) ☑ exit 3: the saturation run, 50/50 under -race and a CPU hog
+Exit (G5)    ☑ one PR (#11, 27 commits), merged by the owner ☑ main CI green on the merge commit
+             ☑ record + retro ☑ known issues (none new: forwards sit on S3.2b, S3.3, S5) ☑ status line
+             ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
 
 ## For the owner (the owner's check)
@@ -117,3 +117,23 @@ Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green 
   - the replay driver runs on the shared ingest step, with S3.2a-1's tests unchanged;
   - a rule body's panic resets its key.
 - **No new dependency.**
+
+**Closed (G5), 2026-11-05.** PR #11 merged by the owner (27 commits); CI green on the PR and on the merge commit. Points: about 8.5; duration: one day.
+
+## Retro
+
+- **Worked:**
+  - The architecture review proved its two blockers with scratch programs, before any code (F1: a panic cut a walk short; F2: a racing tick after a drain).
+  - QA's tests, written apart from the build, plus a separate coverage pass, found two real defects (Q15; the re-drain flag).
+  - The break-it found a process crash (B1).
+  - Exit 3 held 50/50 under `-race` with CPU hogs, twice.
+- **Hurt:**
+  - Two QA tests assumed `Send` waits for the router.
+  - The first T2's exit 0 was `tail`'s, not the gate's: the coverage row had failed.
+  - A stress run's cleanup left 12 CPU hogs spinning for 10 minutes: zsh does not word-split `$PIDS`.
+  - The nightly workflow had never run before this sprint. Its first scheduled run failed on a generator defect from S2.2a.
+- **Keep:**
+  - Read the gate's own `exit:` line, never a pipeline's.
+  - Verify that background processes died.
+  - A breaker plus a coverage pass, both written apart from the build.
+- **Lasting rule proposed (for the owner):** a new CI workflow runs once by hand, and its summary is read, in the sprint that adds it. The nightly's defect would then have shown in S2.2a.
