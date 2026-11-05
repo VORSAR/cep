@@ -4,7 +4,7 @@
 package playback
 
 import (
-	"io"
+	"fmt"
 
 	"github.com/vorsar/cep/internal/clock"
 	"github.com/vorsar/cep/internal/event"
@@ -77,22 +77,7 @@ type LoadError struct {
 	Decode *event.DecodeError // a payload fault's cause; nil otherwise
 }
 
-func (e *LoadError) Error() string {
-	panic("playback: LoadError.Error: not implemented (S3.2a-1 stub)")
-}
-
-// Reader reads a log one record at a time.
-type Reader struct{}
-
-// NewReader reads r against app; an invalid App is an error.
-func NewReader(r io.Reader, app *App) (*Reader, error) {
-	panic("playback: NewReader: not implemented (S3.2a-1 stub)")
-}
-
-// Next is the next record; io.EOF after the last; a *LoadError at the first fault, after which it returns the same.
-func (r *Reader) Next() (Record, error) {
-	panic("playback: Reader.Next: not implemented (S3.2a-1 stub)")
-}
+func (e *LoadError) Error() string { return fmt.Sprintf("playback: line %d: %s", e.Line, e.Msg) }
 
 // StepKind is a replay step's kind.
 type StepKind uint8
@@ -121,98 +106,4 @@ type Step struct {
 	Stream   int // StepBatchEnd
 	Batch    string
 	Time     int64 // StepHeader: the deployment's start; StepTick: the tick's wall time
-}
-
-// Driver replays a log in file order under the virtual clock (ADR-0005 §3, SEMANTICS §2.1).
-type Driver struct{}
-
-// NewDriver makes a driver with fresh, empty tables: a replay is a sandbox (SPEC §6.8).
-func NewDriver(app *App) (*Driver, error) {
-	panic("playback: NewDriver: not implemented (S3.2a-1 stub)")
-}
-
-// Step processes one record the Reader produced; it cannot fail (the Reader checks everything first).
-func (d *Driver) Step(rec Record) Step {
-	panic("playback: Driver.Step: not implemented (S3.2a-1 stub)")
-}
-
-// End is the log's end: in a fixture every contribution to +∞; in a recording nothing.
-func (d *Driver) End() Step { panic("playback: Driver.End: not implemented (S3.2a-1 stub)") }
-
-// Tables is the replay's own tables.
-func (d *Driver) Tables() *table.Set {
-	panic("playback: Driver.Tables: not implemented (S3.2a-1 stub)")
-}
-
-// Registry is the replay's stream registry.
-func (d *Driver) Registry() *clock.StreamRegistry {
-	panic("playback: Driver.Registry: not implemented (S3.2a-1 stub)")
-}
-
-// Walk yields the driver's Seq counters (component "seq", key the stream name): a state holder (ADR-0006 §2(b)).
-func (d *Driver) Walk(fn func(component, key string, state any)) {
-	panic("playback: Driver.Walk: not implemented (S3.2a-1 stub)")
-}
-
-// Replay streams r through d line by line, calling fn on each step, then End; it stops at the first error (a fault or
-// fn's), and the steps already delivered stand (owner D6 of S3.2a-1).
-func Replay(r *Reader, d *Driver, fn func(*Step) error) error {
-	panic("playback: Replay: not implemented (S3.2a-1 stub)")
-}
-
-// AppendValue appends v's canonical JSON (design note §5.4). Error: a NaN or ±Inf float; a timestamp outside the
-// years 0000–9999.
-func AppendValue(dst []byte, v event.Value) ([]byte, error) {
-	panic("playback: AppendValue: not implemented (S3.2a-1 stub)")
-}
-
-// AppendEvent appends e as one log line without a newline: {"attrs":{…},"batch":"…","stream":"…","ts":"…"}; batch
-// only when set, ts only when s has no time attribute.
-func AppendEvent(dst []byte, s event.Schema, e event.Event) ([]byte, error) {
-	panic("playback: AppendEvent: not implemented (S3.2a-1 stub)")
-}
-
-// Trace records a replay's canonical trace: one canonical JSON line per entry, in the order recorded (design note
-// §5.5).
-type Trace struct{}
-
-// NewTrace makes an empty trace for app.
-func NewTrace(app *App) *Trace { panic("playback: NewTrace: not implemented (S3.2a-1 stub)") }
-
-// Step records the driver's own entries: recording, stream_late, table, batch_end, tick, stop, end.
-func (t *Trace) Step(s *Step) { panic("playback: Trace.Step: not implemented (S3.2a-1 stub)") }
-
-// Released records a released event.
-func (t *Trace) Released(at int, rule string, key event.Value, e event.Event) {
-	panic("playback: Trace.Released: not implemented (S3.2a-1 stub)")
-}
-
-// ConstructLate records an event the rule's clock judged late.
-func (t *Trace) ConstructLate(at int, rule string, key event.Value, e event.Event) {
-	panic("playback: Trace.ConstructLate: not implemented (S3.2a-1 stub)")
-}
-
-// Fired records a fired timer.
-func (t *Trace) Fired(at int, rule string, key event.Value, tm clock.Timer) {
-	panic("playback: Trace.Fired: not implemented (S3.2a-1 stub)")
-}
-
-// Discarded records a discard.
-func (t *Trace) Discarded(at int, rule string, key event.Value, ref uint64) {
-	panic("playback: Trace.Discarded: not implemented (S3.2a-1 stub)")
-}
-
-// Purged records a TTL purge.
-func (t *Trace) Purged(at int, rule string, key event.Value, due int64) {
-	panic("playback: Trace.Purged: not implemented (S3.2a-1 stub)")
-}
-
-// Note records a body's own observation.
-func (t *Trace) Note(at int, rule string, key event.Value, name string, v event.Value) {
-	panic("playback: Trace.Note: not implemented (S3.2a-1 stub)")
-}
-
-// Bytes is the trace so far, or the first encoding error.
-func (t *Trace) Bytes() ([]byte, error) {
-	panic("playback: Trace.Bytes: not implemented (S3.2a-1 stub)")
 }
