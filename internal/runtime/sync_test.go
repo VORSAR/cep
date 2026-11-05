@@ -33,6 +33,12 @@ func syncNew(t testing.TB, app runtime.App, start int64, virtual bool, out func(
 	return s
 }
 
+// syncEvent is one Sync event step. The architecture review changes Sync.Event to take *event.Event (stamping Seq
+// and Tables in place, as Ingest.Event does): this one line becomes `return s.Event(&e, arrival)`.
+func syncEvent(s *runtime.Sync, e event.Event, arrival int64) (bool, []clock.WMAdvance) {
+	return s.Event(e, arrival)
+}
+
 // syncApp: S (source, `time arrival` schema with k; delay d), then the derived streams OA (an on-arrival rule's
 // outputs) and OB (a buffered rule's timer outputs). Rule A: on arrival, keyed by k, TTL ttl, emits one OA event
 // per event (k, its Seq). Rule B: buffered, keyed by k, TTL ttl, a Completion at Ts + 10 s per release, emitting
@@ -101,10 +107,10 @@ func TestSyncStartsNoGoroutine(t *testing.T) {
 	before := goruntime.NumGoroutine()
 	var outs []event.Event
 	s := syncNew(t, syncApp(t, 0, 60*rtSec, nil, nil), rtT0, false, func(e event.Event) { outs = append(outs, e) })
-	if _, _ = s.Event(rtEv(0, rtAt(0), rtStr("a")), rtAt(0)); len(outs) != 1 {
+	if _, _ = syncEvent(s, rtEv(0, rtAt(0), rtStr("a")), rtAt(0)); len(outs) != 1 {
 		t.Fatalf("%d outputs after a's step, want 1: rule A emits during its own step", len(outs))
 	}
-	s.Event(rtEv(0, rtAt(20), rtStr("b")), rtAt(20)) // releases a@0 to B: its timer at 10 s fires at clock 20 s
+	syncEvent(s, rtEv(0, rtAt(20), rtStr("b")), rtAt(20)) // releases a@0 to B: its timer at 10 s fires at clock 20 s
 	s.Tick(rtAt(30))
 	s.Drain()
 	after := goruntime.NumGoroutine()
@@ -176,7 +182,7 @@ func TestSyncMatchesLiveOneShard(t *testing.T) {
 	replay := map[int][]event.Event{}
 	s := syncNew(t, syncApp(t, 10*rtSec, 30*rtSec, nil, nil), rtT0, false, func(e event.Event) { replay[e.StreamID] = append(replay[e.StreamID], e) })
 	for _, x := range in {
-		s.Event(x.ev, x.arrival)
+		syncEvent(s, x.ev, x.arrival)
 	}
 	_, sres := s.Drain()
 	sst := s.Stats()
