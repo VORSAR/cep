@@ -1,245 +1,231 @@
-# S3.2a-2 — design note: the runtime core (v1)
+# S3.2a-2 — design note: the runtime core (v2)
 
 **What it covers:**
 - S3.2a's item 3 ([card](sprint-plan.md#s32a--the-replay-format-and-the-runtime-core)) and exit line 3 (saturation).
-- The forwards from S3.2a-1 (design v2 §10, under the S3.2a card).
-- The owner's plan-check answers ([sprint-plan §5, "S3.2a-2's plan check"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-plan-check)):
-  - the drain barrier's mechanism is built here;
-  - one shared ingest step serves the router and the replay driver.
+- The forwards from S3.2a-1 (under the S3.2a card).
+
+**The owner's answers:**
+- at the plan check ([sprint-plan §5, "S3.2a-2's plan check"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-plan-check)): the drain mechanism is built here, with one shared ingest step;
+- after the architecture review ([§5, "S3.2a-2's design"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-design-after-the-architecture-review)):
+  - **F14:** table writes join the intake;
+  - **F5:** a drain ends the app's input;
+  - **F10:** a body's panic resets that key.
 
 **Routine (owner):** QA's tests first and independent; an architecture review of this note; the build in the main session; a QA break-it.
 
-v1 is for the architecture review and QA's tests. The stub commit carries every signature below with panicking bodies. MUST and MUST NOT below are the build's contract.
+v2 answers the review ([s3-2a-2-design-architecture.md](../reviews/s3-2a-2-design-architecture.md): 2 blockers, 15 should-fix, 5 later) and QA's gaps Q1–Q9; §10 places each. MUST and MUST NOT lines are the build's contract.
 
 ## 0. What the code says (read first)
 
-1. **The pieces a shard drives already exist and are single-threaded.**
-   - `partition.Rule` (Apply, Offer, Advance; one goroutine per Rule).
-   - The clock finalizes an instant only once it is past it (owner D1 of S3.2a-1): a shard may walk after every message or once per chunk with the same result.
-   - `table.Set.Snapshot` is single-goroutine.
-   - `clock.StreamRegistry` is written by one goroutine.
-2. **The ingest arithmetic lives in `playback.Driver` today** (Seq, the snapshot, `ObserveEvent`, the virtual floor, ticks, `Drain`, `EndOfInput`).
-   - The import law lets `playback` import `runtime`, never the reverse (`tools/importcheck/rules.json`). So the shared ingest step lives in `internal/runtime`, and the driver calls it (owner, plan check).
-3. **A partition key is an attribute.** The router reads `e.Values[attr]`.
-   - `-0.0` and `+0.0` are one key (break-it K1). The router MUST hash the key with `-0.0` as `+0.0`, or one key would split across two shards.
-4. **No rule body emits yet** (operators are S3.2b's plans, then S4.1). A body emits through an `Emit` function this package gives it, one per (rule, shard).
-5. **Rules cannot read a derived stream in v0.1** (E-GRAPH-004), so an emitted event goes to its stream's sinks only, and never re-enters routing. ADR-0012 §3's fixpoint therefore completes in one round. The loop stays, for Phase 2.
-6. **`archcheck` allows goroutines, channels, `sync` and the wall clock in `internal/runtime` only** (with `io/*` and `cmd`).
-   - The race row and goleak are S3.2b's.
-   - Exit 3's `-race` run is a recorded local run (S3.2a's plan-check reading 3).
+1. **The pieces a shard drives exist and are single-threaded:**
+   - `partition.Rule`: one goroutine per Rule;
+   - the clock: it finalizes an instant only once it is past it (D1 of S3.2a-1);
+   - `table.Set.Snapshot` and `clock.StreamRegistry`: single goroutine.
+2. **The ingest arithmetic lives in `playback.Driver`.** The import law lets `playback` import `runtime`, never the reverse, so the shared step lives here and the driver calls it.
+3. **A partition key is an attribute**, and `-0.0` and `+0.0` are one key. The router hashes `-0.0` as `+0.0`.
+4. **No rule body emits yet.** A body emits through an `Emit` this package gives it, one per (rule, shard).
+5. **v0.1 rules cannot read a derived stream,** so an emitted event goes to sinks only, and the drain completes in one round.
+6. **The race row and goleak are S3.2b's;** exit 3's `-race` run is a recorded local run.
+7. **A body's panic inside a walk unwinds `partition.Rule.Advance`** and leaves the rest of the walk undone (review F1, confirmed by a scratch test). A panicking `OnPurge` leaves a born key with no TTL timer, which is never purged (F10, confirmed). → §1b.
 
-## 1. The shared ingest step (owner)
+## 1. The shared ingest step
 
-```go
-// Ingest is one app's ingest arithmetic, used by one goroutine: the live router, or the playback driver.
-type Ingest struct{ /* reg *clock.StreamRegistry; set *table.Set; seq []uint64; vnow int64; virtual bool; buf []clock.WMAdvance */ }
+As stubbed (`internal/runtime/ingest.go`): `NewIngest(specs, start, set, virtual)`, `Event`, `Tick`, `Drain`, `End`, `Snapshot`, `Registry`, `Walk`.
+- **The arithmetic** is S3.2a-1 design v2 §5.3's, moved. `playback.Driver` keeps its API and calls an `Ingest`: virtual in a fixture; rebuilt with the header's start, non-virtual, in a recording.
+- **The table set may be shared** with its owner (QA Q8): `Ingest` only takes snapshots.
+- **`Ingest` is pure** (no goroutines, no clock reads). F20: `archcheck` cannot tell `ingest.go` from the rest of `internal/runtime`, so a test reads its imports instead.
 
-// NewIngest: start is the deployment's start (wall ms); virtual is playback's fixture mode (the virtual floor after
-// every admitted event); a recording and live run without it.
-func NewIngest(specs []clock.StreamSpec, start int64, set *table.Set, virtual bool) *Ingest
+## 1b. `partition` changes (owner F10; review F1, F10, F11)
 
-// Event stamps e — Seq per stream from 1, a stream-late event included; Tables = Snapshot() — then judges it with the
-// registry. Advances: its own stream's, then (virtual) the virtual floors. The slice is valid until the next call.
-func (g *Ingest) Event(e *event.Event, arrival int64) (late bool, advances []clock.WMAdvance)
-func (g *Ingest) Tick(now int64) []clock.WMAdvance // ObserveTick
-func (g *Ingest) Drain() []clock.WMAdvance         // the registry's Drain: one past the max admitted event time
-func (g *Ingest) End() []clock.WMAdvance           // EndOfInput: +∞
-func (g *Ingest) Snapshot() *table.Snapshot        // the current snapshot (D5: what a walk this step triggers reads)
-func (g *Ingest) Registry() *clock.StreamRegistry
-func (g *Ingest) Walk(fn func(component, key string, state any)) // "seq" per stream: a state holder
-```
+**A body's panic is recovered inside `partition`**, in each callback (`NewState`, `OnEvent`, `OnTimers`, `OnDiscard`, `OnPurge`). That key is reset as a purge resets it:
+- `CancelAll`, `Op = nil`, `LastActivity = math.MinInt64`;
+- the key is marked for freeing;
+- its buffered events stay and start it fresh;
+- `Stats.Panics` counts the panic; `Purged` does not.
 
-- **The arithmetic is S3.2a-1 design v2 §5.3's, moved.** `playback.Driver` keeps its API and builds one `Ingest`: virtual in a fixture; rebuilt with the header's start, non-virtual, in a recording. Its steps call the methods above. S3.2a-1's playback tests are the regression proof.
-- **The live router uses the same `Ingest`,** with `virtual = false`.
+The walk then continues: every other key's due work is released in the same `Advance` (F1).
 
-## 2. The runtime
+- **`OnPurge`'s own panic** still completes the purge (in a `defer`), so no key is left born without a TTL timer.
+- **`CheckTimers` holds after any panic.**
+- **`Stats` gains `Panics`.**
+- **`func (r *Rule) Pending() int`**: the pending timers of every resident key, TTL timers excepted (F11; QA Q3), for `drained_pending`. It is on the cold path.
 
-```go
-type AppID int // dense, from 0, in Start's order
+A panic in partition's own code, not a body's, is still recovered at the shard boundary (§4).
 
-// Emit is a body's output: an event on a derived stream (e.StreamID); it goes to that stream's sinks.
-type Emit func(e event.Event)
+## 2. The runtime's API (stub v2)
 
-// Rule is one rule of an app, as S3.2b's planner will describe it.
-type Rule struct {
-	Name    string
-	Inputs  []int      // the stream ids the rule reads
-	KeyAttr []int      // per input, the key attribute's index in that stream; nil: key-less (the pseudo-key "")
-	KeyType event.Type // the keys' type; TString for a key-less rule
-	TTL     int64      // ms; 0 for a key-less rule
-	NewBody func(emit Emit) partition.Body // one body per (rule, shard)
-}
+- **`App` gains `Schemas []event.Schema`**, aligned with `Streams`. `Start` validates every rule against them (F9, F21):
+  - its inputs are source streams in range;
+  - each `KeyAttr` is in range, and its type is `KeyType`;
+  - a keyed rule has `TTL > 0` (QA Q4; the planner's bug, refused);
+  - a key-less rule has `TTL` 0;
+  - each sink's stream is derived;
+  - every `NewBody` is non-nil.
+- **`Send(ctx, app, e)` checks in the caller's goroutine** (F9) and returns an error, never panicking the router:
+  - the app is in range and not drained;
+  - the stream is a source stream of the app;
+  - `len(e.Values)` equals its schema's attribute count;
+  - each value's `Kind` is its declared type.
 
-// Sink receives one derived stream's outputs on its own flusher goroutine (the facade adapts cepio.Sink in S3.3).
-// An error is counted; retry and backoff are S5's.
-type Sink func(e event.Event) error
+  **Ownership (F4):** `Send` takes `e.Values`, and the caller MUST NOT change it afterwards.
+- **`Tick(ctx, now) error`** (F7).
+- **`TableWrite(ctx, app, table int, op TableOp, rows [][]event.Value) error`** (owner F14): an intake item. The router applies it to `app.Tables` in intake order (`Upsert`, or `Delete` with key values), and it returns the table's error once applied.
+- **After `Close`,** every method returns `ErrClosed`, and a second `Close` returns nil (F7; QA Q6).
+- **After an app's drain,** `Send`, `Tick` and `TableWrite` for it return `ErrDrained` (owner F5).
+- **`Stats` gains:**
+  - `SaturatedParks []int64`: per shard, the times it parked with a non-empty outbox while its mailbox was full (F16), the moment exit 3 must reach;
+  - `AfterDrain [][]int64`: per app and stream, items refused after the drain by intake order (a `Send` racing its `Drain`).
 
-type SinkBinding struct {
-	Stream int // a derived stream's id
-	Sink   Sink
-}
+## 3. Goroutines and their waits
 
-type App struct {
-	Streams []clock.StreamSpec // declaration order; their index is the stream id
-	Tables  *table.Set         // nil: no tables
-	Rules   []Rule
-	Sinks   []SinkBinding
-}
+| Goroutine | May wait on | Never waits on |
+|---|---|---|
+| a caller of `Send`, `Tick`, `TableWrite`, `Drain`, `Stats` | `select { intake send, stopped, ctx.Done }`; then its reply with the same `select`; `Drain` also on its flush markers (§5) | anything else |
+| the router (one) | with nothing pending: `select { intake, handoff, stopped }`; with something pending: `select { the FIFO head's send, handoff, stopped }` | sinks, shards' state, callers' replies (reply channels are buffered, 1) |
+| a shard | `select { mailbox, handoff send of a non-empty outbox }` | anything else |
+| a sink flusher | its queue's receive; its own `Sink` call | anything else; a flush marker is a `close`, which never blocks (F3) |
+| the ticker | `select { ticker, stopped }`, then the intake send under `select { …, stopped }` | anything else |
 
-type Config struct {
-	Shards    int               // 0: GOMAXPROCS (ADR-0006 §1)
-	Mailbox   int               // per shard, in messages; 0: 1024
-	Intake    int               // the router's intake queue; 0: 1024
-	SinkQueue int               // per sink binding; 0: 1024
-	TickEvery time.Duration     // live idle ticks from an internal ticker; 0: none (tests call Tick)
-	Now       func() int64      // wall ms; nil: time.Now; injectable
-}
+- **The intake channel is never closed** (F7): stopping is the `stopped` channel's close.
+- **One shared handoff channel** with capacity `Shards` (R1). The FIFO is bounded in messages, and its bytes by ADR-0006 §5's per-`Advance` emit ceiling, which is S3.2b's tripwire item (F13).
+- **The deadlock argument of v1 §3 stands**, with the caller and flusher rows above.
+- **MUST NOT: a `Sink` calls back into the runtime** (F22). A sink that blocks on the runtime would deadlock its flusher against the router.
+- **A `Sink` that panics** is recovered by its flusher and counted as a sink error, and the flusher continues (F8).
 
-// Start validates the apps, builds every shard's rules, and starts the router, the shards and the sink flushers.
-func Start(cfg Config, apps []App) (*Runtime, error)
-func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error // thread-safe; blocks for backpressure
-func (r *Runtime) Tick(now int64) error                                     // a wall tick into the intake
-func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) // the drain barrier (§5)
-func (r *Runtime) Stats(ctx context.Context) (Stats, error)                 // a consistent cut through the intake (§6)
-func (r *Runtime) Close(ctx context.Context) error                          // stops every goroutine; drops the rest
-```
+## 4. One event's path; ticks; table writes
 
-**`Send`'s contract:**
-- `e.StreamID` is a source stream of the app, and `e.Values` is aligned to its schema (the decoder's output).
-- `e.Ts` is the event time. A `time arrival` stream's live stamping is S3.2b's item 3; here `Ts` is taken as given.
-- `Seq` and `Tables` are the router's.
-- `Send` after `Close` is an error.
-- It waits on the intake queue only, and respects `ctx`.
+**Wall stamps.** One monotone stamp serves arrivals and ticks alike: `stamp = max(last, Now())`. A tick's time is clamped to it, so a recording of what the router applied never has a tick before an arrival (F6).
 
-## 3. Goroutines and their waits (ADR-0006 §5, made concrete)
+**An event** of app `a` (stream `s`):
+1. If `a` is drained, count `AfterDrain` and stop.
+2. `stamp`; `late, adv := a.ingest.Event(&e, stamp)`. If `late`, count `stream_late`.
+3. **Offers.** For each rule `R` of `a` reading `s`, the key is `e.Values[R.KeyAttr[i]]`, or `""` for a key-less rule.
+   - A null or NaN key is a per-rule `key_errors` (a wrong type cannot pass `Start` and `Send`).
+   - The shard is `fnv1a64(app, rule, canonical key) % Shards`, with `-0.0` hashed as `+0.0`; a key-less rule hashes `(app, rule)`.
+4. **Messages.** One per shard with offers or a non-empty `adv`, appended to the FIFO in shard order: `{app, adv (copied), tables: e.Tables, ev: e, offers}`.
 
-| Goroutine | Owns | May wait on | Never waits on |
-|---|---|---|---|
-| a caller of `Send` / `Tick` / `Drain` / `Stats` | — | the intake queue (send); its own reply channel | anything else |
-| the router (one) | every app's `Ingest`; the routing index; the pending-send FIFO | the intake receive (only with nothing pending); the head of the pending FIFO (a mailbox or a sink-queue send) **together with** the shared handoff receive; the ticker | shards' state, sinks |
-| a shard (`Shards` of them) | its `partition.Rule`s (every app's rules); its outbox; its counters | `select { mailbox receive, handoff send of a non-empty outbox }` | sinks, other shards, the router's state, I/O, tables |
-| a sink flusher (one per binding) | its queue's receive side | its queue receive; its own `Sink` call | everything else |
-| the ticker (when `TickEvery > 0`) | — | its `time.Ticker`; the intake send | everything else |
+**A tick:** for every app not drained, `adv := a.ingest.Tick(stamp)`. A non-empty `adv` sends advance-only messages to every shard, with that app's current snapshot (D5). The ticker keeps running for the other apps after one drains (F2).
 
-**The handoff.** One channel shared by every shard, with capacity `Shards`, carrying `handoff{shard, items}`.
-- A shard with a non-empty outbox includes the handoff send in its parking `select`, so it never blocks on the handoff alone. A handed-off outbox belongs to the router from then on, and the shard starts a new one.
-- The router's every wait includes the handoff receive. That is ADR-0006 §5's "the router services every handoff while blocked". With one shared channel, it needs no reflection.
+**A table write** (F14): applied by the router to `a.Tables` in intake order. `a.ingest.Snapshot()` then publishes the next snapshot at the next event or tick. Its reply carries the table's error.
 
-**The router's loop:**
-1. **While the pending FIFO is non-empty:** `select` on the head's send (a shard's mailbox or a sink queue), the handoff receive, and the stop signal.
-   - A received handoff's items are routed: outputs to their stream's sink queues, appended to the FIFO; a drain ack is recorded (§5).
-2. **Otherwise:** `select` on the intake, the handoff, and the stop signal.
-   - An intake item is an event, a tick, a drain request or a stats request. It turns into mailbox sends appended to the FIFO, in shard order.
+**A shard's message**, for each rule of the app:
+1. **Apply** the advances, then **offer** the event under its keys, counting construct-late.
+2. **Advance** with the message's snapshot. A shard walks after every message (R2): per-chunk walking is equal only if a chunk never spans a snapshot change (F18), and it is a later, measured optimization.
+3. **Under `recover`, as a last resort** (partition recovers bodies itself, §1b): a recovered panic is counted as `panics`, and `Advance` is called again until it returns normally. Each panic consumed one item, so this ends (F1).
 
-The router never reads the intake while anything is pending. That is the backpressure: sources feel it, shards never do. The FIFO stays bounded by one intake item's messages plus the outputs of the mailboxes' in-flight work.
+**The outbox.** An `Emit` appends `{app, event}`; the runtime owns the event from then on (F4). A `Sink` receives events it MUST NOT change: several bindings may share one.
 
-**Why it cannot deadlock** (ADR-0006 §5's argument, kept):
-- every edge a shard waits on is completed by the router, which always also receives handoffs;
-- a flusher waits only on its own sink;
-- the router waits on a mailbox or a sink queue only while also receiving handoffs.
-
-The saturation test (exit 3) is the proof.
-
-## 4. One event's path (the step contract, live; S3.2a-1 design §1, D5)
-
-For an intake event `e` of app `a`:
-1. `arrival = max(lastArrival, Now())` (monotone).
-2. `late, adv := a.ingest.Event(&e, arrival)`.
-   - If `late`, count `stream_late` for the stream; stop.
-3. **Offers.** For each rule `R` of `a` reading `e.StreamID` (the routing index):
-   - **The key** is `e.Values[R.KeyAttr[i]]`, or `""` for a key-less rule.
-   - **A bad key** — null, NaN, or not `R.KeyType` — is a per-rule event error, counted for `R`; nothing is offered.
-   - **The shard** is `fnv1a64(appID, ruleIndex, canonicalKey) % Shards`: `-0.0` hashed as `+0.0`; a key-less rule hashes `(appID, ruleIndex)`.
-4. **One message per shard,** in shard order, appended to the pending FIFO, when it has offers or `adv` is non-empty: `{app, kind: event, adv (copied), tables: e.Tables, ev: e, offers: [(rule, key)…] for this shard}`.
-   - The event's own advances ride with it (S3.2a-1 §1), and every message carries the snapshot (D5).
-   - Every shard gets the advances, because a rule's clock moves on every shard, with or without keys (ADR-0004 §3; S3.1-1 D2).
-
-**A tick:** `adv := a.ingest.Tick(now)` for every app; advance-only messages to every shard, each with that app's current snapshot (D5).
-
-**A shard's message** (§3: one goroutine; each rule's work under `recover`):
-1. **Apply** each advance to each of the app's rules that reads its stream.
-2. **Offer** the event to each listed rule under its key; a construct-late result counts for that rule.
-3. **Advance** every rule of the app with the message's snapshot.
-
-A shard walks after every message. D1 makes per-chunk walking equal, and a chunked walk is a later, measured optimization.
-
-**The outbox.**
-- An `Emit` appends `{app, event}` to the shard's outbox.
-- A panic in a rule's `Offer` or `Advance`, a body included, is recovered at the shard boundary: it is counted as a per-rule event error (`panics`), and the shard carries on with the next rule and message (ADR-0012 §6). The rule's clock stays consistent, because the walk removed the item before its callback.
-
-## 5. The drain barrier (owner; ADR-0012 §3)
+## 5. The drain barrier (owner: here; F5 terminal; F2, F3, F11)
 
 **`Drain(ctx, app)`:**
-1. **The request.** An intake item, so it follows every earlier `Send` of the app; Stop stops sources first (S3.3).
-   - It stops the internal ticker first (owner D3 of S3.1-1: the ticks stop before the sources).
-2. **The router's part:**
-   - `adv := a.ingest.Drain()`, so instants up to the max admitted event time finalize, and nothing later fires;
-   - a `drain` message to every shard with `adv`, the app's snapshot and a token.
-3. **Each shard:** applies, walks, counts the app's pending timers as `drained_pending`, appends an ack `{token, pending}` to its outbox, and hands off. A shard with nothing else still hands off its ack.
-4. **The router, with every shard's ack in:**
-   - it has received, and queued in order, every output the shards produced before the ack;
-   - it appends a flush marker behind them to each of the app's sink queues;
-   - each flusher signals its marker once it reaches it.
-5. **Completion.** When every marker is signalled and the app's mailbox work and pending FIFO are empty, the round is complete.
-   - A second round follows only if a round added work; in v0.1 none can.
-   - `Drain` returns `DrainResult{Pending}` (the summed `drained_pending`).
+1. **The caller.**
+   - It sets the app's draining flag (atomic), so later `Send`s fail fast. A `Send` already past the check lands after the request in the intake and is refused there, counted in `AfterDrain`.
+   - It enqueues the request.
+2. **The router** (intake order):
+   - `drained[a] = true`, so no later item of `a` (event, tick or write) reaches the shards (F2: no tick fires after the drain point);
+   - `adv := a.ingest.Drain()`;
+   - a `drain` message to every shard, with `adv`, the snapshot and a token.
+3. **Each shard:** applies, walks, sums `Rule.Pending()` over the app's rules, appends `ack{token, pending}` to its outbox, and hands off. An empty outbox still hands off its ack.
+4. **The router, on every shard's ack:**
+   - **The order.** Every output a shard produced before its ack has already been appended to the FIFO (a handoff's items go in order).
+   - **The flush markers.** It appends one per sink binding of `a` through the FIFO, behind those outputs, so they reach the queues in order.
+   - **The reply.** It replies to the caller with the markers' `done` channels and the summed `Pending`.
+5. **The caller** waits for every marker's `done`. A flusher `close`s it on reaching the marker, never blocking (F3). The caller then returns `DrainResult{Pending}`.
    - On `ctx`'s deadline it returns `ctx.Err()`, and the barrier still completes inside the runtime.
 
-`Drain` does not stop the runtime: later `Send`s of the app are processed normally. S3.3's `Stop` = stop sources → `Drain` → detach.
+**What `Drain` returning means:** every output produced before the barrier has been through its `Sink`. Nothing after it can fire (R3, under the MUSTs of §7).
 
 ## 6. Stats and Close
 
 **`Stats(ctx)`:** an intake item.
-- The router asks every shard through its mailbox. Each shard's reply rides its handoff, so the counters are a consistent cut at that intake position, and there are no atomics on the hot path (ADR-0006, implementation notes).
-- **Counters:**
-  - per app and stream: `stream_late`;
-  - per app and rule: `construct_late`, `purged`, `key_errors`, `panics`;
-  - per sink binding: `sink_errors`;
-  - the router's high-water marks: the pending FIFO's length, and each mailbox's length.
+- **Shard counters** come back through the mailboxes and handoffs, a consistent cut at that position.
+- **`sink_errors`** are counters the flushers increment atomically and `Stats` reads directly, outside the cut (F12; QA Q5).
+- `Stats` waits behind a stuck sink like any intake item, and respects `ctx`.
+- **The router's high-water marks:** the FIFO's length; each mailbox's length after each send (QA Q2).
 
-**`Close(ctx)`:**
-1. Stops the ticker and the intake.
-2. The router finishes its pending FIFO, then closes the mailboxes.
-3. Shards hand off their last outboxes and exit.
-4. The router routes them, closes the sink queues and exits.
-5. Flushers drain their queues and exit.
+**`Close(ctx)`** (F7):
+1. It closes `stopped`. Callers and the ticker return `ErrClosed`.
+2. **The router** abandons its FIFO and closes the mailboxes.
+3. **Shards** finish their current message and exit.
+4. **The router** waits for them, then closes the sink queues.
+5. **Flushers** finish their current `Sink` call, then exit, dropping the rest.
 
-`Close` waits for every goroutine (a `sync.WaitGroup`) until `ctx`'s deadline. It fires no pending timer (MVP stop is graceful or nothing, ADR-0012 §3). A test then sees no goroutine left; goleak is S3.2b's.
+`Close` waits on a `sync.WaitGroup` until `ctx`'s deadline, and returns `ctx.Err()` if a `Sink` never returns: that flusher is leaked, and the docs say so. It fires no pending timer (graceful or nothing, ADR-0012 §3).
 
 ## 7. MUST / MUST NOT
 
-- The router alone writes mailboxes and sink queues, and alone reads the intake (ADR-0006 §4).
-- A shard MUST NOT block on anything but its parking `select`; a flusher, on anything but its queue and its sink.
-- Per key, events reach the body in the order the clock releases them, which equals replay's for the same admitted events (SEMANTICS §2.1, §2.2). Across keys, live order is free.
-- A `-0.0` key and a `+0.0` key reach one instance on one shard.
-- A table-reading timer reads the snapshot of the message whose walk fires it, so its result does not depend on `Shards` (D5).
-- No `time.Sleep` anywhere. Every wait is on a state, with a deadline or a stop signal (testing.md rule 1 applied to production code).
+- **One writer, one reader:** the router alone writes mailboxes and sink queues, applies table writes, and reads the intake.
+- **What may block:**
+  - a shard blocks only in its parking `select`;
+  - a flusher only on its queue and its sink;
+  - the router never blocks without also receiving handoffs and watching `stopped`.
+- **Order:**
+  - per key, events reach the body in the clock's release order, equal to replay's for the same admitted events (SEMANTICS §2.1, §2.2);
+  - every message carries its snapshot (D5);
+  - an event's own advances ride with it.
+- **Keys:** `-0.0` and `+0.0` reach one instance on one shard.
+- **Ownership:** values given to `Send` and `Emit` are the runtime's; a `Sink` never changes an event; a `Sink` never calls the runtime.
+- **No `time.Sleep`.** Every wait is on a state, with a deadline or the stop signal.
 
-## 8. Tests (QA, written first; each red on the stub for its stated reason)
+## 8. Tests (QA, written first)
 
-| Line | Test | Proof |
-|---|---|---|
-| **Exit 3** | `TestSaturationProgress` (`internal/runtime`) | Shards 2, mailbox 1, a body that emits a burst per event, a sink that blocks until the test releases it, a bursty source. The scenario: a shard's mailbox is full while its handoff is pending. Every output still arrives and `Drain` completes, bounded by a ceiling. Run 50/50 under `-race` with a CPU hog, recorded by the coordinator. |
-| Live = replay per key | `TestLiveOrderPerKeyEqualsReplay` | A log replayed through `playback` (the trace harness) and sent live with 1 and with 4 shards: each key's released events and timer fires are identical. Live ticks are off; the drain stands in for the end. |
-| D5 | `TestTimerTablesIndependentOfShards` | A table-reading timer gives the same note with 1 and with 4 shards. |
-| Keys | `TestKeyErrorsAndZeroKeys` | Null, NaN and wrong-type keys are counted as per-rule errors and never offered; `-0.0` and `+0.0` reach one instance. |
-| Pseudo-key | `TestKeylessRuleOneInstance` | A key-less rule runs as one instance, never purged. |
-| Panics | `TestPanicIsAPerRuleError` | A body that panics on one key: counted; other rules and keys of the same event are unaffected. |
-| Drain | `TestDrainBarrier` | Outputs produced by the barrier's walk reach the sinks before `Drain` returns; deadlines after the max event time stay unfired and are counted; `Send` after `Drain` still works; a ctx deadline returns its error. |
-| Ingest | `internal/playback`'s existing tests, plus `TestIngestMatchesDriver` | The driver on `Ingest` passes every S3.2a-1 test; the router's Seq, snapshot and advances equal the driver's on one log. |
-| Close | `TestCloseStopsEverything` | No goroutine of the runtime is left (counted by `runtime.NumGoroutine` before and after, with a ceiling); `Send` after `Close` errors. |
+**Written (red on the stub):**
+- `TestSaturationProgress` (exit 3);
+- `TestTimerTablesIndependentOfShards` (D5);
+- `TestIngestMatchesDriver`;
+- `TestLiveOrderPerKeyEqualsReplay`, in `internal/playback`, because runtime's tests cannot import playback (QA Q1, accepted).
 
-## 9. For the review
+**Revised and added for v2:**
+- **Exit 3** also asserts `SaturatedParks > 0`, so the scenario was reached (F16).
+- **Live = replay** uses a **recording** ending with a stop record, against a live run with no ticks and a `Drain`. The two are the same arithmetic, so every key's sequence must be equal, with 1 and with 4 shards (F15).
+- **D5's test** orders its table writes with `TableWrite`, now in intake order (F14).
+- **The rest:**
+  - `TestKeyErrorsAndZeroKeys`;
+  - `TestKeylessRuleOneInstance`;
+  - `TestPanicResetsTheKey`: one key's body panics; its state resets, the panic is counted, and other keys and rules are unaffected in the same walk;
+  - `TestDrainBarrier`: barrier outputs reach sinks first; later deadlines stay unfired and `Pending` counts non-TTL timers; after the drain, `Send`, `Tick` and `TableWrite` return `ErrDrained`, while other apps keep their ticks;
+  - `TestTableWriteInIntakeOrder`;
+  - `TestSendValidation`;
+  - `TestSinkPanicCounted`;
+  - `TestCloseStopsEverything`: polls the goroutine count to a deadline (F17); `ErrClosed`; a second `Close` returns nil;
+  - `Start`'s validation.
+- **`internal/partition`:** `TestBodyPanicResetsTheKey`, `TestPanicInOnPurgeStillPurges`, and `TestPendingExcludesTTL`.
 
-- **R1:** one shared handoff channel with capacity `Shards`, against one per shard. Is the FIFO's bound argument sound?
-- **R2:** walking after every message, against D1's per-chunk option.
-- **R3:** the drain ack through the outbox, and the flush marker through the sink queues. Does every output produced before the barrier reach its sink before `Drain` returns?
-- **R4:** consistent stats through the mailboxes, against plain counters read after a barrier.
-- **R5:** messages allocate per event (advances copied, offers slices). The allocation budget for ingest → shard is S3.2b's `allocgate`; is anything here structurally unfixable later?
+The coordinator runs exit 3 50 times under `-race` with a CPU hog and records it.
 
-## 10. Size
+## 9. Size
 
-About 7.5 points:
+About 8.5 points:
 - item 3: 6;
 - the drain barrier: 1;
-- the shared ingest step: 0.5.
+- the shared ingest step: 0.5;
+- table writes through the intake: 0.5;
+- partition's panic reset: 0.5.
+
+## 10. Review and test-gap dispositions
+
+| # | Severity | Disposition |
+|---|---|---|
+| F1 | blocker | Fixed (§1b, §4): partition recovers per callback; the shard re-calls `Advance` until it returns. |
+| F2 | blocker | Fixed (§4, §5): a per-app drained mark by intake order; ticks continue for other apps. |
+| F3 | should-fix | Fixed (§3, §5): a marker is a `close`; the `Drain` caller waits, not the router. |
+| F4 | should-fix | Fixed (§2, §4, §7): ownership rules. |
+| F5 | should-fix | Owner: a drain ends the app's input (§2, §5). |
+| F6 | should-fix | Fixed (§4): one monotone wall stamp. |
+| F7 | should-fix | Fixed (§2, §3, §6): `stopped`, never closing the intake; ctx everywhere; the `Close` contract. |
+| F8 | should-fix | Fixed (§3): a flusher recovers a sink panic. |
+| F9 | should-fix | Fixed (§2): `Send` and `Start` validate. |
+| F10 | should-fix | Owner: reset the key (§1b). |
+| F11 | should-fix | Fixed (§1b): `Rule.Pending()` excludes TTL. |
+| F12 | should-fix | Fixed (§6): atomic sink-error counters; the documented wait. |
+| F13 | should-fix | Annotated (ADR-0006 §5): depth metrics are `Stats`' high-water marks; the emit ceiling is S3.2b's tripwire. |
+| F14 | should-fix | Owner: table writes join the intake (§2, §4). |
+| F15 | should-fix | Fixed (§8): a recording against a live run with a drain. |
+| F16 | should-fix | Fixed (§2, §8): `SaturatedParks`. |
+| F17 | should-fix | Fixed (§8): poll to a deadline. |
+| F18 | later | Noted (§4): chunking must cut at snapshot changes. |
+| F19 | later | Forwarded to S5: one router for every app means one app's slow sink stalls the others. A known limit of the single-node MVP, in the docs. |
+| F20 | later | §1: a test reads `ingest.go`'s imports. |
+| F21 | later | §2: `Start`'s validation listed; a tick with empty advances sends nothing. |
+| F22 | later | §3, §7: MUST NOT. |
+| Q1–Q9 | QA | Q1 accepted; Q2 §6; Q3 §1b; Q4 §2; Q5 §6; Q6 §2; Q7 F1; Q8 §1; Q9 as tested. |
