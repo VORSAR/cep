@@ -5,6 +5,13 @@
 package partition
 
 import (
+	"cmp"
+	"errors"
+	"fmt"
+	"math"
+	"slices"
+	"strconv"
+
 	"github.com/vorsar/cep/internal/clock"
 	"github.com/vorsar/cep/internal/event"
 )
@@ -39,6 +46,8 @@ type Instance struct {
 	Clock        *clock.Instance // the key's release buffer and timers
 	Op           OpState         // nil until birth, and from a purge until rebirth
 	LastActivity int64           // the event time of the key's last released event; math.MinInt64 before any
+
+	pending bool // listed for freeing after a purge (once: review F10)
 }
 
 // Config describes one rule to its partitions.
@@ -68,50 +77,261 @@ type InstanceState struct {
 }
 
 // Rule is one rule's instances on one shard, under one construct clock.
-type Rule struct{}
+type Rule struct {
+	clock   *clock.RuleClock
+	keyType event.Type
+	ttl     int64
+	body    Body
+	byKey   map[keyT]*Instance
+	byClock map[*clock.Instance]*Instance
+	pending []*Instance // purged in a walk; freed after it once they hold nothing
+	stats   Stats
+	tables  any // the snapshot of the walk in progress (owner D5): what its timers read
+	cb      clock.Callbacks
+}
 
-// NewRule rejects an empty Inputs, a KeyType of TInvalid or TObject, a negative TTL and a nil Body.
-func NewRule(cfg Config) (*Rule, error) { panic("partition: NewRule: not implemented (S3.2a-1 stub)") }
+// keyT is a key value as a map key: the type's own field only, so a lookup allocates nothing, and float keys compare
+// with ==, the expression engine's equality: -0.0 and +0.0 are one key.
+type keyT struct {
+	s string
+	n int64
+	f float64
+	b bool
+}
 
-// Apply takes one stream's advance without walking (design note §1, step 1).
+func keyOf(v event.Value) keyT {
+	switch v.Kind {
+	case event.TString:
+		return keyT{s: v.Str}
+	case event.TInt:
+		return keyT{n: v.I}
+	case event.TTimestamp:
+		return keyT{n: v.T}
+	case event.TDuration:
+		return keyT{n: v.D}
+	case event.TFloat:
+		return keyT{f: v.F}
+	case event.TBool:
+		return keyT{b: v.B}
+	}
+	return keyT{}
+}
+
+// addSat is a + b for b ≥ 0, saturating at MaxInt64.
+func addSat(a, b int64) int64 {
+	if a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
+}
+
+var (
+	errNoInputs = errors.New("partition: a rule reads at least one stream")
+	errNilBody  = errors.New("partition: a rule needs a body")
+	errNegTTL   = errors.New("partition: negative TTL")
+)
+
+// NewRule rejects an empty Inputs, a KeyType of TInvalid or TObject, a negative TTL and a nil Body. A TTL of 0 is
+// accepted: the validator guarantees a keyed rule carries one (E-TTL-001), and a key-less rule is never purged.
+func NewRule(cfg Config) (*Rule, error) {
+	switch {
+	case len(cfg.Inputs) == 0:
+		return nil, errNoInputs
+	case cfg.KeyType < event.TString || cfg.KeyType >= event.TObject:
+		return nil, fmt.Errorf("partition: key type %v cannot key a partition (owner D7 of S3.2a-1: object keys are a deploy error from S3.3)", cfg.KeyType)
+	case cfg.TTL < 0:
+		return nil, errNegTTL
+	case cfg.Body == nil:
+		return nil, errNilBody
+	}
+	r := &Rule{
+		clock: clock.NewRuleClock(cfg.Inputs), keyType: cfg.KeyType, ttl: cfg.TTL, body: cfg.Body,
+		byKey: map[keyT]*Instance{}, byClock: map[*clock.Instance]*Instance{},
+	}
+	r.cb = clock.Callbacks{OnEvent: r.onEvent, OnTimers: r.onTimers, OnDiscard: r.onDiscard}
+	return r, nil
+}
+
+// Apply takes one stream's advance without walking (design note §1, step 1); advanced says the rule's construct
+// clock moved.
 func (r *Rule) Apply(a clock.WMAdvance) (advanced bool) {
-	panic("partition: Rule.Apply: not implemented (S3.2a-1 stub)")
+	_, advanced = r.clock.ApplyAdvance(a)
+	return advanced
 }
 
 // Offer buffers e under key (design note §1, step 2), creating the key's instance when it has none. It panics on a
-// null key or a key of another type: the router checks both first.
+// null key, a key of another type or a NaN key: the router checks first.
 func (r *Rule) Offer(key event.Value, e event.Event) (constructLate bool) {
-	panic("partition: Rule.Offer: not implemented (S3.2a-1 stub)")
+	switch {
+	case key.Null:
+		panic("partition: Offer: a null key (the router makes it a per-rule event error)")
+	case key.Kind != r.keyType:
+		panic(fmt.Sprintf("partition: Offer: a %v key for a rule keyed by %v", key.Kind, r.keyType))
+	case key.Kind == event.TFloat && key.F != key.F:
+		panic("partition: Offer: a NaN key")
+	}
+	k := keyOf(key)
+	in, resident := r.byKey[k]
+	if !resident {
+		in = &Instance{Key: key, Clock: r.clock.NewInstance(), LastActivity: math.MinInt64}
+	}
+	if in.Clock.Buffer(e) {
+		r.stats.ConstructLate++
+		if !resident {
+			r.clock.Free(in.Clock)
+		}
+		return true
+	}
+	if !resident {
+		r.byKey[k] = in
+		r.byClock[in.Clock] = in
+	}
+	return false
 }
 
-// Advance walks everything up to the clock (design note §1, step 3), then frees purged keys that hold nothing.
-// tables is the snapshot the walk's timers read.
-func (r *Rule) Advance(tables any) { panic("partition: Rule.Advance: not implemented (S3.2a-1 stub)") }
+// Advance walks everything before the clock (design note §1, step 3), then frees purged keys that hold nothing.
+// tables is the snapshot the walk's timers read (owner D5).
+func (r *Rule) Advance(tables any) {
+	r.tables = tables
+	r.clock.Advance(r.cb)
+	r.tables = nil
+	r.free()
+}
+
+func (r *Rule) onEvent(ci *clock.Instance, e event.Event) {
+	in := r.byClock[ci]
+	if in.Op == nil {
+		in.Op = r.body.NewState(in)
+	}
+	in.LastActivity = e.Ts
+	if r.ttl > 0 {
+		ci.Schedule(addSat(e.Ts, r.ttl), clock.TTLPurge, 0)
+	}
+	r.body.OnEvent(in, e)
+}
+
+func (r *Rule) onTimers(ci *clock.Instance, fires []clock.Timer) {
+	in := r.byClock[ci]
+	// A key has one TTL timer, the only strict kind OnTimers receives, so it fires alone in its group.
+	if fires[0].Kind == clock.TTLPurge {
+		if len(fires) != 1 {
+			panic("partition: a TTLPurge grouped with other timers")
+		}
+		r.purge(in)
+		return
+	}
+	r.body.OnTimers(in, fires, r.tables)
+}
+
+func (r *Rule) onDiscard(ci *clock.Instance, refs []uint64) { r.body.OnDiscard(r.byClock[ci], refs) }
+
+// purge resets a key (SEMANTICS §9): the body sees it first, with its state and its other timers; its buffered events
+// stay and start it fresh.
+func (r *Rule) purge(in *Instance) {
+	r.body.OnPurge(in)
+	in.Clock.CancelAll()
+	in.Op = nil
+	in.LastActivity = math.MinInt64
+	r.stats.Purged++
+	if !in.pending {
+		in.pending = true
+		r.pending = append(r.pending, in)
+	}
+}
+
+// free drops each purged key that holds nothing; a reborn one leaves the list, one with buffered events stays.
+func (r *Rule) free() {
+	keep := r.pending[:0]
+	for _, in := range r.pending {
+		switch {
+		case in.Op != nil:
+			in.pending = false
+		case in.Clock.Empty():
+			in.pending = false
+			r.clock.Free(in.Clock)
+			delete(r.byKey, keyOf(in.Key))
+			delete(r.byClock, in.Clock)
+		default:
+			keep = append(keep, in)
+		}
+	}
+	clear(r.pending[len(keep):])
+	r.pending = keep
+}
 
 // Clock is the rule's construct clock.
-func (r *Rule) Clock() int64 { panic("partition: Rule.Clock: not implemented (S3.2a-1 stub)") }
+func (r *Rule) Clock() int64 { return r.clock.Clock() }
 
 // Len is the number of resident instances.
-func (r *Rule) Len() int { panic("partition: Rule.Len: not implemented (S3.2a-1 stub)") }
+func (r *Rule) Len() int { return len(r.byKey) }
+
+// ordered is the resident instances in Ordinal order: a Go map's order never reaches an output.
+func (r *Rule) ordered() []*Instance {
+	ins := make([]*Instance, 0, len(r.byKey))
+	for _, in := range r.byKey {
+		ins = append(ins, in)
+	}
+	slices.SortFunc(ins, func(a, b *Instance) int { return cmp.Compare(a.Clock.Ordinal(), b.Clock.Ordinal()) })
+	return ins
+}
 
 // Instances calls fn for each resident instance in Ordinal order.
 func (r *Rule) Instances(fn func(in *Instance)) {
-	panic("partition: Rule.Instances: not implemented (S3.2a-1 stub)")
+	for _, in := range r.ordered() {
+		fn(in)
+	}
 }
 
-// Walk yields each instance's InstanceState, then its OpState's parts, in Ordinal order: a state-registry holder.
+// Walk yields the rule clock (component "clock", key "", a clock.RuleState), then, for each instance in Ordinal
+// order, its InstanceState (component "instance", key its Ordinal in decimal) and its OpState's parts: a
+// state-registry holder.
 func (r *Rule) Walk(fn func(component, key string, state any)) {
-	panic("partition: Rule.Walk: not implemented (S3.2a-1 stub)")
+	fn("clock", "", r.clock.State())
+	for _, in := range r.ordered() {
+		birth, born := in.Clock.Birth()
+		fn("instance", strconv.FormatUint(in.Clock.Ordinal(), 10), InstanceState{
+			Key: in.Key, LastActivity: in.LastActivity, Birth: birth, Born: born,
+			Events: in.Clock.Events(nil), Timers: in.Clock.Timers(nil),
+		})
+		if in.Op != nil {
+			in.Op.Walk(fn)
+		}
+	}
 }
 
 // CheckTimers checks the derivability invariant: each instance's pending timers equal, as a multiset of (Kind, Due,
 // Ref), the TTL timer and its OpState's Timers when born, and nothing when unborn. It names the first difference.
 func (r *Rule) CheckTimers() error {
-	panic("partition: Rule.CheckTimers: not implemented (S3.2a-1 stub)")
+	for _, in := range r.ordered() {
+		got := in.Clock.Timers(nil)
+		var want []clock.Timer
+		if in.Op != nil {
+			if r.ttl > 0 {
+				want = append(want, clock.Timer{Due: addSat(in.LastActivity, r.ttl), Kind: clock.TTLPurge})
+			}
+			implied := in.Op.Timers(nil)
+			for _, t := range implied {
+				if t.Kind == clock.TTLPurge {
+					return fmt.Errorf("partition: instance %d: its state implies a TTLPurge, which only partition schedules", in.Clock.Ordinal())
+				}
+			}
+			want = append(want, implied...)
+		}
+		slices.SortFunc(got, cmpTimer)
+		slices.SortFunc(want, cmpTimer)
+		if !slices.Equal(got, want) {
+			return fmt.Errorf("partition: instance %d: pending timers %v, but its state implies %v", in.Clock.Ordinal(), got, want)
+		}
+	}
+	return nil
+}
+
+func cmpTimer(a, b clock.Timer) int {
+	return cmp.Or(cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Due, b.Due), cmp.Compare(a.Ref, b.Ref))
 }
 
 // Stats are the rule's counters.
-func (r *Rule) Stats() Stats { panic("partition: Rule.Stats: not implemented (S3.2a-1 stub)") }
+func (r *Rule) Stats() Stats { return r.stats }
 
 // Holder is anything with durable state (ADR-0006 §2(b)).
 type Holder interface {
@@ -119,14 +339,24 @@ type Holder interface {
 }
 
 // Registry lists an app's state holders in registration order.
-type Registry struct{}
+type Registry struct {
+	names   []string
+	holders []Holder
+}
 
 // Register adds a holder; a duplicate name panics.
 func (g *Registry) Register(name string, h Holder) {
-	panic("partition: Registry.Register: not implemented (S3.2a-1 stub)")
+	if slices.Contains(g.names, name) {
+		panic("partition: Registry.Register: duplicate holder " + strconv.Quote(name))
+	}
+	g.names = append(g.names, name)
+	g.holders = append(g.holders, h)
 }
 
 // Walk yields every holder's state, holders in registration order.
 func (g *Registry) Walk(fn func(holder, component, key string, state any)) {
-	panic("partition: Registry.Walk: not implemented (S3.2a-1 stub)")
+	for i, h := range g.holders {
+		name := g.names[i]
+		h.Walk(func(component, key string, state any) { fn(name, component, key, state) })
+	}
 }
