@@ -58,7 +58,9 @@
 - **Exit 4:** `TestOneTTLTimerPerInstance` — exactly one TTL timer per born key after every walk (10,000 events on one key; 100 keys → 100 timers); a re-arm allocates 0. `TestScheduleReplacementAllocatesNothing`: 0 allocations (1 before the fix).
 - **D1:** the oracle passes 48 of 48; `TestRuleClock_D1_WalkTimingNeverChangesAResult` — walking after every step or once at the end gives identical callbacks.
 - **Coverage:** `internal/clock` 98.0%, `internal/partition` 94.9%, `internal/table` 98.1%, `internal/playback` 93.8%, `internal/event` 99.0%.
-- **The gate:** T2 `make check` exit 0.
+- **The gate:**
+  - T2 `make check`: exit 0.
+  - T4 `make strict-gate` on the final tree, after the fix round and the QB4 fix: every row PASS, including the grammar differential (63) and `proofs` (14); exit 0; wall 84.0 s.
 
 ## The break-it (G3)
 
@@ -89,6 +91,18 @@ A fresh QA agent ([s3-2a-1-breakit-qa.md](../reviews/s3-2a-1-breakit-qa.md)) fou
 - **Fixture 2:** all 88 absence completions match by line, key and due, over 200 events.
 - **Checks on the fixtures:** rerunning the generator reproduces the fixtures exactly, and two planted faults turn the tests red.
 
+## For the owner (the owner's check)
+
+- **By reading: exit 1's fixture.** Read `internal/playback/testdata/log/exit1.jsonl` beside its trace, which `TestTraceDeterministic` prints on failure. Three streams; stream-late events at lines 7 and 13; R2/c construct-late at line 9.
+- **By reading: exit 2's scenario.** `TestTableRecordFromNextEvent`: an event read before a table record keeps the old membership, however late it is released.
+- **By reading: D1 in one test.** `TestRuleClock_D1_NoSealedInstant`: an event at the instant of a key's pending timer, arriving after the clock reached that instant, is processed before the timer. In SEMANTICS terms, an event at a deadline always defeats it.
+- **What changed in the language documents.** Dated annotations in SEMANTICS §6.4's ordering paragraph (D1), ADR-0004, ADR-0005 (the log format: D2, D3, D4, D6), ADR-0006, ADR-0010 and ADR-0012. No syntax changed.
+- **A behaviour change older code sees:**
+  - an object attribute is now stored compact (D4);
+  - a timestamp whose UTC instant is outside 0000–9999 is now an event error (K2);
+  - the clock releases an event only once the construct clock is past its instant (D1).
+- **No new dependency.**
+
 ## Done-done
 
 ```
@@ -98,8 +112,8 @@ Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merge
 Design (G1)  ☑ architecture review resolved (design v2 §9) ☑ owner decisions recorded (D1–D7) ☑ ADRs and SEMANTICS annotated
 Build (G2)   ☑ T2 (make check exit 0) ☐ T3 (in T4) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☑ QA break-it (0 blockers, 2 should-fix, 1 later) ☑ every finding fixed or dispositioned, each with its test
-Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check
-             ☐ every acceptance line met by its named proof
+Verify (G4)  ☑ T4 exit 0 (final tree) ☐ CI on the PR ☐ owner's check
+             ☑ every acceptance line met by its named proof (exits 1, 2, 4; exit 3 is S3.2a-2's)
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
              ☐ worktrees removed ☐ points and duration
