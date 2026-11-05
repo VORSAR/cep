@@ -109,9 +109,10 @@ func TestBreakitTimestampOffsetOutsideEncodableYears(t *testing.T) {
 	}
 }
 
-// TestBreakitEndAtCountsEveryLine: design §5.5: "at" for end is "the last line + 1", and §5.2: "Line numbers count
-// every line from 1". A log whose last lines are blank ends at the last record's line + 1 instead.
-func TestBreakitEndAtCountsEveryLine(t *testing.T) {
+// TestBreakitGuardEndAtTheLastRecordsLine: break-it K3 (later), dispositioned by the design: the end entry's "at" is
+// the last record's line + 1 (design §5.3, §5.5 as annotated), not the last line's: trailing blank lines are not
+// steps. A log whose last lines are blank ends at its record's line + 1.
+func TestBreakitGuardEndAtTheLastRecordsLine(t *testing.T) {
 	app := bkApp(t)
 	log := `{"stream":"R","ts":"2026-01-01T10:00:00Z","attrs":{"k":"a"}}` + "\n\n  \n"
 	r, err := playback.NewReader(strings.NewReader(log), app)
@@ -131,8 +132,8 @@ func TestBreakitEndAtCountsEveryLine(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if end != 4 {
-		t.Errorf("a 3-line log (one record, two blank lines): end at %d, want 4 (the last line + 1)", end)
+	if end != 2 {
+		t.Errorf("a 3-line log (one record at line 1, two blank lines): end at %d, want 2 (the last record's line + 1)", end)
 	}
 }
 
