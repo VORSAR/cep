@@ -112,9 +112,25 @@ Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merge
 Design (G1)  ☑ architecture review resolved (design v2 §9) ☑ owner decisions recorded (D1–D7) ☑ ADRs and SEMANTICS annotated
 Build (G2)   ☑ T2 (make check exit 0) ☐ T3 (in T4) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☑ QA break-it (0 blockers, 2 should-fix, 1 later) ☑ every finding fixed or dispositioned, each with its test
-Verify (G4)  ☑ T4 exit 0 (final tree) ☐ CI on the PR ☐ owner's check
+Verify (G4)  ☑ T4 exit 0 (final tree) ☑ CI (PR #10) ☑ owner's check (merged)
              ☑ every acceptance line met by its named proof (exits 1, 2, 4; exit 3 is S3.2a-2's)
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
-             ☐ worktrees removed ☐ points and duration
+Exit (G5)    ☑ one PR (#10, 42 commits), merged by the owner ☑ main CI green on the merge commit (owner)
+             ☑ record + retro ☑ known issues (none new: every forward sits on a later card) ☑ status line
+             ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
+
+**Closed (G5), 2026-11-05.** PR #10 merged by the owner (42 commits); CI green on the PR and on the merge commit. Points: about 9 (5.5 carded, plus D1, D3, D4 and the QB4 fix); duration: one day.
+
+## Retro
+
+- **Worked:**
+  - Asking which option is algorithmically correct, rather than which is cheaper, turned the review's blocker (when a shard walks its clock) into a root fix (D1). That retired the seal, and made batching, shard count and walk timing unable to change a result.
+  - Measuring D1 on scratch copies first (3 of 47 oracle checks, 20 of 43 clock tests) sized it before the build.
+  - QA's tests, written apart from the build, met the implementation with one slip; the oracle fixtures tie the Go clock to the reference executor.
+- **Hurt:**
+  - Firing timers as soon as the clock reached their instant was an older defect. S3.1-1's review saw half of it (its D1-2) and patched it with the seal.
+  - The v2 stub missed what a recording's driver needs (each stream's `idle after`, a header step, a tick's time) and was revised twice.
+  - Two agent runs died on network errors.
+  - An older gate test raced under T4's load.
+- **Keep:** two waves of QA on disjoint files; one batched fix round; a scratch program before trusting a library's behaviour. It caught a wrong memory of how `encoding/json` writes malformed UTF-8.
+- **Lasting rule, proposed again (for the owner):** S3.1-2's proposal — a design claim about a library's behaviour is checked with a scratch program before review — now has a second instance.
