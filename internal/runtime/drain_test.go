@@ -109,6 +109,12 @@ func TestDrainBarrier(t *testing.T) {
 
 	// 3.
 	rtSend(t, ctx, r, 1, rtEv(0, rtAt(0), rtStr("b")))
+	// Send returns once queued; the router stamps the arrival when it takes the event. A Stats call is an intake barrier:
+	// once it returns, b has been stamped at T0, so moving the clock now cannot restamp it (coordinator, 2026-11-05: the
+	// first real run moved the clock first and b looked freshly active at the tick).
+	if _, err := r.Stats(ctx); err != nil {
+		t.Fatalf("Stats (an intake barrier): %v", err)
+	}
 	hold1.arm()
 	now.Store(rtAt(100))
 	if err := r.Tick(ctx, rtAt(100)); err != nil {
@@ -126,4 +132,34 @@ func TestDrainBarrier(t *testing.T) {
 		t.Errorf("Drain under a passed deadline with the sink held: %v, want context.DeadlineExceeded", err)
 	}
 	hold1.free()
+}
+
+// TestDrainWithExpiredContextLeavesTheAppLive (QA gap Q15; coordinator, 2026-11-05): a Drain whose context has already
+// expired queues nothing, so the app is not drained, and it must keep accepting input. Before the fix the draining
+// flag stayed set (Send then returned ErrDrained for an app never drained), and a select between the expired context
+// and a ready intake could queue the request anyway.
+func TestDrainWithExpiredContextLeavesTheAppLive(t *testing.T) {
+	ctx := rtCeiling(t)
+	app := runtime.App{
+		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
+		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("what", event.TString))},
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+			NewBody: rtBodies(rtBody{rule: "R"})}},
+		Sinks: []runtime.SinkBinding{{Stream: 1, Sink: func(event.Event) error { return nil }}},
+	}
+	r := rtStart(t, runtime.Config{Shards: 2}, app)
+	for i := 0; i < 50; i++ { // the old race picked the intake about half the time: 50 tries make a pass by luck ~2^-50
+		expired, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+		_, err := r.Drain(expired, 0)
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("try %d: Drain with an expired context: %v, want DeadlineExceeded", i, err)
+		}
+		if err := r.Send(ctx, 0, rtEv(0, rtAt(float64(i)), rtStr("a"))); err != nil {
+			t.Fatalf("try %d: Send after a Drain that queued nothing: %v, want nil (the app is not drained)", i, err)
+		}
+	}
+	if _, err := r.Drain(ctx, 0); err != nil {
+		t.Fatalf("a real Drain afterwards: %v, want nil", err)
+	}
 }
