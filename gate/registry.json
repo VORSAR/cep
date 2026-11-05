@@ -465,7 +465,7 @@
       "tiers": [
         "nightly"
       ],
-      "blocking": false,
+      "blocking": true,
       "timeout_s": 900,
       "needs": [],
       "scope": [
@@ -494,7 +494,7 @@
       "tiers": [
         "nightly"
       ],
-      "blocking": false,
+      "blocking": true,
       "timeout_s": 900,
       "needs": [],
       "scope": [
