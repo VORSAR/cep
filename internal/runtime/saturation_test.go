@@ -1,7 +1,7 @@
 package runtime_test
 
-// Exit 3 of S3.2a (design §3, §8): progress with a full mailbox at a shard whose handoff is pending, plus a slow sink
-// and a bursty source. The coordinator runs it 50 times under -race with a CPU hog.
+// Exit 3 of S3.2a (design v2 §2, §3, §8): progress with a full mailbox at a shard whose handoff is pending, plus a
+// slow sink and a bursty source. The coordinator runs it 50 times under -race with a CPU hog.
 
 import (
 	"fmt"
@@ -16,45 +16,40 @@ import (
 
 // TestSaturationProgress.
 //
-// The world: G = 4 source streams s0..s3 (Delay 0, no idleness) and one derived stream "out" (id G). One rule
-// "burst" reads all four streams, keyed by attribute 0 (a string), TTL 24 h (no purge: every event lies within
-// 210 s). Its body emits Burst = 8 outputs on "out" for each released event: Values [key, stream, seq, j], j = 0..7.
-// One sink binding on "out" records each output under its key; its FIRST call blocks until the test closes
-// `release` (the slow sink: a hold on a channel the test controls, never a sleep).
+// The world: G = 4 source streams s0..s3 (Delay 0, no idleness; schema [k string]) and a derived stream "out" (id G;
+// schema [k string, stream int, seq int, j int]). One rule "burst" reads all four, keyed by k, TTL 24 h (no purge:
+// every event lies within 210 s). Its body emits Burst = 8 outputs on "out" per released event: [key, stream, seq,
+// j], j = 0..7. One sink records each output under its key; the test can arm it to hold its next call on a channel
+// (the slow sink: never a sleep). Config: Shards 2, Mailbox 1, Intake 1, SinkQueue 1; the handoff channel holds
+// Shards = 2 outboxes (design §3). The rule's clock is min over its inputs' contributions (Delay 0: each stream's max
+// ts); every event raises its stream's contribution, so every event sends a message to BOTH shards (design §4.4).
 //
-// The config is the narrowest the design allows: Shards 2, Mailbox 1, Intake 1, SinkQueue 1; the shared handoff
-// channel then holds Shards = 2 outboxes (design §3). So:
-//   - the router's FIFO head is a sink-queue send that cannot complete while the sink is held, and every shard
-//     keeps producing outboxes from the messages already in its mailbox: the router must keep receiving handoffs
-//     while blocked on that send (design §3, step 1);
-//   - once the sink runs, each event becomes a message to BOTH shards (its own stream's advance goes to every shard,
-//     design §4 step 4), each message releases a burst, and a shard's mailbox (capacity 1) is full whenever the
-//     router has queued one more message while the shard is still handing off: a naive router (a blocking mailbox
-//     send) and a naive shard (a blocking handoff send) deadlock here once the handoff channel holds 2 outboxes.
-//     The test cannot observe that moment through the API; it asserts that the run completes, under a ceiling.
-//
-// Phase 1 (one goroutine, in order): round 1 sends ts = 0 s on s0..s3 with keys w0..w3; round 2 sends ts = 1 s on
-// s0..s3 with the same keys. The rule's clock is min over its four inputs' contributions (Delay 0: each stream's
-// max ts), so it stays at 0 s until round 2's s3 event, then moves to 1 s and releases round 1's four events
-// (ts 0 s < 1 s): 32 outputs, and the sink's first call holds. The test waits for that call (state: the sink is
-// held), so from here the router's FIFO head is blocked on the sink queue.
-// Phase 2 (bursty): G goroutines, goroutine g sends M = 200 events on stream g, ts = 2 s + i s, key s<g>-k<i mod 5>.
-// One sender per stream keeps each stream monotone, so no event is stream-late, and none is construct-late (an
-// event at ts on stream g has ts ≥ its stream's previous max ≥ the rule's clock). The test then releases the sink.
-// Then Drain: Ingest.Drain raises every stream to max ts + 1 ms = 2 s + 199 s + 1 ms, so every event (ts ≤ max) is
-// released.
+// Phase 1 — the saturated park, forced (F16). Round 1 sends ts 0 s on s0..s3 (keys w0..w3), round 2 ts 1 s (same
+// keys): round 2's s3 event moves the clock to 1 s and releases round 1. The body of w0, on its first release, emits
+// its burst and then HOLDS until the test releases it (state: bodyHeld). Shard X (w0's) is then stuck mid-message
+// with a non-empty outbox. The test sends E1, E2, E3 = s0, s1, s2 @ 2 s, key x, from its own goroutine. With Intake 1,
+// Send E3 can return only once the router has taken E2 from the intake, and the router reads the intake only with
+// nothing pending (design §3), so every message of E1 was sent — including E1's to X, which sits in X's mailbox: it is
+// full (capacity 1, X is held). (This reads Send as returning once enqueued: v1 §2 "waits on the intake queue only";
+// gap Q10.) The test releases the body: X finishes with a non-empty outbox and a full mailbox, and parks:
+// SaturatedParks[X] ≥ 1. This is the exit-3 moment: a naive shard blocked on its handoff and a naive router blocked
+// on X's mailbox would deadlock here.
+// Phase 2 — the slow sink. The test arms the sink hold and sends s3 @ 2 s (key x): the clock moves to 2 s and
+// releases round 2 (four keys at 1 s, ≥ 16 outputs from at least one shard in one handoff); the sink's next call
+// holds (state: entered). The router's FIFO head is now a sink-queue send that cannot complete; it must keep
+// receiving handoffs.
+// Phase 3 — the bursty source. G goroutines; goroutine g sends M = 200 events on stream g, ts 3 s + i s, key
+// s<g>-k<i mod 5>. One sender per stream keeps each stream monotone: no event is stream-late or construct-late (Q9).
+// The test releases the sink, joins the senders, then Drains: max ts + 1 ms releases every event.
 //
 // Expected, by hand:
-//   - every Send returns nil; Drain returns nil within the ceiling (Pending is not asserted: the body schedules no
-//     timer, but each key's TTL purge timer is pending, and whether Pending counts those is gap Q3);
-//   - outputs: G × (2 + M) events × 8 = 4 × 202 × 8 = 6464, all at the sink when Drain returns (the barrier);
-//   - per key, in order: key w<g>: (s<g>#1 j0..j7), (s<g>#2 j0..j7); key s<g>-k<c>: for i = c, c+5, … < 200, in
-//     order, (s<g>#(3+i) j0..j7) — a key's events come from one stream in increasing ts, so the clock releases them
-//     in Send order, its outputs leave one shard in order, and the router and the sink queue are FIFOs;
-//   - Stats: no stream-late, no key error, no panic, no construct-late, no sink error; MailboxHigh has one entry
-//     per shard, each ≤ Mailbox = 1 (a channel of capacity 1 never holds 2); PendingHigh ≥ Burst − 2 = 6 (phase 1:
-//     one handoff carries ≥ 8 outputs of one release while the sink holds its first; at most 2 of them can leave
-//     the FIFO — one in the flusher's held call, one in the queue — so the FIFO held ≥ 6 at once).
+//   - every Send returns nil; Drain returns nil within the ceiling;
+//   - outputs: (4 + 4 + 4 + G × M) × 8 = 812 × 8 = 6496, all at the sink when Drain returns (the barrier);
+//   - per key, in order: w<g>: (s<g>#1 j0..7), (s<g>#2 j0..7); x: (s0#3), (s1#3), (s2#3), (s3#3), each j0..7 (one
+//     instant, released in (Ts, StreamID, Seq) order); s<g>-k<c>: for i = c, c+5, … < 200, (s<g>#(4+i) j0..7);
+//   - Stats: no stream-late, key error, panic, construct-late or sink error; MailboxHigh: 2 entries, each ≤ 1;
+//     SaturatedParks: 2 entries, their sum ≥ 1 (phase 1); PendingHigh ≥ Burst − 2 = 6 (phase 2: a handoff of ≥ 8
+//     outputs behind the held sink; at most 2 leave the FIFO, one in the held call and one in the queue).
 func TestSaturationProgress(t *testing.T) {
 	const (
 		G     = 4
@@ -63,35 +58,32 @@ func TestSaturationProgress(t *testing.T) {
 		Burst = 8
 	)
 	ctx := rtCeiling(t)
-	out := G // the derived stream's id
+	out := G
 
-	streams := make([]clock.StreamSpec, 0, G+1)
+	var streams []clock.StreamSpec
+	var schemas []event.Schema
 	inputs := make([]int, G)
 	keyAttr := make([]int, G)
 	for g := 0; g < G; g++ {
-		streams = append(streams, rtSrc(fmt.Sprintf("s%d", g), 0))
+		name := fmt.Sprintf("s%d", g)
+		streams = append(streams, rtSrc(name, 0))
+		schemas = append(schemas, rtSchema(t, name, rtA("k", event.TString)))
 		inputs[g] = g
-		keyAttr[g] = 0
 	}
 	streams = append(streams, rtDerived("out"))
+	schemas = append(schemas, rtSchema(t, "out", rtA("k", event.TString), rtA("stream", event.TInt), rtA("seq", event.TInt), rtA("j", event.TInt)))
 
 	got := newRTLog()
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	var calls int
-	var callsMu sync.Mutex
+	hold := newRTHold()
 	sink := func(e event.Event) error {
-		callsMu.Lock()
-		calls++
-		first := calls == 1
-		callsMu.Unlock()
-		if first {
-			close(entered)
-			<-release // the slow sink: held until the test releases it
-		}
+		hold.at()
 		got.add(e.Values[0].Str, fmt.Sprintf("s%d#%d j%d", e.Values[1].I, e.Values[2].I, e.Values[3].I))
 		return nil
 	}
+	bodyHeld := make(chan struct{})
+	bodyRelease := make(chan struct{})
+	var holdOnce, releaseOnce sync.Once
+	freeBody := func() { releaseOnce.Do(func() { close(bodyRelease) }) }
 
 	body := rtBodies(rtBody{rule: "burst", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
 		for j := 0; j < Burst; j++ {
@@ -99,9 +91,15 @@ func TestSaturationProgress(t *testing.T) {
 				in.Key, rtInt(int64(e.StreamID)), rtInt(int64(e.Seq)), rtInt(int64(j)),
 			}})
 		}
+		if in.Key.Str == "w0" {
+			holdOnce.Do(func() {
+				close(bodyHeld)
+				<-bodyRelease // the held shard: stuck mid-message with a non-empty outbox
+			})
+		}
 	}})
 	app := runtime.App{
-		Streams: streams,
+		Streams: streams, Schemas: schemas,
 		Rules: []runtime.Rule{{
 			Name: "burst", Inputs: inputs, KeyAttr: keyAttr, KeyType: event.TString, TTL: 24 * 3600 * rtSec,
 			NewBody: body,
@@ -109,12 +107,7 @@ func TestSaturationProgress(t *testing.T) {
 		Sinks: []runtime.SinkBinding{{Stream: out, Sink: sink}},
 	}
 	r := rtStart(t, runtime.Config{Shards: 2, Mailbox: 1, Intake: 1, SinkQueue: 1}, app)
-	released := false
-	t.Cleanup(func() { // registered after rtStart's Close, so it runs first: a failed wait never leaves the sink held
-		if !released {
-			close(release)
-		}
-	})
+	t.Cleanup(func() { freeBody(); hold.free() }) // runs before rtStart's Close: a failed wait never leaves a hold
 
 	// Phase 1.
 	for round := 0; round < 2; round++ {
@@ -122,9 +115,18 @@ func TestSaturationProgress(t *testing.T) {
 			rtSend(t, ctx, r, 0, rtEv(g, rtAt(float64(round)), rtStr(fmt.Sprintf("w%d", g))))
 		}
 	}
-	rtWait(t, ctx, entered, "the sink's first call (phase 1's release reached the held sink)")
+	rtWait(t, ctx, bodyHeld, "w0's body held mid-message (round 1 released)")
+	for g := 0; g < 3; g++ {
+		rtSend(t, ctx, r, 0, rtEv(g, rtAt(2), rtStr("x"))) // E1..E3; E3's return: E1's message is in X's full mailbox
+	}
+	freeBody()
 
-	// Phase 2: the bursty source, then the release.
+	// Phase 2.
+	hold.arm()
+	rtSend(t, ctx, r, 0, rtEv(3, rtAt(2), rtStr("x")))
+	rtWait(t, ctx, hold.entered, "the sink's held call (round 2 released behind it)")
+
+	// Phase 3.
 	var wg sync.WaitGroup
 	errs := make(chan error, G)
 	for g := 0; g < G; g++ {
@@ -132,7 +134,7 @@ func TestSaturationProgress(t *testing.T) {
 		go func(g int) {
 			defer wg.Done()
 			for i := 0; i < M; i++ {
-				e := rtEv(g, rtAt(float64(2+i)), rtStr(fmt.Sprintf("s%d-k%d", g, i%K)))
+				e := rtEv(g, rtAt(float64(3+i)), rtStr(fmt.Sprintf("s%d-k%d", g, i%K)))
 				if err := r.Send(ctx, 0, e); err != nil {
 					errs <- fmt.Errorf("goroutine %d, Send %d: %w", g, i, err)
 					return
@@ -140,8 +142,7 @@ func TestSaturationProgress(t *testing.T) {
 			}
 		}(g)
 	}
-	close(release)
-	released = true
+	hold.free()
 	wg.Wait()
 	close(errs)
 	for err := range errs {
@@ -150,15 +151,21 @@ func TestSaturationProgress(t *testing.T) {
 
 	rtDrain(t, ctx, r, 0)
 
-	// Every output, at the sink when Drain returns.
-	if n, want := got.count(), G*(2+M)*Burst; n != want {
-		t.Fatalf("outputs at the sink after Drain: %d, want %d (G × (2 + M) × Burst)", n, want)
+	if n, want := got.count(), (12+G*M)*Burst; n != want {
+		t.Fatalf("outputs at the sink after Drain: %d, want %d", n, want)
 	}
 	burst := func(dst []string, g, seq int) []string {
 		for j := 0; j < Burst; j++ {
 			dst = append(dst, fmt.Sprintf("s%d#%d j%d", g, seq, j))
 		}
 		return dst
+	}
+	var wantX []string
+	for g := 0; g < G; g++ {
+		wantX = burst(wantX, g, 3)
+	}
+	if have := got.get("x"); !rtEqual(have, wantX) {
+		t.Errorf("key x: outputs %v,\nwant %v", have, wantX)
 	}
 	for g := 0; g < G; g++ {
 		key := fmt.Sprintf("w%d", g)
@@ -170,10 +177,10 @@ func TestSaturationProgress(t *testing.T) {
 			key := fmt.Sprintf("s%d-k%d", g, c)
 			var want []string
 			for i := c; i < M; i += K {
-				want = burst(want, g, 3+i)
+				want = burst(want, g, 4+i)
 			}
 			if have := got.get(key); !rtEqual(have, want) {
-				t.Errorf("key %s: %d outputs, want %d in order; first difference shown in full:\n%v\nwant\n%v", key, len(have), len(want), have, want)
+				t.Errorf("key %s: %d outputs, want %d in order:\n%v\nwant\n%v", key, len(have), len(want), have, want)
 			}
 		}
 	}
@@ -190,15 +197,18 @@ func TestSaturationProgress(t *testing.T) {
 	if n := st.SinkErrors[0][0]; n != 0 {
 		t.Errorf("sink_errors %d, want 0", n)
 	}
-	if len(st.MailboxHigh) != 2 {
-		t.Fatalf("MailboxHigh %v: want one entry per shard (2)", st.MailboxHigh)
+	if len(st.MailboxHigh) != 2 || len(st.SaturatedParks) != 2 {
+		t.Fatalf("MailboxHigh %v, SaturatedParks %v: want one entry per shard (2)", st.MailboxHigh, st.SaturatedParks)
 	}
 	for i, h := range st.MailboxHigh {
 		if h < 0 || h > 1 {
 			t.Errorf("shard %d: MailboxHigh %d, want within [0, Mailbox = 1]", i, h)
 		}
 	}
+	if st.SaturatedParks[0]+st.SaturatedParks[1] < 1 {
+		t.Errorf("SaturatedParks %v, want a sum ≥ 1: phase 1 parked w0's shard with a non-empty outbox and a full mailbox (F16)", st.SaturatedParks)
+	}
 	if st.PendingHigh < Burst-2 {
-		t.Errorf("PendingHigh %d, want ≥ %d: phase 1 held ≥ Burst − 2 outputs in the FIFO behind the held sink", st.PendingHigh, Burst-2)
+		t.Errorf("PendingHigh %d, want ≥ %d: phase 2 held ≥ Burst − 2 outputs in the FIFO behind the held sink", st.PendingHigh, Burst-2)
 	}
 }

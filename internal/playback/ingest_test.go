@@ -198,27 +198,23 @@ func lvTm(tm clock.Timer) string {
 }
 func lvPurge(due int64) string { return fmt.Sprintf("purge @%d", due-ldT0) }
 
-// TestLiveOrderPerKeyEqualsReplay (design §7: per key, events reach the body in the order the clock releases them,
-// which equals replay's for the same admitted events; SEMANTICS §2.1, §2.2).
+// TestLiveOrderPerKeyEqualsReplay (design v2 §7: per key, events reach the body in the order the clock releases them,
+// which equals replay's for the same admitted events; SEMANTICS §2.1, §2.2; review F15).
 //
-// One fixture log, A and B (Delay 5 s, no idleness, schema ts, k, x, v). Rules: R1 reads A and B by k, TTL 20 s,
-// schedules Completion at ts + 3 s (ref = the key's release count since birth); R2 reads A by k, TTL 30 s, schedules
-// DelayDue at ts + 7 s, ref 1 (re-scheduled on each release). The log (seconds): A0 k1, B1 k2, A3 k1, A2 k3, B4 k1,
-// A6 k2, B5 k3, A10 k1, B9 k2, A12 k4, B13 k1, A4 k1 (stream-late: 4 < 12 − 5 on A), A40 k2, B38 k4, A41 k4, B42 k2.
-// Every admitted event has ts ≥ (the max ts before it) − 5 s, so none is construct-late under the replay's virtual
-// floor (max ts − 5 s on every stream), nor live, whose clock (admission watermarks only) is never higher. Seq is
-// per stream in log order, the stream-late event included, in both.
+// One RECORDING log: a header (start = T0), event lines with arrival stamps, no ticks, and a stop record. A recording
+// replays non-virtually with the header's start (owner D3 of S3.2a-1), and its stop is the registry's Drain (max
+// admitted ts + 1 ms) — the same arithmetic as a live run with no ticks ended by Drain. So every key's sequence must be
+// equal, with nothing filtered. Streams A and B (Delay 5 s, no idleness; schema ts, k, x, v). Rules: R1 reads A and B
+// by k, TTL 20 s, schedules Completion at ts + 3 s (ref = the key's release count since birth); R2 reads A by k, TTL
+// 30 s, schedules DelayDue at ts + 7 s, ref 1 (re-scheduled on each release). Events (s): A0 k1, B1 k2, A3 k1,
+// A2 k3, B4 k1, A6 k2, B5 k3, A10 k1, B9 k2, A12 k4, B13 k1, A4 k1 (stream-late: 4 < 12 − 5 on A), A40 k2, B38 k4,
+// A41 k4, B42 k2; each arrival = T0 + its line's index s (monotone; it moves nothing without ticks). The stop
+// finalizes every instant ≤ 42 s: k1's and k3's TTL purges (R1: 13 + 20 = 33, 5 + 20 = 25; R2: k1 10 + 30 = 40)
+// fire in both; timers due after 42 s stay pending in both. The live run's Seq per stream is assigned in Send order,
+// the stream-late event included, as the driver's is.
 //
-// The one difference (the brief's choice, made here): the replay of a fixture ends at +∞ (Driver.End), the live run
-// at Drain (max admitted ts + 1 ms = 42.001 s). Both finalize exactly the instants ≤ 42 s: every admitted event
-// (ts ≤ 42 s), every timer and purge due ≤ 42 s (owner D1: due < clock). So the replay's record is compared after
-// dropping the timers and purges due after 42 s, which only +∞ finalizes; the walk is in event-time order (D1), so
-// nothing it drops can precede anything it keeps. The test checks that the filter dropped something (k2's and k4's
-// last timers at 45 s and later), so the comparison is not vacuous, and that the live run has nothing due after 42 s.
-// A recording ending in stop would be the exact drain-equivalent, but it replays non-virtually, the way live does;
-// a fixture is the stronger claim (live = the virtual-clock replay).
-//
-// Expected: for Shards 1 and 4, each "rule/key" sequence equals the filtered replay's; stream_late counts 1 on A.
+// Expected: for Shards 1 and 4, every "rule/key" sequence equals the replay's; stream_late counts 1 on A; the
+// replay shows at least one purge (the comparison covers resets too).
 func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 	app := &playback.App{Streams: []playback.Stream{ldStd(t, "A", 5*ldSec, 0), ldStd(t, "B", 5*ldSec, 0)}}
 	specs := []ldRuleSpec{
@@ -237,44 +233,34 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 	evs := []ev{{"A", 0, "k1"}, {"B", 1, "k2"}, {"A", 3, "k1"}, {"A", 2, "k3"}, {"B", 4, "k1"}, {"A", 6, "k2"},
 		{"B", 5, "k3"}, {"A", 10, "k1"}, {"B", 9, "k2"}, {"A", 12, "k4"}, {"B", 13, "k1"}, {"A", 4, "k1"},
 		{"A", 40, "k2"}, {"B", 38, "k4"}, {"A", 41, "k4"}, {"B", 42, "k2"}}
-	var lines []string
-	for _, e := range evs {
-		lines = append(lines, ldE(e.s, ldAt(e.ts), e.k, "", ""))
+	lines := []string{fmt.Sprintf(`{"recording":{"start":%q}}`, ldRFC(ldT0))}
+	for i, e := range evs {
+		lines = append(lines, ldE(e.s, ldAt(e.ts), e.k, "", fmt.Sprintf(`,"arrival":%q`, ldRFC(ldAt(float64(i))))))
 	}
+	lines = append(lines, `{"stop":true}`)
 	log := ldLog(lines...)
-	maxTs := ldAt(42)
 
-	// The replay, filtered to what a drain finalizes.
 	w := ldRun(t, app, log, specs...)
 	if cl := ldFilter(w.log, "construct_late"); len(cl) != 0 {
-		t.Fatalf("the fixture is not construct-late free under replay:%s", ldEntries(cl))
+		t.Fatalf("the recording is not construct-late free under replay:%s", ldEntries(cl))
 	}
 	if sl := ldFilter(w.log, "stream_late"); len(sl) != 1 {
 		t.Fatalf("replay stream_late %d, want 1 (A4 k1)", len(sl))
 	}
+	if len(ldFilter(w.log, "purge")) == 0 {
+		t.Fatalf("the replay purged nothing: the comparison would not cover resets")
+	}
 	want := map[string][]string{}
-	dropped := 0
 	for _, e := range w.log {
 		k := e.Rule + "/" + e.Key
 		switch e.K {
 		case "event":
 			want[k] = append(want[k], lvEv(e.Stream, e.Seq, e.Ts))
 		case "timer":
-			if e.Due > maxTs {
-				dropped++
-				continue
-			}
 			want[k] = append(want[k], lvTm(clock.Timer{Due: e.Due, Kind: e.Kind, Ref: e.Ref}))
 		case "purge":
-			if e.Due > maxTs {
-				dropped++
-				continue
-			}
 			want[k] = append(want[k], lvPurge(e.Due))
 		}
-	}
-	if dropped == 0 {
-		t.Fatalf("the filter dropped nothing: the fixture never shows the +∞ end's extra work")
 	}
 
 	recs, err := ldRecords(t, app, log)
@@ -301,8 +287,12 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 			for _, s := range app.Streams {
 				streams = append(streams, clock.StreamSpec{Name: s.Schema.Stream(), Delay: s.Delay, IdleAfter: s.IdleAfter})
 			}
+			var schemas []event.Schema
+			for _, s := range app.Streams {
+				schemas = append(schemas, s.Schema)
+			}
 			r, err := runtime.Start(runtime.Config{Shards: shards, Now: func() int64 { return ldT0 }},
-				[]runtime.App{{Streams: streams, Rules: rules}})
+				[]runtime.App{{Streams: streams, Schemas: schemas, Rules: rules}})
 			if err != nil {
 				t.Fatalf("Start: %v", err)
 			}
@@ -312,6 +302,9 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 				}
 			}()
 			for _, rec := range recs {
+				if rec.Kind != playback.RecEvent {
+					continue // the header and the stop: the live run's are Start and Drain
+				}
 				e := rec.Event
 				e.Seq, e.Tables = 0, nil
 				if err := r.Send(ctx, 0, e); err != nil {
@@ -345,7 +338,7 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 			sort.Strings(sorted)
 			for _, k := range sorted {
 				if !slices.Equal(got[k], want[k]) {
-					t.Errorf("%s: live\n\t%s\nwant (replay, finalized ≤ 42 s)\n\t%s", k, strings.Join(got[k], "\n\t"), strings.Join(want[k], "\n\t"))
+					t.Errorf("%s: live\n\t%s\nwant (the recording's replay)\n\t%s", k, strings.Join(got[k], "\n\t"), strings.Join(want[k], "\n\t"))
 				}
 			}
 		})

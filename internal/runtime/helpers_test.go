@@ -65,6 +65,59 @@ func rtSrc(name string, d int64) clock.StreamSpec { return clock.StreamSpec{Name
 // rtDerived is a derived stream: a rule's outputs, bound to sinks.
 func rtDerived(name string) clock.StreamSpec { return clock.StreamSpec{Name: name, Derived: true} }
 
+// rtSchema is a `time arrival` schema (no time attribute among the values: Send takes e.Ts as given, design §2) with
+// the attributes attrs. App.Schemas is aligned with App.Streams (design v2 §2).
+func rtSchema(t testing.TB, name string, attrs ...event.Attr) event.Schema {
+	t.Helper()
+	s, err := event.NewSchema(name, attrs, event.ArrivalTime)
+	if err != nil {
+		t.Fatalf("NewSchema(%s): %v", name, err)
+	}
+	return s
+}
+
+func rtA(name string, ty event.Type) event.Attr { return event.Attr{Name: name, Type: ty} }
+func rtOpt(name string, ty event.Type) event.Attr {
+	return event.Attr{Name: name, Type: ty, Optional: true}
+}
+
+// rtHold is a sink hold the test arms: once armed, the next Sink call closes entered and blocks until release.
+type rtHold struct {
+	mu      sync.Mutex
+	armed   bool
+	entered chan struct{}
+	release chan struct{}
+	done    bool
+}
+
+func newRTHold() *rtHold {
+	return &rtHold{entered: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (h *rtHold) arm() { h.mu.Lock(); h.armed = true; h.mu.Unlock() }
+
+// at is called by a sink: it holds the first call after arm.
+func (h *rtHold) at() {
+	h.mu.Lock()
+	hold := h.armed
+	h.armed = false
+	h.mu.Unlock()
+	if hold {
+		close(h.entered)
+		<-h.release
+	}
+}
+
+// free releases the hold once; safe at cleanup.
+func (h *rtHold) free() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.done {
+		h.done = true
+		close(h.release)
+	}
+}
+
 // rtStart starts a runtime with cfg (Now injected when nil) and closes it at the test's end. A test that calls Close
 // itself uses runtime.Start directly.
 func rtStart(t testing.TB, cfg runtime.Config, apps ...runtime.App) *runtime.Runtime {
