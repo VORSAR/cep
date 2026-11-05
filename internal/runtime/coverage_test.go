@@ -258,8 +258,10 @@ func TestCvStreamLateAndRedrain(t *testing.T) {
 	if n := rtStats(t, ctx, r).StreamLate[0][0]; n != 1 {
 		t.Errorf("stream_late %d, want 1", n)
 	}
-	if _, err := r.Drain(ctx, 0); !errors.Is(err, runtime.ErrDrained) {
-		t.Errorf("a second Drain: %v, want ErrDrained", err)
+	// A second Drain waits for the same flush and returns its result (owner, 2026-11-05, the break-it's question; it
+	// returned ErrDrained before).
+	if res, err := r.Drain(ctx, 0); err != nil || res.Pending != 0 {
+		t.Errorf("a second Drain: (%+v, %v), want ({Pending:0}, nil): the first drain's result", res, err)
 	}
 }
 
