@@ -235,3 +235,19 @@ class T0Kinds(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheRepositorysRegistry(unittest.TestCase):
+    def test_every_nightly_only_row_is_blocking(self):
+        # Owner, 2026-11-04 (S2.2a, decision 3): a fuzz crash makes the nightly run red. A non-blocking failure is a
+        # WARN and the run passes (summarize), so a nightly-only row must be blocking. It never runs on a pull request,
+        # so this blocks only the nightly's verdict (owner, 2026-11-05: the CI review found both fuzz rows advisory).
+        gate_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        path = os.path.join(gate_dir, "registry.json")
+        with open(path, "rb") as f:
+            rows = json.loads(f.read())["rows"]
+        nightly = [r for r in rows if r["tiers"] == ["nightly"]]
+        self.assertTrue(nightly, "the registry has no nightly-only row")
+        for r in nightly:
+            with self.subTest(r["id"]):
+                self.assertTrue(r["blocking"], f"nightly row {r['id']} is non-blocking: its failure would read WARN")
