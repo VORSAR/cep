@@ -107,18 +107,20 @@ class RealGo(support.CoverageTest):
         self.assertEqual((out[-1], code), ("GATE_COVERED 2", 1))
 
     def test_the_planted_proofs_packages_measure_as_designed(self):
-        # gate/proofs (design note §8): below 8 of 9 statements covered, notests without a test, control fully covered.
+        # gate/proofs (design note §8): below 8 of 9 statements covered, notests without a test, control fully covered;
+        # racy (the race row's proof, 2026-11-05) 9 of 9: its race shows only under -race, never in coverage.
         module = os.path.join(self.root, "m")
         shutil.copytree(os.path.join(PROOFS, "internal"), os.path.join(module, "internal"))
         shutil.copy(os.path.join(PROOFS, "go.mod"), module)
         unit_code, code, out = self.unit_then_coverage(module)
         self.assertEqual(unit_code, 0)
         self.assertEqual(
-            out[:3],
+            out[:4],
             [
                 "FAIL github.com/vorsar/cep/gate/proofs/internal/below 88.88% (8/9) < 90%",
                 "PASS github.com/vorsar/cep/gate/proofs/internal/control 100.00% (4/4) >= 90%",
                 "FAIL github.com/vorsar/cep/gate/proofs/internal/notests no tests",
+                "PASS github.com/vorsar/cep/gate/proofs/internal/racy 100.00% (9/9) >= 90%",
             ],
         )
-        self.assertEqual((out[-1], code), ("GATE_COVERED 3", 1))
+        self.assertEqual((out[-1], code), ("GATE_COVERED 4", 1))
