@@ -1,9 +1,13 @@
 package partition_test
 
-// The test harness for internal/partition (design note s3-2a-1 §1, §3): a recording rule body whose state reports
+// The test harness for internal/partition (design note s3-2a-1 v2 §1, §3): a recording rule body whose state reports
 // exactly the timers it scheduled (ADR-0006 §2(c)), and a world that drives one Rule through the step contract —
 // apply every input's advance, offer the event, advance — checking the derivability invariant after every step.
 // All times are int64 ms; 10:00 is 0.
+//
+// Owner D1 (S3.2a-1): an instant is finalized only once the clock is past it. A walk releases an event only when
+// Ts < clock and fires a timer of any kind only when due < clock; at +∞ everything. An event is construct-late iff
+// Ts < clock. So an event offered at the clock's instant is released by a LATER walk, once the clock passes it.
 
 import (
 	"math"
@@ -44,12 +48,13 @@ func keyName(v event.Value) string {
 
 // rec is one body callback, in the order the rule made it.
 type rec struct {
-	Cb    string // "new", "event", "timers", "discard", "purge"
-	Key   string
-	Ord   uint64 // the instance's clock ordinal
-	Ts    int64  // "event": the released event's time
-	Fires []clock.Timer
-	Refs  []uint64
+	Cb     string // "new", "event", "timers", "discard", "purge"
+	Key    string
+	Ord    uint64 // the instance's clock ordinal
+	Ts     int64  // "event": the released event's time
+	Fires  []clock.Timer
+	Tables any // "timers": the tables argument Body.OnTimers received (D5)
+	Refs   []uint64
 	// "purge": what the body saw inside OnPurge, which comes before the reset (design §3)
 	OpSet   bool
 	Last    int64
@@ -70,7 +75,7 @@ func P(key string, ord uint64, last int64, pending ...clock.Timer) rec {
 
 func recEqual(a, b rec) bool {
 	return a.Cb == b.Cb && a.Key == b.Key && a.Ord == b.Ord && a.Ts == b.Ts && slices.Equal(a.Fires, b.Fires) &&
-		slices.Equal(a.Refs, b.Refs) && a.OpSet == b.OpSet && a.Last == b.Last && slices.Equal(a.Pending, b.Pending)
+		a.Tables == b.Tables && slices.Equal(a.Refs, b.Refs) && a.OpSet == b.OpSet && a.Last == b.Last && slices.Equal(a.Pending, b.Pending)
 }
 
 // state is the body's per-key state: it implies exactly the timers it scheduled and has not seen fire.
@@ -131,7 +136,9 @@ func (b *body) OnEvent(in *partition.Instance, e event.Event) {
 }
 
 func (b *body) OnTimers(in *partition.Instance, fires []clock.Timer, tables any) {
-	b.log = append(b.log, Tm(keyName(in.Key), in.Clock.Ordinal(), slices.Clone(fires)...))
+	r := Tm(keyName(in.Key), in.Clock.Ordinal(), slices.Clone(fires)...)
+	r.Tables = tables
+	b.log = append(b.log, r)
 	for _, tm := range fires {
 		if tm.Kind == clock.TTLPurge {
 			b.t.Errorf("Body.OnTimers received a TTLPurge %+v: never (design §3)", tm)
@@ -174,6 +181,7 @@ type world struct {
 	inputs  []int
 	keyType event.Type
 	noCheck bool
+	tables  any // what Advance passes on (D5)
 }
 
 func newWorld(t *testing.T, ttl int64, b *body, inputs ...int) *world {
@@ -202,7 +210,7 @@ func (w *world) apply(c int64) {
 
 func (w *world) advance() {
 	w.t.Helper()
-	w.r.Advance(nil)
+	w.r.Advance(w.tables)
 	if w.noCheck {
 		return
 	}
@@ -211,7 +219,8 @@ func (w *world) advance() {
 	}
 }
 
-// arrive is one arrival under the step contract: apply (clock to c), offer e under key, advance.
+// arrive is one arrival under the step contract: apply (clock to c), offer e under key, advance. Under D1 the walk
+// releases only events below c, so e itself (Ts ≥ c when admitted) waits for a later walk.
 func (w *world) arrive(c int64, key event.Value, e event.Event) (constructLate bool) {
 	w.t.Helper()
 	w.apply(c)
