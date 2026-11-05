@@ -13,9 +13,10 @@ import (
 
 // Stream is one declared stream; its index in App.Streams is its stream id (SEMANTICS §2.2's declaration order).
 type Stream struct {
-	Schema  event.Schema // name, attributes, time attribute (event.ArrivalTime for `time arrival`)
-	Delay   int64        // d_s, ms
-	Derived bool         // a rule's output: never in a log (v0.1)
+	Schema    event.Schema // name, attributes, time attribute (event.ArrivalTime for `time arrival`)
+	Delay     int64        // d_s, ms
+	IdleAfter int64        // ms; 0: the stream declares no idleness (a recording's ticks never move it)
+	Derived   bool         // a rule's output: never in a log (v0.1)
 }
 
 // Table is one declared table; its index in App.Tables is its table id.
@@ -99,6 +100,7 @@ type StepKind uint8
 // The step kinds (design note §5.3).
 const (
 	StepEvent      StepKind = iota + 1 // admitted: the step contract (design note §1) with Advances
+	StepHeader                         // a recording's header: the driver switches to recording mode
 	StepStreamLate                     // behind its stream's admission watermark: counted; nothing moves (not a fault)
 	StepTable                          // a table record, applied
 	StepBatchEnd                       // a batch-end record
