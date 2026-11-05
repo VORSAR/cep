@@ -174,7 +174,8 @@ def _():
 
 
 @check("2.1 · quiet", "a source that always delivers 2 s late (d = 0) loses nothing after a "
-                      "quiet spell: its floor runs from its own last event, not the wall (D5)")
+                      "quiet spell: its floor runs from its own last event, not the wall (D5); "
+                      "the release waits for the floor to pass the instant (owner 2026-11-05, D1)")
 def _():
     spec = PatternSpec(steps=[Step("a", "A"), Step("b", "B")],
                        within=10 * MIN, key=lambda e: "k")
@@ -184,19 +185,61 @@ def _():
     ms, sl, cl = run_pattern_multi(spec, arrivals, {"S1": 0}, mode="live", eos=False,
                                    idle_after={"S1": 1 * MIN})
     assert sl == [] and cl == [], (sl, cl)       # "wall − d" would make B construct-late
-    assert len(ms) == 1, ms
+    # D1: the clock sits ON 10:10:00 (floor 10:10:00, S1's own wm 10:10:00) — B's instant
+    # is not finalized, so B (and A@10:00's discard, due 10:10:00 too) still wait.
+    assert ms == [], ms
+    # Quiet again from B's arrival (10:10:02): a tick at 10:11:02 moves the floor to
+    # 10:10:00 + 1:00 = 10:11:00 > 10:10:00. The instant 10:10:00 is finalized: B first
+    # (10:10 - 10:00 <= within: it completes), then the discard due then finds no partial.
+    ms, sl, cl = run_pattern_multi(spec, arrivals + [("tick", 11 * MIN + 2 * SEC)], {"S1": 0},
+                                   mode="live", eos=False, idle_after={"S1": 1 * MIN})
+    assert sl == [] and cl == [], (sl, cl)
+    assert len(ms) == 1 and ms[0]["match_end"] == 10 * MIN, ms
 
 
-@check("2.1 · seal", "once a key's timers at an instant have fired, that key's later event "
-                     "at the same instant is construct-late: dropped and counted (D7)")
+@check("2.1 · seal", "the seal is retired (owner 2026-11-05, D1): an event at the instant of "
+                     "a key's pending timer, arriving after the clock reached that instant, is "
+                     "admitted and processed before the timer")
 def _():
     spec = PatternSpec(steps=[Step("a", "A"), Step("n", "B", negated=True, bound=5 * MIN)],
                        within=10 * MIN, key=lambda e: "k")
-    arrivals = [("S1", ev("A", 0)),
-                ("S1", ev("X", 5 * MIN)),        # the clock reaches 10:05: the absence fires
-                ("S2", ev("B", 5 * MIN))]        # admitted by S2, but 10:05 is sealed for k
+    head = [("S1", ev("A", 0)),
+            ("S1", ev("X", 5 * MIN))]            # playback, d = 0: the clock reaches 10:05
+    # The clock ON 10:05 finalizes nothing at 10:05: A@10:00 is released, its absence
+    # (due 10:00 + 5 min = 10:05) waits for the clock to pass 10:05.
+    ms, sl, cl = run_pattern_multi(spec, head, {"S1": 0, "S2": 0}, eos=False)
+    assert ms == [] and sl == [] and cl == [], (ms, sl, cl)
+    arrivals = head + [("S2", ev("B", 5 * MIN))]  # S2's B at 10:05: 10:05 < clock 10:05 is false
     ms, sl, cl = run_pattern_multi(spec, arrivals, {"S1": 0, "S2": 0}, eos=False)
-    assert len(ms) == 1 and sl == [] and cl == [2], (ms, sl, cl)
+    assert ms == [] and sl == [] and cl == [], (ms, sl, cl)   # admitted, not construct-late
+    # End of input (+inf): the instant 10:05 in 2.2 order — X (S1), then B (S2) defeats the
+    # partial (10:05 <= 10:05, inclusive end) — and only then the absence timer: no alert.
+    ms, sl, cl = run_pattern_multi(spec, arrivals, {"S1": 0, "S2": 0})
+    assert ms == [] and sl == [] and cl == [], (ms, sl, cl)
+    # Without B the same timer fires at +inf: B, not an end-of-log artifact, defeated it.
+    ms, _, _ = run_pattern_multi(spec, head, {"S1": 0, "S2": 0})
+    assert len(ms) == 1 and ms[0]["match_end"] == 5 * MIN, ms
+
+
+@check("2.2 · D1", "same millisecond, two streams, arriving in reverse declared order while "
+                   "the clock sits on that millisecond: processed in declared order "
+                   "(owner 2026-11-05, D1)")
+def _():
+    spec = PatternSpec(steps=[Step("a", "A"), Step("b", "B")],
+                       within=10 * MIN, key=lambda e: "k")
+    delays = {"S1": 0, "S2": 0}                  # 2.2: S1 is stream id 0, S2 is 1
+    head = [("S1", ev("X", 5 * MIN)),            # playback: the clock reaches 10:05
+            ("S2", ev("B", 5 * MIN)),            # S2's B arrives first ...
+            ("S1", ev("A", 5 * MIN))]            # ... then S1's A, the same millisecond
+    ms, sl, cl = run_pattern_multi(spec, head, delays, eos=False)
+    assert ms == [] and sl == [] and cl == [], (ms, sl, cl)   # both admitted (not < 10:05)
+    # S1's X at 10:06 moves the clock to 10:06 (S2's contribution rides the virtual
+    # clock). The instant 10:05 is released in 2.2 order: X (0, 1), A (0, 2), B (1, 1) —
+    # A opens the partial, B completes it: one match at 10:05. In arrival order (B, A)
+    # B would find no partial and nothing would match.
+    ms, sl, cl = run_pattern_multi(spec, head + [("S1", ev("X", 6 * MIN))], delays, eos=False)
+    assert sl == [] and cl == [], (sl, cl)
+    assert [(m["match_start"], m["match_end"]) for m in ms] == [(5 * MIN, 5 * MIN)], ms
 
 
 @check("6.4 · walk", "an unrelated event never changes a result: one advance or many, the "
@@ -270,15 +313,23 @@ def _():
 
 
 @check("6.4", "absence at the boundary: approval at +5 min +1 ms is irrelevant; "
-              "alert releases when wm >= 10:05 (first event with ts >= 10:07, d = 2 min)")
+              "alert releases when wm > 10:05 (first event with ts > 10:07, d = 2 min; "
+              "owner 2026-11-05, D1)")
 def _():
     head = [ev("SensitiveRead", 0, agent="a"), ev("Egress", 3 * MIN, agent="a"),
             ev("HumanApproval", 5 * MIN + 1, agent="a")]
     pending, _ = run_pattern(_killswitch(wm_delay=2 * MIN), head, eos=False)
-    assert pending == [], pending                  # wm still below 10:05 -> pending
+    assert pending == [], pending                  # wm 10:03:00.001 below 10:05 -> pending
+    # D1: wm = 10:07 - 2 min = 10:05 exactly — an approval at 10:05 could still come, so
+    # the absence due 10:05 is not finalized yet.
     ms, _ = run_pattern(_killswitch(wm_delay=2 * MIN),
                         head + [ev("X", 7 * MIN, agent="a")], eos=False)
-    assert len(ms) == 1 and ms[0]["match_end"] == 5 * MIN, ms  # latency = d past bound
+    assert ms == [], ms
+    # wm = 10:07:00.001 - 2 min = 10:05:00.001 > 10:05: the alert releases; the approval
+    # at 10:05:00.001 is not yet released (not < wm) and is past the bound anyway.
+    ms, _ = run_pattern(_killswitch(wm_delay=2 * MIN),
+                        head + [ev("X", 7 * MIN + 1, agent="a")], eos=False)
+    assert len(ms) == 1 and ms[0]["match_end"] == 5 * MIN, ms  # latency = d + 1 ms past bound
 
 
 @check("6.4 · RT-18", "completion rule: absence `for 3 min` elapses, egress at 10:04 within "
