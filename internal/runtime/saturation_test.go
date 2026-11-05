@@ -75,9 +75,18 @@ func TestSaturationProgress(t *testing.T) {
 
 	got := newRTLog()
 	hold := newRTHold()
+	// round1 closes when round 1's G × Burst outputs have reached the sink. Phase 2 arms the hold only then, so the hold
+	// catches a round-2 output: arming earlier could catch a round-1 output still in flight, and the router (rightly)
+	// reads no intake while its sink send is held, so the test's own Send in phase 2 would wait on a hold only the test
+	// releases (coordinator, 2026-11-05: the first real run hung here).
+	round1 := make(chan struct{})
+	var round1Once sync.Once
 	sink := func(e event.Event) error {
 		hold.at()
 		got.add(e.Values[0].Str, fmt.Sprintf("s%d#%d j%d", e.Values[1].I, e.Values[2].I, e.Values[3].I))
+		if got.count() == G*Burst {
+			round1Once.Do(func() { close(round1) })
+		}
 		return nil
 	}
 	bodyHeld := make(chan struct{})
@@ -122,6 +131,7 @@ func TestSaturationProgress(t *testing.T) {
 	freeBody()
 
 	// Phase 2.
+	rtWait(t, ctx, round1, "round 1's outputs at the sink")
 	hold.arm()
 	rtSend(t, ctx, r, 0, rtEv(3, rtAt(2), rtStr("x")))
 	rtWait(t, ctx, hold.entered, "the sink's held call (round 2 released behind it)")
