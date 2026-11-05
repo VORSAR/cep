@@ -18,8 +18,10 @@ import (
 // keyed by s, TTL 1 h. Shards 16, and four float rules (each rule index hashes apart): a router that hashed −0.0 and
 // +0.0 apart would put them on one shard of 16 for all four rules with probability (1/16)^4.
 // Events: 1 s f = −0.0; 2 s f = null; 3 s f = NaN; 4 s f = +0.0; 5 s f = 1.5; all s = "a". Drain (5.001 s).
-// Expected: each f rule: key 0 (stored +0.0, break-it K1) released [s0#1 @1 s, s0#4 @4 s] with ONE birth; key 1.5
-// [s0#5 @5 s]; nothing else; KeyErrors 2 (null, NaN). Rule s: key a gets all five; KeyErrors 0.
+// The NaN event is refused by Send itself (fix round, 2026-11-05: NaN and infinities are never values, S3.1-2's D2),
+// so it takes no Seq: the others are #1 @1 s, #2 @2 s, #3 @4 s, #4 @5 s.
+// Expected: each f rule: key 0 (stored +0.0, break-it K1) released [s0#1 @1 s, s0#3 @4 s] with ONE birth; key 1.5
+// [s0#4 @5 s]; nothing else; KeyErrors 1 (null). Rule s: key a gets all four; KeyErrors 0.
 func TestKeyErrorsAndZeroKeys(t *testing.T) {
 	ctx := rtCeiling(t)
 	log, births := newRTLog(), newRTLog()
@@ -39,14 +41,21 @@ func TestKeyErrorsAndZeroKeys(t *testing.T) {
 	r := rtStart(t, runtime.Config{Shards: 16}, app)
 	fs := []event.Value{rtFloat(math.Copysign(0, -1)), {Kind: event.TFloat, Null: true}, rtFloat(math.NaN()), rtFloat(0), rtFloat(1.5)}
 	for i, f := range fs {
-		rtSend(t, ctx, r, 0, rtEv(0, rtAt(float64(i+1)), f, rtStr("a")))
+		e := rtEv(0, rtAt(float64(i+1)), f, rtStr("a"))
+		if !f.Null && math.IsNaN(f.F) {
+			if err := r.Send(ctx, 0, e); err == nil {
+				t.Errorf("Send with a NaN key: nil, want an error (NaN is never a value)")
+			}
+			continue
+		}
+		rtSend(t, ctx, r, 0, e)
 	}
 	rtDrain(t, ctx, r, 0)
 
-	want := map[string][]string{"s/a": {"ev s0#1 @1000", "ev s0#2 @2000", "ev s0#3 @3000", "ev s0#4 @4000", "ev s0#5 @5000"}}
+	want := map[string][]string{"s/a": {"ev s0#1 @1000", "ev s0#2 @2000", "ev s0#3 @4000", "ev s0#4 @5000"}}
 	for i := 0; i < 4; i++ {
-		want[fmt.Sprintf("f%d/0", i)] = []string{"ev s0#1 @1000", "ev s0#4 @4000"}
-		want[fmt.Sprintf("f%d/1.5", i)] = []string{"ev s0#5 @5000"}
+		want[fmt.Sprintf("f%d/0", i)] = []string{"ev s0#1 @1000", "ev s0#3 @4000"}
+		want[fmt.Sprintf("f%d/1.5", i)] = []string{"ev s0#4 @5000"}
 	}
 	got := log.snapshot()
 	for k, w := range want {
@@ -67,8 +76,8 @@ func TestKeyErrorsAndZeroKeys(t *testing.T) {
 	}
 	st := rtStats(t, ctx, r)
 	for i := 0; i < 4; i++ {
-		if n := st.Rules[0][i].KeyErrors; n != 2 {
-			t.Errorf("rule f%d: KeyErrors %d, want 2 (null, NaN)", i, n)
+		if n := st.Rules[0][i].KeyErrors; n != 1 {
+			t.Errorf("rule f%d: KeyErrors %d, want 1 (the null; the NaN never got past Send)", i, n)
 		}
 	}
 	if n := st.Rules[0][4].KeyErrors; n != 0 {
