@@ -192,3 +192,43 @@ class Unit(GoRows):
         self.package("a")
         self.package("b")
         self.assertEqual(self.unit("./a"), "covered 1 ≠ expected 2")
+
+
+class Race(GoRows):
+    """The race row (owner, 2026-11-05: pulled forward from S3.2b): `go test -race -json -count=1`, with cgo on for
+    that row alone (ADR-0015 §3.6, residue item 9). A data race fails the test it happened in, naming it."""
+
+    SCOPE = ("go", "./...")
+    GOOD = Unit.GOOD
+    RACY = (
+        'package p\n\nimport (\n\t"sync"\n\t"testing"\n)\n\n'
+        "func TestRacy(t *testing.T) {\n\tn := 0\n\tvar wg sync.WaitGroup\n\tfor range 2 {\n\t\twg.Add(1)\n"
+        "\t\tgo func() { defer wg.Done(); n++ }()\n\t}\n\twg.Wait()\n\t_ = n\n}\n"
+    )
+
+    def race(self, *args):
+        rows = [self.row("race", command=wrapper("race", *args), expected_scope=self.SCOPE, job="race")]
+        self.run_rows(rows)
+        return self.reason("race", "race")
+
+    def package(self, name, test=GOOD):
+        self.track(f"{name}/a.go", "package p\n\nfunc F() int { return 1 }\n")
+        self.track(f"{name}/a_test.go", test)
+
+    def test_passing_packages(self):
+        self.package("a")
+        self.package("b")
+        self.assertEqual(self.race(), "covered 2")
+
+    def test_a_data_race_fails_naming_its_test(self):
+        self.package("a")
+        self.package("b", self.RACY)
+        self.assertEqual(self.race(), "exit 1: ex.com/m/b: TestRacy")
+        self.assertIn("ex.com/m/b: TestRacy", self.stdout("race", "race"))
+
+    def test_a_repeat_runs_every_test_that_many_times(self):
+        # The nightly race-stress row: --repeat=N is go test's -count=N; a pass needs every run to pass.
+        self.package("a")
+        self.assertEqual(self.race("--repeat=3", "./..."), "covered 1")
+        passes = b'"Action":"pass","Package":"ex.com/m/a","Test":"TestOk"'
+        self.assertEqual(self.row_file("race", "race", "test.json").count(passes), 3)
