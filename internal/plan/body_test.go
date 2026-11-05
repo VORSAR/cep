@@ -269,8 +269,8 @@ func TestRateArrivalOrder(t *testing.T) {
 	}
 }
 
-// TestRatePerKey: SEMANTICS §8/§9 — the anchor is per key: keys a and b at the same instant both emit, and each
-// key's anchor lives on its partition.Instance (design §2, §7.4).
+// TestRatePerKey: SEMANTICS §8/§9 — the anchor is per key: keys a and b at the same instant both emit, and a's
+// second output inside its interval is suppressed while b's anchor is untouched.
 func TestRatePerKey(t *testing.T) {
 	t.Parallel()
 	p := pqBuild(t, "qa-rate.cep", qaRateSrc)
@@ -278,21 +278,43 @@ func TestRatePerKey(t *testing.T) {
 	x.offer(qaK(0, "a"))
 	x.offer(qaK(0, "b"))
 	x.offer(qaK(5*pqMin, "a"))
-	if len(x.out) != 2 || x.out[0].Values[0] != pqStr("a") || x.out[1].Values[0] != pqStr("b") {
-		t.Fatalf("outputs %+v, want a@0 then b@0", x.out)
+	x.offer(qaK(10*pqMin+1, "b"))
+	if len(x.out) != 3 || x.out[0].Values[0] != pqStr("a") || x.out[1].Values[0] != pqStr("b") || x.out[2].Values[0] != pqStr("b") {
+		t.Fatalf("outputs %+v, want a@0, b@0, b@10 min + 1 ms", x.out)
 	}
 	if st := x.stats(); st.Suppressed != 1 {
 		t.Errorf("Suppressed %d, want 1 (a@5 min)", st.Suppressed)
 	}
-	n := 0
-	x.pr.Instances(func(in *partition.Instance) {
-		n++
-		if !in.Anchored || in.Anchor != pqT0 {
-			t.Errorf("instance %v: Anchored %v, Anchor %d; want true, %d (the last emission's Ts)", in.Key, in.Anchored, in.Anchor, pqT0)
+}
+
+// TestRatePanicResetStartsFresh: the anchor is per-key state and dies with the key's reset (SEMANTICS §8, §9;
+// design §7.4 as changed by the architecture review: the anchor lives in the body's OpState). The planted emit
+// panics on its first call, so the body panics inside a@0's emission; partition recovers it and resets the key
+// (Panics 1). a@1 min, inside 10 min of a@0, must then alert: no stale suppression survives the reset.
+func TestRatePanicResetStartsFresh(t *testing.T) {
+	t.Parallel()
+	p := pqBuild(t, "qa-rate.cep", qaRateSrc)
+	rule := pqRuleNamed(t, p, "Keyed")
+	calls := 0
+	var out []event.Event
+	body := rule.NewBody(func(e event.Event) {
+		calls++
+		if calls == 1 {
+			panic("planted: the first emission fails")
 		}
+		out = append(out, e)
 	})
-	if n != 2 {
-		t.Errorf("%d instances, want 2", n)
+	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr.Offer(pqStr("a"), qaK(0, "a"))
+	if pr.Stats().Panics != 1 {
+		t.Fatalf("Panics %d after the planted emit, want 1 (the key reset)", pr.Stats().Panics)
+	}
+	pr.Offer(pqStr("a"), qaK(pqMin, "a"))
+	if len(out) != 1 || out[0].Ts != pqT0+pqMin {
+		t.Errorf("outputs %+v after the reset, want a@1 min (no stale anchor)", out)
 	}
 }
 

@@ -184,12 +184,16 @@ func TestBuildPartitionedAndTimeClauses(t *testing.T) {
 	}
 }
 
-// TestBuildRefusesPattern: example 01's rule is a pattern; this release cannot run it (design §7.11).
-func TestBuildRefusesPattern(t *testing.T) {
+// TestBuildRefusesNotBuilt: design §7.11, extended by the architecture review — Build refuses with ErrNotBuilt a
+// body kind this release cannot run (01: a pattern, S4.1; 02: a cron window, S8) and a plain rule whose filter or
+// select uses an expression it cannot run yet (05: text operators, S7).
+func TestBuildRefusesNotBuilt(t *testing.T) {
 	t.Parallel()
-	app := pqChecked(t, "01-agent-kill-switch.cep", pqExample(t, "01-agent-kill-switch.cep"))
-	p, err := pqTryBuild(t, app)
-	if !errors.Is(err, plan.ErrNotBuilt) {
-		t.Fatalf("Build(01) = %v, %v; want ErrNotBuilt (a pattern body, S4.1)", p, err)
+	for _, file := range []string{"01-agent-kill-switch.cep", "02-cron-digest.cep", "05-text-operators.cep"} {
+		app := pqChecked(t, file, pqExample(t, file))
+		p, err := pqTryBuild(t, app)
+		if !errors.Is(err, plan.ErrNotBuilt) {
+			t.Errorf("Build(%s) = %v, %v; want ErrNotBuilt", file, p, err)
+		}
 	}
 }
