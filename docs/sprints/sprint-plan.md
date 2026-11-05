@@ -512,6 +512,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | **Depends on** | S8 |
 | **In scope** | 1. `internal/window/cron.go` (ADR-0014 §3, §6): the 5-field Vixie parser; next-fire by field-wise search in the rule's timezone; `time.LoadLocation` over embedded tzdata [4]. · 2. **Enumerated DST cases, expected UTC instants derived with Python `zoneinfo` before the Go code:** the spring gap and autumn fold for `0 2 * * *` in America/New_York; Australia/Lord_Howe's 30-minute shift; a southern-hemisphere zone; a day-of-week-restricted expression across a transition [1.5]. · 3. The `windowspec` helper for the validator: E-WIN-003 and the cron part of E-TTL-002 (lifting S2.2b's skips) — the 10-year extent scan reads its start instant from an injected clock, pinned in tests [1.5]. · 4. Buckets with `count` (from S8), the close timer at `bᵢ₊₁`, a single fire, no allowance (rev 3), incl. the admission-drop case [1.5]. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss expects for 02, incl. an event behind the admission watermark whose bucket is still open [1]. · 6. Live cron close through the idle-tick source [1]. · 7. The time-shift law's cron variant [0.5]. · 8. The cron harness port; RT-07's window-extent assertions; the boundary property test; the walked-state invariant for buckets [1]. |
 | **Not in scope** | The builder's cron surface and the twin of 02 → S9.2. Delay → S9.2. `late events allow` → Phase 2. |
+| *Forwarded* | *(Annotated 2026-11-05, from S3.2a-1 (owner D1; QA G1): a timer fires once the clock is past its due, so a cron close that must run once the clock reaches a bucket's end `e` is scheduled at `e − 1`; the oracle's `cron` function is changed to D1 first.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 02 passes its cases, incl. the admission-drop case — **proof:** the conformance runner. |
@@ -531,6 +532,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | **Depends on** | S9.1 |
 | **In scope** | 1. Delay: a due-ordered queue; each event re-stamped `t + D` [2]. · 2. **Test material (QA):** fire-path and near-miss expects for 04's delay rule, plus a delay case across a TTL purge [1]. · 3. Builder cron and delay surface + the parity twins of 02 and 04 [2.5]. · 4. The delay harness port; the walked-state invariant for the queue; `allocgate` [1]. |
 | **Not in scope** | Rule-consumption of a delay's output (derived stream) → Phase 2 (RT-09). |
+| *Forwarded* | *(Annotated 2026-11-05, from S3.2a-1 (owner D1; QA G1): the oracle's `delay` still releases at `wm ≥ t + D`; under D1, whether delay re-times at `wm ≥ t + D` (scheduled at `t + D − 1`) or once the clock is past `t + D` is this sprint's design, oracle first, and an owner decision.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 04 passes all its cases, incl. the TTL-purge case — **proof:** the conformance runner. |
