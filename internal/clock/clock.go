@@ -57,6 +57,7 @@ type stream struct {
 	floor       int64 // live: the quiet floor
 	vfloor      int64 // playback: the virtual floor
 	punct       int64 // derived: the latest punctuation
+	drain       int64 // Stop's drain: one past the largest admitted event time (owner D1 of S3.2a-1)
 	ended       bool
 	contrib     int64
 }
@@ -73,7 +74,8 @@ func NewStreamRegistry(specs []StreamSpec, start int64) *StreamRegistry {
 	for i, sp := range specs {
 		r.streams[i] = stream{
 			spec: sp, maxTs: math.MinInt64, adm: math.MinInt64, lastTs: start, lastArrival: start,
-			floor: math.MinInt64, vfloor: math.MinInt64, punct: math.MinInt64, contrib: math.MinInt64,
+			floor: math.MinInt64, vfloor: math.MinInt64, punct: math.MinInt64, drain: math.MinInt64,
+			contrib: math.MinInt64,
 		}
 	}
 	return r
@@ -82,7 +84,7 @@ func NewStreamRegistry(specs []StreamSpec, start int64) *StreamRegistry {
 // raise recomputes a stream's contribution and reports the advance when it rose.
 func (r *StreamRegistry) raise(sid int) WMAdvance {
 	s := &r.streams[sid]
-	c := max(s.adm, s.floor, s.vfloor, s.punct)
+	c := max(s.adm, s.floor, s.vfloor, s.punct, s.drain)
 	if s.ended {
 		c = math.MaxInt64
 	}
@@ -167,13 +169,47 @@ func (r *StreamRegistry) Contribution(sid int) int64 { return r.streams[sid].con
 // (ADR-0012 §3's Stop under owner D1 of S3.2a-1: that instant is complete once the sources are stopped, so it
 // finalizes; any deadline after it stays unfired). Nothing admitted: no advance.
 func (r *StreamRegistry) Drain(buf []WMAdvance) []WMAdvance {
-	panic("clock: StreamRegistry.Drain: not implemented (S3.2a-1 stub)")
+	m := int64(math.MinInt64)
+	for i := range r.streams {
+		m = max(m, r.streams[i].maxTs)
+	}
+	if m == math.MinInt64 {
+		return buf
+	}
+	to := add(m, 1)
+	for sid := range r.streams {
+		r.streams[sid].drain = max(r.streams[sid].drain, to)
+		if a := r.raise(sid); a.Moved {
+			buf = append(buf, a)
+		}
+	}
+	return buf
 }
 
-// Walk yields each stream's state, component "stream" and key its name: the registry is a state holder
-// (ADR-0006 §2(b); design note s3-2a-1 §4).
+// StreamState is one stream's registry state, as Walk yields it (ADR-0006 §2(b); design note s3-2a-1 §4.2).
+type StreamState struct {
+	MaxTs        int64 // the largest admitted event time
+	Admission    int64 // the admission watermark
+	LastTs       int64 // its own last event time (the deployment's start before any)
+	LastArrival  int64 // that event's intake stamp
+	Floor        int64 // live: the quiet floor
+	VirtualFloor int64 // playback: the virtual floor
+	Punctuation  int64 // derived: the latest punctuation
+	Drain        int64 // Stop's drain level
+	Contribution int64
+	Ended        bool
+}
+
+// Walk yields each stream's state, component "stream" and key its name, in declaration order: the registry is a
+// state holder (ADR-0006 §2(b); design note s3-2a-1 §4.2).
 func (r *StreamRegistry) Walk(fn func(component, key string, state any)) {
-	panic("clock: StreamRegistry.Walk: not implemented (S3.2a-1 stub)")
+	for i := range r.streams {
+		s := &r.streams[i]
+		fn("stream", s.spec.Name, StreamState{
+			MaxTs: s.maxTs, Admission: s.adm, LastTs: s.lastTs, LastArrival: s.lastArrival, Floor: s.floor,
+			VirtualFloor: s.vfloor, Punctuation: s.punct, Drain: s.drain, Contribution: s.contrib, Ended: s.ended,
+		})
+	}
 }
 
 // TimerKind names a timer; for one key at one instant the inclusive kinds fire in this order.

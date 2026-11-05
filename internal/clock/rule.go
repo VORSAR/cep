@@ -2,11 +2,13 @@ package clock
 
 import (
 	"math"
+	"slices"
 
 	"github.com/vorsar/cep/internal/event"
 )
 
-// The walk's phases at one instant: released events, then inclusive timers, then strict ones.
+// The walk's phases at one instant: released events, then inclusive timers, then strict ones. Owner D1 of S3.2a-1:
+// the phases order one instant only; the whole instant is finalized once the clock is past it.
 const (
 	phaseEvents = iota
 	phaseInclusive
@@ -124,12 +126,15 @@ func (rc *RuleClock) Free(in *Instance) {
 	in.freed = true
 }
 
-// Advance walks every pending item up to the clock, forward in event time (owner D1): by instant; within one,
-// events in event.Compare order, then the inclusive timers due, then — once the clock is past the instant — the
-// strict ones. A timer a callback schedules joins the walk in order.
+// Advance walks every pending item before the clock, forward in event time (owner D1 of S3.1-1): by instant; within
+// one, events in event.Compare order, then the inclusive timers due, then the strict ones. An instant is finalized
+// only once the clock is past it (owner D1 of S3.2a-1): a watermark promises only that nothing earlier will arrive,
+// so an event exactly at the clock can still come, and it is processed before that instant's timers. So when the
+// walk runs never changes a result. A timer a callback schedules joins the walk in order.
 //
 // Keys at one instant go in birth order: a key is born at its first released event or first timer, and born again
-// after its purge's CancelAll (the reference executor's order, SEMANTICS §9). A clock still at −∞ releases nothing.
+// after its purge's CancelAll (the reference executor's order, SEMANTICS §9). A clock still at −∞ releases nothing;
+// a clock at +∞ (the end of input) is past every instant.
 func (rc *RuleClock) Advance(cb Callbacks) {
 	if rc.clock == math.MinInt64 {
 		return
@@ -153,25 +158,23 @@ func (rc *RuleClock) Advance(cb Callbacks) {
 	}
 }
 
-// nextEvent is the earliest buffered event's instant when it is released by the clock.
+// past says the clock is past instant t (owner D1 of S3.2a-1); +∞ is past every instant.
+func (rc *RuleClock) past(t int64) bool { return t < rc.clock || rc.clock == math.MaxInt64 }
+
+// nextEvent is the earliest buffered event's instant when the clock is past it.
 func (rc *RuleClock) nextEvent() (int64, bool) {
-	if len(rc.events) == 0 || rc.events[0].e.Ts > rc.clock {
+	if len(rc.events) == 0 || !rc.past(rc.events[0].e.Ts) {
 		return 0, false
 	}
 	return rc.events[0].e.Ts, true
 }
 
-// nextTimer is the earliest timer the clock has reached: an inclusive one at due ≤ clock, a strict one at due < clock.
+// nextTimer is the earliest timer whose due the clock is past, of any kind (owner D1 of S3.2a-1).
 func (rc *RuleClock) nextTimer() *timer {
-	if len(rc.timers) == 0 {
+	if len(rc.timers) == 0 || !rc.past(rc.timers[0].due) {
 		return nil
 	}
-	t := rc.timers[0]
-	// a strict timer needs the clock past its due; +∞ (the end of input) is past every due
-	if t.due > rc.clock || (t.kind.strict() && t.due == rc.clock && rc.clock != math.MaxInt64) {
-		return nil
-	}
-	return t
+	return rc.timers[0]
 }
 
 // fireGroup fires the head timer and every timer of the same instant, phase, key and callback with it.
@@ -189,9 +192,6 @@ func (rc *RuleClock) fireGroup(head *timer, cb Callbacks) {
 		} else {
 			rc.fires = append(rc.fires, Timer{Due: t.due, Kind: t.kind, Ref: t.ref})
 		}
-	}
-	if phase == phaseInclusive && (!in.hasSeal || due > in.sealed) { // owner D7: this key's instant is sealed
-		in.sealed, in.hasSeal = due, true
 	}
 	switch {
 	case discard && cb.OnDiscard != nil:
@@ -310,8 +310,6 @@ type Instance struct {
 	ordinal  uint64
 	birth    uint64 // the walk's order across keys; valid while born
 	born     bool
-	sealed   int64 // owner D7: the latest instant this key's inclusive timers fired, when hasSeal
-	hasSeal  bool
 	buffered int
 	timers   map[timerKey]*timer
 	freed    bool
@@ -328,10 +326,11 @@ func (in *Instance) bear() {
 	}
 }
 
-// Buffer holds an admitted event until the walk releases it, or reports it construct-late: behind the rule's clock,
-// or at or before an instant sealed for this key (owner D7). A construct-late event is not kept.
+// Buffer holds an admitted event until the walk releases it, or reports it construct-late: behind the rule's clock.
+// No instant at or above the clock is finalized (owner D1 of S3.2a-1, which retired S3.1-1's D7 seal), so nothing
+// else can make it late. A construct-late event is not kept.
 func (in *Instance) Buffer(e event.Event) (constructLate bool) {
-	if e.Ts < in.rc.clock || (in.hasSeal && e.Ts <= in.sealed) {
+	if e.Ts < in.rc.clock {
 		return true
 	}
 	in.rc.pushEvent(buffered{e: e, in: in})
@@ -339,14 +338,18 @@ func (in *Instance) Buffer(e event.Event) (constructLate bool) {
 	return false
 }
 
-// Schedule adds a timer; a second Schedule of the same (kind, ref) — of any TTLPurge — replaces it.
+// Schedule adds a timer; a second Schedule of the same (kind, ref) — of any TTLPurge — replaces it, in place and
+// without allocating (the TTL re-arm on every released event, ADR-0010 §1), ordered as a fresh schedule.
 func (in *Instance) Schedule(due int64, k TimerKind, ref uint64) {
 	key := keyOf(k, ref)
-	if old := in.timers[key]; old != nil {
-		in.rc.removeTimer(old)
-	}
 	in.bear()
 	in.rc.seq++
+	if old := in.timers[key]; old != nil {
+		old.due, old.ref, old.seq = due, ref, in.rc.seq
+		in.rc.down(old.index)
+		in.rc.up(old.index)
+		return
+	}
 	t := &timer{due: due, kind: k, ref: ref, seq: in.rc.seq, in: in}
 	in.timers[key] = t
 	in.rc.pushTimer(t)
@@ -371,22 +374,43 @@ func (in *Instance) CancelAll() {
 	in.born = false
 }
 
-// Timers appends the key's pending timers in walk order (design note s3-2a-1 §4).
+// Timers appends the key's pending timers in walk order (design note s3-2a-1 §4.2). Cold path.
 func (in *Instance) Timers(dst []Timer) []Timer {
-	panic("clock: Instance.Timers: not implemented (S3.2a-1 stub)")
+	ts := make([]*timer, 0, len(in.timers))
+	for _, t := range in.timers {
+		ts = append(ts, t)
+	}
+	slices.SortFunc(ts, func(a, b *timer) int {
+		switch {
+		case a.before(b):
+			return -1
+		case b.before(a):
+			return 1
+		}
+		return 0
+	})
+	for _, t := range ts {
+		dst = append(dst, Timer{Due: t.due, Kind: t.kind, Ref: t.ref})
+	}
+	return dst
 }
 
-// Events appends the key's buffered events in event.Compare order (design note s3-2a-1 §4). Cold path: it scans the
-// rule clock's buffer.
+// Events appends the key's buffered events in event.Compare order (design note s3-2a-1 §4.2). Cold path: it scans
+// the rule clock's buffer.
 func (in *Instance) Events(dst []event.Event) []event.Event {
-	panic("clock: Instance.Events: not implemented (S3.2a-1 stub)")
+	start := len(dst)
+	for i := range in.rc.events {
+		if in.rc.events[i].in == in {
+			dst = append(dst, in.rc.events[i].e)
+		}
+	}
+	slices.SortFunc(dst[start:], func(a, b event.Event) int { return event.Compare(&a, &b) })
+	return dst
 }
 
 // Birth is the key's place in the walk's order across keys at one instant; born is false before its first released
 // event or timer, and again after CancelAll (design note s3-2a-1 §4.2).
-func (in *Instance) Birth() (birth uint64, born bool) {
-	panic("clock: Instance.Birth: not implemented (S3.2a-1 stub)")
-}
+func (in *Instance) Birth() (birth uint64, born bool) { return in.birth, in.born }
 
 // RuleState is a rule clock's own state (design note s3-2a-1 §4.2).
 type RuleState struct {
@@ -397,11 +421,10 @@ type RuleState struct {
 
 // State is the rule clock's own state, copied.
 func (rc *RuleClock) State() RuleState {
-	panic("clock: RuleClock.State: not implemented (S3.2a-1 stub)")
+	return RuleState{Inputs: slices.Clone(rc.inputs), Contributions: slices.Clone(rc.contrib), Clock: rc.clock}
 }
 
-// Empty says the key holds nothing the shard would lose by freeing it: no buffered event, no timer, and no seal
-// the clock has not yet passed (a sealed instant still drops a late event of the key, owner D7).
+// Empty says the key holds nothing the shard would lose by freeing it: no buffered event and no timer.
 func (in *Instance) Empty() bool {
-	return in.buffered == 0 && len(in.timers) == 0 && !(in.hasSeal && in.sealed >= in.rc.clock)
+	return in.buffered == 0 && len(in.timers) == 0
 }
