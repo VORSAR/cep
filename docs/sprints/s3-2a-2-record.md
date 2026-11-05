@@ -60,6 +60,40 @@
   - QA's gap Q15, a real defect, was fixed test-first: a `Drain` whose context had already expired left the app refusing input without draining it.
 - **The replay driver on the shared ingest step:** every S3.2a-1 playback test passes unchanged.
 
+- **Coverage** (the gate's row first failed at 88.46%; QA added coverage tests): `internal/runtime` 96.9%, `internal/partition` 96.4%, `internal/playback` 94.9%.
+  - **Reached by no test:** `Offer`'s last-resort recover. `Start` and `Send` enforce the key type, and the router drops null keys, so `partition.Offer` has nothing left to panic on.
+- **After the fix round:** `go test -race -count=50 ./internal/runtime` with 14 CPU hogs gave 1,700 passes, 0 failures, 0 data races; saturation 50/50.
+- **The gate:**
+  - T2 `make check`: exit 0 after the coverage tests.
+  - T4 `make strict-gate` on the final tree: every row PASS, the grammar differential (63) and `proofs` (14) included; exit 0; wall 88.1 s.
+
+## The break-it (G3)
+
+A fresh QA agent ([s3-2a-2-breakit-qa.md](../reviews/s3-2a-2-breakit-qa.md)) found 1 blocker, 1 should-fix and 3 later. QA's coverage work found one more, the same defect as R1. Each has a red test, and all were handled in one batched round: every fix's test was red in one run, then every fix, then one verification.
+
+| id | severity | finding | disposition |
+|---|---|---|---|
+| B1 | blocker | a body's emit on a stream outside its app panicked the router and killed the process | fixed: the emit checks its stream; a bad one is a body fault, so partition resets the key and counts it |
+| R1 (and QA's) | should-fix (a broken contract) | a failed second Drain cleared the drained app's flag, so `Send` returned nil, not `ErrDrained` | fixed: only the Drain that set the flag clears it |
+| C1 | later | a sink could still be called after `Close` began (a random `select`) | fixed: every loop checks the stop first |
+| V1 | later | `Send` accepted a null in a required attribute | fixed: refused, along with NaN and ±Inf (S3.1-2's D2) |
+| V2 | later | a rule listing one input twice saw every event twice | fixed: refused at `Start` |
+| question | — | a retried Drain after a timeout | owner: it waits for the same flush |
+| gaps | — | a schema whose name differs from its stream's; a `NewBody` that panics in `Start` | fixed, with tests |
+
+**Two older tests changed with the decisions:** QA's coverage test now expects a second Drain to return the first drain's result, and the key test expects a NaN key to be refused by `Send`.
+
+**What held:**
+- tiny capacities with 7 shards and 4 apps under `-race` and CPU hogs, every drain flushing every output in per-key order;
+- a `Send` racing a `Drain`, never lost;
+- `Close` during traffic and during a drain, with no leaks;
+- every key type across shard counts;
+- a storm of body and sink panics.
+
+**Not tried, forwarded:**
+- a sink calling back into the runtime (a documented MUST NOT);
+- randomized live-against-replay comparisons, which go to S3.2b's live/replay equivalence exit.
+
 ## Done-done
 
 ```
@@ -67,10 +101,19 @@ Sprint S3.2a-2 — the runtime core · routine: S3.1's (QA first + architecture 
 Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merged, main green (S3.2a-1's merge, PR #10)
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (2026-11-05) ☑ test material: QA's tests, an item
 Design (G1)  ☑ architecture review resolved (design v2 §10) ☑ owner decisions recorded (F5, F10, F14) ☑ ADRs and SEMANTICS annotated
-Build (G2)   ☐ T2 (make check exit 0) ☐ T3 ☐ tests on the real code (QA's, red first)
-Review (G3)  ☐ QA break-it ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check ☑ exit 3: the saturation run, 50/50 under -race and a CPU hog
+Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (in T4) ☑ tests on the real code (QA's, red first)
+Review (G3)  ☑ QA break-it (1 blocker, 1 should-fix, 3 later) ☑ every finding fixed, each with its red test
+Verify (G4)  ☑ T4 exit 0 (final tree) ☐ CI on the PR ☐ owner's check ☑ exit 3: the saturation run, 50/50 under -race and a CPU hog
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
              ☐ worktrees removed ☐ points and duration
 ```
+
+## For the owner (the owner's check)
+
+- **By reading: exit 3's scenario.** `internal/runtime/saturation_test.go`, a held body, a slow sink and four bursty senders, and its pass rate: 50/50 under -race with a CPU hog per core, twice (before and after the fix round).
+- **By reading: the drain.** `TestDrainBarrier` and `TestRetriedDrainWaitsForTheSameFlush`: what `Drain` guarantees when it returns.
+- **Behaviour older code now sees:**
+  - the replay driver runs on the shared ingest step, with S3.2a-1's tests unchanged;
+  - a rule body's panic resets its key.
+- **No new dependency.**
