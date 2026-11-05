@@ -300,14 +300,16 @@ var handCases = []hcase{
 	bad("duration/overflow", "D", `{"d":9223372036854775808}`, typ, "d", "9223"),
 	bad("duration/text", "D", `{"d":"90s"}`, typ, "d", `"90s"`),
 
-	// object (§4.1 row 7; P3)
-	ok("object/kept byte for byte", "O", `{"o":{"a":[1, 2]}}`, vObj(`{"a":[1, 2]}`)),
-	ok("object/array with inner whitespace", "O", "{\"o\":[ 1 ,\n{\"b\" : null} ]}", vObj("[ 1 ,\n{\"b\" : null} ]")),
+	// object (§4.1 row 7; P3), cleaned at decode (owner D4 of S3.2a-1, design note s3-2a-1 §5.6): compact, member
+	// order and every token's text kept, malformed UTF-8 replaced with U+FFFD
+	ok("object/stored compact", "O", `{"o":{"a":[1, 2]}}`, vObj(`{"a":[1,2]}`)),
+	ok("object/array with inner whitespace compacted", "O", "{\"o\":[ 1 ,\n{\"b\" : null} ]}", vObj(`[1,{"b":null}]`)),
 	ok("object/empty", "O", `{"o":{}}`, vObj(`{}`)),
 	ok("object/empty array", "O", `{"o":[]}`, vObj(`[]`)),
 	ok("object/surrounding whitespace is not kept", "O", "{\"o\" :\t {\"a\":1}  \n}", vObj(`{"a":1}`)),
-	ok("object/escapes kept raw", "O", `{"o":{"k":"é\n"}}`, vObj(`{"k":"é\n"}`)),
-	ok("object/malformed UTF-8 kept raw", "O", "{\"o\":{\"k\":\"\xff\"}}", vObj("{\"k\":\"\xff\"}")),
+	ok("object/escapes kept as written", "O", `{"o":{"k":"é\n"}}`, vObj(`{"k":"é\n"}`)),
+	// "\xff" is one malformed byte: one U+FFFD (EF BF BD), raw, not an escape
+	ok("object/malformed UTF-8 replaced", "O", "{\"o\":{\"k\":\"\xff\"}}", vObj("{\"k\":\"\uFFFD\"}")),
 	ok("object/inner repeated keys kept", "O", `{"o":{"a":1,"a":2}}`, vObj(`{"a":1,"a":2}`)),
 	ok("object/nesting at the limit", "O", `{"o":`+deep(9999)+`}`, vObj(deep(9999))),
 	ok("object/object nesting at the limit", "O", `{"o":`+deepObj(9999)+`}`, vObj(deepObj(9999))),
