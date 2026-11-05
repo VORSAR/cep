@@ -60,6 +60,21 @@ class Render(unittest.TestCase):
                 self.assertIn(needle, nightly)
         self.assertNotIn("pull_request", nightly)
 
+    def test_the_summary_downloads_each_jobs_records_by_name_into_its_own_directory(self):
+        # The nightly's first scheduled run (2026-11-05) failed: download-artifact with a pattern extracts a single
+        # match straight into its path, but each of several into a subdirectory, so the one-job nightly's records
+        # never reached summarize's records-<job>-<attempt>/ layout. One download per job, by name, into its own
+        # directory, gives that layout whatever the job count.
+        nightly = dict(generate.targets(NIGHTLY))[".github/workflows/nightly.yml"]
+        for name, text, jobs in (("gate", self.text, ["lint", "test", "proofs"]), ("nightly", nightly, ["nightly"])):
+            block = text[text.index("  strict-gate:") :]
+            with self.subTest(name):
+                self.assertNotIn("pattern:", block)
+                for job in jobs:
+                    self.assertIn(f"name: records-{job}-${{{{ github.run_attempt }}}}", block)
+                    self.assertIn(f"path: .gate/artifacts/records-{job}-${{{{ github.run_attempt }}}}", block)
+                self.assertEqual(block.count("download-artifact@"), len(jobs))
+
     def test_without_nightly_rows_there_is_one_workflow(self):
         self.assertEqual([p for p, _ in generate.targets(ROWS)], [".github/workflows/gate.yml"])
 
