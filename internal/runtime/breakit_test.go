@@ -194,8 +194,11 @@ func TestBkGuardAfterCloseAndLeaks(t *testing.T) {
 				defer wg.Done()
 				for i := 0; ; i++ {
 					if err := r.Send(ctx, runtime.AppID(a), rtEv(0, rtAt(float64(i)), rtStr(fmt.Sprint(i%7)))); err != nil {
-						if !errors.Is(err, runtime.ErrClosed) {
-							t.Errorf("Send during Close: %v, want ErrClosed", err)
+						if !errors.Is(err, runtime.ErrClosed) && !(a == 1 && errors.Is(err, runtime.ErrDrained)) {
+							t.Errorf("Send during Close: %v, want ErrClosed (or ErrDrained for the drained app 1)", err)
+						}
+						if errors.Is(err, runtime.ErrDrained) {
+							continue // app 1 is drained: keep calling until Close
 						}
 						return
 					}
@@ -342,5 +345,141 @@ func TestBkGuardSendRacingDrainNeverLost(t *testing.T) {
 		if atDrain+st.AfterDrain[0][0] != ok.Load() {
 			t.Fatalf("try %d: %d Sends returned nil; %d outputs by Drain's return + %d AfterDrain = %d", try, ok.Load(), atDrain, st.AfterDrain[0][0], atDrain+st.AfterDrain[0][0])
 		}
+	}
+}
+
+// Every key type, across 1 and 5 shards: each key value is born once (one instance on one shard), and -0.0 and +0.0
+// are one key; the per-key release records are equal across shard counts.
+func TestBkGuardEveryKeyTypeOneInstance(t *testing.T) {
+	types := []event.Type{event.TString, event.TInt, event.TFloat, event.TBool, event.TTimestamp, event.TDuration}
+	vals := func(ty event.Type, i int) event.Value {
+		switch ty {
+		case event.TString:
+			return rtStr(fmt.Sprint("s", i%4))
+		case event.TInt:
+			return rtInt(int64(i%4) - 2)
+		case event.TFloat:
+			fs := []float64{0, -1.5, 2.25, 0}
+			v := rtFloat(fs[i%4])
+			if i%8 == 3 {
+				v.F = -v.F // -0.0
+			}
+			return v
+		case event.TBool:
+			return event.Value{Kind: event.TBool, B: i%2 == 0}
+		case event.TTimestamp:
+			return event.Value{Kind: event.TTimestamp, T: rtT0 + int64(i%4)}
+		}
+		return event.Value{Kind: event.TDuration, D: int64(i % 4)}
+	}
+	run := func(shards int) (map[string][]string, map[string][]string) {
+		ctx := rtCeiling(t)
+		log, births := newRTLog(), newRTLog()
+		var attrs []event.Attr
+		var rules []runtime.Rule
+		for i, ty := range types {
+			attrs = append(attrs, rtA(fmt.Sprint("a", i), ty))
+			rules = append(rules, runtime.Rule{Name: fmt.Sprint("R", i), Inputs: []int{0}, KeyAttr: []int{i}, KeyType: ty, TTL: 3600 * rtSec,
+				NewBody: rtBodies(rtBody{rule: fmt.Sprint("R", i), log: log, births: births})})
+		}
+		rules = append(rules, runtime.Rule{Name: "L", Inputs: []int{0}, KeyType: event.TString, NewBody: rtBodies(rtBody{rule: "L", log: log, births: births})})
+		r := rtStart(t, runtime.Config{Shards: shards, Mailbox: 1, Intake: 1}, runtime.App{
+			Streams: []clock.StreamSpec{rtSrc("in", 0)}, Schemas: []event.Schema{rtSchema(t, "in", attrs...)}, Rules: rules,
+		})
+		for i := 0; i < 40; i++ {
+			var vs []event.Value
+			for _, ty := range types {
+				vs = append(vs, vals(ty, i))
+			}
+			rtSend(t, ctx, r, 0, rtEv(0, rtAt(float64(i)), vs...))
+		}
+		rtDrain(t, ctx, r, 0)
+		b := births.snapshot()
+		for k, v := range b {
+			if len(v) != 1 {
+				t.Errorf("shards %d: %s born %d times: %v", shards, k, len(v), v)
+			}
+		}
+		return log.snapshot(), b
+	}
+	l1, b1 := run(1)
+	l5, b5 := run(5)
+	if len(b1) != len(b5) || len(b1) != 4+4+3+2+4+4+1 {
+		t.Errorf("keys: 1 shard %d, 5 shards %d, want %d", len(b1), len(b5), 4+4+3+2+4+4+1)
+	}
+	for k, v := range l1 {
+		if !rtEqual(v, l5[k]) {
+			t.Errorf("%s: 1 shard %v, 5 shards %v", k, v, l5[k])
+		}
+	}
+}
+
+// A panic storm in every body hook, sinks that panic and fail, tiny capacities: nothing crashes, Drain returns,
+// and the counters add up.
+func TestBkGuardPanicStorm(t *testing.T) {
+	ctx := rtCeiling(t)
+	var sinkCalls atomic.Int64
+	body := rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
+		b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{in.Key, rtInt(int64(e.Seq))}})
+		in.Clock.Schedule(e.Ts+500, clock.TimerKind(1), e.Seq)
+		in.Op.(*rtState).timers = append(in.Op.(*rtState).timers, clock.Timer{Due: e.Ts + 500, Kind: clock.TimerKind(1), Ref: e.Seq})
+		if e.Seq%3 == 0 {
+			panic("OnEvent storm")
+		}
+	}, onTimers: func(b *rtBody, in *partition.Instance, fires []clock.Timer, _ any) {
+		if fires[0].Ref%2 == 0 {
+			panic("OnTimers storm")
+		}
+	}}
+	app := bkApp(t, 0, 1,
+		func(e event.Event) error {
+			sinkCalls.Add(1)
+			if e.Values[1].I%5 == 0 {
+				panic("sink storm")
+			}
+			if e.Values[1].I%7 == 0 {
+				return errors.New("sink error")
+			}
+			return nil
+		})
+	app.Rules[0].NewBody = rtBodies(body)
+	r := rtStart(t, runtime.Config{Shards: 3, Mailbox: 1, Intake: 1, SinkQueue: 1}, app)
+	const n = 300
+	for i := 0; i < n; i++ {
+		rtSend(t, ctx, r, 0, rtEv(0, rtAt(float64(i)/4), rtStr(fmt.Sprint(i%6))))
+	}
+	rtDrain(t, ctx, r, 0)
+	st := rtStats(t, ctx, r)
+	if sinkCalls.Load() != n {
+		t.Errorf("sink calls %d, want %d (one output per released event, emitted before any panic)", sinkCalls.Load(), n)
+	}
+	if st.Rules[0][0].Panics == 0 || st.SinkErrors[0][0] == 0 {
+		t.Errorf("stats %+v: want panics and sink errors counted", st)
+	}
+}
+
+// ---- red (later): a rule listing one input stream twice sees each event twice ----
+
+// Design §2: Start validates every rule's inputs. It accepts Inputs [0, 0]; the router then offers each event twice
+// under the same key, and the body releases it twice. Start should refuse it (or the body see each event once).
+func TestBkDuplicateInputDoublesEvents(t *testing.T) {
+	ctx := rtCeiling(t)
+	log := newRTLog()
+	app := runtime.App{
+		Streams: []clock.StreamSpec{rtSrc("in", 0)},
+		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0, 0}, KeyAttr: []int{0, 0}, KeyType: event.TString, TTL: 3600 * rtSec,
+			NewBody: rtBodies(rtBody{rule: "R", log: log})}},
+	}
+	r, err := runtime.Start(runtime.Config{Shards: 2, Now: rtNow}, []runtime.App{app})
+	if err != nil {
+		return // refused: fine
+	}
+	defer func() { _ = r.Close(ctx) }()
+	rtSend(t, ctx, r, 0, rtEv(0, rtAt(1), rtStr("a")))
+	rtSend(t, ctx, r, 0, rtEv(0, rtAt(2), rtStr("a")))
+	rtDrain(t, ctx, r, 0)
+	if got := log.get("R/a"); len(got) != 2 {
+		t.Fatalf("Inputs [0, 0] was accepted, and the body saw 2 events as %v", got)
 	}
 }
