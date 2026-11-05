@@ -62,6 +62,7 @@ type Config struct {
 type Stats struct {
 	ConstructLate uint64
 	Purged        uint64
+	Panics        uint64 // a body's panics, each of which reset its key (owner F10 of S3.2a-2)
 }
 
 // InstanceState is what Rule.Walk yields, as a value, for one instance (component "instance", key its Ordinal in
@@ -335,6 +336,10 @@ func cmpTimer(a, b clock.Timer) int {
 
 // Stats are the rule's counters.
 func (r *Rule) Stats() Stats { return r.stats }
+
+// Pending is the number of pending timers over every resident key, TTL timers excepted: what a drain leaves unfired
+// (drained_pending; design s3-2a-2 §1b). Cold path.
+func (r *Rule) Pending() int { panic("partition: Rule.Pending: not implemented (S3.2a-2 stub)") }
 
 // Holder is anything with durable state (ADR-0006 §2(b)).
 type Holder interface {

@@ -28,13 +28,34 @@
   - every message that can trigger a walk carries the router's snapshot, proven with 1 and with 4 shards;
   - a shard may walk per message or per chunk.
 
+- **The design (G1, 2026-11-05):** [s3-2a-2-design.md](s3-2a-2-design.md) v2.
+  - **v1's review** ([s3-2a-2-design-architecture.md](../reviews/s3-2a-2-design-architecture.md)) found 2 blockers, 15 should-fix and 5 later. The reviewer confirmed both blockers with scratch programs:
+    - F1: a recovered panic cut a rule's walk short;
+    - F2: stopping the ticker at drain raced.
+  - **The owner's answers,** all as recommended ([sprint-plan §5, "S3.2a-2's design"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-design-after-the-architecture-review)):
+    - F14: table writes join the intake;
+    - F5: a drain ends the app's input;
+    - F10: a body's panic resets its key.
+  - **Annotated:** ADR-0006 §5, ADR-0012 §3, §5 and §6, and SEMANTICS §4.
+  - **QA's first four tests** (exit 3, D5, the ingest step, live against replay) are red on the stub; its gaps Q1–Q9 are placed in v2 §10.
+
+## Scope changes
+
+- **2026-11-05 (owner, plan check):**
+  - the drain mechanism, from S3.3: +1;
+  - the shared ingest step: +0.5.
+- **2026-11-05 (owner, design):**
+  - table writes through the intake: +0.5;
+  - partition's panic reset: +0.5.
+- **Total:** 6 → about 8.5 points, under the cap. Nothing moved out; S3.3 13 → 12.
+
 ## Done-done
 
 ```
-Sprint S3.2a-2 — the runtime core · routine: S3.1's (QA first + architecture review + break-it) · SP ~7.5 · cap 2 weeks
+Sprint S3.2a-2 — the runtime core · routine: S3.1's (QA first + architecture review + break-it) · SP ~8.5 · cap 2 weeks
 Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merged, main green (S3.2a-1's merge, PR #10)
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (2026-11-05) ☑ test material: QA's tests, an item
-Design (G1)  ☐ architecture review resolved ☐ owner decisions recorded ☐ ADRs annotated
+Design (G1)  ☑ architecture review resolved (design v2 §10) ☑ owner decisions recorded (F5, F10, F14) ☑ ADRs and SEMANTICS annotated
 Build (G2)   ☐ T2 (make check exit 0) ☐ T3 ☐ tests on the real code (QA's, red first)
 Review (G3)  ☐ QA break-it ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check ☐ exit 3: the saturation run, 50/50 under -race and a CPU hog

@@ -6,6 +6,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/vorsar/cep/internal/clock"
@@ -42,7 +43,8 @@ type SinkBinding struct {
 // App is one deployed app.
 type App struct {
 	Streams []clock.StreamSpec // declaration order; their index is the stream id
-	Tables  *table.Set         // nil: no tables
+	Schemas []event.Schema     // aligned with Streams: Send and Start validate against them
+	Tables  *table.Set         // nil: no tables; the router is their only live writer (owner F14)
 	Rules   []Rule
 	Sinks   []SinkBinding
 }
@@ -57,9 +59,24 @@ type Config struct {
 	Now       func() int64  // wall ms; nil: time.Now
 }
 
+// The errors a caller sees.
+var (
+	ErrClosed  = errors.New("runtime: closed")
+	ErrDrained = errors.New("runtime: the app is drained: its input has ended (owner F5)")
+)
+
+// TableOp is a table write's operation.
+type TableOp uint8
+
+// The table operations.
+const (
+	TablePut TableOp = iota + 1
+	TableDelete
+)
+
 // DrainResult is what a drain barrier reports.
 type DrainResult struct {
-	Pending int64 // timers left unfired after the barrier (drained_pending)
+	Pending int64 // body timers left unfired after the barrier, TTL timers excepted (drained_pending)
 }
 
 // RuleStats are one rule's counters, summed over the shards.
@@ -69,11 +86,13 @@ type RuleStats struct {
 
 // Stats is a consistent cut of the runtime's counters at one intake position.
 type Stats struct {
-	StreamLate  [][]int64     // [app][stream]
-	Rules       [][]RuleStats // [app][rule]
-	SinkErrors  [][]int64     // [app][binding]
-	PendingHigh int           // the router's pending FIFO, its longest
-	MailboxHigh []int         // per shard, the longest mailbox seen
+	StreamLate     [][]int64     // [app][stream]
+	AfterDrain     [][]int64     // [app][stream]: refused after the app's drain, by intake order
+	Rules          [][]RuleStats // [app][rule]
+	SinkErrors     [][]int64     // [app][binding]; read atomically, outside the cut
+	PendingHigh    int           // the router's pending FIFO, its longest
+	MailboxHigh    []int         // per shard, the longest mailbox seen after a send
+	SaturatedParks []int64       // per shard: parks with a non-empty outbox while the mailbox was full
 }
 
 // Runtime is a running engine core.
@@ -90,7 +109,15 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 }
 
 // Tick hands a wall tick to the intake, behind every event already there.
-func (r *Runtime) Tick(now int64) error { panic("runtime: Tick: not implemented (S3.2a-2 stub)") }
+func (r *Runtime) Tick(ctx context.Context, now int64) error {
+	panic("runtime: Tick: not implemented (S3.2a-2 stub)")
+}
+
+// TableWrite applies rows to one of app's tables in intake order (owner F14) and returns once the router has applied
+// them: put rows are whole rows; delete rows are key values, in key order.
+func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op TableOp, rows [][]event.Value) error {
+	panic("runtime: TableWrite: not implemented (S3.2a-2 stub)")
+}
 
 // Drain runs the drain barrier for app (design §5).
 func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
