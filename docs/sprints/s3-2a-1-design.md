@@ -139,8 +139,7 @@ Its error begins `partition: instance <ordinal>: ` and names the difference (QA 
 **Within one instant the order is unchanged:**
 1. events, in `event.Compare` order across keys;
 2. then the inclusive kinds (Completion, CronClose, DelayDue, BatchClose), by (key birth, kind, ref, schedule order);
-3. then TTLPurge;
-4. then Discard (through `OnDiscard` only).
+3. then the strict kinds, by (key birth, kind, ref, schedule order): each key's TTLPurge before its Discard, keys in birth order (the executor's order; QA B2, G4). Discard goes through `OnDiscard` only.
 
 "Inclusive" and "strict" now name only this order within an instant, not when a kind fires. A timer scheduled by a callback joins the walk in order, as before.
 
@@ -442,6 +441,15 @@ D1–D7 are the owner's, as recorded in [sprint-plan §5](sprint-plan.md#owner-d
 | A7 | QA | `Apply` reports the rule clock moving. |
 | A8 | QA | TTL 0 is accepted; the validator guarantees keyed rules carry a TTL. |
 | A9 | QA | Stated: at +∞ every resident key purges. |
+| B1 | QA (v2) | Accepted: an Ordinal is a creation label. A key freed between two walks and seen again gets a new one, so `Walk`'s instance keys may differ with walk frequency while every callback is the same. A replay's walk schedule is fixed, so its output is deterministic. |
+| B2, G4 | QA | Fixed in §4.1's wording: the strict kinds go per key in birth order, a key's purge before its discard. |
+| B3 | QA | As tested: a refused key leaves no instance. |
+| B4 | QA | As tested: a fresh rule's first-born key has Birth 0. |
+| B5 | QA | `Drain` raises every stream, derived ones included, as `EndOfInput` does. Nothing arrives after it: a recording's stop is its last record, and a live `Stop` stops the sources first. |
+| B6 | QA | Confirmed: under D1 a key is unborn, and holds no TTL timer, until its first event is released. Exit 4's "one TTL timer per instance" holds for every born instance after every walk. |
+| G1 | QA (D1) | Forwarded to S9.1 and S9.2: the oracle's window functions (`cron`, `delay`) still finalize at `wm ≥ due`. Cron's close is unchanged if it schedules `e − 1`; whether delay re-times at `wm ≥ t + D` or `wm > t + D` is S9.2's design, oracle first. |
+| G2 | QA (D1) | As tested: a due of +∞ fires at +∞. |
+| G3, G5, G6 | QA (D1) | Noted: GranularityRandom's shared checks follow D1; `Empty()`'s doc is changed; SEMANTICS and ADR-0004 carry dated annotations, never rewrites (ground rule 4). |
 
 ## 10. Forwarded to S3.2a-2
 
