@@ -46,6 +46,20 @@
 
   From 5.5 to about 9 points, under the cap. Nothing moved out.
 
+## Measured results
+
+- **Tests first** (QA, four agents, apart from the build):
+  - **Wave A:** the oracle's D1 checks (3 changed, 1 added, red on the old drain), 22 clock tests revised or added for D1, 35 partition tests, the clock-view and `table.Set` tests.
+  - **Wave B:** the reader, driver and recordings (15 tests, 47 fault cases), exits 1 and 2, the encoder and trace (24), and D4 (2 new plus 4 existing decoder tests moved to the D4 oracle).
+  - **Red evidence:** every test was seen red on the stub or the old code before the implementation was committed.
+  - **One slip in a test:** exit 1's rule R3 read an attribute before checking the stream; it was fixed when the test first met the real code.
+- **Exit 1:** `TestTraceDeterministic` — two replays of a three-stream fixture give byte-identical traces, with stream-late events at lines 7 and 13 and the construct-late event R2/c at line 9. `TestTracePlantedMapOrderIsRed` — a body that writes over a 16-entry map gives differing traces within 20 replays.
+- **Exit 2:** `TestTableRecordFromNextEvent` (put and delete) — an event buffered before a table record reads the old membership after release; the next event reads the new one; a timer fired in a walk reads that step's snapshot, by pointer identity (D5).
+- **Exit 4:** `TestOneTTLTimerPerInstance` — exactly one TTL timer per born key after every walk (10,000 events on one key; 100 keys → 100 timers); a re-arm allocates 0. `TestScheduleReplacementAllocatesNothing`: 0 allocations (1 before the fix).
+- **D1:** the oracle passes 48 of 48; `TestRuleClock_D1_WalkTimingNeverChangesAResult` — walking after every step or once at the end gives identical callbacks.
+- **Coverage:** `internal/clock` 98.0%, `internal/partition` 94.9%, `internal/table` 98.1%, `internal/playback` 93.8%, `internal/event` 99.0%.
+- **The gate:** T2 `make check` exit 0.
+
 ## Done-done
 
 ```
@@ -53,7 +67,7 @@ Sprint S3.2a-1 — the replay format layer and partitions · routine: S3.1's (QA
 Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merged, main green (S3.1-2's merge, PR #9)
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (2026-11-05) ☑ test material: QA's tests, an item
 Design (G1)  ☑ architecture review resolved (design v2 §9) ☑ owner decisions recorded (D1–D7) ☑ ADRs and SEMANTICS annotated
-Build (G2)   ☐ T2 (make check exit 0) ☐ T3 ☐ tests on the real code (QA's, red first)
+Build (G2)   ☑ T2 (make check exit 0) ☐ T3 (in T4) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☐ QA break-it ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check
              ☐ every acceptance line met by its named proof
