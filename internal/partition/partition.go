@@ -46,6 +46,8 @@ type Instance struct {
 	Clock        *clock.Instance // the key's release buffer and timers
 	Op           OpState         // nil until birth, and from a purge until rebirth
 	LastActivity int64           // the event time of the key's last released event; math.MinInt64 before any
+	Anchor       int64           // the rate limit's last emission time (SEMANTICS §8); meaningful when Anchored
+	Anchored     bool            // cleared by every reset, a purge or a panic (design s3-2b-1 §3)
 
 	pending bool // listed for freeing after a purge (once: review F10)
 }
@@ -56,6 +58,9 @@ type Config struct {
 	KeyType event.Type // the keys' one type (E-PART-003); TString for a key-less rule's pseudo-key ""
 	TTL     int64      // ms, > 0; 0 only for a key-less rule, which is never purged
 	Body    Body
+	// OnArrival: the body sees each event at Offer, never buffered and never construct-late (owner Q1 of S3.2b;
+	// design s3-2b-1 §3). Stub: not honoured yet.
+	OnArrival bool
 }
 
 // Stats are a rule's plain counters on its shard; the runtime sums them on scrape.
