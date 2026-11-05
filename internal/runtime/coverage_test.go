@@ -296,3 +296,91 @@ func TestCvStartRefusesMore(t *testing.T) {
 		})
 	}
 }
+
+// TestCvCallerContextsAndClose (design v2 §3: a caller waits on the intake send, then on its reply, each under
+// select { …, stopped, ctx.Done }; §6: Close returns ctx's error while a Sink has not returned).
+//
+// App 0: "in" (Delay 0; [k string]), derived "out" ([n int]); rule R keyed by k emits 3 outputs per release. App 1:
+// "in1" ([k string]); rule R1 keyed by k. Config: Shards 2, Intake 2, SinkQueue 1. The sink is armed to hold.
+//  1. a@1 s, a@2 s: the second releases a@1 → 3 outputs; the flusher holds the first (state: entered), the second
+//     fills the queue, the third stays at the router's FIFO head. The router reads no intake from here on.
+//  2. Stats under a passed deadline → DeadlineExceeded (nothing queued).
+//  3. Stats under a 20 ms deadline → queued (intake slot 1), its reply never comes → DeadlineExceeded.
+//  4. Drain(app 1) under a 20 ms deadline → queued (slot 2), its reply never comes → DeadlineExceeded.
+//  5. Send(app 0) under a 20 ms deadline → the intake is full → DeadlineExceeded.
+//  6. A goroutine Sends to app 0 under the ceiling: it can only wait (full intake) or see Close → ErrClosed.
+//  7. Close under a passed deadline → DeadlineExceeded: the held flusher has not returned.
+//  8. The goroutine's Send returns ErrClosed. The test releases the sink; Close under the ceiling returns nil; Stats
+//     returns ErrClosed.
+//
+// The outcomes do not depend on timing: the router is provably stalled from step 1 until Close.
+func TestCvCallerContextsAndClose(t *testing.T) {
+	ceiling := rtCeiling(t)
+	hold := newRTHold()
+	t.Cleanup(hold.free)
+	app0 := runtime.App{
+		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
+		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("n", event.TInt))},
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+			NewBody: rtBodies(rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
+				for n := 0; n < 3; n++ {
+					b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{rtInt(int64(n))}})
+				}
+			}})}},
+		Sinks: []runtime.SinkBinding{{Stream: 1, Sink: func(event.Event) error { hold.at(); return nil }}},
+	}
+	app1 := runtime.App{
+		Streams: []clock.StreamSpec{rtSrc("in1", 0)},
+		Schemas: []event.Schema{rtSchema(t, "in1", rtA("k", event.TString))},
+		Rules:   []runtime.Rule{{Name: "R1", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R1"})}},
+	}
+	r, err := runtime.Start(runtime.Config{Shards: 2, Intake: 2, SinkQueue: 1, Now: rtNow}, []runtime.App{app0, app1})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	short := func() context.Context {
+		ctx, cancel := context.WithTimeout(ceiling, 20*time.Millisecond)
+		t.Cleanup(cancel)
+		return ctx
+	}
+	passed, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer cancel()
+
+	hold.arm()
+	rtSend(t, ceiling, r, 0, rtEv(0, rtAt(1), rtStr("a")))
+	rtSend(t, ceiling, r, 0, rtEv(0, rtAt(2), rtStr("a")))
+	rtWait(t, ceiling, hold.entered, "the sink's held call (a@1's outputs)")
+
+	if _, err := r.Stats(passed); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("2. Stats under a passed deadline: %v, want DeadlineExceeded", err)
+	}
+	if _, err := r.Stats(short()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("3. Stats awaiting its reply: %v, want DeadlineExceeded", err)
+	}
+	if _, err := r.Drain(short(), 1); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("4. Drain awaiting its reply: %v, want DeadlineExceeded", err)
+	}
+	if err := r.Send(short(), 0, rtEv(0, rtAt(3), rtStr("b"))); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("5. Send into a full intake: %v, want DeadlineExceeded", err)
+	}
+	waiting := make(chan error, 1)
+	go func() { waiting <- r.Send(ceiling, 0, rtEv(0, rtAt(4), rtStr("c"))) }()
+	if err := r.Close(passed); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("7. Close with the flusher held: %v, want DeadlineExceeded", err)
+	}
+	select {
+	case err := <-waiting:
+		if !errors.Is(err, runtime.ErrClosed) {
+			t.Errorf("8. the waiting Send: %v, want ErrClosed", err)
+		}
+	case <-ceiling.Done():
+		t.Fatalf("ceiling hit waiting for the waiting Send to see Close")
+	}
+	hold.free()
+	if err := r.Close(ceiling); err != nil {
+		t.Errorf("8. Close after the sink returned: %v, want nil", err)
+	}
+	if _, err := r.Stats(ceiling); !errors.Is(err, runtime.ErrClosed) {
+		t.Errorf("8. Stats after Close: %v, want ErrClosed", err)
+	}
+}
