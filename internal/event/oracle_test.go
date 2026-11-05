@@ -174,7 +174,9 @@ func oracleValue(t event.Type, raw json.RawMessage) (event.Value, bool) {
 			return event.Value{}, false
 		}
 		ms, ok := rfc3339Ms(s) // §4.2, owner D4: not time.Parse
-		if !ok {
+		// Owner, 2026-11-05 (S3.2a-1 break-it K2): the UTC instant must lie in RFC 3339's years, 0000-01-01T00:00:00.000Z
+		// (-62167219200000 ms) to 9999-12-31T23:59:59.999Z (253402300799999 ms).
+		if !ok || ms < -62167219200000 || ms > 253402300799999 {
 			return event.Value{}, false
 		}
 		return event.Value{Kind: t, T: ms}, true

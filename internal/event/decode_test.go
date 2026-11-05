@@ -76,7 +76,6 @@ const (
 	ms20261104T235959_999 = 1793836799999   // 2026-11-04T23:59:59.999Z
 	ms20000229            = 951782400000    // 2000-02-29T00:00:00Z
 	ms00000101            = -62167219200000 // 0000-01-01T00:00:00Z (year 0 is a leap year: 366 days before 0001)
-	ms99991231m2359       = 253402387139000 // 9999-12-31T23:59:59-23:59 = 10000-01-01T23:58:59Z
 )
 
 // hcase is one hand-written case. A nil want is a rejection with reason and attr. at fixes the error's Offset
@@ -260,7 +259,8 @@ var handCases = []hcase{
 		vTs(ms20261104T10+999)).withTs(ms20261104T10 + 999),
 	ok("timestamp/year 0, a leap year", "T", `{"ts":"0000-01-01T00:00:00Z"}`, vTs(ms00000101)).withTs(ms00000101),
 	ok("timestamp/Feb 29 of 2000", "T", `{"ts":"2000-02-29T00:00:00Z"}`, vTs(ms20000229)).withTs(ms20000229),
-	ok("timestamp/year 9999 west of UTC", "T", `{"ts":"9999-12-31T23:59:59-23:59"}`, vTs(ms99991231m2359)).withTs(ms99991231m2359),
+	// Owner, 2026-11-05 (S3.2a-1 break-it K2): read by its UTC instant, which lies past 9999 (10000-01-01T23:58:59Z).
+	bad("timestamp/year 9999 west of UTC is past RFC 3339's years in UTC", "T", `{"ts":"9999-12-31T23:59:59-23:59"}`, typ, "ts", `"9999`),
 	bad("timestamp/offset +24:00", "T", `{"ts":"2026-11-04T10:00:00+24:00"}`, typ, "ts", `"2026`),
 	bad("timestamp/offset minute 60", "T", `{"ts":"2026-11-04T10:00:00+00:60"}`, typ, "ts", `"2026`),
 	bad("timestamp/offset without a colon", "T", `{"ts":"2026-11-04T10:00:00+0200"}`, typ, "ts", `"2026`),
