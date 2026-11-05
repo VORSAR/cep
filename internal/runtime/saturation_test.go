@@ -45,9 +45,8 @@ import (
 // released.
 //
 // Expected, by hand:
-//   - every Send returns nil; Drain returns nil within the ceiling (Pending 0: the body schedules no timer, and
-//     the TTL timers are the partition's: see TestDrainBarrier's note on what Pending counts — this rule's purge
-//     timers are pending too, so Pending is not asserted here);
+//   - every Send returns nil; Drain returns nil within the ceiling (Pending is not asserted: the body schedules no
+//     timer, but each key's TTL purge timer is pending, and whether Pending counts those is gap Q3);
 //   - outputs: G × (2 + M) events × 8 = 4 × 202 × 8 = 6464, all at the sink when Drain returns (the barrier);
 //   - per key, in order: key w<g>: (s<g>#1 j0..j7), (s<g>#2 j0..j7); key s<g>-k<c>: for i = c, c+5, … < 200, in
 //     order, (s<g>#(3+i) j0..j7) — a key's events come from one stream in increasing ts, so the clock releases them
