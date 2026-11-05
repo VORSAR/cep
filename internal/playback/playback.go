@@ -39,6 +39,9 @@ const (
 	RecEvent RecordKind = iota + 1
 	RecTable
 	RecBatchEnd
+	RecHeader // a recording's first record: {"recording":{"start":…}}
+	RecTick   // a recording's idle tick
+	RecStop   // a recording's last record: the session ended by Stop
 )
 
 // TableOp is a table record's operation.
@@ -53,21 +56,24 @@ const (
 // Record is one log line, decoded. Every slice in it is fresh: the clock and later the operators keep events, so a
 // Values slice is never reused (ADR-0010 §4).
 type Record struct {
-	Line   int
-	Kind   RecordKind
-	Event  event.Event        // RecEvent: StreamID, Ts, Values, BatchID; Seq and Tables are the driver's
-	Err    *event.DecodeError // RecEvent whose payload failed its schema: an event error; Values nil
-	Table  int                // RecTable
-	Op     TableOp
-	Row    []event.Value // put: the row in attribute order; delete: the key in key order
-	Stream int           // RecBatchEnd
-	Batch  string
+	Line    int
+	Kind    RecordKind
+	Event   event.Event // RecEvent: StreamID, Ts, Values, BatchID; Seq and Tables are the driver's
+	Arrival int64       // RecEvent in a recording: the intake stamp (a `time arrival` stream: = Event.Ts)
+	Table   int         // RecTable
+	Op      TableOp
+	Row     []event.Value // put: the row in attribute order; delete: the key in key order
+	Stream  int           // RecBatchEnd
+	Batch   string
+	Time    int64 // RecHeader: the deployment's start; RecTick: the tick's wall time
 }
 
-// LoadError is a line the log format does not allow: the whole log is refused.
+// LoadError is the first fault in a log (owner D6 of S3.2a-1): the reader stops at its line; steps already delivered
+// stand. A payload that fails its stream's schema is a fault too, with its cause in Decode.
 type LoadError struct {
-	Line int
-	Msg  string
+	Line   int
+	Msg    string
+	Decode *event.DecodeError // a payload fault's cause; nil otherwise
 }
 
 func (e *LoadError) Error() string {
@@ -82,7 +88,7 @@ func NewReader(r io.Reader, app *App) (*Reader, error) {
 	panic("playback: NewReader: not implemented (S3.2a-1 stub)")
 }
 
-// Next is the next record; io.EOF after the last; a *LoadError on a line the format does not allow.
+// Next is the next record; io.EOF after the last; a *LoadError at the first fault, after which it returns the same.
 func (r *Reader) Next() (Record, error) {
 	panic("playback: Reader.Next: not implemented (S3.2a-1 stub)")
 }
@@ -93,22 +99,22 @@ type StepKind uint8
 // The step kinds (design note §5.3).
 const (
 	StepEvent      StepKind = iota + 1 // admitted: the step contract (design note §1) with Advances
-	StepStreamLate                     // behind its stream's admission watermark: dropped, counted; nothing moves
-	StepErrored                        // its payload failed its schema: dropped, counted
+	StepStreamLate                     // behind its stream's admission watermark: counted; nothing moves (not a fault)
 	StepTable                          // a table record, applied
 	StepBatchEnd                       // a batch-end record
-	StepEnd                            // the log's end: Advances raise every contribution to +∞
+	StepTick                           // a recording's tick: Advances from ObserveTick
+	StepStop                           // a recording's stop: Advances from Drain
+	StepEnd                            // a fixture: Advances raise every contribution to +∞; a recording: none
 )
 
 // Step is one replay step.
 type Step struct {
 	Kind     StepKind
-	Line     int                // the record's line; StepEnd: the last line + 1
-	Event    event.Event        // StepEvent, StepStreamLate: Seq and Tables set; StepErrored: StreamID only
-	Err      *event.DecodeError // StepErrored
-	Advances []clock.WMAdvance  // StepEvent, StepEnd; valid until the next call
-	Tables   *table.Snapshot    // the snapshot current after this step: what this step's timers read
-	Table    int                // StepTable
+	Line     int               // the record's line; StepEnd: the last line + 1
+	Event    event.Event       // StepEvent, StepStreamLate: Seq and Tables set
+	Advances []clock.WMAdvance // StepEvent, StepTick, StepStop, StepEnd; valid until the next call
+	Tables   *table.Snapshot   // the snapshot current after this step: what this step's timers read
+	Table    int               // StepTable
 	Op       TableOp
 	Stream   int // StepBatchEnd
 	Batch    string
@@ -122,12 +128,12 @@ func NewDriver(app *App) (*Driver, error) {
 	panic("playback: NewDriver: not implemented (S3.2a-1 stub)")
 }
 
-// Step processes one record; a *LoadError when a table refuses a write.
-func (d *Driver) Step(rec Record) (Step, error) {
+// Step processes one record the Reader produced; it cannot fail (the Reader checks everything first).
+func (d *Driver) Step(rec Record) Step {
 	panic("playback: Driver.Step: not implemented (S3.2a-1 stub)")
 }
 
-// End is the log's end: every contribution to +∞.
+// End is the log's end: in a fixture every contribution to +∞; in a recording nothing.
 func (d *Driver) End() Step { panic("playback: Driver.End: not implemented (S3.2a-1 stub)") }
 
 // Tables is the replay's own tables.
@@ -140,7 +146,13 @@ func (d *Driver) Registry() *clock.StreamRegistry {
 	panic("playback: Driver.Registry: not implemented (S3.2a-1 stub)")
 }
 
-// Replay runs every record of r through d, then End, calling fn on each step; it stops at the first error.
+// Walk yields the driver's Seq counters (component "seq", key the stream name): a state holder (ADR-0006 §2(b)).
+func (d *Driver) Walk(fn func(component, key string, state any)) {
+	panic("playback: Driver.Walk: not implemented (S3.2a-1 stub)")
+}
+
+// Replay streams r through d line by line, calling fn on each step, then End; it stops at the first error (a fault or
+// fn's), and the steps already delivered stand (owner D6 of S3.2a-1).
 func Replay(r *Reader, d *Driver, fn func(*Step) error) error {
 	panic("playback: Replay: not implemented (S3.2a-1 stub)")
 }
@@ -164,7 +176,7 @@ type Trace struct{}
 // NewTrace makes an empty trace for app.
 func NewTrace(app *App) *Trace { panic("playback: NewTrace: not implemented (S3.2a-1 stub)") }
 
-// Step records the driver's own entries: stream_late, errored, table, batch_end, end.
+// Step records the driver's own entries: stream_late, table, batch_end, tick, stop, end.
 func (t *Trace) Step(s *Step) { panic("playback: Trace.Step: not implemented (S3.2a-1 stub)") }
 
 // Released records a released event.

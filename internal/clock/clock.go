@@ -163,6 +163,13 @@ func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance {
 // Contribution is a stream's current contribution.
 func (r *StreamRegistry) Contribution(sid int) int64 { return r.streams[sid].contrib }
 
+// Drain raises every stream's contribution to one past the largest event time admitted on any of the app's streams
+// (ADR-0012 §3's Stop under owner D1 of S3.2a-1: that instant is complete once the sources are stopped, so it
+// finalizes; any deadline after it stays unfired). Nothing admitted: no advance.
+func (r *StreamRegistry) Drain(buf []WMAdvance) []WMAdvance {
+	panic("clock: StreamRegistry.Drain: not implemented (S3.2a-1 stub)")
+}
+
 // Walk yields each stream's state, component "stream" and key its name: the registry is a state holder
 // (ADR-0006 §2(b); design note s3-2a-1 §4).
 func (r *StreamRegistry) Walk(fn func(component, key string, state any)) {
