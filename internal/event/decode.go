@@ -810,8 +810,20 @@ func parseRFC3339(t []byte) (int64, bool) {
 		sec, ms = 59, 999
 	}
 	secs := ((daysFromCivil(year, month, day)*24+hour)*60+minute-offset)*60 + sec
-	return secs*1000 + ms, true
+	v := secs*1000 + ms
+	if v < minRFC3339 || v > maxRFC3339 { // an offset carried the instant out of RFC 3339's years (break-it K2, owner)
+		return 0, false
+	}
+	return v, true
 }
+
+// The UTC instants RFC 3339 can write, in Unix milliseconds: 0000-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z.
+// A timestamp is read by its UTC instant (owner, 2026-11-05, S3.2a-1 break-it K2), so every accepted one can be
+// written back.
+const (
+	minRFC3339 int64 = -62167219200000
+	maxRFC3339 int64 = 253402300799999
+)
 
 func digitsAt(t []byte, at, n int) (int64, bool) {
 	var v int64
