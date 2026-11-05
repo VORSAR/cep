@@ -93,7 +93,7 @@ rule Name
 
 ## 5. Rule bodies and static rules
 
-**5.1 Plain body** — `from Stream[filter]`: stateless filter/projection. No partition is required; unpartitioned, `output first every D` keeps one global anchor per rule. A plain body **may** carry a partition clause solely to scope rate limiting — suppression then runs per key (§6.7). *(Pinned 2026-10-31 after both L5 generators read §5.1/§6.7 in tension.)*
+**5.1 Plain body** — `from Stream[filter]`: stateless filter/projection. No partition is required; unpartitioned, `output first every D` keeps one global anchor per rule. A plain body **may** carry a partition clause solely to scope rate limiting — suppression then runs per key (§6.7). *(Pinned 2026-10-31 after both L5 generators read §5.1/§6.7 in tension.)* *(Annotated owner, 2026-11-06 (S3.2b's plan check Q1, S3.2b-1 D1; [sprint-plan §5](../sprints/sprint-plan.md)): a plain body emits as soon as its stream accepts an event, never waiting for the watermark; its rate limit compares event times in arrival order, and its keys expire on the stream's own admission watermark (SEMANTICS §8, §9 as annotated).)*
 
 ```
 rule UnknownAppConsent
