@@ -123,6 +123,8 @@ type appState struct {
 	all      []*sinkQ    // every binding, in order
 	draining atomic.Bool // a caller's fast path (owner F5)
 	drained  bool        // the router's, by intake order
+	drainTok uint64      // the router's: the drain's token while its acks are due
+	drainRes *reply      // the router's: the drain's result, once known; a retried Drain waits on it (owner)
 	late     []int64     // per stream: stream_late (the router's)
 	after    []int64     // per stream: refused after the drain (the router's)
 	keyErr   []int64     // per rule: key_errors (the router's)
@@ -305,6 +307,11 @@ func validateApp(i int, a *App) error {
 	if len(a.Schemas) != len(a.Streams) {
 		return fmt.Errorf("runtime: app %d: %d schemas for %d streams", i, len(a.Schemas), len(a.Streams))
 	}
+	for sid, sch := range a.Schemas {
+		if sch.Stream() != a.Streams[sid].Name {
+			return fmt.Errorf("runtime: app %d: schema %d describes stream %q, not %q", i, sid, sch.Stream(), a.Streams[sid].Name)
+		}
+	}
 	for ri, rule := range a.Rules {
 		bad := func(format string, args ...any) error {
 			return fmt.Errorf("runtime: app %d rule %d (%q): %s", i, ri, rule.Name, fmt.Sprintf(format, args...))
@@ -323,10 +330,15 @@ func validateApp(i int, a *App) error {
 		case rule.KeyType < event.TString || rule.KeyType >= event.TObject:
 			return bad("key type %v cannot key a partition", rule.KeyType)
 		}
+		seen := map[int]bool{}
 		for k, sid := range rule.Inputs {
 			if sid < 0 || sid >= len(a.Streams) || a.Streams[sid].Derived {
 				return bad("input %d is not a source stream", sid)
 			}
+			if seen[sid] {
+				return bad("input %d is listed twice (break-it V2)", sid)
+			}
+			seen[sid] = true
 			if rule.KeyAttr == nil {
 				continue
 			}
@@ -416,8 +428,14 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 		return fmt.Errorf("runtime: app %d stream %q: %d values for %d attributes", app, sch.Stream(), len(e.Values), sch.NumAttrs())
 	}
 	for i, v := range e.Values {
-		if v.Kind != sch.Attr(i).Type {
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(), sch.Attr(i).Name, v.Kind, sch.Attr(i).Type)
+		at := sch.Attr(i)
+		switch {
+		case v.Kind != at.Type:
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(), at.Name, v.Kind, at.Type)
+		case v.Null && !at.Optional:
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app, sch.Stream(), at.Name)
+		case v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)", app, sch.Stream(), at.Name, v.F)
 		}
 	}
 	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
@@ -449,16 +467,19 @@ func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op Tab
 }
 
 // Drain runs the drain barrier for app (design §5): the app's input ends (owner F5); every output produced before the
-// barrier has been through its sink when it returns.
+// barrier has been through its sink when it returns. A second Drain of the app waits for the same flush and returns
+// the same result (owner, 2026-11-05).
 func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	a, err := r.appOf(app)
 	if err != nil {
 		return DrainResult{}, err
 	}
-	a.draining.Store(true)
+	set := !a.draining.Swap(true)
 	it := item{kind: iDrain, app: app, reply: make(chan reply, 1)}
 	if err := r.enqueue(ctx, it); err != nil {
-		a.draining.Store(false) // nothing was queued: the app is not drained (QA Q15)
+		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
+			a.draining.Store(false)
+		}
 		return DrainResult{}, err
 	}
 	rep, err := r.await(ctx, it.reply)
@@ -532,7 +553,7 @@ type drainWait struct {
 	app     *appState
 	acks    int
 	pending int64
-	reply   chan reply
+	replies []chan reply // the Drain calls waiting for this drain's result
 }
 
 type statsWait struct {
@@ -560,6 +581,9 @@ func (r *Runtime) route() {
 		stats: map[uint64]*statsWait{}, offers: make([][]offer, len(r.shards)),
 	}
 	for {
+		if r.stopping() {
+			return
+		}
 		if len(rt.pending) > 0 {
 			head := &rt.pending[0]
 			if head.shard >= 0 {
@@ -646,13 +670,19 @@ func (rt *router) ingest(it item) {
 		it.reply <- reply{err: err}
 	case iDrain:
 		a := r.apps[it.app]
-		if a.drained {
-			it.reply <- reply{err: ErrDrained}
+		if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
+			if a.drainRes != nil {
+				it.reply <- *a.drainRes
+			} else {
+				d := rt.drains[a.drainTok]
+				d.replies = append(d.replies, it.reply)
+			}
 			return
 		}
 		a.drained = true
 		rt.token++
-		rt.drains[rt.token] = &drainWait{app: a, reply: it.reply}
+		a.drainTok = rt.token
+		rt.drains[rt.token] = &drainWait{app: a, replies: []chan reply{it.reply}}
 		rt.broadcast(a, mDrain, a.ing.Drain(), a.ing.Snapshot(), rt.token)
 	case iStats:
 		rt.token++
@@ -782,7 +812,11 @@ func (rt *router) take(h handoff) {
 				markers = append(markers, m)
 				rt.push(send{shard: -1, sink: q, si: sinkItem{marker: m}})
 			}
-			d.reply <- reply{pending: d.pending, markers: markers}
+			res := reply{pending: d.pending, markers: markers}
+			d.app.drainRes = &res
+			for _, ch := range d.replies {
+				ch <- res
+			}
 		case oStats:
 			w := rt.stats[it.token]
 			w.acks++
@@ -829,9 +863,20 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 		rules := make([]*partition.Rule, len(a.app.Rules))
 		reads := make([][]int, len(a.app.Streams))
 		for ri, rule := range a.app.Rules {
-			app := a.id
-			emit := func(e event.Event) { sh.outbox = append(sh.outbox, outItem{kind: oEvent, app: app, ev: e}) }
-			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: rule.NewBody(emit)})
+			app, streams, name := a.id, a.app.Streams, rule.Name
+			emit := func(e event.Event) {
+				if e.StreamID < 0 || e.StreamID >= len(streams) || !streams[e.StreamID].Derived {
+					// a body's fault: partition recovers it and resets the key (owner F10); the router never sees it
+					// (break-it B1)
+					panic(fmt.Sprintf("runtime: rule %q emitted on stream %d, which is not a derived stream of app %d", name, e.StreamID, app))
+				}
+				sh.outbox = append(sh.outbox, outItem{kind: oEvent, app: app, ev: e})
+			}
+			body, err := newBody(rule, emit)
+			if err != nil {
+				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
+			}
+			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body})
 			if err != nil {
 				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
 			}
@@ -847,10 +892,26 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 	return sh, nil
 }
 
+// newBody calls a rule's NewBody; its panic is Start's error, never its caller's panic.
+func newBody(rule Rule, emit Emit) (b partition.Body, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("NewBody panicked: %v", p)
+		}
+	}()
+	return rule.NewBody(emit), nil
+}
+
+// stopping says Close has begun: a loop checks it first, so nothing starts after stop (break-it C1).
+func (r *Runtime) stopping() bool { return r.isClosed() }
+
 // run is a shard's loop: it waits only on its mailbox and, with a non-empty outbox, the handoff (design §3).
 func (sh *shard) run(r *Runtime) {
 	defer r.wg.Done()
 	for {
+		if r.stopping() {
+			return
+		}
 		var ho chan handoff
 		if len(sh.outbox) > 0 {
 			ho = r.handoff
@@ -940,8 +1001,14 @@ func (sh *shard) tryAdvance(app AppID, ri int, tables *table.Snapshot) (done boo
 func (q *sinkQ) run(r *Runtime) {
 	defer r.wg.Done()
 	for {
+		if r.stopping() {
+			return
+		}
 		select {
 		case it := <-q.q:
+			if r.stopping() { // stop won the race: drop the rest (design §6)
+				return
+			}
 			if it.marker != nil {
 				close(it.marker)
 				continue
