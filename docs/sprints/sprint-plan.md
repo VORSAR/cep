@@ -303,6 +303,8 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 4. **The log format's open points** — whether an event line's `ts` repeats the time attribute in `attrs`, what a punctuation record is in v0.1, what the encoder writes for malformed UTF-8 in an object value — come to the owner as one list after S3.2a-1's design review.
 5. **The snapshot carrier on `event.Event` must be a type `event` can hold without importing `table`;** S3.2a-1's design note chooses it.
 
+*Forwarded to S3.2a-2 (2026-11-05, from S3.2a-1's design v2 §10 and owner D1, D5):* the router reads the key attribute and makes a null, wrong-type or NaN key a per-rule event error; it sets `Tables` from `table.Set.Snapshot`; an event and its own advances travel in one message; **every message that can trigger a walk carries the router's snapshot**, proven by a table-reading timer giving one result with 1 and with 4 shards; one single-threaded ingest step (Seq, snapshot, `ObserveEvent`, the virtual floor or ticks) serves the router and the playback driver; a shard may walk per message or per chunk (D1 makes them equal).
+
 #### S3.2b — One runtime, live and replay: rate limits, errors, arrival time
 
 | | |
@@ -335,7 +337,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | **Depends on** | S3.2b |
 | **In scope** | 1. The public facade `cep` (minimal): `Runtime`, `Config`, `Deploy` (parse → validate → plan → expect sandbox → register), `AppHandle` `Start` / `Stop` (drain barrier to a fixpoint, `drained_pending`) / `Undeploy`, `Runtime.Close` (reverse deploy order), multiple apps per runtime, `Input` with **`SendRow` only**, the `Table` API, `BuildInfo` [4]. · 2. **The connector contracts as the leaf package `io` (package `cepio`)** — `Source`, `Sink`, `Mapper`, `RowWriter`, `EmitFunc`, `OutEvent`, `Mode`, and **the batch-close signal** (designed here; an API Δ) — plus `io/inmemory` [1.5]. · 3. **The expect sandbox in `internal/playback`**, called by `cep.Deploy` and `conformance/`: a fresh sandbox per block, `given table` seeding through table records [2]. · 4. The conformance runner `conformance/` (public API only); E-EXP-001 lifted from S2.2b's skip; the six planted wrong-expect proofs [2]. · 5. `apipartition` (`api/exports.golden`: `cep` + `io`) + `apidiff` against the merge base [1.5]. · 6. `gate/regen-baseline` + Tier-2 baselines [1.5]. · 7. `api/clock.golden` added to `gate/law.json`; **the clock contract freezes at this sprint's G5** [0.5]. |
 | **Not in scope** | Patterns → S4.1. HTTP and the other connectors → S5.1, S5.2. |
-| *Forwarded* | *(Annotated 2026-11-04, from S3.1-2, owner D3: an `optional` or `object` primary-key column is a deploy error with a new code, with its SPEC v0.1 change-log entry and an invalid example; owner D2: the Go API's row boundary refuses a non-finite float; break-it B5: an object value enters as its JSON text.)* |
+| *Forwarded* | *(Annotated 2026-11-04, from S3.1-2, owner D3: an `optional` or `object` primary-key column is a deploy error with a new code, with its SPEC v0.1 change-log entry and an invalid example; owner D2: the Go API's row boundary refuses a non-finite float; break-it B5: an object value enters as its JSON text.)* *(Annotated 2026-11-05, from S3.2a-1, owner D7: an `object` partition key is a deploy error with a new code beside D3's, with its SPEC v0.1 change-log entry and an invalid example; until then `partition.NewRule` refuses it. And under D1, `Stop`'s drain uses `clock.StreamRegistry.Drain`: one past the max observed event time.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 07 and 09 pass their fire-path and near-miss expects through `Deploy` — **proof:** the conformance runner. |
@@ -357,6 +359,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | **Depends on** | S3.3 |
 | **In scope** | 1. `internal/pattern` (ADR-0013): partials, continuous absence watchers, completion timers, skip-till-next, skip-past-last earliest-wins, `every` / `once`, the per-instance freelist, `Walk` [5]. · 2. The `chain` factory [1]. · 3. Plan wiring for pattern rules [1]. · 4. The 18 harness ports (see the mapping) [2]. · 5. **Test material (QA, before the engine runs):** 01 gains an expect with two sessions in one agent, and its fire-path expect asserts the full `evidence` value (in the expect if SPEC §6.8 can express it, otherwise a conformance case); 08 gains fire-path and near-miss expects where `sessionId == a.sessionId` can be false [1]. · 6. The walked-state invariant extended to partials; `allocgate` spawn; partial-count ceilings for 01 and 08 [1]. |
 | **Not in scope** | `and` groups, the live quiet-key case, the drain case, the oracle and the metamorphic suite → S4.2. Live connectors → S5.1. |
+| *Forwarded* | *(Annotated 2026-11-05, from S3.2a-1: an operator that keeps an event after its release (a capture) sets its `Tables` to nil, so kept events do not pin table copies (review F3). Under owner D1 a timer due at `t` fires once the clock is past `t`: a deadline is scheduled at exactly `t_first + D`, and an event at the deadline is processed first (SPEC §6.4). Per-key marks (`once`) live in the body's `OpState`; `partition.Rule.CheckTimers` runs after every step of the operator's tests.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 01's expects pass: fire at 10:05 with the asserted evidence chain (both captures, in order, original values); defeat → nothing; the second session neither fires nor defeats the first — **proof:** the conformance runner. |
@@ -489,6 +492,7 @@ No code yet. The product documents are written: the [brainstorm](../product/00-p
 | **Depends on** | S7 |
 | **In scope** | 1. `internal/window`'s `Kind` interface and `Out` (ADR-0014 §1) [1]. · 2. Sort: the tie rule, changelog output, `OnPurge` retractions in total order [2.5]. · 3. Batch: grouping by `BatchID` within the key; firing on the batch-close signal delivered by the router as a control timer; one group event at the group's max event time; the fired-id dedup set per instance, TTL-purged with it [2.5]. · 4. **`count`** (registry `Aggregate` kind) over a closed group, respecting E-SEL-002 [1]. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss cases for 03 (its `+`/`−` rows in a conformance log if an expect cannot express them) and for 04's batch rule [1]. · 6. Builder sort and batch surface + the twin of 03 [1.5]. · 7. The five harness ports [1]. · 8. The live batch test (NDJSON over HTTP and the same records over stdin) [1]. · 9. The walked-state invariant for window state; `allocgate` [0.5]. |
 | **Not in scope** | Cron → S9.1; delay → S9.2. The time-based window catalog → Phase 2. |
+| *Forwarded* | *(Annotated 2026-11-05, from S3.2a-1: windows keep events past release, so they clear `Tables` on capture (review F3). Under owner D1 a timer fires once the clock is past its due: a close that must run once the clock reaches `e` is scheduled at `e − 1`. The batch-id dedup set lives in the body's `OpState`, so a purge clears it. Batch ends arrive as `StepBatchEnd` in replay.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 03 and 04's batch rule pass their cases — **proof:** the conformance runner (+ 03's log). |
@@ -851,5 +855,27 @@ All four as recommended; the plan check's readings are under the S3.2a card:
 2. **S3.2a is split along its card's line:** S3.2a-1 = items 1, 2 (the replay format layer and partitions; exits 1, 2, 4); S3.2a-2 = item 3 (the runtime core; exit 3). Two sprints, two PRs, one at a time. Why: the concurrent runtime gets its own design review and break-it, and one PR of 11.5 points would likely pass the 100-commit limit (S3.1-2: 73 commits for 8 points).
 3. **S1.1c runs right after S3.3:** after the clock freeze, before the pattern engine. §3's table gains its row; it is sized at its own G0.
 4. **A re-forecast now:** §3's forecast paragraph is annotated; the next stays at S3.3's G5.
+
+### Owner decisions, 2026-11-05 — S3.2a-1's design (after the architecture review)
+
+The review ([s3-2a-1-design-architecture.md](../reviews/s3-2a-1-design-architecture.md): 1 blocker, 8 should-fix, 4 later) and the design's own questions (O1–O6) gave seven decisions. On D1 and D3 the owner asked first which option is algorithmically correct, then chose it. [s3-2a-1-design.md](s3-2a-1-design.md) v2 places every finding.
+
+1. **D1 — an instant is finalized only once the construct clock is past it** (review F1; as recommended after the re-ask). Its events are released, and its timers of every kind fire, only when `clock > t`. Why: a watermark W promises only that nothing before W will still arrive, so an event exactly at W can still come.
+   - **Results:** an event exactly at a deadline always defeats it (SPEC §6.4); same-millisecond events from different streams always go in declared order (SEMANTICS §2.2); when a walk runs, how messages are batched and how many shards there are never change a result (ADR-0010 §2 holds by construction).
+   - **The seal goes:** S3.1-1's D7 seal is no longer needed and is retired.
+   - **Cost, accepted:** the newest instant waits for the next event on every input, or a quiet stream's idle tick, so a match that completes on an event on a quiet stream waits up to `idle after`. Timer-driven alerts are unaffected.
+   - **Scope:** this is an older defect in S3.1-1's merged clock and the reference executor, fixed in this sprint, oracle and tests first (about +2 points).
+2. **D2 — an event line carries `ts` only when its stream has no time attribute** (O1, as recommended): a `time arrival` source, or a derived output. An event-time stream's time is its attribute alone.
+3. **D3 — the format defines recording records now** (O2, as recommended after the re-ask): a recording carries the deployment's start, each event's arrival time, every idle tick, and a final stop record.
+   - The driver applies them as live ingest does, in place of the virtual clock and +∞.
+   - A log without them is a fixture, with the virtual clock and +∞ at the end.
+   - S3.2b's recorder writes them. About +1 point.
+4. **D4 — an `object` value is cleaned when decoded** (O3 + review F6, as recommended): whitespace between tokens is removed, member order kept, and malformed UTF-8 is replaced with U+FFFD, as P8 does for strings. Every reader then sees one form, and a log line never breaks. A change to S3.1-2's decoder, about +0.5 point.
+5. **D5 — a timer sees the tables as at the arrival whose processing fired it** (O4 + review F2, as recommended). Every message that can trigger a walk (an event, another shard's advance, a tick) carries the router's snapshot, so the shard count never changes what a timer reads.
+6. **D6 — replay streams and stops at the first fault** (O6; ≠ R twice: the recommendation was to check the whole log first, with a payload fault as an event error).
+   - Steps run as lines are read; the first fault stops the replay at its line, and steps already delivered stand.
+   - A fault is any of: an envelope fault, a wrong-typed field, a bad table record, or a payload that fails its stream's schema.
+   - Live ingest still treats a payload fault as an event error.
+7. **D7 — an `object` partition key becomes a deploy error with a new code in S3.3** (O5, as recommended), beside S3.1-2's D3 table-key error. Until then `partition` refuses it when a rule is created.
 
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
