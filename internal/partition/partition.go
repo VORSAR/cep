@@ -204,6 +204,7 @@ func (r *Rule) Advance(tables any) {
 
 func (r *Rule) onEvent(ci *clock.Instance, e event.Event) {
 	in := r.byClock[ci]
+	defer r.recoverBody(in)
 	if in.Op == nil {
 		in.Op = r.body.NewState(in)
 	}
@@ -221,22 +222,47 @@ func (r *Rule) onTimers(ci *clock.Instance, fires []clock.Timer) {
 		if len(fires) != 1 {
 			panic("partition: a TTLPurge grouped with other timers")
 		}
-		r.purge(in)
+		r.stats.Purged++
+		r.onPurge(in)
+		r.reset(in)
 		return
 	}
+	defer r.recoverBody(in)
 	r.body.OnTimers(in, fires, r.tables)
 }
 
-func (r *Rule) onDiscard(ci *clock.Instance, refs []uint64) { r.body.OnDiscard(r.byClock[ci], refs) }
+func (r *Rule) onDiscard(ci *clock.Instance, refs []uint64) {
+	in := r.byClock[ci]
+	defer r.recoverBody(in)
+	r.body.OnDiscard(in, refs)
+}
 
-// purge resets a key (SEMANTICS §9): the body sees it first, with its state and its other timers; its buffered events
-// stay and start it fresh.
-func (r *Rule) purge(in *Instance) {
+// onPurge lets the body see a purged key first, with its state and its other timers (S8's retractions). A panic there
+// is counted, and the purge still completes (owner F10 of S3.2a-2).
+func (r *Rule) onPurge(in *Instance) {
+	defer func() {
+		if recover() != nil {
+			r.stats.Panics++
+		}
+	}()
 	r.body.OnPurge(in)
+}
+
+// recoverBody, deferred around a body call, turns the body's panic into a reset of its key (owner F10 of S3.2a-2):
+// counted, and the walk goes on for every other key (review F1). The key's buffered events stay and start it fresh.
+func (r *Rule) recoverBody(in *Instance) {
+	if recover() != nil {
+		r.stats.Panics++
+		r.reset(in)
+	}
+}
+
+// reset drops a key's state and timers, as a purge does (SEMANTICS §9); its buffered events stay and start it fresh,
+// and it is freed after the walk if it holds nothing.
+func (r *Rule) reset(in *Instance) {
 	in.Clock.CancelAll()
 	in.Op = nil
 	in.LastActivity = math.MinInt64
-	r.stats.Purged++
 	if !in.pending {
 		in.pending = true
 		r.pending = append(r.pending, in)
@@ -339,7 +365,17 @@ func (r *Rule) Stats() Stats { return r.stats }
 
 // Pending is the number of pending timers over every resident key, TTL timers excepted: what a drain leaves unfired
 // (drained_pending; design s3-2a-2 §1b). Cold path.
-func (r *Rule) Pending() int { panic("partition: Rule.Pending: not implemented (S3.2a-2 stub)") }
+func (r *Rule) Pending() int {
+	n := 0
+	for _, in := range r.byKey { // a count: the map's order cannot show
+		for _, t := range in.Clock.Timers(nil) {
+			if t.Kind != clock.TTLPurge {
+				n++
+			}
+		}
+	}
+	return n
+}
 
 // Holder is anything with durable state (ADR-0006 §2(b)).
 type Holder interface {
