@@ -89,6 +89,20 @@ func TestImports(t *testing.T) {
 		runtime := "import _ \"" + mod + "internal/runtime\"\n"
 		wantOne(t, check(t, "internal/validate/x_test.go", "package validate_test\n"+runtime), "may not import internal/runtime")
 	})
+	t.Run("plan's and playback's tests may read .cep programs, their production code may not", func(t *testing.T) {
+		// Owner, 2026-11-06 (S3.2b-1): test_imports, test files only — plan's tests through the parser and the
+		// validator, playback's through the parser (it may import the validator already).
+		parser := "import _ \"" + mod + "internal/parser\"\n"
+		validate := "import _ \"" + mod + "internal/validate\"\n"
+		wantNone(t, check(t, "internal/plan/x_test.go", "package plan_test\n"+parser))
+		wantNone(t, check(t, "internal/plan/x_test.go", "package plan_test\n"+validate))
+		wantNone(t, check(t, "internal/playback/x_test.go", "package playback_test\n"+parser))
+		wantOne(t, check(t, "internal/plan/x.go", "package plan\n"+parser), "internal/plan may not import internal/parser")
+		wantOne(t, check(t, "internal/plan/x.go", "package plan\n"+validate), "internal/plan may not import internal/validate")
+		wantOne(t, check(t, "internal/playback/x.go", "package playback\n"+parser), "internal/playback may not import internal/parser")
+		runtime := "import _ \"" + mod + "internal/runtime\"\n"
+		wantOne(t, check(t, "internal/plan/x_test.go", "package plan_test\n"+runtime), "may not import internal/runtime")
+	})
 	t.Run("expr's tests may also build tables, its production code may not", func(t *testing.T) {
 		// Owner, 2026-11-04 (S3.1-2, ≠ R): test_fences, test files only, these identifiers only.
 		imp := "import \"" + mod + "internal/table\"\n"
