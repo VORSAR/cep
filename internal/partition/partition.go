@@ -55,11 +55,14 @@ type Stats struct {
 	Purged        uint64
 }
 
-// InstanceState is what Rule.Walk yields for one instance (component "instance", key its Ordinal in decimal),
-// before the instance's OpState parts.
+// InstanceState is what Rule.Walk yields, as a value, for one instance (component "instance", key its Ordinal in
+// decimal), before the instance's OpState parts. Rule.Walk yields the rule clock first (component "clock", key "",
+// a clock.RuleState).
 type InstanceState struct {
 	Key          event.Value
 	LastActivity int64
+	Birth        uint64        // the key's place in the walk's order across keys at one instant (clock.Instance.Birth)
+	Born         bool          // false before its first released event or timer, and again after a purge
 	Events       []event.Event // buffered, in event.Compare order
 	Timers       []clock.Timer // pending, in walk order
 }

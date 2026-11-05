@@ -382,6 +382,24 @@ func (in *Instance) Events(dst []event.Event) []event.Event {
 	panic("clock: Instance.Events: not implemented (S3.2a-1 stub)")
 }
 
+// Birth is the key's place in the walk's order across keys at one instant; born is false before its first released
+// event or timer, and again after CancelAll (design note s3-2a-1 §4.2).
+func (in *Instance) Birth() (birth uint64, born bool) {
+	panic("clock: Instance.Birth: not implemented (S3.2a-1 stub)")
+}
+
+// RuleState is a rule clock's own state (design note s3-2a-1 §4.2).
+type RuleState struct {
+	Inputs        []int
+	Contributions []int64
+	Clock         int64
+}
+
+// State is the rule clock's own state, copied.
+func (rc *RuleClock) State() RuleState {
+	panic("clock: RuleClock.State: not implemented (S3.2a-1 stub)")
+}
+
 // Empty says the key holds nothing the shard would lose by freeing it: no buffered event, no timer, and no seal
 // the clock has not yet passed (a sealed instant still drops a late event of the key, owner D7).
 func (in *Instance) Empty() bool {
