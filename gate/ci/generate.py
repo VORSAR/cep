@@ -80,6 +80,23 @@ def _job(job: str, timeout_min: int, tier: str) -> list[str]:
     ]
 
 
+def _downloads(jobs: Sequence[str]) -> list[str]:
+    """One download per job, by name, into its own records-<job>-<attempt>/ directory: summarize's layout whatever the
+    job count. A pattern download extracts a single match straight into its path (the nightly's first run, 2026-11-05).
+    A job that uploaded nothing leaves no directory, and its rows read missing."""
+    steps = []
+    for job in jobs:
+        name = f"records-{job}-${{{{ github.run_attempt }}}}"
+        steps += [
+            f"      - {_uses('download')}",
+            "        continue-on-error: true",
+            "        with:",
+            f"          name: {name}",
+            f"          path: .gate/artifacts/{name}",
+        ]
+    return steps
+
+
 def _strict_gate(jobs: Sequence[str], tier: str) -> list[str]:
     return [
         "  strict-gate:",
@@ -89,11 +106,7 @@ def _strict_gate(jobs: Sequence[str], tier: str) -> list[str]:
         "    if: always()",
         "    steps:",
         *_setup_steps(),
-        f"      - {_uses('download')}",
-        "        continue-on-error: true",
-        "        with:",
-        "          pattern: records-*",
-        "          path: .gate/artifacts",
+        *_downloads(jobs),
         "      - if: always()",
         f"        run: python3 -I -B gate/bootstrap.py exec -- summarize --registry {REGISTRY} --tier {tier} "
         f"--artifacts .gate/artifacts --run-id {RUN_ID} --commit ${{{{ github.sha }}}} "

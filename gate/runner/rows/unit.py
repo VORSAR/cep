@@ -22,6 +22,13 @@ def main(argv: list[str]) -> int:
     profile = os.path.join(row_dir, "cover.prof")
     argv_go = ["go", "test", "-json", "-count=1", f"-coverprofile={profile}", *(argv[1:] or ["./..."])]
     code = rows.run_tool(argv_go, out, err)
+    failures, packages = judge(out, code)
+    rows.covered(len(packages))
+    return rows.finish(sorted(failures))
+
+
+def judge(out: str, code: int) -> tuple[list[str], set[str]]:
+    """The failures and the packages of one `go test -json` run (the unit row's, and the race row's)."""
     failures: list[str] = []
     with open(out, "rb") as f:
         data = f.read()
@@ -40,8 +47,7 @@ def main(argv: list[str]) -> int:
         failures.append("no test ran")
     if code != 0:
         failures.append(f"go test exit {code}")
-    rows.covered(len(packages))
-    return rows.finish(sorted(failures))
+    return failures, packages
 
 
 if __name__ == "__main__":
