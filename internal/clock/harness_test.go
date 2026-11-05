@@ -13,7 +13,8 @@ import (
 )
 
 // Harness check "2.1/6.5" — late drop: 10:01 arriving after 10:06 (wm = 10:04) is dropped + counted.
-// Plus ADR-0004 §4's strictness pin: an equal timestamp is admitted, one ms below is stream-late.
+// Plus ADR-0004 §4's strictness pin: an equal timestamp is admitted, one ms below is stream-late. Owner D1
+// (2026-11-05): the admitted event at the clock's instant is kept, and released only once the clock is past it.
 func TestHarness_2_1_6_5_LateDropAndEqualTimestampAdmitted(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, false, []clock.StreamSpec{{Name: "S", Delay: 2 * minute}}, 0, 0)
@@ -31,7 +32,8 @@ func TestHarness_2_1_6_5_LateDropAndEqualTimestampAdmitted(t *testing.T) {
 	if got := w.rec.advance(w.rc); len(got) != 0 {
 		t.Fatalf("clock 09:58 delivered %v; 10:00 is not yet released", got)
 	}
-	// X at 10:06: adm before −120000 ≤ 360000 → admitted; adm = 360000 − 120000 = 240000 (10:04).
+	// X at 10:06: adm before −120000 ≤ 360000 → admitted; adm = 360000 − 120000 = 240000 (10:04). 0 < 240000: A
+	// is released; X (360000) waits.
 	late, cl, got := w.arrive(k, ev(0, 6*minute, 2), 6*minute)
 	if late || cl || w.reg.Contribution(0) != 4*minute || w.rc.Clock() != 4*minute {
 		t.Fatalf("10:06: late=%v cl=%v contrib=%d clock=%d, want false false 240000 240000",
@@ -46,17 +48,21 @@ func TestHarness_2_1_6_5_LateDropAndEqualTimestampAdmitted(t *testing.T) {
 		t.Fatalf("10:01 after 10:06: (%v, %+v) contrib %d, want stream-late, no advance, 240000", late, adv, w.reg.Contribution(0))
 	}
 	// Exactly 10:04 = adm: 240000 < 240000 is false → admitted (strict); adm stays 240000 → no advance. At the rule
-	// clock 240000 < 240000 is false and no timer of the key fired → kept, released at once.
+	// clock 240000 < 240000 is false → kept; D1: the clock is ON 10:04, not past it → not released yet.
 	late, cl, got = w.arrive(k, ev(0, 4*minute, 3), 6*minute+2)
 	if late || cl {
 		t.Fatalf("10:04 at wm 10:04: streamLate=%v constructLate=%v, want admitted", late, cl)
 	}
-	if want := []item{E(0, 0, 4*minute, 3)}; !slices.Equal(got, want) {
-		t.Fatalf("delivered %v, want %v", got, want)
+	if len(got) != 0 {
+		t.Fatalf("clock 10:04 delivered %v; D1: the event at 10:04 waits for the clock to pass 10:04", got)
 	}
 	// One ms below: 239999 < 240000 → stream-late.
 	if late, _ := w.reg.ObserveEvent(0, 4*minute-1, 6*minute+3); !late {
 		t.Fatalf("239999 at wm 240000 admitted, want stream-late")
+	}
+	// Y at 10:06:00.001: adm = 360001 − 120000 = 240001 > 240000 → the 10:04 event is released; X and Y wait.
+	if _, _, got := w.arrive(k, ev(0, 6*minute+1, 4), 6*minute+4); !slices.Equal(got, []item{E(0, 0, 4*minute, 3)}) {
+		t.Fatalf("clock 240001 delivered %v, want %v", got, []item{E(0, 0, 4*minute, 3)})
 	}
 }
 
@@ -92,27 +98,31 @@ func TestHarness_2_1_WatermarkFiring_AbsenceDue10_01_30(t *testing.T) {
 	}
 }
 
-// The inclusive boundary (SEMANTICS §6.4: completes when wm ≥ deadline): a Completion due 90000 does not fire at
-// clock 89999 and fires at clock 90000.
-func TestFiring_InclusiveDueFiresAtTheClock(t *testing.T) {
+// The deadline boundary (owner D1, 2026-11-05; SEMANTICS §6.4: the absence holds once the clock is past the
+// deadline, so an event exactly at it can still defeat it): a Completion due 90000 does not fire at clock 89999 nor
+// at clock 90000, and fires at clock 90001.
+func TestFiring_DueFiresOnceTheClockIsPastIt(t *testing.T) {
 	t.Parallel()
 	rc := clock.NewRuleClock([]int{0})
 	k := rc.NewInstance()
 	r := &recorder{t: t}
 	k.Schedule(90*second, clock.Completion, 1)
-	to(rc, 90*second-1, 0)
-	if got := r.advance(rc); len(got) != 0 {
-		t.Fatalf("clock 89999 delivered %v", got)
+	for _, c := range []int64{90*second - 1, 90 * second} {
+		to(rc, c, 0)
+		if got := r.advance(rc); len(got) != 0 {
+			t.Fatalf("clock %d delivered %v; the due 90000 waits until the clock is past it", c, got)
+		}
 	}
-	to(rc, 90*second, 0)
+	to(rc, 90*second+1, 0)
 	if got, want := r.advance(rc), []item{T(0, 90*second, clock.Completion, 1)}; !slices.Equal(got, want) {
-		t.Fatalf("clock 90000 delivered %v, want %v", got, want)
+		t.Fatalf("clock 90001 delivered %v, want %v", got, want)
 	}
 }
 
 // Harness check "2.1" — multi-stream wm: clamped monotonic min; idle-resume event is construct-late, dropped +
 // counted separately. Live, as the check now runs it (D3, D5): S1 = stream 0, S2 = stream 1, d = 0, idle after
-// 1 min each; start = wall 0; arrival stamps default to the event time; one tick at wall 10:10.
+// 1 min each; start = wall 0; arrival stamps default to the event time; one tick at wall 10:10. Owner D1
+// (2026-11-05): an instant is released only once the clock is past it.
 func TestHarness_2_1_ClampedMinAndIdleResumeConstructLate(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, false, []clock.StreamSpec{{Name: "S1", IdleAfter: 1 * minute}, {Name: "S2", IdleAfter: 1 * minute}}, 0, 0, 1)
@@ -124,19 +134,23 @@ func TestHarness_2_1_ClampedMinAndIdleResumeConstructLate(t *testing.T) {
 	if sl, cl, _ := w.arrive(k, ev(0, 0, 1), 0); sl || cl || w.rc.Clock() != negInf {
 		t.Fatalf("[0] sl=%v cl=%v clock=%d, want false false −∞", sl, cl, w.rc.Clock())
 	}
-	// [1] S2 X@0 (arr 0): min(0, 0) = 0; A (stream 0) then X (stream 1): event.Compare order.
-	if _, _, got := w.arrive(k, ev(1, 0, 1), 0); !slices.Equal(got, []item{E(0, 0, 0, 1), E(0, 1, 0, 1)}) {
-		t.Fatalf("[1] delivered %v", got)
+	// [1] S2 X@0 (arr 0): min(0, 0) = 0; the clock is ON 0 → nothing released (D1).
+	if _, _, got := w.arrive(k, ev(1, 0, 1), 0); len(got) != 0 || w.rc.Clock() != 0 {
+		t.Fatalf("[1] delivered %v clock %d, want nothing at clock 0", got, w.rc.Clock())
 	}
 	// [2] tick at wall 600000: both quiet (600000 − 0 ≥ 60000); floors = 0 + 600000 − 0 = 600000 → clock 600000.
-	w.tick(10 * minute)
+	// 0 < 600000: A (stream 0) then X (stream 1), event.Compare order.
+	got := w.tick(10 * minute)
 	if w.reg.Contribution(0) != 10*minute || w.reg.Contribution(1) != 10*minute || w.rc.Clock() != 10*minute {
 		t.Fatalf("[2] contributions %d %d clock %d, want 600000 600000 600000",
 			w.reg.Contribution(0), w.reg.Contribution(1), w.rc.Clock())
 	}
-	// [3] S1 X@10:10 (arr 600000): adm 600000; 600000 < 600000 is false, no timer fired → kept and released.
-	if sl, cl, got := w.arrive(k, ev(0, 10*minute, 2), 10*minute); sl || cl || !slices.Equal(got, []item{E(0, 0, 10*minute, 2)}) {
-		t.Fatalf("[3] sl=%v cl=%v delivered %v", sl, cl, got)
+	if want := []item{E(0, 0, 0, 1), E(0, 1, 0, 1)}; !slices.Equal(got, want) {
+		t.Fatalf("[2] delivered %v, want %v", got, want)
+	}
+	// [3] S1 X@10:10 (arr 600000): adm 600000; 600000 < 600000 is false → kept; the clock is ON 10:10 → not released.
+	if sl, cl, got := w.arrive(k, ev(0, 10*minute, 2), 10*minute); sl || cl || len(got) != 0 {
+		t.Fatalf("[3] sl=%v cl=%v delivered %v, want kept and not yet released", sl, cl, got)
 	}
 	// [4] S2 B@10:05 (arr 300000): S2's adm before = 0 ≤ 300000 → stream-ADMITTED; adm = 300000, contrib stays
 	// max(300000, 600000) = 600000 (no advance). 300000 < clock 600000 → construct-late, kept nowhere.
@@ -154,7 +168,8 @@ func TestHarness_2_1_ClampedMinAndIdleResumeConstructLate(t *testing.T) {
 
 // Harness check "2.1 · RT-01" — playback virtual clock: EMPTY approvals stream never stalls the min; absence fires
 // when virtual time passes 10:05 + d, before the sentinel. AgentActions = 0, HumanApprovals = 1 (declaration
-// order), d = 1 min each; HumanApprovals contributes no events.
+// order), d = 1 min each; HumanApprovals contributes no events. Owner D1 (2026-11-05): an instant is released, and
+// a due fires, only once the clock is past it.
 func TestHarness_2_1_RT01_EmptyStreamNeverStallsTheMin(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, true, []clock.StreamSpec{
@@ -171,10 +186,11 @@ func TestHarness_2_1_RT01_EmptyStreamNeverStallsTheMin(t *testing.T) {
 		at   int64  // HumanApprovals' contribution = virtual_now − d = ts − 60000 = the clock
 		want []item // what the walk delivers
 	}{
-		{ev(0, 0, 1), -1 * minute, nil},                                // SensitiveRead 10:00
-		{ev(0, 1*minute, 2), 0, []item{E(0, 0, 0, 1)}},                 // Egress 10:01
-		{ev(0, 4*minute, 3), 3 * minute, []item{E(0, 0, 1*minute, 2)}}, // X 10:04: 180000 < 300000
-		{ev(0, 6*minute+30*second, 4), 5*minute + 30*second, // X 10:06:30: 330000 ≥ 300000
+		{ev(0, 0, 1), -1 * minute, nil}, // SensitiveRead 10:00
+		{ev(0, 1*minute, 2), 0, nil},    // Egress 10:01: clock 0 is ON 10:00, not past it
+		{ev(0, 4*minute, 3), 3 * minute, // X 10:04: clock 180000: 0 and 60000 < 180000; 300000 waits
+			[]item{E(0, 0, 0, 1), E(0, 0, 1*minute, 2)}},
+		{ev(0, 6*minute+30*second, 4), 5*minute + 30*second, // X 10:06:30: clock 330000 > 300000
 			[]item{E(0, 0, 4*minute, 3), T(0, 5*minute, clock.Completion, 1)}}, // 240000 before 300000
 	}
 	for i, s := range steps {
@@ -247,7 +263,8 @@ func mapsEqual(a, b map[int]int64) bool {
 
 // Harness check "2.1" — playback admission = live admission: an active stream's event behind the merged virtual
 // clock but within its OWN watermark is admitted in both modes; construct-late: playback [1, 2], live [].
-// S1 = 0, S2 = 1, d = 1 min each; no ticks in live (the arrivals are back to back).
+// S1 = 0, S2 = 1, d = 1 min each; no ticks in live (the arrivals are back to back). The check runs to the end of
+// input (+∞), where live's match completes.
 func TestHarness_2_1_PlaybackAdmissionEqualsLiveAdmission(t *testing.T) {
 	t.Parallel()
 	specs := []clock.StreamSpec{{Name: "S1", Delay: 1 * minute}, {Name: "S2", Delay: 1 * minute}}
@@ -271,19 +288,25 @@ func TestHarness_2_1_PlaybackAdmissionEqualsLiveAdmission(t *testing.T) {
 	if len(slp) != 0 || !slices.Equal(clp, []int{1, 2}) || wp.rc.Clock() != 19*minute {
 		t.Fatalf("playback: sl %v cl %v clock %d, want [] [1 2] 1140000", slp, clp, wp.rc.Clock())
 	}
-	// Live: [0] S2 −∞ → −∞; [1] min(1140000, 240000) = 240000; [2] 300000 → A@300000 released.
+	// Live: [0] S2 −∞ → −∞; [1] min(1140000, 240000) = 240000; [2] 300000. D1: the clock is ON 300000 → A@300000
+	// waits; nothing is released yet.
 	sll, cll, wl := run(false)
 	if len(sll) != 0 || len(cll) != 0 || wl.rc.Clock() != 5*minute {
 		t.Fatalf("live: sl %v cl %v clock %d, want [] [] 300000", sll, cll, wl.rc.Clock())
 	}
-	if want := []item{E(0, 1, 5*minute, 1)}; !slices.Equal(wl.rec.items, want) {
-		t.Fatalf("live delivered %v, want %v", wl.rec.items, want)
+	if len(wl.rec.items) != 0 {
+		t.Fatalf("live delivered %v at clock 300000, want nothing yet (D1)", wl.rec.items)
+	}
+	// End of input (+∞): every instant — S1's X@1200000 and S2's A, B, in event.Compare order.
+	if got, want := wl.end(), []item{E(0, 1, 5*minute, 1), E(0, 1, 6*minute, 2), E(0, 0, 20*minute, 1)}; !slices.Equal(got, want) {
+		t.Fatalf("live at +∞ delivered %v, want %v", got, want)
 	}
 }
 
 // Harness check "6.4 · RT-10" — within 5 min + for 5 min (equal bounds), wm jumps 10:04 → 10:06 in one advance →
 // the alert FIRES. d = 0. The operator schedules the partial's discard at t_first + within = 300000 (strict) and,
-// when egress makes it a match waiting out its absence, cancels it and schedules the Completion at 300000.
+// when egress makes it a match waiting out its absence, cancels it and schedules the Completion at 300000. Owner D1
+// (2026-11-05): each arrival at d = 0 moves the clock ONTO its own instant, so it releases the previous event.
 func TestHarness_6_4_RT10_EqualBoundsTheAlertFires(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, false, []clock.StreamSpec{{Name: "AgentActions"}}, 0, 0)
@@ -299,14 +322,54 @@ func TestHarness_6_4_RT10_EqualBoundsTheAlertFires(t *testing.T) {
 			in.Schedule(5*minute, clock.Completion, 1)
 		}
 	}
-	for _, e := range []event.Event{ev(0, 0, 1), ev(0, 3*minute, 2), ev(0, 4*minute, 3)} {
-		if _, _, got := w.arrive(k, e, e.Ts); len(got) != 1 || got[0].Cb != "event" {
-			t.Fatalf("at %d delivered %v, want only the event", e.Ts, got)
+	// read@0 → clock 0: nothing; egress@180000 → clock 180000: read; X@240000 → clock 240000: egress.
+	steps := []struct {
+		e    event.Event
+		want []item
+	}{
+		{ev(0, 0, 1), nil},
+		{ev(0, 3*minute, 2), []item{E(0, 0, 0, 1)}},
+		{ev(0, 4*minute, 3), []item{E(0, 0, 3*minute, 2)}},
+	}
+	for _, s := range steps {
+		if _, _, got := w.arrive(k, s.e, s.e.Ts); !slices.Equal(got, s.want) {
+			t.Fatalf("at %d delivered %v, want %v", s.e.Ts, got, s.want)
 		}
 	}
-	// 240000 → 360000: instant 300000 fires the Completion, then instant 360000 releases X. No discard ever.
+	// 240000 → 360000: instant 240000 releases X@10:04, instant 300000 fires the Completion (300000 < 360000);
+	// X@10:06 waits. No discard ever.
 	_, _, got := w.arrive(k, ev(0, 6*minute, 4), 6*minute)
-	if want := []item{T(0, 5*minute, clock.Completion, 1), E(0, 0, 6*minute, 4)}; !slices.Equal(got, want) {
+	if want := []item{E(0, 0, 4*minute, 3), T(0, 5*minute, clock.Completion, 1)}; !slices.Equal(got, want) {
 		t.Fatalf("delivered %v, want %v (match_end 10:05)", got, want)
+	}
+}
+
+// Harness check "2.2 · D1" (owner D1, 2026-11-05; SEMANTICS §2.2) — same millisecond, two streams, arriving in
+// reverse declared order while the clock sits on that millisecond: released in declared order. Playback, S1 =
+// stream 0, S2 = stream 1, d = 0; one key.
+//
+//	S1 X@10:05 (seq 1): S1 adm 300000, S2's virtual floor 300000 − 0 → clock 300000: nothing (the clock is ON it)
+//	S2 B@10:05 (seq 1): 300000 < 300000 is false → kept, not released
+//	S1 A@10:05 (seq 2): kept, not released
+//	S1 X@10:06 (seq 3): clock 360000 → instant 300000 in (Ts, StreamID, Seq): S1 seq 1, S1 seq 2, then S2 seq 1
+//
+// In arrival order S2's B would precede S1's A; finalizing at the clock would release each as it arrived.
+func TestHarness_2_2_D1_SameMillisecondTwoStreamsInDeclaredOrder(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, true, []clock.StreamSpec{{Name: "S1"}, {Name: "S2"}}, 0, 0, 1)
+	k := w.rc.NewInstance()
+	for _, e := range []event.Event{ev(0, 5*minute, 1), ev(1, 5*minute, 1), ev(0, 5*minute, 2)} {
+		sl, cl, got := w.arrive(k, e, e.Ts)
+		if sl || cl || len(got) != 0 || w.rc.Clock() != 5*minute {
+			t.Fatalf("%v: sl=%v cl=%v delivered %v clock %d, want kept, nothing released, clock 300000",
+				keyOf(e), sl, cl, got, w.rc.Clock())
+		}
+	}
+	_, _, got := w.arrive(k, ev(0, 6*minute, 3), 6*minute)
+	if want := []item{E(0, 0, 5*minute, 1), E(0, 0, 5*minute, 2), E(0, 1, 5*minute, 1)}; !slices.Equal(got, want) {
+		t.Fatalf("clock 360000 delivered %v, want %v (declared order within 10:05)", got, want)
+	}
+	if w.rc.Clock() != 6*minute {
+		t.Fatalf("clock %d, want 360000", w.rc.Clock())
 	}
 }

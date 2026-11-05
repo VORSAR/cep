@@ -3,7 +3,8 @@ package clock_test
 // Exit line 3 of S3.1 — ADR-0004's mandated case (Implementation notes; §3): two keys of one rule, live, one key
 // silent after its anchor. Its absence fires at the right event time and its TTL purge at the right time; both
 // times are asserted. With D2 the two keys share one RuleClock; wall time reaches the silent approvals stream
-// only through ticks (D3, D5).
+// only through ticks (D3, D5). Owner D1 (2026-11-05): an instant is released, and a due fires, only once the clock is
+// past it.
 
 import (
 	"slices"
@@ -44,11 +45,13 @@ func TestQuietKey_SilentKeyFiresAbsenceAndTTLOnTime(t *testing.T) {
 		wall  int64
 		bWant []item // what B receives in this step
 	}{
-		{1 * minute, []item{E(1, 0, 0, 1)}},                                 // clock 0: B's anchor released; Completion 300000, TTL 600000
-		{5*minute + 50*second, nil},                                         // clock 290000 < 300000: waits
-		{6*minute + 10*second, []item{T(1, 5*minute, clock.Completion, 1)}}, // clock 310000 ≥ 300000: due 300000 (10:05)
-		{11 * minute, nil},                                                  // clock 600000: wm − t_last = 600000, not > TTL
-		{11*minute + 1, []item{T(1, ttl, clock.TTLPurge, 0)}},               // clock 600001 > 600000: purged, due 600000
+		{1 * minute, nil},                     // clock 0: ON B's anchor (D1): not yet released
+		{1*minute + 1, []item{E(1, 0, 0, 1)}}, // clock 1 > 0: B's anchor released; Completion 300000, TTL 600000
+		{5*minute + 50*second, nil},           // clock 290000 < 300000: waits
+		{6 * minute, nil},                     // clock 300000: ON the deadline: waits (D1)
+		{6*minute + 10*second, []item{T(1, 5*minute, clock.Completion, 1)}}, // clock 310000 > 300000: due 300000 (10:05)
+		{11 * minute, nil}, // clock 600000: wm − t_last = 600000, not > TTL
+		{11*minute + 1, []item{T(1, ttl, clock.TTLPurge, 0)}}, // clock 600001 > 600000: purged, due 600000
 	}
 	for i, s := range steps {
 		got := w.tick(s.wall)

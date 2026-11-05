@@ -14,7 +14,8 @@ import (
 
 // D3 / D6 (fail-closed: "silence is silence, the alert fires on time"): every input quiet, the clock moves at wall
 // speed and a due absence fires on time. Replaces v1's "all inputs idle, the clock stays".
-// S0 (d 1 min, idle after 30 s) carries the anchor; S1 (d 0, idle after 30 s) never sends; start = 0.
+// S0 (d 1 min, idle after 30 s) carries the anchor; S1 (d 0, idle after 30 s) never sends; start = 0. Owner D1
+// (2026-11-05): the anchor is released, and the absence fires, only once the clock is past their instants.
 func TestQuiet_AllInputsQuietClockMovesAtWallSpeedAbsenceFiresOnTime(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, false, []clock.StreamSpec{
@@ -31,12 +32,16 @@ func TestQuiet_AllInputsQuietClockMovesAtWallSpeedAbsenceFiresOnTime(t *testing.
 		{10 * second, -1 * minute, negInf, nil},
 		// 30000 ≥ 30000: both quiet. S0 = 0 + 30000 − 60000 = −30000; S1 = 0 + 30000 − 0 = 30000. clock −30000.
 		{30 * second, -30 * second, 30 * second, nil},
-		// S0 = 60000 − 60000 = 0; S1 = 60000. clock 0: the anchor is released, Completion due 300000.
-		{1 * minute, 0, 1 * minute, []item{E(0, 0, 0, 1)}},
-		// S0 = 359999 − 60000 = 299999: one ms short.
+		// S0 = 60000 − 60000 = 0; S1 = 60000. clock 0 is ON the anchor's instant: not yet released (D1).
+		{1 * minute, 0, 1 * minute, nil},
+		// S0 = 60001 − 60000 = 1; S1 = 60001. clock 1 > 0: the anchor is released, Completion due 300000.
+		{1*minute + 1, 1, 1*minute + 1, []item{E(0, 0, 0, 1)}},
+		// S0 = 359999 − 60000 = 299999: short.
 		{6*minute - 1, 5*minute - 1, 6*minute - 1, nil},
-		// S0 = 360000 − 60000 = 300000 ≥ 300000: fires on time — wall 10:06 = deadline 10:05 + d.
-		{6 * minute, 5 * minute, 6 * minute, []item{T(0, 5*minute, clock.Completion, 1)}},
+		// S0 = 360000 − 60000 = 300000: ON the deadline — an approval at 10:05 could still come (D1).
+		{6 * minute, 5 * minute, 6 * minute, nil},
+		// S0 = 360001 − 60000 = 300001 > 300000: fires on time — the first wall ms past deadline 10:05 + d.
+		{6*minute + 1, 5*minute + 1, 6*minute + 1, []item{T(0, 5*minute, clock.Completion, 1)}},
 	}
 	for _, s := range steps {
 		got := w.tick(s.now)
@@ -55,29 +60,39 @@ func TestQuiet_AllInputsQuietClockMovesAtWallSpeedAbsenceFiresOnTime(t *testing.
 // D5: the floor runs from the stream's OWN last event time, not the wall minus d. A source that always delivers
 // 2 s late (d = 0, idle after 1 min) goes quiet; after a tick at wall 10:10:02 an event stamped 10:10:00 arriving
 // at 10:10:02 is NOT construct-late. (Under "wall − d" the floor would be 602000 and the event would be dropped.)
+// Harness check "2.1 · quiet · a source that always delivers 2 s late"; owner D1 (2026-11-05): each release waits
+// for the floor to pass the event's instant.
 func TestQuiet_D5_LaggingSourceKeepsItsEvents(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, false, []clock.StreamSpec{{Name: "S", IdleAfter: 1 * minute}}, 0, 0)
 	k := w.rc.NewInstance()
-	// ts 0 arrives at wall 2000: adm 0, clock 0.
-	if sl, cl, _ := w.arrive(k, ev(0, 0, 1), 2*second); sl || cl {
-		t.Fatalf("first event late: %v %v", sl, cl)
+	// ts 0 arrives at wall 2000: adm 0, clock 0 — ON the event's instant: kept, not released (D1).
+	if sl, cl, got := w.arrive(k, ev(0, 0, 1), 2*second); sl || cl || len(got) != 0 {
+		t.Fatalf("first event: late %v %v, delivered %v; want kept, not yet released", sl, cl, got)
 	}
 	// Tick at 602000: 602000 − 2000 = 600000 ≥ 60000 → quiet; floor = 0 + 600000 − 0 = 600000 (10:10:00).
-	w.tick(10*minute + 2*second)
+	// 0 < 600000: the first event is released.
+	if got, want := w.tick(10*minute+2*second), []item{E(0, 0, 0, 1)}; !slices.Equal(got, want) {
+		t.Fatalf("tick 602000 delivered %v, want %v", got, want)
+	}
 	if got := w.reg.Contribution(0); got != 10*minute {
 		t.Fatalf("quiet floor %d, want 600000 = last ts 0 + elapsed 600000 − d 0", got)
 	}
 	if got := w.rc.Clock(); got != 10*minute {
 		t.Fatalf("clock %d, want 600000", got)
 	}
-	// ts 600000 arriving at 602000: adm before 0 → admitted; 600000 < 600000 is false, no timer → kept, released.
+	// ts 600000 arriving at 602000: adm before 0 → admitted; 600000 < 600000 is false → kept; the clock is ON
+	// 600000 → not released yet (D1).
 	sl, cl, got := w.arrive(k, ev(0, 10*minute, 2), 10*minute+2*second)
 	if sl || cl {
 		t.Fatalf("10:10:00 arriving at 10:10:02: streamLate=%v constructLate=%v, want neither", sl, cl)
 	}
-	if want := []item{E(0, 0, 10*minute, 2)}; !slices.Equal(got, want) {
-		t.Fatalf("delivered %v, want %v", got, want)
+	if len(got) != 0 {
+		t.Fatalf("clock 600000 delivered %v; D1: the event at 600000 waits for the floor to pass it", got)
+	}
+	// Quiet again: tick at 662000, 662000 − 602000 = 60000 ≥ 60000; floor = 600000 + 60000 − 0 = 660000 > 600000.
+	if got, want := w.tick(11*minute+2*second), []item{E(0, 0, 10*minute, 2)}; !slices.Equal(got, want) {
+		t.Fatalf("tick 662000 (clock %d) delivered %v, want %v", w.rc.Clock(), got, want)
 	}
 }
 
