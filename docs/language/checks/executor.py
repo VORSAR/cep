@@ -19,12 +19,16 @@ Documented divergences from the base executor:
      partial even before later positive steps have matched (RT-03); the base (like
      Siddhi) consulted the negated step only positionally. Completion requires all
      positive steps matched AND every absence window elapsed un-defeated
-     (wm >= each deadline); match_end = max(last positive event ts, all absence
-     deadlines) and is never earlier than a captured event (RT-18).
-  4. Watermark-advance ordering (6.4): (1) buffered events with t <= wm released in
-     2.2 order, (2) due completions/absence resolutions fired, (3) overrun partials
-     (wm > t_first + within) discarded — completions before discards, so equal
-     `within`/`for` bounds fire (RT-10).
+     (wm > each deadline; owner 2026-11-05, D1); match_end = max(last positive
+     event ts, all absence deadlines) and is never earlier than a captured event
+     (RT-18).
+  4. Watermark-advance ordering (6.4): the matcher finalizes an instant only once
+     the watermark is past it (owner 2026-11-05, D1; +inf is past every instant).
+     Per instant t < wm: (1) buffered events at t released in 2.2 order, (2) due
+     completions/absence resolutions fired, (3) overrun partials (t = t_first +
+     within) discarded — completions before discards, so equal `within`/`for`
+     bounds fire (RT-10). The MVP windows below (cron, delay, sort, the TTL table)
+     keep their own release rules.
   5. Lateness (6.5): strict watermark — an arrival with t < wm is dropped and
      counted; the base only dropped events older than the last processed event.
   6. Multi-stream watermarks (2.1): wm_construct = max(previous, min(per-input
@@ -300,17 +304,22 @@ class _PatternEngine:
 
     Owner decisions 2026-11-04 (S3.1-1, sprint-plan §5): an advance WALKS FORWARD IN
     EVENT TIME (D1) — everything at an instant before anything later; within an
-    instant, released events, then inclusive timers due then (completions), then,
-    once the watermark is past it, strict deadlines (the `within` discard, the TTL
-    purge). Keys are walked in birth order (D2-2). Once a key's completion fires at an
-    instant, that instant is sealed for the key (D7). Skip-past-last compares in 2.2
-    order (D8).
+    instant, released events, then inclusive timers due then (completions), then
+    strict deadlines (the TTL purge, the `within` discard). Keys are walked in birth
+    order (D2-2). Skip-past-last compares in 2.2 order (D8).
+
+    Owner 2026-11-05 (S3.2a-1, D1): an instant is finalized only once the watermark is
+    PAST it — its events are released, and its timers of every kind fire, only when
+    wm > t; at wm = +inf (end of input) every instant. A watermark W promises only that
+    nothing before W will still arrive, so an event at exactly W may still come; it is
+    admitted (not late) and processed before that instant's timers. S3.1-1's D7 seal is
+    retired.
 
     Absence steps are CONSTRAINTS active from the match start over their whole
     window (6.4, RT-03), not positional steps. A match completes when all positive
-    steps have matched AND every absence window elapsed un-defeated (wm >= each
+    steps have matched AND every absence window elapsed un-defeated (wm > each
     deadline); match_end = max(last positive event ts, all absence deadlines)
-    (RT-18). At each watermark advance: (1) buffered events <= wm released in 2.2
+    (RT-18). At each watermark advance: (1) buffered events < wm released in 2.2
     order, (2) due completions fired, (3) overrun partials discarded — completions
     before discards (RT-10)."""
 
@@ -325,7 +334,6 @@ class _PatternEngine:
         self.partials: Dict[object, List[_Partial]] = {}
         self.done: set = set()
         self.last_act: Dict[object, float] = {}
-        self.sealed: Dict[object, float] = {}   # D7: the latest instant a key's timers fired
         self._spawn = 0
         self.wm = -math.inf
 
@@ -357,12 +365,13 @@ class _PatternEngine:
 
     # -- the walk: timers in event-time order (6.4 / 9; owner D1) -----------------
 
-    def _next_timer(self, upto: float, inclusive: bool):
-        """The earliest pending timer item before `upto` (at it too, for an inclusive
-        item, when `inclusive`): (time, phase, key order, kind, first_ord, seq, action).
-        Phase 0 = inclusive (a pending completion fires once wm >= its due); phase 1 =
-        strict, at the instant just after its time (the TTL purge once wm - t_last >
-        ttl; the within discard once wm > t_first + within). Keys in birth order."""
+    def _next_timer(self, upto: float):
+        """The earliest pending timer item strictly before `upto` (every item when `upto`
+        is +inf, the end of input; owner 2026-11-05, D1): (time, phase, key order, kind,
+        first_ord, seq, action). Every kind fires once wm is past its time — the pending
+        completion once wm > its due, the TTL purge once wm > t_last + ttl, the within
+        discard once wm > t_first + within. Phase orders one instant only: 0 = inclusive
+        (completions), 1 = strict (purge, then discard). Keys in birth order."""
         best = None
         for order, k in enumerate(self.last_act):
             items = []
@@ -375,22 +384,20 @@ class _PatternEngine:
             if self.spec.ttl is not None:
                 items.append((self.last_act[k] + self.spec.ttl, 1, order, 1, (), 0, ("purge", k, None)))
             for it in items:
-                t, phase = it[0], it[1]
-                ripe = t <= upto if (phase == 0 and inclusive) else t < upto
+                ripe = it[0] < upto or upto == math.inf
                 if ripe and (best is None or it[:6] < best[:6]):
                     best = it
         return best
 
-    def _walk(self, upto: float, inclusive: bool):
+    def _walk(self, upto: float):
         while True:
-            it = self._next_timer(upto, inclusive)
+            it = self._next_timer(upto)
             if it is None:
                 return
             what, k, p = it[6]
             if what == "complete":
                 self.partials[k].remove(p)
                 self._emit(k, p)
-                self.sealed[k] = max(self.sealed.get(k, -math.inf), it[0])
             elif what == "discard":
                 self.partials[k].remove(p)    # 6.3: overrun, at its instant
             else:
@@ -399,7 +406,6 @@ class _PatternEngine:
                 # fresh instance.
                 self.partials.pop(k, None)
                 self.done.discard(k)
-                self.sealed.pop(k, None)
                 del self.last_act[k]
 
     # -- one event, in 2.2 order -------------------------------------------------
@@ -436,8 +442,9 @@ class _PatternEngine:
                     # event has already elapsed un-defeated (any defeater would have
                     # been processed first, 2.2) -> complete now, with match_end =
                     # max(this event, deadlines) (RT-18). A deadline at or after
-                    # this instant leaves the match pending until wm >= it — so a
-                    # tied-at-the-deadline defeater, processed first, still wins.
+                    # this instant leaves the match pending until wm > it (D1 of
+                    # 2026-11-05) — so a tied-at-the-deadline defeater, released
+                    # before that instant's timers, still wins.
                     if all(d < ev["ts"] for d in self._deadlines(p)):
                         ps.remove(p)
                         completed.append(p)
@@ -465,32 +472,31 @@ class _PatternEngine:
     # -- watermark advance (6.4 normative ordering) ------------------------------
 
     def drain(self, wm: float):
-        """Walk forward in event time up to wm (owner 2026-11-04, D1): for each instant
-        holding buffered events, first every timer item strictly before it, then its
-        events in 2.2 order; then every timer item up to wm. Completions come before
-        discards at one instant (RT-10), and a pending completion is never discarded."""
+        """Walk forward in event time up to wm (owner 2026-11-04, D1), finalizing only
+        the instants wm is past (owner 2026-11-05, D1): for each instant t < wm holding
+        buffered events, first every timer item strictly before t, then its events in
+        2.2 order; then every timer item before wm. At wm = +inf every instant goes.
+        Completions come before discards at one instant (RT-10), and a pending
+        completion is never discarded."""
         self.wm = max(self.wm, wm)          # clamped monotonic
         wm = self.wm
         self.buffer.sort(key=lambda b: (b[0], b[1]))
-        while self.buffer and self.buffer[0][0] <= wm:
+        while self.buffer and (self.buffer[0][0] < wm or wm == math.inf):
             ts = self.buffer[0][0]
-            self._walk(ts, inclusive=False)
+            self._walk(ts)
             while self.buffer and self.buffer[0][0] == ts:
                 _, tok, ev = self.buffer.pop(0)
                 self._process(ev, (ts, tok))
-        self._walk(wm, inclusive=True)
-
-    def sealed_for(self, ev: dict) -> bool:
-        """D7: the event's instant is sealed for its key (a timer of the key fired then)."""
-        return ev["ts"] <= self.sealed.get(self.spec.key(ev), -math.inf)
+        self._walk(wm)
 
 
 def run_pattern(spec: PatternSpec, stream: List[dict], eos: bool = True):
     """Run the matcher over an arrival-ordered single merged stream (dicts with
     'type', 'ts', attrs) — wm = max(event_time seen) - d (2.1).
 
-    Events are buffered and released in event-time order once the watermark passes
-    them (2.2); an arrival with t < wm is late -> dropped + counted (6.5).
+    Events are buffered and released in event-time order once the watermark is past
+    them (2.2; owner 2026-11-05, D1); an arrival with t < wm is late -> dropped +
+    counted (6.5) — one at t = wm is admitted, its instant not yet finalized.
     Returns (matches, late_indices); a match carries the captures plus 'key',
     'match_start', 'match_end' and the evidence 'chain' (6.6). eos=False suppresses
     the end-of-stream wm->infinity flush so release *timing* can be asserted."""
@@ -498,7 +504,7 @@ def run_pattern(spec: PatternSpec, stream: List[dict], eos: bool = True):
     late: List[int] = []
     max_ts = -math.inf
     for i, ev in enumerate(stream):
-        if ev["ts"] < max_ts - spec.wm_delay or eng.sealed_for(ev):   # 6.5 / D7: late, counted
+        if ev["ts"] < max_ts - spec.wm_delay:   # 6.5: late, counted
             late.append(i)
             continue
         max_ts = max(max_ts, ev["ts"])
@@ -579,7 +585,7 @@ def run_pattern_multi(spec: PatternSpec, arrivals, delays: Dict[str, float],
             wm_c = max(wm_c, min(max(stream_wm[n], virtual_now - delays[n]) for n in names))
         else:                                  # live: contributions rise only (D3, D5)
             wm_c = max(wm_c, min(max(stream_wm[n], floor[n]) for n in names))
-        if ev["ts"] < wm_c or eng.sealed_for(ev):   # 2.1 construct-late / D7 sealed: counted
+        if ev["ts"] < wm_c:   # 2.1 construct-late, counted (D1: t = wm_c is not finalized)
             construct_late.append(i)
             continue
         stream_seq[name] += 1
@@ -605,7 +611,7 @@ def run_pattern_punctuated(spec: PatternSpec, items, eos: bool = True):
             wm = max(wm, val)
             eng.drain(wm)
         elif kind == "ev":
-            if val["ts"] < wm or eng.sealed_for(val):
+            if val["ts"] < wm:
                 late.append(i)
                 continue
             eng.buffer.append((val["ts"], i, val))
