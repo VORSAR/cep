@@ -4,26 +4,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/vorsar/cep/internal/clock"
 	"github.com/vorsar/cep/internal/event"
+	"github.com/vorsar/cep/internal/runtime"
 	"github.com/vorsar/cep/internal/table"
 )
 
 // Driver replays a log in file order (ADR-0005 §3, SEMANTICS §2.1): a fixture under the virtual clock, a recording
-// as live ingest applied it (owner D3 of S3.2a-1). It alone writes the replay's stream registry (ADR-0004 §1).
+// as live ingest applied it (owner D3 of S3.2a-1). Its ingest arithmetic is the live router's, runtime.Ingest (owner,
+// S3.2a-2's plan check), which alone writes the replay's stream registry (ADR-0004 §1).
 type Driver struct {
 	app       *App
 	specs     []clock.StreamSpec
-	reg       *clock.StreamRegistry
 	set       *table.Set
 	tables    []*table.Table
-	seq       []uint64
-	vnow      int64
+	ing       *runtime.Ingest
 	recording bool
 	line      int
-	buf       []clock.WMAdvance
 }
 
 // NewDriver makes a driver with fresh, empty tables: a replay is a sandbox (SPEC §6.8).
@@ -31,7 +29,7 @@ func NewDriver(app *App) (*Driver, error) {
 	if err := validateApp(app); err != nil {
 		return nil, err
 	}
-	d := &Driver{app: app, seq: make([]uint64, len(app.Streams)), vnow: math.MinInt64}
+	d := &Driver{app: app}
 	for _, s := range app.Streams {
 		d.specs = append(d.specs, clock.StreamSpec{Name: s.Schema.Stream(), Delay: s.Delay, IdleAfter: s.IdleAfter, Derived: s.Derived})
 	}
@@ -43,7 +41,7 @@ func NewDriver(app *App) (*Driver, error) {
 		d.tables = append(d.tables, tb)
 	}
 	d.set = table.NewSet(d.tables)
-	d.reg = clock.NewStreamRegistry(d.specs, 0)
+	d.ing = runtime.NewIngest(d.specs, 0, d.set, true)
 	return d, nil
 }
 
@@ -54,7 +52,7 @@ func (d *Driver) Step(rec Record) Step {
 	switch rec.Kind {
 	case RecHeader:
 		d.recording = true
-		d.reg = clock.NewStreamRegistry(d.specs, rec.Time)
+		d.ing = runtime.NewIngest(d.specs, rec.Time, d.set, false)
 		st.Kind, st.Time = StepHeader, rec.Time
 	case RecEvent:
 		st = d.event(rec)
@@ -72,11 +70,9 @@ func (d *Driver) Step(rec Record) Step {
 	case RecBatchEnd:
 		st.Kind, st.Stream, st.Batch = StepBatchEnd, rec.Stream, rec.Batch
 	case RecTick:
-		d.buf = d.reg.ObserveTick(rec.Time, d.buf[:0])
-		st.Kind, st.Time, st.Advances = StepTick, rec.Time, d.buf
+		st.Kind, st.Time, st.Advances = StepTick, rec.Time, d.ing.Tick(rec.Time)
 	case RecStop:
-		d.buf = d.reg.Drain(d.buf[:0])
-		st.Kind, st.Advances = StepStop, d.buf
+		st.Kind, st.Advances = StepStop, d.ing.Drain()
 	default:
 		panic(fmt.Sprintf("playback: line %d: record kind %d", rec.Line, rec.Kind))
 	}
@@ -84,29 +80,19 @@ func (d *Driver) Step(rec Record) Step {
 	return st
 }
 
-// event is an event record's step (design note §5.3), in order: Seq, the snapshot, the registry, the virtual clock.
+// event is an event record's step (design note §5.3), through the shared ingest step: Seq, the snapshot, the
+// registry, then (a fixture) the virtual clock.
 func (d *Driver) event(rec Record) Step {
 	e := rec.Event
-	d.seq[e.StreamID]++
-	e.Seq = d.seq[e.StreamID]
-	e.Tables = d.set.Snapshot()
 	arrival := e.Ts
 	if d.recording {
 		arrival = rec.Arrival
 	}
-	late, a := d.reg.ObserveEvent(e.StreamID, e.Ts, arrival)
+	late, adv := d.ing.Event(&e, arrival)
 	if late {
 		return Step{Kind: StepStreamLate, Line: rec.Line, Event: e}
 	}
-	d.buf = d.buf[:0]
-	if a.Moved {
-		d.buf = append(d.buf, a)
-	}
-	if !d.recording {
-		d.vnow = max(d.vnow, e.Ts)
-		d.buf = d.reg.ObserveVirtual(d.vnow, d.buf)
-	}
-	return Step{Kind: StepEvent, Line: rec.Line, Event: e, Advances: d.buf}
+	return Step{Kind: StepEvent, Line: rec.Line, Event: e, Advances: adv}
 }
 
 // End is the log's end: in a fixture every contribution to +∞; in a recording nothing (a session that ended without
@@ -114,8 +100,7 @@ func (d *Driver) event(rec Record) Step {
 func (d *Driver) End() Step {
 	st := Step{Kind: StepEnd, Line: d.line + 1}
 	if !d.recording {
-		d.buf = d.reg.EndOfInput(d.buf[:0])
-		st.Advances = d.buf
+		st.Advances = d.ing.End()
 	}
 	st.Tables = d.set.Snapshot()
 	return st
@@ -125,15 +110,11 @@ func (d *Driver) End() Step {
 func (d *Driver) Tables() *table.Set { return d.set }
 
 // Registry is the replay's stream registry.
-func (d *Driver) Registry() *clock.StreamRegistry { return d.reg }
+func (d *Driver) Registry() *clock.StreamRegistry { return d.ing.Registry() }
 
 // Walk yields the driver's Seq counters (component "seq", key the stream name), in declaration order: a state holder
 // (ADR-0006 §2(b)).
-func (d *Driver) Walk(fn func(component, key string, state any)) {
-	for i, s := range d.specs {
-		fn("seq", s.Name, d.seq[i])
-	}
-}
+func (d *Driver) Walk(fn func(component, key string, state any)) { d.ing.Walk(fn) }
 
 // Replay streams r through d line by line, calling fn on each step, then End; it stops at the first error (a fault or
 // fn's), and the steps already delivered stand (owner D6 of S3.2a-1).
