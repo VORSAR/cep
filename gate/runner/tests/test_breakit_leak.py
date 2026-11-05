@@ -35,6 +35,7 @@ HELPER = (
     "import os, signal\\n"
     "with open(PIDFILE, 'w') as f:\\n"
     "    f.write(str(os.getpid()))\\n"
+    "os.read(0, 1)\\n"
     "fd = os.open(WITNESS, os.O_WRONLY)\\n"
     "os.write(fd, b's')\\n"
     "while True:\\n"
@@ -45,10 +46,14 @@ HELPER = (
 class T(unittest.TestCase):
     def test_holds_a_helper(self):
         helper = subprocess.Popen(
-            [sys.executable, "-I", "-c", HELPER], stdin=subprocess.DEVNULL, start_new_session=NEW_SESSION
+            [sys.executable, "-I", "-c", HELPER], stdin=subprocess.PIPE, start_new_session=NEW_SESSION
         )
         self.addCleanup(helper.wait)
         self.addCleanup(helper.kill)
+        # The start byte follows the cleanups (S3.2a-1, owner): the helper writes its witness only after this go-ahead,
+        # so a stop the witness lets the test send can never land before the kill is registered.
+        helper.stdin.write(b"g")
+        helper.stdin.flush()
         signal.pause()
 """
 
