@@ -186,11 +186,35 @@ func oracleValue(t event.Type, raw json.RawMessage) (event.Value, bool) {
 		return event.Value{Kind: t, D: n}, true
 	case event.TObject:
 		if len(raw) > 0 && (raw[0] == '{' || raw[0] == '[') {
-			return event.Value{Kind: t, Obj: string(raw)}, true
+			return event.Value{Kind: t, Obj: oracleObjectText(raw)}, true
 		}
 		return event.Value{}, false
 	}
 	panic(fmt.Sprintf("oracle: no rule for type %v", t))
+}
+
+// oracleObjectText is owner D4 of S3.2a-1 (design note s3-2a-1 §5.6): an object value is stored as json.Compact of
+// its text, with malformed UTF-8 replaced. json.Compact drops every whitespace byte outside a string and copies every
+// token, a string's bytes included, as written. The replacement is the one encoding/json's Unmarshal makes for a
+// string (P8): each byte that utf8.DecodeRune cannot start a rune with becomes one U+FFFD. Outside a string a JSON
+// text holds only ASCII, so replacing over the whole text replaces exactly inside strings.
+func oracleObjectText(raw []byte) string {
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err != nil {
+		panic(fmt.Sprintf("oracle: json.Compact refused %q, which Unmarshal accepted: %v", clip(raw), err))
+	}
+	b := compact.Bytes()
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); {
+		r, size := utf8.DecodeRune(b[i:])
+		if r == utf8.RuneError && size == 1 {
+			out = append(out, "\uFFFD"...)
+		} else {
+			out = append(out, b[i:i+size]...)
+		}
+		i += size
+	}
+	return string(out)
 }
 
 // decodeResult is one decoder call, with a panic caught so that a test names the payload that caused it.
