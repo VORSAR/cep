@@ -205,7 +205,7 @@ func (r *StreamRegistry) Walk(fn func(component, key string, state any))
 ### 5.1 The app the log is read against
 
 As stubbed: `App{Streams []Stream; Tables []Table}`.
-- **`Stream`:** `{Schema, Delay, Derived}`; a stream's index is its stream id.
+- **`Stream`:** `{Schema, Delay, IdleAfter, Derived}`; a stream's index is its stream id. `IdleAfter` is the stream's `idle after D` (0 when it declares none); a recording's ticks use it.
 - **`Table`:** `{Name, Attrs, Key}`; a table's index is its table id.
 
 Names must be unique among streams and among tables, and `Delay ≥ 0`. S3.3's planner builds the `App`; tests build it by hand.
@@ -290,6 +290,7 @@ Every slice in a `Record` is fresh: the clock and later the operators keep event
 type StepKind uint8
 const (
 	StepEvent StepKind = iota + 1 // admitted: §1 with Advances
+	StepHeader                    // a recording's header: recording mode from here
 	StepStreamLate                // behind its stream's admission watermark: counted; nothing moves (not a fault)
 	StepTable
 	StepBatchEnd
