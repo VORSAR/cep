@@ -49,6 +49,17 @@
   - partition's panic reset: +0.5.
 - **Total:** 6 → about 8.5 points, under the cap. Nothing moved out; S3.3 13 → 12.
 
+## Measured results
+
+- **Exit 3, the saturation run** (recorded local run; S3.2a's plan-check reading 3): `go test -race -count=50 ./internal/runtime`, with one busy-loop CPU hog per core (12) running throughout.
+  - `TestSaturationProgress`: **50/50**.
+  - Every runtime test: 600 of 600 passes, 0 failures, 0 data races.
+  - The saturation test asserts `SaturatedParks ≥ 1`, so the "full mailbox while its handoff is pending" moment was reached in each run.
+- **Tests first** (QA, apart from the build): 17 runtime, partition and playback tests, red on the stub or the old code before the build.
+  - Two of them assumed `Send` waits for the router. It returns once queued, so they now wait on observable states (the first round's outputs at the sink; a `Stats` barrier) before changing their setup.
+  - QA's gap Q15, a real defect, was fixed test-first: a `Drain` whose context had already expired left the app refusing input without draining it.
+- **The replay driver on the shared ingest step:** every S3.2a-1 playback test passes unchanged.
+
 ## Done-done
 
 ```
@@ -58,7 +69,7 @@ Entry (G0)   ☑ card complete and approved (S3.2a's, v3) ☑ dependencies merge
 Design (G1)  ☑ architecture review resolved (design v2 §10) ☑ owner decisions recorded (F5, F10, F14) ☑ ADRs and SEMANTICS annotated
 Build (G2)   ☐ T2 (make check exit 0) ☐ T3 ☐ tests on the real code (QA's, red first)
 Review (G3)  ☐ QA break-it ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check ☐ exit 3: the saturation run, 50/50 under -race and a CPU hog
+Verify (G4)  ☐ T4 exit 0 ☐ CI on the PR ☐ owner's check ☑ exit 3: the saturation run, 50/50 under -race and a CPU hog
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
              ☐ worktrees removed ☐ points and duration
