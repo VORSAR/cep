@@ -120,6 +120,7 @@ type Step struct {
 	Op       TableOp
 	Stream   int // StepBatchEnd
 	Batch    string
+	Time     int64 // StepHeader: the deployment's start; StepTick: the tick's wall time
 }
 
 // Driver replays a log in file order under the virtual clock (ADR-0005 §3, SEMANTICS §2.1).
@@ -178,7 +179,7 @@ type Trace struct{}
 // NewTrace makes an empty trace for app.
 func NewTrace(app *App) *Trace { panic("playback: NewTrace: not implemented (S3.2a-1 stub)") }
 
-// Step records the driver's own entries: stream_late, table, batch_end, tick, stop, end.
+// Step records the driver's own entries: recording, stream_late, table, batch_end, tick, stop, end.
 func (t *Trace) Step(s *Step) { panic("playback: Trace.Step: not implemented (S3.2a-1 stub)") }
 
 // Released records a released event.

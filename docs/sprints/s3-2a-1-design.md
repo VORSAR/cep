@@ -299,6 +299,7 @@ const (
 	StepEnd                       // a fixture: Advances raise everything to +∞; a recording: no Advances
 )                                 // v2 drops StepErrored (D6)
 
+// Step gains `Time int64`: StepHeader's start, StepTick's wall time (v2).
 func NewDriver(app *App) (*Driver, error)
 func (d *Driver) Step(rec Record) Step // v2: cannot fail; the Reader checks everything first
 func (d *Driver) End() Step
@@ -361,6 +362,7 @@ As stubbed: `NewTrace`, `Step`, `Released`, `ConstructLate`, `Fired`, `Discarded
 | `stream_late` | `stream`, `seq`, `ts` |
 | `table` | `table`, `op` |
 | `batch_end` | `stream`, `batch` |
+| `recording` | `start` |
 | `tick` | `time` |
 | `stop` | — |
 | `end` | — |
