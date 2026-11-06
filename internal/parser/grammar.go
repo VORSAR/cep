@@ -120,10 +120,19 @@ type Partition struct {
 	TTL  *DurationOrParam `parser:"'ttl' @@"`
 }
 
+// PartKey is `k of S` or `(k, j, …) of S` (SPEC §4.4, rev 5). The grammar accepts a one-attribute group, which the
+// validator answers with E-PART-005 and its fix (design s3-2b-2 §1.2).
 type PartKey struct {
 	Pos    Position
-	Attr   string   `parser:"@(Ident|Backticked)"`
-	Stream *NameTok `parser:"'of' @@"`
+	Group  *KeyGroup `parser:"( @@"`
+	Attr   *NameTok  `parser:"| @@ )"`
+	Stream *NameTok  `parser:"'of' @@"`
+}
+
+// KeyGroup is the bracketed attribute list of a grouped key.
+type KeyGroup struct {
+	Pos   Position
+	Attrs []*NameTok `parser:"'(' @@ (',' @@)* ')'"`
 }
 
 type Body struct {

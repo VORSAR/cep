@@ -148,10 +148,16 @@ func (l *lowerer) rule(r *RuleDecl) model.Rule {
 	if p := r.Partition; p != nil {
 		out.Partition.Pos = pos(p.Pos)
 		for _, k := range p.Keys {
-			out.Partition.Keys = append(out.Partition.Keys, model.PartitionKey{
-				Attrs:  []model.KeyAttr{{Name: name(k.Attr), Pos: pos(k.Pos)}},
-				Stream: name(k.Stream.Value), Pos: pos(k.Pos), StreamPos: pos(k.Stream.Pos),
-			})
+			key := model.PartitionKey{Stream: name(k.Stream.Value), Pos: pos(k.Pos), StreamPos: pos(k.Stream.Pos)}
+			if k.Group != nil {
+				key.Grouped = true
+				for _, a := range k.Group.Attrs {
+					key.Attrs = append(key.Attrs, model.KeyAttr{Name: name(a.Value), Pos: pos(a.Pos)})
+				}
+			} else {
+				key.Attrs = []model.KeyAttr{{Name: name(k.Attr.Value), Pos: pos(k.Attr.Pos)}}
+			}
+			out.Partition.Keys = append(out.Partition.Keys, key)
 		}
 		out.Partition.TTL = l.durationOrParam(p.TTL)
 	}

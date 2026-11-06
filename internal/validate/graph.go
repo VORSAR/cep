@@ -46,6 +46,7 @@ func (c *checker) graph() {
 			}
 		}
 		c.timeAttr(s)
+		c.invisiblesDecl(s)
 	}
 	derived := func(name string) *model.Rule {
 		if s := c.streams[name]; s != nil && s.Time.Kind == model.TimeNone && len(producers[name]) > 0 {
@@ -90,6 +91,19 @@ func (c *checker) graph() {
 		c.report("E-GRAPH-001", c.app.Rules[cyc[0]].InsertIntoPos, "rules %s form a cycle", strings.Join(ruleNames(c.app.Rules, cyc), " -> "))
 	}
 	c.idle()
+}
+
+// invisiblesDecl: a stream may declare `text_invisibles` only as a non-optional bool, the engine's flag's type; any
+// other declaration is E-TYPE-001 at it (S3.2b's Q3), since every read of the name returns the flag.
+func (c *checker) invisiblesDecl(s *model.Stream) {
+	a := attrOf(s, event.InvisiblesAttr)
+	switch {
+	case a == nil:
+	case a.Type != event.TBool:
+		c.report("E-TYPE-001", a.Pos, "%s.%s is the engine's invisible-character flag: declare it bool, not %s", s.Name, a.Name, a.Type)
+	case a.Optional:
+		c.report("E-TYPE-001", a.Pos, "%s.%s is the engine's invisible-character flag, never null: declare it bool without optional", s.Name, a.Name)
+	}
 }
 
 func (c *checker) timeAttr(s *model.Stream) {

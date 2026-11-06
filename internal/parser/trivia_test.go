@@ -14,6 +14,7 @@ var corpus = []string{
 	filepath.Join("..", "..", "docs", "language", "examples", "torture", "*.cep"),
 	filepath.Join("..", "..", "docs", "language", "eval", "generated", "*.cep"),
 	filepath.Join("..", "..", "docs", "language", "eval", "generated", "torture", "*.cep"),
+	filepath.Join("..", "..", "docs", "language", "eval", "generated", "rev5", "*.cep"), // SPEC rev 5's grouped-key evaluation (S3.2b-2)
 }
 
 func corpusFiles(t *testing.T) []string {

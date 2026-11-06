@@ -60,7 +60,7 @@ func TestGroupedKeyFindings(t *testing.T) {
 		{"a single key in brackets", gkPlain("(k) of S"), "E-PART-005", 4, "(k)", 1,
 			"the partition key of S in rule R is one attribute in brackets: write k of S",
 			"write `k of S`; brackets group two or more attributes: `(k, j) of S`."},
-		{"an attribute named twice in one group", gkPlain("(k, j, k) of S"), "E-PART-006", 4, "k", 3,
+		{"an attribute named twice in one group", gkPlain("(k, j, k) of S"), "E-PART-006", 4, "k", 2,
 			"k is named twice in the partition key of S in rule R: name each attribute once",
 			"name each attribute once: `(k, j) of S`."},
 		{"a stream keyed twice", gkPlain("k of S, j of S"), "E-PART-004", 4, "j of S", 1,

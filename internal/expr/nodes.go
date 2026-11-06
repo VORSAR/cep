@@ -614,3 +614,12 @@ func (n *ifThenElse) Eval(row Row) (event.Value, error) {
 	v, err := n.b.Eval(row)
 	return promote(v, n.typ), err
 }
+
+// invisibles reads the engine's invisible-character flag of its slot's event (design s3-2b-2 §5).
+type invisibles struct{ slot int }
+
+func (n *invisibles) Eval(row Row) (event.Value, error) {
+	return event.Value{Kind: event.TBool, B: row.Invisibles(n.slot)}, nil
+}
+
+func (n *invisibles) Type() event.Type { return event.TBool }

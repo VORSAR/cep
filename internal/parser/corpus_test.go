@@ -59,6 +59,7 @@ func TestValidCorpus(t *testing.T) {
 		filepath.Join(corpusRoot, "examples", "*.cep"),
 		filepath.Join(corpusRoot, "examples", "torture", "*.cep"),
 		filepath.Join(corpusRoot, "eval", "generated", "*.cep"),
+		filepath.Join(corpusRoot, "eval", "generated", "rev5", "*.cep"), // SPEC rev 5's grouped-key evaluation (S3.2b-2)
 	} {
 		files = append(files, glob(t, pattern)...)
 	}

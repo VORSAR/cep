@@ -299,8 +299,8 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 		return
 	}
 	if ts := attrOf(target, "ts"); ts != nil && target.Time.Kind == model.TimeNone && ts.Type != event.TTimestamp && !c.badTs[target] {
-		c.badTs[target] = true // once per stream; at its declaration until model attributes carry a position (owner D3 as annotated: S3.2b-2)
-		c.report("E-TYPE-001", target.Pos, "%s.ts is filled with the output timestamp: declare it timestamp, not %s", target.Name, ts.Type)
+		c.badTs[target] = true // once per stream, at the attribute itself (owner, S3.2b-1's review: D3's position)
+		c.report("E-TYPE-001", ts.Pos, "%s.ts is filled with the output timestamp: declare it timestamp, not %s", target.Name, ts.Type)
 	}
 	for _, a := range target.Attrs {
 		if broken {
@@ -348,6 +348,9 @@ func (c *checker) mayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
 	case model.ExprLiteral:
 		return n.Lit.Kind == model.LitNull
 	case model.ExprAttr, model.ExprRaw:
+		if n.Kind == model.ExprAttr && n.Name == event.InvisiblesAttr {
+			return false // the engine's flag: a non-optional bool, declared or not (S3.2b's Q3)
+		}
 		slot, i, _, ok := sc.Attr(n.Qualifier, n.Name)
 		if !ok {
 			return true
