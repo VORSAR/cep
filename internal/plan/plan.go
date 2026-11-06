@@ -326,6 +326,7 @@ type body struct {
 	every  int64
 	emit   func(event.Event)
 	row    row
+	buf    []event.Value // the projection, reused: copied only when the output is emitted (review F7)
 	stats  Stats
 }
 
@@ -349,7 +350,11 @@ func (b *body) OnEvent(in *partition.Instance, e event.Event) {
 			return
 		}
 	}
-	vals := make([]event.Value, b.nattrs)
+	if len(b.buf) != b.nattrs {
+		b.buf = make([]event.Value, b.nattrs)
+	}
+	vals := b.buf
+	defer clear(vals) // hold nothing of the event between calls
 	for _, p := range b.sel {
 		v, err := p.e.Eval(&b.row)
 		if err != nil {
@@ -368,7 +373,8 @@ func (b *body) OnEvent(in *partition.Instance, e event.Event) {
 }
 
 // out is the emission stage (SEMANTICS §8): with D > 0, an output with Ts <= At + D (saturating; ties included) is
-// suppressed and counted; otherwise it is emitted and the anchor moves to its Ts.
+// suppressed and counted; otherwise it is emitted and the anchor moves to its Ts. e.Values is the body's projection
+// buffer: an emitted output gets its own copy, so a suppressed one allocates nothing (S3.2b's Q4; review F7).
 func (b *body) out(a *Anchor, e event.Event) {
 	if b.every > 0 {
 		if a.Set && e.Ts <= addSat(a.At, b.every) {
@@ -377,6 +383,7 @@ func (b *body) out(a *Anchor, e event.Event) {
 		}
 		a.At, a.Set = e.Ts, true
 	}
+	e.Values = slices.Clone(e.Values)
 	b.emit(e)
 }
 

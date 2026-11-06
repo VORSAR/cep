@@ -197,7 +197,8 @@ func TestSaturationProgress(t *testing.T) {
 	}
 
 	st := rtStats(t, ctx, r)
-	for sid, n := range st.StreamLate[0] {
+	for sid, ss := range st.Streams[0] {
+		n := ss.Late
 		if n != 0 {
 			t.Errorf("stream %d: stream_late %d, want 0 (one sender per stream, monotone)", sid, n)
 		}

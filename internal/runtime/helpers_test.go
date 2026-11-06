@@ -54,9 +54,10 @@ func rtStr(s string) event.Value    { return event.Value{Kind: event.TString, St
 func rtInt(i int64) event.Value     { return event.Value{Kind: event.TInt, I: i} }
 func rtFloat(f float64) event.Value { return event.Value{Kind: event.TFloat, F: f} }
 
-// rtEv is a source event of stream sid at ts with values; Seq and Tables are the router's.
+// rtEv is a source event of stream sid at ts with values, its time attribute (rtSchema's last) set to ts; Seq and
+// Tables are the router's.
 func rtEv(sid int, ts int64, vals ...event.Value) event.Event {
-	return event.Event{StreamID: sid, Ts: ts, Values: vals}
+	return event.Event{StreamID: sid, Ts: ts, Values: append(append([]event.Value(nil), vals...), event.Value{Kind: event.TTimestamp, T: ts})}
 }
 
 // rtSrc is a source stream with delay d ms and no idleness.
@@ -67,9 +68,11 @@ func rtDerived(name string) clock.StreamSpec { return clock.StreamSpec{Name: nam
 
 // rtSchema is a `time arrival` schema (no time attribute among the values: Send takes e.Ts as given, design §2) with
 // the attributes attrs. App.Schemas is aligned with App.Streams (design v2 §2).
+// The schema is event-time: its last attribute is `ts timestamp`, the time attribute, which rtEv fills from the
+// event's Ts (an arrival-time schema would have the live intake stamp every event: S3.2b-2's item 3).
 func rtSchema(t testing.TB, name string, attrs ...event.Attr) event.Schema {
 	t.Helper()
-	s, err := event.NewSchema(name, attrs, event.ArrivalTime)
+	s, err := event.NewSchema(name, append(append([]event.Attr(nil), attrs...), rtA("ts", event.TTimestamp)), len(attrs))
 	if err != nil {
 		t.Fatalf("NewSchema(%s): %v", name, err)
 	}
@@ -349,4 +352,13 @@ func rtEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// rtLate is a row of StreamStats' Late counters.
+func rtLate(ss []runtime.StreamStats) []int64 {
+	out := make([]int64, len(ss))
+	for i, s := range ss {
+		out[i] = s.Late
+	}
+	return out
 }

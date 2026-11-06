@@ -9,8 +9,8 @@ import (
 	"github.com/vorsar/cep/internal/event"
 )
 
-// maxLine is the longest line a log may hold (design note §5.2).
-const maxLine = 16 << 20
+// maxLine is the longest line a log may hold (design note §5.2): event.MaxLogLine, which live intake honours too.
+const maxLine = event.MaxLogLine
 
 // The envelope's keys, in the envelope schema's attribute order (design note §5.2).
 const (
@@ -26,6 +26,7 @@ const (
 	eTable
 	eTick
 	eTs
+	eRejected
 	eCount
 )
 
@@ -43,6 +44,7 @@ var envelopeAttrs = [eCount]event.Attr{
 	eTable:     {Name: "table", Type: event.TString, Optional: true},
 	eTick:      {Name: "tick", Type: event.TTimestamp, Optional: true},
 	eTs:        {Name: "ts", Type: event.TTimestamp, Optional: true},
+	eRejected:  {Name: "rejected", Type: event.TObject, Optional: true},
 }
 
 // recordKinds names each kind's choosing key, in the order the kind is chosen (design note §5.2), and the keys it
@@ -58,6 +60,7 @@ var recordKinds = [...]struct {
 	{eBatchEnd, RecBatchEnd, "batch end", [eCount]bool{eBatchEnd: true, eStream: true}},
 	{eTick, RecTick, "tick", [eCount]bool{eTick: true}},
 	{eStop, RecStop, "stop", [eCount]bool{eStop: true}},
+	{eRejected, RecRejected, "rejected", [eCount]bool{eRejected: true, eStream: true, eArrival: true}},
 	{eStream, RecEvent, "event", [eCount]bool{eStream: true, eAttrs: true, eBatch: true, eTs: true, eArrival: true}},
 }
 
@@ -70,6 +73,7 @@ type Reader struct {
 	app       *App
 	env       *event.Decoder
 	header    *event.Decoder
+	rejected  *event.Decoder
 	streams   map[string]int
 	tables    map[string]int
 	sdec      []*event.Decoder // per stream: its payload
@@ -98,9 +102,14 @@ func NewReader(r io.Reader, app *App) (*Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("playback: the header schema: %w", err)
 	}
+	rejSchema, err := event.NewSchema("rejected", []event.Attr{{Name: "attr", Type: event.TString, Optional: true}, {Name: "reason", Type: event.TString}}, event.ArrivalTime)
+	if err != nil {
+		return nil, fmt.Errorf("playback: the rejected record's schema: %w", err)
+	}
 	rd := &Reader{
 		br: bufio.NewReaderSize(r, 64<<10), app: app, env: event.NewDecoder(envSchema), header: event.NewDecoder(hdrSchema),
-		streams: map[string]int{}, tables: map[string]int{},
+		rejected: event.NewDecoder(rejSchema),
+		streams:  map[string]int{}, tables: map[string]int{},
 	}
 	for i, s := range app.Streams {
 		rd.streams[s.Schema.Stream()] = i
@@ -273,7 +282,7 @@ func (r *Reader) record(line []byte) (Record, error) {
 		}
 	}
 	if kind < 0 {
-		return Record{}, r.fault("a record names none of recording, table, batch_end, tick, stop or stream")
+		return Record{}, r.fault("a record names none of recording, table, batch_end, tick, stop, rejected or stream")
 	}
 	rk := &recordKinds[kind]
 	for i := range eCount {
@@ -292,8 +301,53 @@ func (r *Reader) record(line []byte) (Record, error) {
 		return r.tickRecord(vals)
 	case RecStop:
 		return r.stopRecord(vals)
+	case RecRejected:
+		return r.rejectedRecord(vals, present)
 	}
 	return r.eventRecord(vals, present)
+}
+
+// rejectedRecord is a recording's rejected live event (owner Q1 of S3.2b-2; design s3-2b-2 §7): its stream, its
+// arrival (on every stream: a rejected record is no event) and its fault's reason, with the attribute unless the
+// fault is syntax. Legal only in a recording.
+func (r *Reader) rejectedRecord(vals []event.Value, present func(int) bool) (Record, error) {
+	if !r.recording {
+		return Record{}, r.fault("a rejected record in a log without a recording header")
+	}
+	if !present(eStream) || !present(eArrival) {
+		return Record{}, r.fault("a rejected record carries stream and arrival")
+	}
+	sid, err := r.stream(vals)
+	if err != nil {
+		return Record{}, err
+	}
+	f, info, err := r.rejected.Decode([]byte(vals[eRejected].Obj.(string)), nil)
+	if err != nil {
+		return Record{}, r.fault("the rejected record: %s", decodeMsg(err))
+	}
+	if info.Unknown > 0 {
+		return Record{}, r.fault("the rejected record has a key other than reason and attr")
+	}
+	reason, ok := reasonOf[f[1].Str]
+	switch {
+	case !ok:
+		return Record{}, r.fault("the rejected record's reason %q is none of syntax, type, missing, null", f[1].Str)
+	case reason == event.DecodeSyntax && !f[0].Null:
+		return Record{}, r.fault("a syntax fault names no attribute")
+	case reason != event.DecodeSyntax && f[0].Null:
+		return Record{}, r.fault("a %s fault names its attribute", f[1].Str)
+	}
+	arrival := vals[eArrival].T
+	if arrival < r.last {
+		return Record{}, r.fault("an arrival before the previous arrival or tick")
+	}
+	r.last = arrival
+	return Record{Line: r.line, Kind: RecRejected, Stream: sid, Arrival: arrival, Reason: reason, Attr: f[0].Str}, nil
+}
+
+// reasonOf maps a rejected record's reason to its decode reason.
+var reasonOf = map[string]event.DecodeReason{
+	"syntax": event.DecodeSyntax, "type": event.DecodeType, "missing": event.DecodeMissing, "null": event.DecodeNull,
 }
 
 func (r *Reader) headerRecord(vals []event.Value) (Record, error) {
@@ -453,7 +507,7 @@ func (r *Reader) eventRecord(vals []event.Value, present func(int) bool) (Record
 	if present(eBatch) {
 		batch = vals[eBatch].Str
 	}
-	return Record{Line: r.line, Kind: RecEvent, Arrival: arrival,
+	return Record{Line: r.line, Kind: RecEvent, Arrival: arrival, Info: info,
 		Event: event.Event{StreamID: sid, Ts: ts, Values: values, BatchID: batch}}, nil
 }
 

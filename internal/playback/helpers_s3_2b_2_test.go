@@ -277,3 +277,12 @@ func q2Diff(t testing.TB, p *plan.App, a, b *q2Run, n int) string {
 
 // q2Header is a recording's header line.
 func q2Header(start int64) string { return fmt.Sprintf(`{"recording":{"start":%q}}`, ldRFC(start)) }
+
+// lateRow is a row of StreamStats' Late counters.
+func lateRow(ss []runtime.StreamStats) []int64 {
+	out := make([]int64, len(ss))
+	for i, s := range ss {
+		out[i] = s.Late
+	}
+	return out
+}

@@ -36,7 +36,7 @@ func TestCvFailedRedrainKeepsTheInputEnded(t *testing.T) {
 	if err := r.Send(ctx, 0, rtEv(0, rtAt(2), rtStr("a"))); !errors.Is(err, runtime.ErrDrained) {
 		t.Errorf("Send after the drain, behind a failed second Drain: %v, want ErrDrained (design v2 §2, owner F5)", err)
 	}
-	if n := rtStats(t, ctx, r).AfterDrain[0][0]; n != 0 {
+	if n := rtStats(t, ctx, r).Streams[0][0].AfterDrain; n != 0 {
 		t.Errorf("AfterDrain %d, want 0: the Send should have been refused in its caller", n)
 	}
 }

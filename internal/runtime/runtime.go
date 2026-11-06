@@ -49,7 +49,8 @@ type App struct {
 	Tables  *table.Set         // nil: no tables; the router is their only live writer (owner F14)
 	Rules   []Rule
 	Sinks   []SinkBinding
-	// Recorder writes the app's recording (S3.2a-1's D3; S3.2b-2's Q1, Q2); nil: none. Stub: not built yet.
+	// Recorder writes the app's recording (S3.2a-1's D3; S3.2b-2's Q1, Q2) on its own goroutine; nil: none, the
+	// default (owner D4 of S3.2b-2's design: recording is off unless the deployment turns it on).
 	Recorder Recorder
 }
 
@@ -65,9 +66,6 @@ type Recorder interface {
 	Stop() error                                             // at the drain, once
 }
 
-// errNotBuilt marks an S3.2b-2 path whose behaviour is built after G1: the stub QA's tests are written against.
-var errNotBuilt = errors.New("runtime: S3.2b-2: not built yet")
-
 // Config is the runtime's configuration; zero values take the defaults.
 type Config struct {
 	Shards    int           // 0: GOMAXPROCS
@@ -76,6 +74,9 @@ type Config struct {
 	SinkQueue int           // per sink binding; 0: 1024
 	TickEvery time.Duration // live idle ticks from an internal ticker; 0: none
 	Now       func() int64  // wall ms; nil: time.Now
+	// RecordQueue is each recording's queue, in records; 0: 65,536. A full queue ends the recording (owner D2 of
+	// S3.2b-2's design).
+	RecordQueue int
 }
 
 // The errors a caller sees.
@@ -122,11 +123,9 @@ type RecordingStats struct {
 
 // Stats is a consistent cut of the runtime's counters at one intake position.
 type Stats struct {
-	Streams        [][]StreamStats  // [app][stream] (design s3-2b-2 §6); stub: Late and AfterDrain only
-	Recording      []RecordingStats // per app; stub: zero
-	OutboxHigh     []int            // per shard: the most items one message's processing appended to the outbox; stub: zero
-	StreamLate     [][]int64        // [app][stream]
-	AfterDrain     [][]int64        // [app][stream]: refused after the app's drain, by intake order
+	Streams        [][]StreamStats  // [app][stream] (design s3-2b-2 §6)
+	Recording      []RecordingStats // per app; read outside the cut, as SinkErrors (the recorder goroutine's own)
+	OutboxHigh     []int            // per shard: the most items one message's processing appended to the outbox
 	Rules          [][]RuleStats    // [app][rule]
 	SinkErrors     [][]int64        // [app][binding]; read atomically, outside the cut
 	PendingHigh    int              // the router's pending FIFO, its longest
@@ -136,6 +135,7 @@ type Stats struct {
 
 // Runtime is a running engine core (design §2–§6).
 type Runtime struct {
+	start     int64 // the deployment's start: the stamps' floor (review F5)
 	cfg       Config
 	apps      []*appState
 	shards    []*shard
@@ -149,17 +149,19 @@ type Runtime struct {
 type appState struct {
 	id       AppID
 	app      App
-	ing      *Ingest     // the router's
-	byStream [][]route   // per stream: the rules reading it
-	sinks    [][]*sinkQ  // per stream: its bindings
-	all      []*sinkQ    // every binding, in order
-	draining atomic.Bool // a caller's fast path (owner F5)
-	drained  bool        // the router's, by intake order
-	drainTok uint64      // the router's: the drain's token while its acks are due
-	drainRes *reply      // the router's: the drain's result, once known; a retried Drain waits on it (owner)
-	late     []int64     // per stream: stream_late (the router's)
-	after    []int64     // per stream: refused after the drain (the router's)
-	keyErr   []int64     // per rule: key_errors (the router's)
+	ing      *Ingest          // the router's
+	byStream [][]route        // per stream: the rules reading it
+	sinks    [][]*sinkQ       // per stream: its bindings
+	all      []*sinkQ         // every binding, in order
+	draining atomic.Bool      // a caller's fast path (owner F5)
+	drained  bool             // the router's, by intake order
+	drainTok uint64           // the router's: the drain's token while its acks are due
+	drainRes *reply           // the router's: the drain's result, once known; a retried Drain waits on it (owner)
+	late     []int64          // per stream: stream_late (the router's)
+	after    []int64          // per stream: refused after the drain (the router's)
+	keyErr   []int64          // per rule: key_errors (the router's)
+	dec      []*event.Decoder // per stream: SendPayload's decoder (safe for concurrent use)
+	rec      *recQ            // nil: no recording (owner D4 of S3.2b-2's design: off unless turned on)
 }
 
 type route struct {
@@ -181,7 +183,8 @@ type sinkItem struct {
 type itemKind uint8
 
 const (
-	iEvent itemKind = iota + 1
+	iEvent  itemKind = iota + 1
+	iReject          // a payload that failed its schema or the format's limits (owner Q1 of S3.2b-2)
 	iTick
 	iWrite
 	iDrain
@@ -189,14 +192,18 @@ const (
 )
 
 type item struct {
-	kind  itemKind
-	app   AppID
-	ev    event.Event
-	now   int64
-	table int
-	op    TableOp
-	rows  [][]event.Value
-	reply chan reply // buffered 1: the router never blocks on it
+	kind    itemKind
+	app     AppID
+	ev      event.Event
+	info    event.Decoded      // iEvent from SendPayload: its decode report
+	payload []byte             // iEvent from SendPayload with a recording: the payload as sent, cleaned; the item's own
+	stream  int                // iReject
+	fault   *event.DecodeError // iReject
+	now     int64
+	table   int
+	op      TableOp
+	rows    [][]event.Value
+	reply   chan reply // buffered 1: the router never blocks on it
 }
 
 type reply struct {
@@ -280,6 +287,10 @@ func Start(cfg Config, apps []App) (*Runtime, error) {
 			r.wg.Add(1)
 			go q.run(r)
 		}
+		if a.rec != nil {
+			r.wg.Add(1)
+			go a.rec.run(r)
+		}
 	}
 	if r.cfg.TickEvery > 0 {
 		r.wg.Add(1)
@@ -310,15 +321,16 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 		if err := validateApp(i, &apps[i]); err != nil {
 			return nil, err
 		}
-		if apps[i].Recorder != nil {
-			return nil, errNotBuilt
-		}
 	}
 	r := &Runtime{
 		cfg: cfg, intake: make(chan item, cfg.Intake), handoff: make(chan handoff, cfg.Shards),
 		stopped: make(chan struct{}),
 	}
+	if cfg.RecordQueue <= 0 {
+		cfg.RecordQueue = 65536
+	}
 	start := cfg.Now()
+	r.start = start
 	for i := range apps {
 		app := apps[i]
 		a := &appState{
@@ -326,6 +338,14 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 			byStream: make([][]route, len(app.Streams)), sinks: make([][]*sinkQ, len(app.Streams)),
 			late: make([]int64, len(app.Streams)), after: make([]int64, len(app.Streams)),
 			keyErr: make([]int64, len(app.Rules)),
+			dec:    make([]*event.Decoder, len(app.Streams)),
+		}
+		for sid, sch := range app.Schemas {
+			a.dec[sid] = event.NewDecoder(sch)
+		}
+		if app.Recorder != nil {
+			a.rec = newRecQ(app.Recorder, cfg.RecordQueue)
+			a.rec.put(recItem{kind: rHeader, arrival: start}) // the header first (design s3-2b-2 §7)
 		}
 		for ri, rule := range app.Rules {
 			for k, sid := range rule.Inputs {
@@ -468,20 +488,12 @@ func (r *Runtime) await(ctx context.Context, ch chan reply) (reply, error) {
 	}
 }
 
-// SendPayload hands one source event of app, as a JSON payload, to the intake (design s3-2b-2 §6). The payload is
-// decoded on the caller's goroutine with the stream's decoder; a payload that fails its stream's schema is not an
-// error to the caller: it enters the intake as a rejected item, counted and recorded (SEMANTICS §10; owner Q1 of
-// S3.2b-2). It blocks for backpressure and respects ctx; the caller may reuse payload after it returns. Stub: not
-// built yet.
-func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payload []byte) error {
-	return errNotBuilt
-}
-
-// streamStats is a's per-stream counters; the stub fills Late and AfterDrain only.
+// streamStats is a's per-stream counters: the router's (late, after the drain) and the ingest step's.
 func streamStats(a *appState) []StreamStats {
 	out := make([]StreamStats, len(a.app.Streams))
 	for i := range out {
-		out[i].Late, out[i].AfterDrain = a.late[i], a.after[i]
+		c := a.ing.counts[i]
+		out[i] = StreamStats{Late: a.late[i], AfterDrain: a.after[i], Rejected: c.rejected, Unknown: c.unknown, FlagOverrides: c.overrides}
 	}
 	return out
 }
@@ -513,6 +525,16 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 		case v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
 			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)", app, sch.Stream(), at.Name, v.F)
 		}
+		if err := recordable(v); err != nil {
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(), at.Name, err)
+		}
+	}
+	if ta := sch.TimeAttr(); ta != event.ArrivalTime && e.Ts != e.Values[ta].T {
+		return fmt.Errorf("runtime: app %d stream %q: Ts %d differs from the time attribute %q, %d: an event-time stream's time is its attribute (S3.2a-1's D2; owner D1 of S3.2b-2's design)",
+			app, sch.Stream(), e.Ts, sch.Attr(ta).Name, e.Values[ta].T)
+	}
+	if lineBound(sch, e) > event.MaxLogLine {
+		return fmt.Errorf("runtime: app %d stream %q: the event could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", app, sch.Stream(), event.MaxLogLine)
 	}
 	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
 }
@@ -537,6 +559,13 @@ func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op Tab
 	}
 	if a.app.Tables == nil || tableID < 0 || tableID >= a.app.Tables.Len() || (op != TablePut && op != TableDelete) {
 		return fmt.Errorf("runtime: app %d: no table %d, or an unknown operation", app, tableID)
+	}
+	for ri, row := range rows {
+		for ci, v := range row {
+			if err := recordable(v); err != nil {
+				return fmt.Errorf("runtime: app %d table %d: row %d value %d %v (owner D1 of S3.2b-2's design)", app, tableID, ri, ci, err)
+			}
+		}
 	}
 	_, err = r.request(ctx, item{kind: iWrite, app: app, table: tableID, op: op, rows: rows})
 	return err
@@ -626,10 +655,11 @@ type send struct {
 }
 
 type drainWait struct {
-	app     *appState
-	acks    int
-	pending int64
-	replies []chan reply // the Drain calls waiting for this drain's result
+	app       *appState
+	acks      int
+	pending   int64
+	replies   []chan reply  // the Drain calls waiting for this drain's result
+	recMarker chan struct{} // closed once the recording's stop is written; nil: no recording, or it ended
 }
 
 type statsWait struct {
@@ -655,7 +685,7 @@ type router struct {
 
 func newRouter(r *Runtime) *router {
 	return &router{
-		r: r, mailboxHigh: make([]int, len(r.shards)), stamp: math.MinInt64, drains: map[uint64]*drainWait{},
+		r: r, mailboxHigh: make([]int, len(r.shards)), stamp: r.start, drains: map[uint64]*drainWait{},
 		stats: map[uint64]*statsWait{}, offers: make([][]offer, len(r.shards)),
 	}
 }
@@ -739,13 +769,28 @@ func (rt *router) ingest(it item) {
 			a.after[it.ev.StreamID]++
 			return
 		}
-		rt.event(a, &it.ev, rt.now(r.cfg.Now()))
+		stamp := rt.now(r.cfg.Now())
+		if a.app.Schemas[it.ev.StreamID].TimeAttr() == event.ArrivalTime {
+			it.ev.Ts = stamp // live stamping at ingest (item 3; design s3-2b-2 §4, MUST 6)
+		}
+		a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
+		rt.event(a, &it.ev, stamp, it.info)
+	case iReject:
+		a := r.apps[it.app]
+		if a.drained {
+			a.after[it.stream]++
+			return
+		}
+		stamp := rt.now(r.cfg.Now())
+		a.rec.put(recItem{kind: rRejected, stream: it.stream, arrival: stamp, fault: it.fault})
+		a.ing.Reject(it.stream, stamp)
 	case iTick:
 		stamp := rt.now(it.now)
 		for _, a := range r.apps {
 			if a.drained {
 				continue
 			}
+			a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
 			rt.tickApp(a, stamp)
 		}
 	case iWrite:
@@ -754,7 +799,11 @@ func (rt *router) ingest(it item) {
 			it.reply <- reply{err: ErrDrained}
 			return
 		}
-		it.reply <- reply{err: a.write(it.table, it.op, it.rows)}
+		err := a.write(it.table, it.op, it.rows)
+		if err == nil {
+			a.rec.put(recItem{kind: rTable, table: it.table, op: it.op, rows: copyRows(it.rows)})
+		}
+		it.reply <- reply{err: err}
 	case iDrain:
 		a := r.apps[it.app]
 		if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
@@ -769,17 +818,21 @@ func (rt *router) ingest(it item) {
 		a.drained = true
 		rt.token++
 		a.drainTok = rt.token
-		rt.drains[rt.token] = &drainWait{app: a, replies: []chan reply{it.reply}}
+		dw := &drainWait{app: a, replies: []chan reply{it.reply}}
+		if a.rec.put(recItem{kind: rStop}) {
+			if m := make(chan struct{}); a.rec.put(recItem{kind: rMarker, marker: m}) {
+				dw.recMarker = m // the drain waits until the stop is written (design s3-2b-2 §7)
+			}
+		}
+		rt.drains[rt.token] = dw
 		rt.drainApp(a, rt.token)
 	case iStats:
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
 		st.OutboxHigh = make([]int, len(r.shards))
-		st.Recording = make([]RecordingStats, len(r.apps))
 		for _, a := range r.apps {
 			st.Streams = append(st.Streams, streamStats(a))
-			st.StreamLate = append(st.StreamLate, append([]int64(nil), a.late...))
-			st.AfterDrain = append(st.AfterDrain, append([]int64(nil), a.after...))
+			st.Recording = append(st.Recording, a.rec.stats())
 			rules := make([]RuleStats, len(a.app.Rules))
 			for i := range rules {
 				rules[i].KeyErrors = a.keyErr[i]
@@ -797,10 +850,10 @@ func (rt *router) ingest(it item) {
 // event is design §4: the ingest step (stamping e in place), the offers by key, and one message per shard, each a
 // view delivered before the next step (design s3-2b-1 v2 §4). The caller checks the app is not drained and gives the
 // arrival stamp. adv is the ingest step's, valid until its next call.
-func (rt *router) event(a *appState, e *event.Event, arrival int64) (late bool, adv []clock.WMAdvance) {
+func (rt *router) event(a *appState, e *event.Event, arrival int64, info event.Decoded) (late bool, adv []clock.WMAdvance) {
 	reg := a.ing.Registry()
 	before := reg.Admission(e.StreamID)
-	late, adv = a.ing.Event(e, arrival)
+	late, adv = a.ing.Event(e, arrival, info)
 	if late {
 		a.late[e.StreamID]++
 		return true, adv
@@ -968,6 +1021,9 @@ func (rt *router) take(h handoff) {
 				m := make(chan struct{})
 				markers = append(markers, m)
 				rt.push(send{shard: -1, sink: q, si: sinkItem{marker: m}})
+			}
+			if d.recMarker != nil {
+				markers = append(markers, d.recMarker)
 			}
 			res := reply{pending: d.pending, markers: markers}
 			d.app.drainRes = &res
@@ -1222,4 +1278,13 @@ func (q *sinkQ) call(e event.Event) {
 	if err := q.sink(e); err != nil {
 		q.errors.Add(1)
 	}
+}
+
+// copyRows is a table write's rows as the record's own: the caller may reuse its slices once TableWrite returns.
+func copyRows(rows [][]event.Value) [][]event.Value {
+	out := make([][]event.Value, len(rows))
+	for i, row := range rows {
+		out[i] = append([]event.Value(nil), row...)
+	}
+	return out
 }

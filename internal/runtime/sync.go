@@ -62,17 +62,24 @@ func (s *Sync) Begin(start int64) {
 
 // Event is one event step: the shared ingest step (stamping e's Seq and Tables in place), the offers, the walks;
 // late says its stream judged it late. adv is valid until the next step.
-func (s *Sync) Event(e *event.Event, arrival int64) (late bool, adv []clock.WMAdvance) {
+// info is the event's decode report (a recording's or fixture's payload: unknown keys, its own text_invisibles).
+func (s *Sync) Event(e *event.Event, arrival int64, info event.Decoded) (late bool, adv []clock.WMAdvance) {
 	if s.a.drained {
 		s.a.after[e.StreamID]++
 		return false, nil
 	}
-	return s.rt.event(s.a, e, arrival)
+	return s.rt.event(s.a, e, arrival, info)
 }
 
 // Reject is a recording's rejected record (owner Q1 of S3.2b-2; design §6): it raises the stamp and counts the
-// rejection, nothing else. Stub: not built yet (a no-op).
-func (s *Sync) Reject(stream int, arrival int64, reason event.DecodeReason) {}
+// rejection, nothing else, as live ingest does.
+func (s *Sync) Reject(stream int, arrival int64) {
+	if s.a.drained {
+		s.a.after[stream]++
+		return
+	}
+	s.a.ing.Reject(stream, arrival)
+}
 
 // Tick is a recording's idle tick.
 func (s *Sync) Tick(now int64) []clock.WMAdvance {
@@ -131,7 +138,6 @@ func (s *Sync) Stats() Stats {
 	}
 	return Stats{
 		Streams: [][]StreamStats{streamStats(a)}, Recording: []RecordingStats{{}}, OutboxHigh: []int{0},
-		StreamLate: [][]int64{append([]int64(nil), a.late...)}, AfterDrain: [][]int64{append([]int64(nil), a.after...)},
 		Rules: [][]RuleStats{rules}, SinkErrors: [][]int64{make([]int64, len(a.all))},
 		PendingHigh: 0, MailboxHigh: []int{0}, SaturatedParks: []int64{sh.parks},
 	}

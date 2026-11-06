@@ -234,6 +234,7 @@ func decodeSafe(d *event.Decoder, b []byte, dst []event.Value) (r decodeResult) 
 		}
 	}()
 	r.values, r.dec, r.err = d.Decode(b, dst)
+	r.dec.Depth = 0 // the oracle does not measure depth; TestDecodeReportsTheDeepestNesting pins it
 	return r
 }
 

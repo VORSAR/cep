@@ -98,7 +98,7 @@ func TestIngestMatchesDriver(t *testing.T) {
 					if recording {
 						arrival = rec.Arrival
 					}
-					late, adv := g.Event(&e, arrival)
+					late, adv := g.Event(&e, arrival, event.Decoded{})
 					got = append(got, igStep{"event", e.Seq, late, e.Tables, slices.Clone(adv)})
 					if snap := g.Snapshot(); snap != st.Tables {
 						t.Errorf("line %d: Snapshot() %p, want the step's %p", rec.Line, snap, st.Tables)
@@ -318,8 +318,8 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Stats: %v", err)
 			}
-			if st.StreamLate[0][0] != 1 || st.StreamLate[0][1] != 0 {
-				t.Errorf("stream_late %v, want [1 0] (A4 k1)", st.StreamLate[0])
+			if st.Streams[0][0].Late != 1 || st.Streams[0][1].Late != 0 {
+				t.Errorf("stream_late %v, want [1 0] (A4 k1)", lateRow(st.Streams[0]))
 			}
 			live.mu.Lock()
 			got := live.per
