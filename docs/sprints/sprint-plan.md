@@ -55,7 +55,8 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | S3.1 ✓ ([S3.1-1](s3-1-1-record.md), [S3.1-2](s3-1-2-record.md)) | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
 | S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
 | S3.2b ✓ ([S3.2b-1](s3-2b-1-record.md), [S3.2b-2](s3-2b-2-record.md)) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
-| S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b |
+| S3.2c | The spec cleanup: the five contradictions in the language documents (known issue S2.2b-1), the grouped-key evaluation's two notes, integer overflow as an expression error (S3.2b-1-1) *(placed here by the owner, 2026-11-06: [decisions](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2))* | sized at its G0 | at its G0 (a language change runs the language-design skill) | S3.2b |
+| S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b, S3.2c *(owner, 2026-11-06: the cleanup first)* |
 | S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* *(and the one-module check of ADR-0001 §1: [owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure))* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
 | S4.2 | The pattern engine completed and independently proven | 13 (13) | full | S4.1 |
@@ -369,14 +370,13 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Still open for the owner
 
-- **Two lasting-rule proposals from [S3.2b-2's retro](s3-2b-2-record.md#retro):** a fix round's changes run under the race detector before T4; a sprint that adds a CI job opens its PR as a draft to get that job's first run, and marks it ready after reading it.
-- **Language questions for a spec-cleanup pass:** the five contradictions in the language documents ([known issue S2.2b-1](../product/known-issues.md)) and integer overflow ([known issue S3.2b-1-1](../product/known-issues.md)).
+- *None open (2026-11-06): the retro's two rules joined the sprint model; the spec cleanup is S3.2c, with integer overflow decided.*
 
 *Resolved items move to [history.md](history.md#resolved-owner-items).*
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2b-2 merged (PRs #1–#19, the last on 2026-11-06); S3.2b is complete. Next: S3.3's plan check — the Deploy pipeline and the conformance runner, the clock freeze — with its forwards (recording off unless turned on, the expect sandbox's arrival order and output count, `Deploy` not mutating the checked model).**
+**Phase 1 in progress: S1.1a-1 to S3.2b-2 merged (PRs #1–#19, the last on 2026-11-06); S3.2b is complete. Next: S3.2c's plan check — the spec cleanup (the five contradictions, the evaluation's two notes, integer overflow as an expression error), placed before S3.3 by the owner — then S3.3.**
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
 

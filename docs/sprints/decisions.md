@@ -50,6 +50,7 @@
 | 2026-11-06 | [S3.2b-2's plan check](#owner-decisions-2026-11-06--s32b-2s-plan-check) |
 | 2026-11-06 | [S3.2b-2's design (after the architecture review)](#owner-decisions-2026-11-06--s32b-2s-design-after-the-architecture-review) |
 | 2026-11-06 | [S3.2b-2's review and break-it](#owner-decisions-2026-11-06--s32b-2s-review-and-break-it) |
+| 2026-11-06 | [the open items after S3.2b-2](#owner-decisions-2026-11-06--the-open-items-after-s32b-2) |
 
 ## The decisions
 
@@ -451,3 +452,12 @@ The combined-build review ([s3-2b-2-combined-architecture.md](../reviews/s3-2b-2
 
 1. **Stopping an app waits for its recording only until the stop's deadline** (review C4). If the recording has not finished by then — a stuck disk — it is marked failed and the stop still reports success, every alert having gone out. Rejected: not waiting at all (the recording's status not final when the stop returns); today's behaviour (the stop fails with a timeout although detection did not).
 2. **The per-rule burst gauge (`RuleStats.OutboxHigh`) is left out of the live-equals-replay check** (break-it S3). It measures what one worker holds at once — a capacity mark, like the queue high-water marks — so it depends on the number of shards; alerts and every detection counter must still match exactly, and the runaway-rule ceiling keeps working per worker. Rejected: counting it across all workers (more bookkeeping on the hot path).
+
+### Owner decisions, 2026-11-06 — the open items after S3.2b-2
+
+Asked for the decisions open for the owner; four questions in plain language, all answered as recommended.
+
+1. **Two lasting rules join the sprint model** ([§10](00-sprint-model.md#10-the-quality-bar)), both from S3.2b-2's retro: a fix round's changes run under the race detector before T4 (a fix there made a data race found only at T4); a sprint that adds a CI job opens its PR as a draft to get that job's first run, and marks it ready after reading it (the gate workflow runs on pull requests only).
+2. **The spec-cleanup pass runs now, before S3.3**, as sprint S3.2c: the five contradictions of known issue S2.2b-1, the two notes of the grouped-key evaluation, and integer overflow (S3.2b-1-1). Why: the spec rule writers and generators read is made consistent before more is built on it, and overflow is a correctness bug, which ground rule 10 keeps open no longer than 30 days. Rejected: inside S3.3 (at its cap); before the release (overflow open for weeks).
+3. **Integer overflow is an expression error for that rule** (known issue S3.2b-1-1): as division by zero is, the event is dropped for that rule only and counted; other rules see it. No rule acts on a wrong number. Rejected: clamping to the largest value (a selected value is wrong); wrapping, documented (a huge product turns negative and the alert is missed). A language change: SPEC's change log and a test, in S3.2c.
+4. **S3.2b-2's close-out goes out as a small docs PR now**, so main's status line is current, and the merged branch `s3-2b-2/integration` is deleted from GitHub.
