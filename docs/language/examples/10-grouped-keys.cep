@@ -1,0 +1,48 @@
+-- constructs: plain-rule partitioned-plain-rule grouped-partition-key rate-limit-per-key single-event
+--             multi-key null-key-part defeat-path-expect
+language cep/0.1;
+
+stream Grants (tenantId string, userId string optional, scope string,
+               ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream GrantAlerts (tenantId string, userId string, scope string, ts timestamp);
+
+-- Expected outputs, derived by hand from SEMANTICS §8 and §9 (SPEC rev 5) before any engine ran:
+--   * a key is the pair (tenantId, userId); two grants share a rate limit iff both parts are equal;
+--   * `output first every 5 min`: after an alert at t, an alert of the same pair at t' <= t + 5 min is suppressed;
+--     the first one after re-anchors (inclusive end, §8);
+--   * a null userId is a key error for this rule: no alert, no state (§9, §10), counted in its key errors.
+-- Block 1 (fire path): one admin grant for (t1, alice) at 10:00 -> one alert at 10:00.
+-- Block 2 (near miss): a read-scope grant fails the filter -> no alert.
+-- Block 3 (multi-key, worked example 1): (t1, alice) 10:00 -> alert (new pair); (t1, bob) 10:01 -> alert (equal
+--   in tenantId, different in userId: a new pair); (t1, alice) 10:02 -> suppressed (10:02 <= 10:00 + 5 min);
+--   (t2, alice) 10:03 -> alert (equal in userId, different in tenantId: a new pair).
+-- Block 4 (a null part, worked example 2): (t1, null) 10:00 -> no alert.
+-- Block 5 (the interval per pair): (t1, alice) 10:00 -> alert; 10:05:00.000 -> suppressed (= 10:00 + 5 min);
+--   10:05:00.001 -> alert.
+rule AdminScopeGrant
+  intent 'An admin-scope grant, at most one alert per tenant-and-user pair every 5 minutes.'
+  partition by (tenantId, userId) of Grants ttl 10 min
+  from Grants[scope == 'admin']
+  expect given Grants [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then GrantAlerts [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+  expect given Grants [ {tenantId: 't1', userId: 'alice', scope: 'read', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then GrantAlerts [ ]
+  expect given Grants [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'},
+                        {tenantId: 't1', userId: 'bob', scope: 'admin', ts: timestamp '2026-01-01T10:01:00Z'},
+                        {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:02:00Z'},
+                        {tenantId: 't2', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:03:00Z'} ]
+         then GrantAlerts [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'},
+                            {tenantId: 't1', userId: 'bob', scope: 'admin', ts: timestamp '2026-01-01T10:01:00Z'},
+                            {tenantId: 't2', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:03:00Z'} ]
+  expect given Grants [ {tenantId: 't1', userId: null, scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then GrantAlerts [ ]
+  expect given Grants [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'},
+                        {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:05:00Z'},
+                        {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:05:00.001Z'} ]
+         then GrantAlerts [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'},
+                            {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:05:00.001Z'} ]
+  select tenantId, userId, scope
+  output first every 5 min
+  insert into GrantAlerts;
