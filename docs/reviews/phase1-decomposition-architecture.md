@@ -1,5 +1,7 @@
 # Architecture review — Phase 1 decomposition (DRAFT, 2026-11-01)
 
+> **Historical — review of the Phase 1 decomposition draft (v2), 2026-11-01; dispositioned 2026-11-02.** The approved plan is v3 in [sprint-plan.md](../sprints/sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02) (closed cards in [history.md](../sprints/history.md)). **Companion:** [QA review](phase1-decomposition-qa.md). **Next →** [S1.1a plan check](../sprints/s1-1a-plan-check.md).
+
 **Reviewed:** `docs/sprints/sprint-plan.md` §3 "Phase 1 decomposition — DRAFT for owner approval", cards S1–S12, "Still open for the owner", and §5 "Owner decisions, 2026-11-01 — Phase 1 decomposition". The plan was read twice: once as first drafted, and again after the owner's four scoping decisions (formatter in S6, kill-switch first, full window panel, seven-example gallery). Findings cite the revised text. Line numbers are for the working-tree file on 2026-11-01.
 **Against:** ARCHITECTURE.md, ADR-0001…ADR-0015, the sprint model (§3, §4, §5, §9), the ground rules, roadmap Phase 1, SPEC/SEMANTICS/errors.md, `docs/language/checks/test_semantics.py`, the example corpus, qa-strategy.md, DEVELOPMENT.md.
 **Reviewer stance:** architect reviewer with the-fool's adversarial stance. Blind: no other reviewer's findings were read. `docs/architecture/review/` was searched only to check whether a finding had already been dispositioned. None of the findings below had been.

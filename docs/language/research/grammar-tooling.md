@@ -1,5 +1,7 @@
 # Grammar assurance — tooling & literature survey
 
+> **Historical — language workstream, L4 research, 2026-10-31; its goyacc plan was replaced by participle v2 (S2.1).** Normative today: [SPEC.md](../SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](../errors.md) and the corpus; [SEMANTICS.md](../SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](../PLAN.md) · [DESIGN (L0)](../DESIGN.md) · [PRIOR-ART (L1)](../PRIOR-ART.md) · [SEMANTICS (L2)](../SEMANTICS.md) · [SYNTAX (L3)](../SYNTAX.md) · [SPEC (L4)](../SPEC.md) · [EVAL (L5)](../EVAL.md) · [REVIEW (L6)](../REVIEW.md).
+
 Research note for L4/engine Phase 1 (owner request 2026-10-31: "make sure the grammar is iron-clad tight, no uncertainties; Go frameworks preferable"). Sources accessed 2026-10-31.
 
 ## The governing fact from the literature

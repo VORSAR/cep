@@ -1,5 +1,7 @@
 # S3.2a-1 break-it: the D1 clock, partitions, the snapshot carrier, D4, the replay format layer (breaker QA)
 
+> **Historical — S3.2a-1, the replay format layer and partitions; merged in PR #10.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-05--s32as-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2a-1-design.md) · [record](../sprints/s3-2a-1-record.md) · reviews: [design: architecture](s3-2a-1-design-architecture.md), **break-it: QA**. **← [S3.1-2](../sprints/s3-1-2-record.md) · [S3.2a-2](../sprints/s3-2a-2-record.md) →**
+
 **Base:** e56bb27 (`s3-2a-1/integration`). **Branch:** `s3-2a-1/breakit` (worktree `/Users/ramith/code/cep-wt/s3-2a-1-breakit`). Not pushed.
 **Red-test commits:** 4048a6f (K1; guards), 46383dc (K2, K3; guards). **Guard-only commit:** dbddea9 (table, event).
 **Test runs (pinned Go 1.27.3, GOTOOLCHAIN=local GOFLAGS=):** I ran each of the 3 red tests alone with `go test -run '^Name$'`. Each exits 1, for its stated reason. Every `TestBreakitGuard*` test passes in `./internal/partition ./internal/playback ./internal/table ./internal/event` (exit 0). The table guards also pass under `-race` (exit 0). The pre-commit gate passed on all three commits.

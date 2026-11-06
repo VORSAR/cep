@@ -1,6 +1,8 @@
-> **Status (2026-11-06):** open — B1 awaits a fix with this red test, or the owner's forwarding.
+> **Status (closed in PR #14):** B1 fixed — E-PART-004 refuses a stream keyed twice at deploy and `Build` refuses it too; multi-part keys `(k, j) of S` follow in S3.2b-2 (owner). L1 fixed; L2 forwarded to S3.3; the integer overflow seen on the way is [known issue S3.2b-1-1](../product/known-issues.md). Dispositions: [the record's findings](../sprints/s3-2b-1-record.md#findings).
 
 # S3.2b-1 break-it — the plan, replay through the runtime, rate limits (breaker: QA, with the fool's lens)
+
+> **Historical — S3.2b-1, the plan, replay through the runtime, rate limits; merged in PR #14.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2b-1-design.md) · [record](../sprints/s3-2b-1-record.md) · reviews: [design: architecture](s3-2b-1-design-architecture.md), [combined build: architecture](s3-2b-1-combined-architecture.md), **break-it: QA**. **← [S3.2a-2](../sprints/s3-2a-2-record.md) · [S3.2b-2 (next)](../sprints/sprint-plan.md#status) →**
 
 **Base:** 8214be8 (`s3-2b-1/integration`). **Branch:** `s3-2b-1/breakit`, not pushed.
 **Red-test commits:** 195fff8 (B1).

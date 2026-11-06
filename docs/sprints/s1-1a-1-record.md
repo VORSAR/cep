@@ -1,5 +1,7 @@
 # S1.1a-1 — sprint record
 
+> **Historical — S1.1a-1, the local gate, coverage and the event kernel; merged in PR #1.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1a-plan-check.md) · [design](s1-1a-gate-design.md) · **record** · reviews: [plan check: architecture](../reviews/s1-1a-plan-check-architecture.md), [plan check: QA](../reviews/s1-1a-plan-check-qa.md), [design: architecture](../reviews/s1-1a-design-architecture.md), [design: QA](../reviews/s1-1a-design-qa.md), [design re-check](../reviews/s1-1a-design-recheck.md), [build: architecture](../reviews/s1-1a-1-build-architecture.md), [break-it: QA](../reviews/s1-1a-1-breakit-qa.md). **← [Phase 1 decomposition review](../reviews/phase1-decomposition-architecture.md) · [S1.1a-2](s1-1a-2-record.md) →**
+
 **Sprint:** S1.1a-1 — The local gate, coverage and the event kernel · **Routine:** the full loop, no design panel · **Size:** 13 SP (items 11.5) against the 2-week cap · **Branch:** `s1-1a-1/integration`
 **What to build and how each item is proven:** [sprint plan — S1.1a-1](history.md#s11a-1--the-local-gate-coverage-and-the-event-kernel) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 

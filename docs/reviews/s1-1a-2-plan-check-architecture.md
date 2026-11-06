@@ -1,5 +1,7 @@
 # S1.1a-2 plan check: architecture review (with a pre-mortem)
 
+> **Historical — S1.1a-2, hooks and CI; merged in PR #2.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-2-plan-check.md) · [design (§12)](../sprints/s1-1a-gate-design.md#12-s11a-2-the-hooks-and-ci-2026-11-03-g1-approved-by-the-owner-2026-11-04-implement-this-fast-and-get-it-over) · [record](../sprints/s1-1a-2-record.md) · reviews: **plan check: architecture**, [plan check: QA](s1-1a-2-plan-check-qa.md). **← [S1.1a-1](../sprints/s1-1a-1-record.md) · [S1.1b](../sprints/s1-1b-record.md) →**
+
 **What I reviewed.** The draft `docs/sprints/s1-1a-2-plan-check.md` (as committed at 9b59a0f). I checked it against the S1.1a-2 card (sprint-plan.md:144-162), the shared S1.1a plan check (S2-S4, P7, P9, §6, §10), the S1.1a-1 gate design, ADR-0015 §1.1-§1.3 and §3.1/§3.6, DEVELOPMENT.md, the sprint model, the S1.1a-1 record and owner decisions, and the code on this branch (`gate/runner/{main,step,scope,verdict,records,summary,env,scheduler}.py`, `gate/runner/rows/`, `gate/run.py`, `gate/registry.json`, `Makefile`, `ruff.toml`).
 
 **How.** I read the documents and the code. I worked blind of QA. The coordinator time-boxed the job, so I ran no probes. Every git or GitHub Actions behaviour below is marked **inferred**. Code claims cite `file:line`.

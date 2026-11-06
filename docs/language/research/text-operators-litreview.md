@@ -1,5 +1,7 @@
 # Prior art: deterministic free-form-text matching operators in rule and detection languages
 
+> **Historical — language workstream, L1 input: text-operator literature, 2026-10-31.** Normative today: [SPEC.md](../SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](../errors.md) and the corpus; [SEMANTICS.md](../SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](../PLAN.md) · [DESIGN (L0)](../DESIGN.md) · [PRIOR-ART (L1)](../PRIOR-ART.md) · [SEMANTICS (L2)](../SEMANTICS.md) · [SYNTAX (L3)](../SYNTAX.md) · [SPEC (L4)](../SPEC.md) · [EVAL (L5)](../EVAL.md) · [REVIEW (L6)](../REVIEW.md).
+
 Literature/prior-art review supporting the design of first-class deterministic text operators
 (keyword, contains, regex) in our CEP rule language for AI-agent fleet detection. Gathered online
 2026-10-31; every claim carries a numbered citation into the [references](#references). This

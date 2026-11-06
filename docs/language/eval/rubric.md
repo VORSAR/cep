@@ -1,5 +1,7 @@
 # L5 grading rubric — pre-registered before outputs were seen (2026-10-31)
 
+> **Historical — language workstream, L5 grading rubric, 2026-10-31.** Normative today: [SPEC.md](../SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](../errors.md) and the corpus; [SEMANTICS.md](../SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](../PLAN.md) · [DESIGN (L0)](../DESIGN.md) · [PRIOR-ART (L1)](../PRIOR-ART.md) · [SEMANTICS (L2)](../SEMANTICS.md) · [SYNTAX (L3)](../SYNTAX.md) · [SPEC (L4)](../SPEC.md) · [EVAL (L5)](../EVAL.md) · [REVIEW (L6)](../REVIEW.md).
+
 **Parse**: `grammar_check.py grammar.lark eval/generated` accepts the file. **Static**: no violation of an errors.md [static] rule on manual audit (checked items below). **Semantic**: the rule implements the task's intent — required elements per task:
 
 | ID | Must have (semantic) | Static audit focus |

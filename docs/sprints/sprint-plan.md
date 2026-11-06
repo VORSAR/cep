@@ -40,19 +40,21 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 **Sequencing principle (owner decision 2026-11-01).** Enablers first (S1.1a–S3.3). Then the **kill-switch vertical**: patterns (S4.1, S4.2) make the flagship fire in playback; connectivity (S5.1) makes it fire live through `cepd`; the Go builder (S6.1) proves DSL/Go parity on it. Breadth follows: the formatter (S6.2), text (S7), windows (S8, S9.1, S9.2), the demo kit and published latency (S10), the attack gallery (S11), the release close-out (S12). **From S6.1 onward every construct ships in both front-ends in the sprint that ships it** (builder surface + a parity twin per example).
 
+*✓ = merged and closed: the link is its record; its card is in [history.md](history.md#closed-sprint-cards).*
+
 | Sprint | Title | SP (items) | Routine | Depends on |
 |---|---|---|---|---|
 | ~~S1.1a~~ | ~~The gate runner, CI, coverage and the event kernel~~ *split at its plan check, 2026-11-02 (owner, §5): re-sized for the owner's Python decision to about 15 points → S1.1a-1 + S1.1a-2* | ~~13 (12.5)~~ | full | — |
-| S1.1a-1 | The local gate, coverage and the event kernel | 13 (11.5) | full | — |
-| S1.1a-2 | Hooks and CI | 5 (3.5) | full | S1.1a-1 |
-| S1.1b | The analyzers and the law | 13 (13) | full | S1.1a-2 *(was S1.1a; annotated 2026-11-02)* |
-| S1.2 | The model kernel, the remaining gate rows and spec rev 3 | 13 (11) | full | S1.1b |
-| S2.1 | The parser | 13 (13) | full | S1.2 |
-| S2.2a | The grammar differential and the expression engine | 13 (10.5) | full | S2.1 |
-| S2.2b | The validator | 13 (11.5) | full | S2.2a |
-| S3.1 | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
-| S3.2a | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
-| S3.2b | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
+| S1.1a-1 [✓](s1-1a-1-record.md) | The local gate, coverage and the event kernel | 13 (11.5) | full | — |
+| S1.1a-2 [✓](s1-1a-2-record.md) | Hooks and CI | 5 (3.5) | full | S1.1a-1 |
+| S1.1b [✓](s1-1b-record.md) | The analyzers and the law | 13 (13) | full | S1.1a-2 *(was S1.1a; annotated 2026-11-02)* |
+| S1.2 [✓](s1-2-record.md) | The model kernel, the remaining gate rows and spec rev 3 | 13 (11) | full | S1.1b |
+| S2.1 [✓](s2-1-record.md) | The parser | 13 (13) | full | S1.2 |
+| S2.2a [✓](s2-2a-record.md) | The grammar differential and the expression engine | 13 (10.5) | full | S2.1 |
+| S2.2b [✓](s2-2b-record.md) | The validator | 13 (11.5) | full | S2.2a |
+| S3.1 ✓ ([S3.1-1](s3-1-1-record.md), [S3.1-2](s3-1-2-record.md)) | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
+| S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
+| S3.2b ([S3.2b-1](s3-2b-1-record.md) ✓; S3.2b-2 next) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
 | S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b |
 | S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |

@@ -1,5 +1,7 @@
 # S2.2a — sprint record (slim)
 
+> **Historical — S2.2a, the grammar differential and the expression engine; merged in PR #6.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s22a-runs-in-full); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **record** · reviews: [the expr → model edge](../reviews/s2-2a-expr-model-edge.md). **← [S2.1](s2-1-record.md) · [S2.2b](s2-2b-record.md) →**
+
 **Sprint:** S2.2a — the grammar differential and the expression engine · **Routine:** slim, by the owner (2026-11-04: the full card, built in the main session, no reviews for gate plumbing; one adversarial review where the owner asked for one) · **Size:** 13 SP (items 10.5) · **Branch:** `s2-2a/integration`, on `s2-1/integration` (PR #5)
 
 ## Plan and decisions

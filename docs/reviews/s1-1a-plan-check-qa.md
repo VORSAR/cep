@@ -2,6 +2,8 @@
 
 # S1.1a plan check: QA review (blind)
 
+> **Historical — S1.1a (split at this plan check into S1.1a-1 and S1.1a-2); merged in PR #1.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-plan-check.md) · [design](../sprints/s1-1a-gate-design.md) · [record](../sprints/s1-1a-1-record.md) · reviews: [plan check: architecture](s1-1a-plan-check-architecture.md), **plan check: QA**, [design: architecture](s1-1a-design-architecture.md), [design: QA](s1-1a-design-qa.md), [design re-check](s1-1a-design-recheck.md), [build: architecture](s1-1a-1-build-architecture.md), [break-it: QA](s1-1a-1-breakit-qa.md). **← [Phase 1 decomposition review](phase1-decomposition-architecture.md) · [S1.1a-2](../sprints/s1-1a-2-record.md) →**
+
 Reviewed: `docs/sprints/s1-1a-plan-check.md` (draft, 2026-11-02, uncommitted) against `main` @ `0a56632` plus the uncommitted `sprint-plan.md` annotation. The owner's Q1 answer was given mid-review (all gate tooling is stdlib-only Python under a pinned CPython; Go stays for `internal/event`, the planted Go packages in `gate/proofs/` and S1.1b's analyzers). This review assumes that answer.
 
 Short names: PC = docs/sprints/s1-1a-plan-check.md · SP = docs/sprints/sprint-plan.md · SM = docs/sprints/00-sprint-model.md · GR = docs/ground-rules.md · TM = docs/development/testing.md · QS = docs/development/qa-strategy.md · DEV = docs/development/DEVELOPMENT.md · ADR15 = docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md · ARCH = docs/architecture/ARCHITECTURE.md · SEM = docs/language/SEMANTICS.md.

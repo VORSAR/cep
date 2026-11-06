@@ -1,5 +1,7 @@
 # Spike: participle v2 as the engine's parser (2026-11-04)
 
+> **Historical — spike for S2.1, 2026-11-04; findings only.** The owner chose participle v2 ([decisions.md](../../sprints/decisions.md#owner-decisions-2026-11-04--s21-the-parser-participle-v2--adr-0002s-goyacc); [ADR-0002](../../architecture/adr/ADR-0002-parser-goyacc-and-grammar-differential.md) as amended); the parser is `internal/parser`. **Sprint:** [S2.1 record](../../sprints/s2-1-record.md).
+
 *Time-boxed by the owner's request ("evaluate participle v2 for the parser"); findings only. The spike code (about 650 lines: the whole v0.1 grammar as participle structs, a keyword-classifying lexer wrapper, a corpus runner and an error-code map) lives in the session scratchpad, not in the repository. [grammar-tooling.md](grammar-tooling.md) rejected participle on principle (no conflict analysis); this spike tested it on evidence.*
 
 ## The library

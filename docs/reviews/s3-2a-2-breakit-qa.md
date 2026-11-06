@@ -1,5 +1,7 @@
 # S3.2a-2 break-it: the runtime core: router, shards, sink flushers, drain barrier, Stats, Close (breaker QA)
 
+> **Historical — S3.2a-2, the runtime core; merged in PR #11.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-05--s32a-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2a-2-design.md) · [record](../sprints/s3-2a-2-record.md) · reviews: [design: architecture](s3-2a-2-design-architecture.md), **break-it: QA**. **← [S3.2a-1](../sprints/s3-2a-1-record.md) · [S3.2b-1](../sprints/s3-2b-1-record.md) →**
+
 **Base:** 1a86e88 (`s3-2a-2/integration`). **Branch:** `s3-2a-2/breakit` (worktree `/Users/ramith/code/cep-wt/s3-2a-2-breakit`). Not pushed.
 **Commits:** c8e29fb (R1, B1, C1, V1 reds; 3 guards), e070198 (V2 red; 2 guards). One file: `internal/runtime/breakit_test.go`. No production code touched.
 **Test runs (pinned Go 1.27.3, GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS=):**

@@ -1,5 +1,7 @@
 # The Fool's pre-mortem — Phase 1 architecture baseline
 
+> **Historical — a review of the Phase 1 architecture baseline, 2026-11-01; every finding is dispositioned.** Current truth: [ARCHITECTURE.md](../ARCHITECTURE.md) and the [ADRs](../adr/) as annotated since, then the code. **Review set, in order:** [round 1](arch-review.md) · **pre-mortem** · [round 2](arch-review-round2.md) · [round 3](arch-review-round3.md) · [gate red-team](gate-redteam.md) · [foundation consistency](foundation-consistency.md).
+
 **Role:** the-fool (adversarial reasoning, pre-mortem mode). I wrote none of the documents under review.
 **Scenario assumed true:** it is 2027-02-01, three months after the baseline was ratified. Phase 1 — the Agent Kill Switch MVP — shipped late, broken, or not at all, *despite the architecture baseline being followed*.
 **Inputs read on commit 1b9fff8:** ARCHITECTURE.md; ADR-0001…0009; roadmap Phase 1 (02-roadmap.md) incl. exit criteria and attack gallery; sprint model §2/§3/§6; DEVELOPMENT.md; SEMANTICS.md (§2 especially); SPEC.md §6.8/§8; errors.md (57 codes); the corpus (9 valid / 24 invalid files); checks/executor.py.

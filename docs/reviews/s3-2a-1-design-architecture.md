@@ -1,5 +1,7 @@
 # S3.2a-1 design note v1 — architecture review
 
+> **Historical — S3.2a-1, the replay format layer and partitions; merged in PR #10.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-05--s32as-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2a-1-design.md) · [record](../sprints/s3-2a-1-record.md) · reviews: **design: architecture**, [break-it: QA](s3-2a-1-breakit-qa.md). **← [S3.1-2](../sprints/s3-1-2-record.md) · [S3.2a-2](../sprints/s3-2a-2-record.md) →**
+
 Artifact: `docs/sprints/s3-2a-1-design.md` (v1), branch `s3-2a-1/integration` at b08a017. Blind review.
 Sources read: the note; `internal/clock/{clock,rule}.go`; `internal/partition/partition.go` (stub); `internal/table/table.go`;
 `internal/event/{event,decode}.go` (parts); `docs/language/checks/executor.py` (`_PatternEngine`, `run_pattern_multi`);

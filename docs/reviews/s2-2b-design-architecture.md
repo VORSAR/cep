@@ -1,5 +1,7 @@
 # S2.2b design note — architecture review
 
+> **Historical — S2.2b, the validator; merged in PR #7.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s2-2b-design.md) · [record](../sprints/s2-2b-record.md) · reviews: **design: architecture**. **← [S2.2a](../sprints/s2-2a-record.md) · [S3.1-1](../sprints/s3-1-1-record.md) →**
+
 Reviewer: architecture (adversarial, pre-build, G1). Subject: `docs/sprints/s2-2b-design.md` at `5dd8ee2`. The reviewer did not write the note. Line references are to the tree at that commit.
 
 ### AR-1 blocker: A1 retires a pinned law, and the note's proof leaves that out

@@ -1,5 +1,7 @@
 # Architecture review, round 2 — closure verification + elegance pass
 
+> **Historical — a review of the Phase 1 architecture baseline, 2026-11-01; every finding is dispositioned.** Current truth: [ARCHITECTURE.md](../ARCHITECTURE.md) and the [ADRs](../adr/) as annotated since, then the code. **Review set, in order:** [round 1](arch-review.md) · [pre-mortem](fool-premortem.md) · **round 2** · [round 3](arch-review-round3.md) · [gate red-team](gate-redteam.md) · [foundation consistency](foundation-consistency.md).
+
 **Reviewer:** architect reviewer (with the-fool: evidence-audit on closure claims, red-team on the revised concurrency model).
 **Reviewed at:** 2026-11-01, against the revised `docs/architecture/` baseline (ARCHITECTURE.md + ADR-0001…0014 + research/).
 **Round 1:** [arch-review.md](arch-review.md) — 24 findings (6 blocker / 15 should-fix / 3 later). This file does not modify it.

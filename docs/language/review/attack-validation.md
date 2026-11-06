@@ -1,5 +1,7 @@
 # Attack validation — SEMANTICS.md vs. the real 2025–2026 agentic attack landscape
 
+> **Historical — language workstream, L2 attack-landscape review, 2026-10-31.** Normative today: [SPEC.md](../SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](../errors.md) and the corpus; [SEMANTICS.md](../SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](../PLAN.md) · [DESIGN (L0)](../DESIGN.md) · [PRIOR-ART (L1)](../PRIOR-ART.md) · [SEMANTICS (L2)](../SEMANTICS.md) · [SYNTAX (L3)](../SYNTAX.md) · [SPEC (L4)](../SPEC.md) · [EVAL (L5)](../EVAL.md) · [REVIEW (L6)](../REVIEW.md).
+
 Review artifact (L2 validation input). Purpose: defensive detection engineering. Validates [SEMANTICS.md](../SEMANTICS.md) and the [roadmap](../../product/02-roadmap.md) against publicly documented real-world attacks on AI agents, LLM applications, and agent infrastructure. The question is narrow: **can the specified semantics express detections for these attacks, and what gaps does that imply for the roadmap?**
 
 All sources accessed 2026-10-31; URLs in §4. Rule sketches are illustrative pseudo-syntax (no surface syntax exists yet). Each attack is described as a sequence of *observable events at a defensive vantage point* (gateway / IAM / tool-audit layer) — the telemetry a SOC would ingest — not as an attacker playbook. Where a claim rests on a single secondary source it is marked.

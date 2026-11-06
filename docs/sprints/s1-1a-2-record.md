@@ -1,5 +1,7 @@
 # S1.1a-2 — sprint record
 
+> **Historical — S1.1a-2, hooks and CI; merged in PR #2.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1a-2-plan-check.md) · [design (§12)](s1-1a-gate-design.md#12-s11a-2-the-hooks-and-ci-2026-11-03-g1-approved-by-the-owner-2026-11-04-implement-this-fast-and-get-it-over) · **record** · reviews: [plan check: architecture](../reviews/s1-1a-2-plan-check-architecture.md), [plan check: QA](../reviews/s1-1a-2-plan-check-qa.md). **← [S1.1a-1](s1-1a-1-record.md) · [S1.1b](s1-1b-record.md) →**
+
 **Sprint:** S1.1a-2 — Hooks and CI · **Routine:** the full loop, no design panel · **Size:** about 8 SP (items 4.5), from G0 on 2026-11-03 to the build on 2026-11-04 against the 2-week cap · **Branch:** `s1-1a-2/integration`
 **What to build and how each item is proven:** [sprint plan — S1.1a-2](history.md#s11a-2--hooks-and-ci) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 

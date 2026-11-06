@@ -1,5 +1,7 @@
 # S3.1-1 — sprint record (S2.2b's routine, plus a clock break-it)
 
+> **Historical — S3.1-1, the clock service and the metrics counters; merged in PR #8.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s22b-closed-s31s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-1-1-design.md) · **record** · reviews: [design: architecture](../reviews/s3-1-1-design-architecture.md), [owner's decisions: architecture](../reviews/s3-1-1-decisions-architecture.md). **← [S2.2b](s2-2b-record.md) · [S3.1-2](s3-1-2-record.md) →**
+
 **Sprint:** S3.1-1 — the clock service and the metrics counters (S3.1's items 1–2; the owner split S3.1 at its card's line) · **Routine:** by the owner (2026-11-04): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it of the finished clock · **Size:** 6.5 SP of S3.1's 13 · **Branch:** `s3-1-1/integration`
 
 ## Plan and decisions

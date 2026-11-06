@@ -1,5 +1,7 @@
 # S3.1-2 break-it: tables and membership, NaN/±Inf, IngestFlags, the decoder, archcheck's exceptions (breaker QA)
 
+> **Historical — S3.1-2, tables and membership, the ingest flag, the schema decoder; merged in PR #9.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-04--s31-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-1-2-design.md) · [record](../sprints/s3-1-2-record.md) · reviews: [design: architecture](s3-1-2-design-architecture.md), **break-it: QA**. **← [S3.1-1](../sprints/s3-1-1-record.md) · [S3.2a-1](../sprints/s3-2a-1-record.md) →**
+
 **Base:** d22fbc1 (`s3-1-2/integration`). **Branch:** `s3-1-2/breakit` (worktree `/Users/ramith/code/cep-wt/s3-1-2-breakit`). Not pushed.
 **Red-test commits:** 48d2c00 (B1, B2, B7), 6168cb8 (B1 blank-import variant, B3), 5b92cdb (B5; guards), 5c9b446 (B4, B6; guard), 73b7ada (guards only: decoder and IngestFlags).
 **Test runs:** the 7 new red tests fail alone (`go test -run '^Name$' ./<pkg>/`, exit 1 each). With `-skip` over them, `./tools/archcheck/`, `./internal/expr/` (`-race`) and `./internal/table/` (`-race`) pass, and `./internal/event/ ./internal/text/` (`-race`) pass. `go vet` on all five packages: exit 0.

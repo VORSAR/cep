@@ -1,5 +1,7 @@
 # Language Spec Workstream — Phases
 
+> **Historical — language workstream, the workstream plan, L0–L6, 2026-10-31; complete — SPEC v0.1 froze 2026-11-01.** Normative today: [SPEC.md](SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](errors.md) and the corpus; [SEMANTICS.md](SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** **PLAN** · [DESIGN (L0)](DESIGN.md) · [PRIOR-ART (L1)](PRIOR-ART.md) · [SEMANTICS (L2)](SEMANTICS.md) · [SYNTAX (L3)](SYNTAX.md) · [SPEC (L4)](SPEC.md) · [EVAL (L5)](EVAL.md) · [REVIEW (L6)](REVIEW.md).
+
 v1.0 · 2026-10-31 · Precedes engine Phase 1 ([roadmap](../product/02-roadmap.md)): the spec is the normative input for parser/semantics agent waves. Method: `language-design` skill; its artifacts live in this directory. Spec depth is staged: structural semantics (time, emission, patterns) designed for the whole language; normative syntax detail for the MVP subset first, the rest reserved.
 
 | Phase | Work | Artifact | Gate (exit) |

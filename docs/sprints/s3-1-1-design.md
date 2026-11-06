@@ -1,5 +1,7 @@
 # S3.1-1 — design note: the clock service and the metrics counters (v2)
 
+> **Historical — S3.1-1, the clock service and the metrics counters; merged in PR #8.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s22b-closed-s31s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s3-1-1-record.md) · reviews: [design: architecture](../reviews/s3-1-1-design-architecture.md), [owner's decisions: architecture](../reviews/s3-1-1-decisions-architecture.md). **← [S2.2b](s2-2b-record.md) · [S3.1-2](s3-1-2-record.md) →**
+
 The clock as the owner decided it after two architecture reviews ([design review](../reviews/s3-1-1-design-architecture.md), [impact review](../reviews/s3-1-1-decisions-architecture.md)); the decisions are [sprint-plan §5, "S3.1-1's clock"](decisions.md#owner-decisions-2026-11-04--s31-1s-clock-after-two-architecture-reviews), numbered **D1–D8** below. ADR-0004 is annotated to match. The stub in `internal/clock` and `internal/metrics` carries exactly this API with panicking bodies. §8 places every review finding.
 
 ## 1. The stream registry (per app; written by ingest or the playback driver only)

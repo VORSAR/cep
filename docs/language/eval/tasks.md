@@ -1,5 +1,7 @@
 # L5 evaluation — held-out generation tasks
 
+> **Historical — language workstream, L5 tasks, 2026-10-31.** Normative today: [SPEC.md](../SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](../errors.md) and the corpus; [SEMANTICS.md](../SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](../PLAN.md) · [DESIGN (L0)](../DESIGN.md) · [PRIOR-ART (L1)](../PRIOR-ART.md) · [SEMANTICS (L2)](../SEMANTICS.md) · [SYNTAX (L3)](../SYNTAX.md) · [SPEC (L4)](../SPEC.md) · [EVAL (L5)](../EVAL.md) · [REVIEW (L6)](../REVIEW.md).
+
 Pre-registered 2026-10-31, before any generation. Protocol: evaluation-harness §1 — generator receives ONLY [SPEC.md](../SPEC.md), [grammar.ebnf](../grammar.ebnf), [errors.md](../errors.md), and K=3 tagged examples ([01](../examples/01-agent-kill-switch.cep) pattern, [02](../examples/02-cron-digest.cep) window, [05](../examples/05-text-operators.cep) text). Output: one complete `.cep` file per task. Grading: parse via `grammar_check`; static audit against errors.md **[static]** rules; one repair round (diagnostic fed back verbatim) for failures. Targets: parse ≥ 97%, static ≥ 90%, repair ≥ 95% of remainder.
 
 | ID | Stratum | Intent (given to the generator verbatim) |

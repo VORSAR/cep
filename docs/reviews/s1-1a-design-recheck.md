@@ -2,6 +2,8 @@
 
 # S1.1a-1 design note v2: focused re-check by probe
 
+> **Historical — S1.1a-1, the local gate, coverage and the event kernel; merged in PR #1.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-plan-check.md) · [design](../sprints/s1-1a-gate-design.md) · [record](../sprints/s1-1a-1-record.md) · reviews: [plan check: architecture](s1-1a-plan-check-architecture.md), [plan check: QA](s1-1a-plan-check-qa.md), [design: architecture](s1-1a-design-architecture.md), [design: QA](s1-1a-design-qa.md), **design re-check**, [build: architecture](s1-1a-1-build-architecture.md), [break-it: QA](s1-1a-1-breakit-qa.md). **← [Phase 1 decomposition review](phase1-decomposition-architecture.md) · [S1.1a-2](../sprints/s1-1a-2-record.md) →**
+
 Target: `docs/sprints/s1-1a-gate-design.md` (v2, 2026-11-02, uncommitted). Re-checked on darwin-arm64 (Darwin 25.6.0, APFS), 2026-11-02.
 
 Probe directory: `<scratchpad>/s1-1a/recheck-probe/`. It holds the scripts in `scripts/`, the downloads in `dl/`, and the simulated cache and test modules in `x/`. No repository file was edited.

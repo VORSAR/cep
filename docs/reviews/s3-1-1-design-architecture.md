@@ -1,5 +1,7 @@
 # S3.1-1 design note: architecture review (G1)
 
+> **Historical — S3.1-1, the clock service and the metrics counters; merged in PR #8.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-04--s22b-closed-s31s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-1-1-design.md) · [record](../sprints/s3-1-1-record.md) · reviews: **design: architecture**, [owner's decisions: architecture](s3-1-1-decisions-architecture.md). **← [S2.2b](../sprints/s2-2b-record.md) · [S3.1-2](../sprints/s3-1-2-record.md) →**
+
 Reviewed: `docs/sprints/s3-1-1-design.md` (the note), `internal/clock/clock.go` and `internal/metrics/metrics.go` (the stub), at `8c51591`, against ADR-0004, ADR-0006, ADR-0013, ADR-0014, SEMANTICS §2.1/§6/§9 and the reference executor. The reviewer did not write the design.
 
 **Method.** Each divergence claim below was run, not argued: a scratch probe imports `docs/language/checks/executor.py` unchanged and, for the ordering claims, a copy of `_PatternEngine.drain` changed to do the note's order ((a) every event, then (b) every timer, then (c) discards). The probes are P1–P7. Each finding quotes its probe's output.

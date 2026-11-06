@@ -1,5 +1,7 @@
 # S3.2a-2 — design note: the runtime core (v2)
 
+> **Historical — S3.2a-2, the runtime core; merged in PR #11.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-05--s32a-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s3-2a-2-record.md) · reviews: [design: architecture](../reviews/s3-2a-2-design-architecture.md), [break-it: QA](../reviews/s3-2a-2-breakit-qa.md). **← [S3.2a-1](s3-2a-1-record.md) · [S3.2b-1](s3-2b-1-record.md) →**
+
 **What it covers:**
 - S3.2a's item 3 ([card](history.md#s32a--the-replay-format-and-the-runtime-core)) and exit line 3 (saturation).
 - The forwards from S3.2a-1 (under the S3.2a card).

@@ -1,5 +1,7 @@
 # S1.1a-2 plan check: QA review (blind)
 
+> **Historical — S1.1a-2, hooks and CI; merged in PR #2.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-2-plan-check.md) · [design (§12)](../sprints/s1-1a-gate-design.md#12-s11a-2-the-hooks-and-ci-2026-11-03-g1-approved-by-the-owner-2026-11-04-implement-this-fast-and-get-it-over) · [record](../sprints/s1-1a-2-record.md) · reviews: [plan check: architecture](s1-1a-2-plan-check-architecture.md), **plan check: QA**. **← [S1.1a-1](../sprints/s1-1a-1-record.md) · [S1.1b](../sprints/s1-1b-record.md) →**
+
 Reviewed: `docs/sprints/s1-1a-2-plan-check.md` (draft, 2026-11-03, uncommitted). I checked it against the S1.1a-2 card (`docs/sprints/sprint-plan.md:144-160`), the shared plan check v2 (S4, P7, P9, §6), its QA review (C11–C22), the v1 cases 19–23 and 40–42 (`git show a96ee08:docs/sprints/s1-1a-plan-check.md:202-206, 229-231`), and the code on `main` @ 5166ce4. The `gate/`, `Makefile` and `ruff.toml` files at HEAD 9b59a0f are the same as on main. I worked read-only. The coordinator cut the time box short, so **I ran no probes**: every claim about git or ruff behaviour below is marked "inferred". Code claims cite `file:line`. Short names: PC2 = the draft; SPC = `docs/sprints/s1-1a-plan-check.md`.
 
 ## Bottom line

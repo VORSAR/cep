@@ -1,5 +1,7 @@
 # Red-team review — SEMANTICS.md (L2)
 
+> **Historical — language workstream, L2 red-team review, 2026-10-31.** Normative today: [SPEC.md](../SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](../errors.md) and the corpus; [SEMANTICS.md](../SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](../PLAN.md) · [DESIGN (L0)](../DESIGN.md) · [PRIOR-ART (L1)](../PRIOR-ART.md) · [SEMANTICS (L2)](../SEMANTICS.md) · [SYNTAX (L3)](../SYNTAX.md) · [SPEC (L4)](../SPEC.md) · [EVAL (L5)](../EVAL.md) · [REVIEW (L6)](../REVIEW.md).
+
 Adversarial semantics review of [SEMANTICS.md](../SEMANTICS.md) against [DESIGN.md](../DESIGN.md)'s Fixed constraints, the L2 harness ([checks/](../checks/), 23/23 green, re-run 2026-10-31), and the Phase-1 flagship rule ([02-roadmap.md](../../product/02-roadmap.md)). Every finding carries a concrete timeline or rule shape; executor-reproducible ones are pinned in [experiments/exp_redteam.py](experiments/exp_redteam.py) (E1–E8, all reproduced — run from repo root: `python3 docs/language/review/experiments/exp_redteam.py`). Severity per ground rule 15: **blocker** = wrong/missed detection, lost state, contradiction; **should-fix** = wrong with a workaround or misleading; **later** = polish. No fixes proposed; findings only.
 
 ## Findings table
