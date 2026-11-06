@@ -55,7 +55,8 @@ func pqOpt(name string, ty event.Type) event.Attr {
 	return event.Attr{Name: name, Type: ty, Optional: true}
 }
 
-// TestBuildExample07: one source stream (bound 1 min), one derived stream, one table, one key-less rule.
+// TestBuildExample07: one source stream (bound 1 min), one derived stream, one table, one rule keyed by tenant
+// (owner D2 of S3.2b-1: `partition by tenantId of ConsentGrants ttl 10 min`).
 func TestBuildExample07(t *testing.T) {
 	t.Parallel()
 	p := pqBuild(t, "07-consent-gate.cep", pqExample(t, "07-consent-gate.cep"))
@@ -77,8 +78,8 @@ func TestBuildExample07(t *testing.T) {
 	if r.Name != "UnknownAppConsent" || !slices.Equal(r.Inputs, []int{0}) {
 		t.Errorf("rule %q reads %v, want UnknownAppConsent reading [0]", r.Name, r.Inputs)
 	}
-	if r.KeyAttr != nil || r.KeyType != event.TString || r.TTL != 0 {
-		t.Errorf("rule %s: KeyAttr %v, KeyType %v, TTL %d; want nil (key-less), string, 0 (design §1)", r.Name, r.KeyAttr, r.KeyType, r.TTL)
+	if !slices.Equal(r.KeyAttr, []int{0}) || r.KeyType != event.TString || r.TTL != 10*pqMin {
+		t.Errorf("rule %s: KeyAttr %v, KeyType %v, TTL %d; want [0] (tenantId), string, 10 min (owner D2)", r.Name, r.KeyAttr, r.KeyType, r.TTL)
 	}
 	if !r.OnArrival {
 		t.Errorf("rule %s: OnArrival false; a plain body sees each event on arrival (owner Q1, design §1 step 3)", r.Name)

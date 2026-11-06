@@ -319,8 +319,8 @@ func TestRatePanicResetStartsFresh(t *testing.T) {
 }
 
 // TestExample07Material: design §6's cases for 07 at the body — an unregistered app (alert), a registered app (no
-// alert), a null appId (alert with 'missing', SEMANTICS §1.1 + coalesce), and a second unregistered grant inside
-// 5 min of the last alert (suppressed: UnknownAppConsent is key-less, one global anchor — design O2).
+// alert), a null appId (alert with 'missing', SEMANTICS §1.1 + coalesce), another tenant's grant inside those 5 min
+// (its own alert: UnknownAppConsent is limited per tenant, owner D2), and a same-tenant grant inside them (suppressed).
 func TestExample07Material(t *testing.T) {
 	t.Parallel()
 	p := pqBuild(t, "07-consent-gate.cep", pqExample(t, "07-consent-gate.cep"))
@@ -341,10 +341,12 @@ func TestExample07Material(t *testing.T) {
 	x.offer(grant(0, "t1", pqStr("rogue")))        // alert
 	x.offer(grant(10*pqMin, "t1", pqStr("known"))) // registered: no alert
 	x.offer(grant(20*pqMin, "t2", pqNullStr()))    // alert, appId 'missing'
-	x.offer(grant(22*pqMin, "t3", pqStr("other"))) // inside 5 min of 20: suppressed
+	x.offer(grant(22*pqMin, "t3", pqStr("other"))) // another tenant inside 5 min of 20: its own alert (D2)
+	x.offer(grant(23*pqMin, "t2", pqStr("other"))) // t2 again inside 5 min of its alert: suppressed
 	want := [][]event.Value{
 		{pqStr("t1"), pqStr("rogue"), pqTs(pqT0)},
 		{pqStr("t2"), pqStr("missing"), pqTs(pqT0 + 20*pqMin)},
+		{pqStr("t3"), pqStr("other"), pqTs(pqT0 + 22*pqMin)},
 	}
 	if len(x.out) != len(want) {
 		t.Fatalf("outputs %+v, want %+v", x.out, want)
