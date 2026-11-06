@@ -54,8 +54,8 @@ type App struct {
 	Recorder Recorder
 }
 
-// Recorder writes one app's recording (design s3-2b-2 §7). The router calls it on its own goroutine, in intake order,
-// before the step it records. A non-nil error ends the recording for good (owner Q2 of S3.2b-2): the router never calls
+// Recorder writes one app's recording (design s3-2b-2 §7). The runtime calls it from the app's recorder goroutine —
+// never the router's — in intake order: each record is queued before the step it records. A non-nil error ends the recording for good (owner Q2 of S3.2b-2): the router never calls
 // it again, records the failure in Stats and goes on running the app.
 type Recorder interface {
 	Header(start int64) error                                           // once, before any other call
@@ -211,10 +211,11 @@ type item struct {
 }
 
 type reply struct {
-	err     error
-	pending int64
-	markers []chan struct{}
-	stats   Stats
+	err       error
+	pending   int64
+	markers   []chan struct{}
+	recMarker chan struct{} // a drain's recording stop, waited for only until the drain's deadline (owner, 2026-11-06)
+	stats     Stats
 }
 
 type msgKind uint8
@@ -339,7 +340,7 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 	for i := range apps {
 		app := apps[i]
 		a := &appState{
-			id: AppID(i), app: app, ing: NewIngest(app.Streams, start, app.Tables, false),
+			id: AppID(i), app: app, ing: NewIngest(app.Streams, start, app.Tables, false).withFlagSlots(app.Schemas),
 			byStream: make([][]route, len(app.Streams)), sinks: make([][]*sinkQ, len(app.Streams)),
 			late: make([]int64, len(app.Streams)), after: make([]int64, len(app.Streams)),
 			keyErr: make([]int64, len(app.Rules)),
@@ -546,6 +547,9 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 
 // Tick hands a wall tick to the intake, behind every event already there.
 func (r *Runtime) Tick(ctx context.Context, now int64) error {
+	if !event.TimestampInRange(now) {
+		return fmt.Errorf("runtime: Tick at %d ms: outside the years 0000-9999, which a recording cannot write (owner D1 of S3.2b-2's design; break-it S2)", now)
+	}
 	if r.isClosed() {
 		return ErrClosed
 	}
@@ -565,11 +569,15 @@ func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op Tab
 	if a.app.Tables == nil || tableID < 0 || tableID >= a.app.Tables.Len() || (op != TablePut && op != TableDelete) {
 		return fmt.Errorf("runtime: app %d: no table %d, or an unknown operation", app, tableID)
 	}
+	tb := a.app.Tables.Table(tableID)
 	for ri, row := range rows {
 		for ci, v := range row {
 			if err := recordable(v); err != nil {
 				return fmt.Errorf("runtime: app %d table %d: row %d value %d %v (owner D1 of S3.2b-2's design)", app, tableID, ri, ci, err)
 			}
+		}
+		if rowBound(tb.Name(), tb.Attrs(), row) > event.MaxLogLine {
+			return fmt.Errorf("runtime: app %d table %d: row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", app, tableID, ri, event.MaxLogLine)
 		}
 	}
 	_, err = r.request(ctx, item{kind: iWrite, app: app, table: tableID, op: op, rows: rows})
@@ -603,6 +611,14 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 			return DrainResult{}, ErrClosed
 		case <-ctx.Done():
 			return DrainResult{}, ctx.Err()
+		}
+	}
+	if rep.recMarker != nil { // every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
+		select {
+		case <-rep.recMarker:
+		case <-r.stopped:
+		case <-ctx.Done():
+			a.rec.fail("runtime: the recording's stop was not written before the drain's deadline: the recording is incomplete")
 		}
 	}
 	return DrainResult{Pending: rep.pending}, nil
@@ -807,7 +823,9 @@ func (rt *router) ingest(it item) {
 		}
 		err := a.write(it.table, it.op, it.rows)
 		if err == nil {
-			a.rec.put(recItem{kind: rTable, table: it.table, op: it.op, rows: copyRows(it.rows)})
+			for _, row := range copyRows(it.rows) { // one record per row: Records counts lines (break-it S1)
+				a.rec.put(recItem{kind: rTable, table: it.table, op: it.op, rows: [][]event.Value{row}})
+			}
 		}
 		it.reply <- reply{err: err}
 	case iDrain:
@@ -1027,10 +1045,7 @@ func (rt *router) take(h handoff) {
 				markers = append(markers, m)
 				rt.push(send{shard: -1, sink: q, si: sinkItem{marker: m}})
 			}
-			if d.recMarker != nil {
-				markers = append(markers, d.recMarker)
-			}
-			res := reply{pending: d.pending, markers: markers}
+			res := reply{pending: d.pending, markers: markers, recMarker: d.recMarker}
 			d.app.drainRes = &res
 			for _, ch := range d.replies {
 				ch <- res

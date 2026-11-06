@@ -246,6 +246,44 @@ func cleanObject(raw []byte) string {
 // S3.2a-1). A recording keeps a live payload in this form (owner D3 of S3.2b-2's design).
 func CleanObject(raw []byte) string { return cleanObject(raw) }
 
+// CleanLen is len(CleanObject(raw)) without building it: what a recording line holds of a payload (review C1).
+func CleanLen(raw []byte) int {
+	if compactAndValid(raw) {
+		return len(raw)
+	}
+	n, inStr := 0, false
+	for i := 0; i < len(raw); {
+		c := raw[i]
+		switch {
+		case !inStr:
+			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+				n++
+				inStr = c == '"'
+			}
+			i++
+		case c == '\\':
+			n += 2
+			i += 2
+		case c == '"':
+			n++
+			inStr = false
+			i++
+		case c < utf8.RuneSelf:
+			n++
+			i++
+		default:
+			r, size := utf8.DecodeRune(raw[i:])
+			if r == utf8.RuneError && size == 1 {
+				n += len("\uFFFD")
+			} else {
+				n += size
+			}
+			i += size
+		}
+	}
+	return n
+}
+
 // ExactObject says text is an object value a log line holds as it is (owner D1 of S3.2b-2's design): one JSON object
 // or array, valid, already in CleanObject's form, nested no deeper than an event line allows (the line and its attrs
 // are two levels).

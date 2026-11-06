@@ -28,6 +28,15 @@ var errLineTooLong = fmt.Errorf("playback: a recording line longer than %d bytes
 // NewRecorder is the recorder of app's recording into w.
 func NewRecorder(w io.Writer, app *plan.App) *Recorder { return &Recorder{w: w, app: app} }
 
+// stamp checks a time the recording writes: outside RFC 3339's years the line would not read back, so the recording
+// fails instead (owner Q2 of S3.2b-2; break-it S2).
+func stamp(ms int64) error {
+	if !event.TimestampInRange(ms) {
+		return errTimeRange
+	}
+	return nil
+}
+
 func (r *Recorder) line(b []byte) error {
 	if len(b) > event.MaxLogLine {
 		return errLineTooLong
@@ -40,6 +49,9 @@ func (r *Recorder) line(b []byte) error {
 
 // Header writes {"recording":{"start":…}}.
 func (r *Recorder) Header(start int64) error {
+	if err := stamp(start); err != nil {
+		return err
+	}
 	b := append(r.buf[:0], `{"recording":{"start":`...)
 	b = appendTime(b, start)
 	return r.line(append(b, `}}`...))
@@ -53,6 +65,9 @@ func (r *Recorder) Event(e *event.Event, arrival int64, payload []byte) error {
 		return fmt.Errorf("playback: recorder: stream %d of %d", e.StreamID, len(r.app.Streams))
 	}
 	s := r.app.Streams[e.StreamID].Schema
+	if err := stamp(arrival); err != nil {
+		return err
+	}
 	b := append(r.buf[:0], '{')
 	if s.TimeAttr() != event.ArrivalTime {
 		b = append(b, `"arrival":`...)
@@ -95,6 +110,9 @@ func (r *Recorder) Rejected(stream int, arrival int64, fault *event.DecodeError)
 	if fault == nil {
 		return errors.New("playback: recorder: a rejected event without its fault")
 	}
+	if err := stamp(arrival); err != nil {
+		return err
+	}
 	reason, ok := reasonNames[fault.Reason]
 	if !ok {
 		return fmt.Errorf("playback: recorder: decode reason %d", fault.Reason)
@@ -116,6 +134,9 @@ func (r *Recorder) Rejected(stream int, arrival int64, fault *event.DecodeError)
 
 // Tick writes {"tick":…}.
 func (r *Recorder) Tick(now int64) error {
+	if err := stamp(now); err != nil {
+		return err
+	}
 	b := append(r.buf[:0], `{"tick":`...)
 	b = appendTime(b, now)
 	return r.line(append(b, '}'))

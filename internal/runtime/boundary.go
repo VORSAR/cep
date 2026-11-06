@@ -59,6 +59,28 @@ func lineBound(sch event.Schema, e event.Event) int {
 			n += 40
 		}
 	}
+	return n + 6*len(e.BatchID) + 12 // the batch id, escaped at worst (break-it L1)
+}
+
+// rowBound is a cap on one table record's line (review C2; break-it B3): {"op":…,"row":{…},"table":…}, every string at
+// its worst-case escaped length.
+func rowBound(table string, attrs []event.Attr, row []event.Value) int {
+	n := 256 + 6*len(table)
+	for i, v := range row {
+		if i < len(attrs) {
+			n += len(attrs[i].Name) + 4
+		}
+		switch {
+		case v.Kind == event.TString:
+			n += 6*len(v.Str) + 2
+		case v.Kind == event.TObject:
+			if s, ok := v.Obj.(string); ok {
+				n += len(s)
+			}
+		default:
+			n += 40
+		}
+	}
 	return n
 }
 
@@ -95,6 +117,9 @@ func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payloa
 			de = &event.DecodeError{Reason: event.DecodeSyntax, Msg: err.Error()}
 		}
 		return reject(de)
+	}
+	if n := event.CleanLen(payload); n > payloadLimit(name) { // the recorded form: malformed UTF-8 grows (review C1)
+		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf("the payload is %d bytes as a recording keeps it; a recording line holds %d", n, payloadLimit(name))})
 	}
 	if info.Depth > event.MaxDepth-1 {
 		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf("the payload is nested %d deep; a recording line holds %d", info.Depth, event.MaxDepth-1)})

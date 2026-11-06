@@ -189,7 +189,9 @@ func q2RuleStats(t testing.TB, st runtime.Stats, rule int) runtime.RuleStats {
 	if len(st.Rules) == 0 || rule >= len(st.Rules[0]) {
 		t.Fatalf("Stats.Rules %v has no app 0 rule %d", st.Rules, rule)
 	}
-	return st.Rules[0][rule]
+	rs := st.Rules[0][rule]
+	rs.OutboxHigh = 0 // a capacity mark, per worker: left out of live-equals-replay (owner, 2026-11-06, S3.2b-2's review)
+	return rs
 }
 
 // q2Rule is the index of p's rule named name.

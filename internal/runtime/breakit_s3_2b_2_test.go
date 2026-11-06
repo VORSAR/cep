@@ -130,7 +130,10 @@ func TestBreakitOutboxHighReplaysAcrossShards(t *testing.T) {
 	if liveOuts.Load() != replayOuts {
 		t.Fatalf("outputs: live %d, replay %d", liveOuts.Load(), replayOuts)
 	}
+	// Owner, 2026-11-06 (S3.2b-2's review and break-it, 2): OutboxHigh is a capacity mark, per worker, left out of the
+	// live-equals-replay check; every detection counter must still match. A guard from here on.
+	live.OutboxHigh, replay.OutboxHigh = 0, 0
 	if live != replay {
-		t.Errorf("RuleStats live (4 shards) %+v vs replay (1 shard) %+v: OutboxHigh counts per shard, so it differs with the shard count (MUST 10)", live, replay)
+		t.Errorf("RuleStats live (4 shards) %+v vs replay (1 shard) %+v: the detection counters must match (MUST 10)", live, replay)
 	}
 }

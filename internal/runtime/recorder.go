@@ -37,22 +37,27 @@ type recItem struct {
 
 // recQ is one app's recording (owner D2 of S3.2b-2's design; review F2; MUST 13): a bounded queue the router puts
 // records on without ever blocking, drained in order by the app's recorder goroutine, the only caller of the
-// Recorder. A full queue or the Recorder's first error ends the recording for good: the app goes on.
+// Recorder. A full queue or the Recorder's first error or panic ends the recording for good: the app goes on. After a
+// full queue the goroutine still writes every record already queued, then flushes, so the file holds whole lines
+// (review C3).
 type recQ struct {
-	q   chan recItem
-	rec Recorder
+	q        chan recItem
+	rec      Recorder
+	overflow chan int64 // the router's one signal that the queue filled: the records queued before it
 
 	ended  bool  // the router's: the recording has ended (a full queue, or it saw the goroutine fail); put nothing more
 	queued int64 // the router's: records put
 
-	mu      sync.Mutex // guards the goroutine's results, read by Stats outside the cut
+	broken bool // the goroutine's: the Recorder failed or panicked; it is never called again
+
+	mu      sync.Mutex // guards the results, read by Stats outside the cut
 	records int64
-	failed  bool
+	failed  bool // the recording has ended: a full queue (set by the router at once) or the Recorder's failure
 	err     string
 }
 
 func newRecQ(rec Recorder, capacity int) *recQ {
-	return &recQ{q: make(chan recItem, capacity), rec: rec}
+	return &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1)}
 }
 
 // put is the router's non-blocking hand-over; it reports whether the record was queued. A full queue ends the
@@ -71,7 +76,8 @@ func (q *recQ) put(it recItem) bool {
 		return true
 	default:
 		q.ended = true
-		q.fail(fmt.Sprintf("runtime: recording queue full at record %d: the recording stopped; detection goes on", q.queued+1))
+		q.fail(fmt.Sprintf("runtime: recording queue full after record %d: the recording stopped; detection goes on", q.queued))
+		q.overflow <- q.queued // once: ended stops every later put; the goroutine writes what is queued
 		return false
 	}
 }
@@ -108,15 +114,24 @@ func (q *recQ) run(r *Runtime) {
 		select {
 		case it := <-q.q:
 			q.handle(it)
+		case <-q.overflow: // every record queued before the overflow is in q: write them, then flush (review C3)
+			for {
+				select {
+				case it := <-q.q:
+					q.handle(it)
+					continue
+				default:
+				}
+				break
+			}
+			q.flush()
 		case <-r.stopped:
 			for {
 				select {
 				case it := <-q.q:
 					q.handle(it)
 				default:
-					if f, ok := q.rec.(interface{ Flush() error }); ok && !q.isFailed() {
-						_ = f.Flush()
-					}
+					q.flush()
 					return
 				}
 			}
@@ -129,10 +144,38 @@ func (q *recQ) handle(it recItem) {
 		close(it.marker)
 		return
 	}
-	if q.isFailed() {
+	if q.broken {
 		return
 	}
-	var err error
+	err := q.call(it)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	switch {
+	case err != nil:
+		q.broken = true
+		if !q.failed {
+			q.failed, q.err = true, err.Error()
+		}
+	default:
+		q.records++
+	}
+}
+
+// flush flushes a Recorder that can, unless it has failed: a file then ends on a whole line.
+func (q *recQ) flush() {
+	if f, ok := q.rec.(interface{ Flush() error }); ok && !q.broken {
+		_ = f.Flush()
+	}
+}
+
+// call hands one record to the Recorder; a panic is the recording's failure, never the process's (break-it B4), as a
+// sink's is counted.
+func (q *recQ) call(it recItem) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("runtime: the recorder panicked: %v", p)
+		}
+	}()
 	switch it.kind {
 	case rHeader:
 		err = q.rec.Header(it.arrival)
@@ -147,12 +190,5 @@ func (q *recQ) handle(it recItem) {
 	case rStop:
 		err = q.rec.Stop()
 	}
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	switch {
-	case err != nil && !q.failed:
-		q.failed, q.err = true, err.Error()
-	case err == nil:
-		q.records++
-	}
+	return err
 }

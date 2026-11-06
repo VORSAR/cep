@@ -102,6 +102,9 @@ func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 // Name is the table's declared name.
 func (t *Table) Name() string { return t.name }
 
+// Attrs is the table's columns, in declaration order; the caller MUST NOT change them.
+func (t *Table) Attrs() []event.Attr { return t.attrs }
+
 // Snapshot is the current Version: never nil, one atomic load, no allocation.
 func (t *Table) Snapshot() *Version { return t.cur.Load() }
 
