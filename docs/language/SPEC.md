@@ -198,7 +198,7 @@ The identifier exclusion list in `grammar.lark`'s NAME terminal is normative: al
 
 ## Appendix C. Error codes
 
-See [errors.md](errors.md) — 61 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 24 files), 38 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`; rev 4 added `E-NULL-003`).
+See [errors.md](errors.md) — 62 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 24 files), 39 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`; rev 4 added `E-NULL-003`, `E-PART-004`).
 
 ## Appendix D. Go builder API mapping (informative until the API spec lands)
 
@@ -255,7 +255,7 @@ Aggregates beyond `count` (sum, avg, `distinctCount`, …) are **reserved** for 
 ## Appendix E. Change log
 
 - v0.1 draft (2026-10-31): initial MVP surface; adversarially reviewed semantics; grammar machine-checked.
-- v0.1 rev 4 (2026-11-06, pre-release; the owner's decisions at sprint S3.2b-1): a select item that can be null is never bound to a non-optional output attribute (`E-NULL-003`, new); a derived stream's `ts`, which holds the output timestamp, is declared `timestamp` (`E-TYPE-001`); a plain rule emits as soon as its stream accepts an event, its rate limit compares event times in arrival order, and its keys expire on the stream's admission watermark (§5.1 as annotated).
+- v0.1 rev 4 (2026-11-06, pre-release; the owner's decisions at sprint S3.2b-1): a select item that can be null is never bound to a non-optional output attribute (`E-NULL-003`, new; a rule's own partition key is never null where the rule runs); a stream named twice in a partition clause is refused (`E-PART-004`, new — multi-part keys `(k, j) of S` follow in S3.2b-2); a derived stream's `ts`, which holds the output timestamp, is declared `timestamp` (`E-TYPE-001`); a plain rule emits as soon as its stream accepts an event, its rate limit compares event times in arrival order, and its keys expire on the stream's admission watermark (§5.1 as annotated).
 - v0.1 rev 3 (2026-11-04, pre-release; the owner's decisions of 2026-11-01 and 2026-11-02, applied at sprint S1.2): a rule reads source streams only (`E-GRAPH-004`; `E-GRAPH-001` unreachable in v0.1, kept for Phase 2); a cross-stream partition-key type mismatch is rejected at deploy (`E-PART-003`, naming both streams and both types); `late events allow` removed for v0.1 (`E-LATE-002` wherever it appears; example 02 now `late events drop`); cron admission pinned to §6.1 (an event behind the admission watermark is dropped even if its bucket is open; the reference executor aligned, a new harness check pins it); `text_invisibles` engine-owned; keyword sets over a table read its per-event snapshot like `in`; `time arrival` stays (playback logs carry the recorded stamp as `ts`); a `time <attr>` must name a `timestamp` attribute (`E-TIME-003`). The grammar is unchanged.
 - v0.1 rev 2 (2026-11-01, pre-release; owner-approved at architecture ratification): expect blocks gain `given table <Name> [rows]` seeding (playback logs gain a table-load record); regex `_ci` defined as RE2 folding, distinct from the simple fold of text operators. Grammar re-verified.
 - v0.1 rev 1 (2026-11-01, pre-release): owner reversal — keywords are lowercase-only; non-lowercase keyword spellings are E-KW-002, reserved-in-any-case retained. Verified: full corpus + probes.
