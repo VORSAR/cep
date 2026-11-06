@@ -1,5 +1,7 @@
 # Prior art: siddhi-core internal architecture (owner-directed study, 2026-11-01)
 
+> **Historical — prior-art study, 2026-11-01; evidence only.** What was adopted is in [ARCHITECTURE.md](../ARCHITECTURE.md) and the ADRs it names in §11 (StreamNode: [ADR-0012](../adr/ADR-0012-streamnode-and-app-lifecycle.md)).
+
 Commissioned because the owner judged Siddhi "sufficiently well written" architecturally. Source: /Users/ramith/code/siddhi @ 98de1eb41 (v5.1.35-1), module siddhi-core. Mapping produced by a thorough sweep (agent `siddhi-core-arch`); two load-bearing claims verified first-hand by the coordinator (the fc771aab8 "remove cloning" commit; the per-event purge-scheduling defect in `PartitionRuntimeImpl.initPartition()` — confirmed by reading the Java). §1–§10 are the map; §11 is our adopt/adapt/reject digestion feeding the Phase 1 baseline revision.
 
 ## 1. Packages and dependencies

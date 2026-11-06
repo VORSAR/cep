@@ -1,5 +1,7 @@
 # S2.2b — design note: the validator (v2, after review)
 
+> **Historical — S2.2b, the validator; merged in PR #7.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s2-2b-record.md) · reviews: [design: architecture](../reviews/s2-2b-design-architecture.md). **← [S2.2a](s2-2a-record.md) · [S3.1-1](s3-1-1-record.md) →**
+
 The plan for the validator, as it stands after the architecture review ([s2-2b-design-architecture.md](../reviews/s2-2b-design-architecture.md)), QA's independent test programs (`internal/validate/testdata/`) and the owner's answers ([decisions](decisions.md#owner-decisions-2026-11-04--s22bs-design)). Every review finding is placed in §10.
 
 ## 1. The shape

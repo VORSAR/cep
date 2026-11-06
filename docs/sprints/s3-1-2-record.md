@@ -1,5 +1,7 @@
 # S3.1-2 — sprint record (S3.1's routine: QA first, an architecture review, a break-it)
 
+> **Historical — S3.1-2, tables and membership, the ingest flag, the schema decoder; merged in PR #9.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s31-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-1-2-design.md) · **record** · reviews: [design: architecture](../reviews/s3-1-2-design-architecture.md), [break-it: QA](../reviews/s3-1-2-breakit-qa.md). **← [S3.1-1](s3-1-1-record.md) · [S3.2a-1](s3-2a-1-record.md) →**
+
 **Sprint:** S3.1-2 — tables and membership, the ingest flag, the schema decoder, the purity exceptions (S3.1's items 3–6; the owner split S3.1 at its card's line) · **Routine:** by the owner (2026-11-04, all of S3.1): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** 6.5 SP carded + 1.5 (D2, D4, break-it B4/B6) · **Branch:** `s3-1-2/integration`
 
 ## Plan and decisions

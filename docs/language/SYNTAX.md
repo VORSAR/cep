@@ -1,5 +1,7 @@
 # SYNTAX.md — concrete surface (L3)
 
+> **Historical — language workstream, L3 draft of the surface, 2026-10-31; superseded by SPEC.** Normative today: [SPEC.md](SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](errors.md) and the corpus; [SEMANTICS.md](SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](PLAN.md) · [DESIGN (L0)](DESIGN.md) · [PRIOR-ART (L1)](PRIOR-ART.md) · [SEMANTICS (L2)](SEMANTICS.md) · **SYNTAX (L3)** · [SPEC (L4)](SPEC.md) · [EVAL (L5)](EVAL.md) · [REVIEW (L6)](REVIEW.md).
+
 Surface for the semantics in [SEMANTICS.md](SEMANTICS.md); meanings live there, never here. Style: **symbols** (owner ruling 2026-10-31): `->` connector, `[bracket]` filters, SQL-verbatim expressions. Canonical form: lowercase keywords, one clause per line, two-space indent, `;` terminators, no layout sensitivity. Keywords are reserved (backtick-quote an identifier that collides). Every construct carries its one-sentence English rendering. Grammar target: <60 productions, LALR(1), at L4.
 
 ## 1. Program shape

@@ -1,5 +1,7 @@
 # QA review: Phase 1 decomposition (sprint-plan.md §3 "Phase 1 decomposition — DRAFT", revision with the owner's 2026-11-01 decomposition decisions)
 
+> **Historical — review of the Phase 1 decomposition draft (v2), 2026-11-01; dispositioned 2026-11-02.** The approved plan is v3 in [sprint-plan.md](../sprints/sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02) (closed cards in [history.md](../sprints/history.md)). **Companion:** [architecture review](phase1-decomposition-architecture.md). **Next →** [S1.1a plan check](../sprints/s1-1a-plan-check.md).
+
 **Reviewer stance:** QA with an adversarial, the-fool reading. I reviewed blind: I did not open `docs/architecture/review/` or `docs/reviews/`. Paths are relative to the repository root `/Users/ramith/code/complex-events-engine`. Line numbers refer to the working-tree `docs/sprints/sprint-plan.md` (407 lines). That revision already includes §5 "Owner decisions, 2026-11-01 — Phase 1 decomposition" (lines 401–407). I checked those decisions in the file. I did not relitigate them, but I did review the testability of the lines they added: S2.1 trivia, S6 lines 4–7, S8/S9 panel, and S11 line 3.
 
 **Method:**

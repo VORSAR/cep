@@ -1,5 +1,7 @@
 # PRIOR-ART.md — inherit/break dispositions
 
+> **Historical — language workstream, L1 artifact, 2026-10-31.** Normative today: [SPEC.md](SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](errors.md) and the corpus; [SEMANTICS.md](SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](PLAN.md) · [DESIGN (L0)](DESIGN.md) · **PRIOR-ART (L1)** · [SEMANTICS (L2)](SEMANTICS.md) · [SYNTAX (L3)](SYNTAX.md) · [SPEC (L4)](SPEC.md) · [EVAL (L5)](EVAL.md) · [REVIEW (L6)](REVIEW.md).
+
 L1 artifact ([PLAN.md](PLAN.md)). Computes the novelty budget: what we inherit verbatim, what we deliberately change, what we leave out — one line of reason each. The decision to build is fixed; this is not a feasibility review.
 
 **Evidence base:** [research/siddhi-surface.md](research/siddhi-surface.md) (full SiddhiQL inventory: grammar `SiddhiQL.g4` @ v5.1.35-1 cross-checked against the [5.0 query guide](https://siddhi.io/en/v5.0/docs/query-guide/), verified 2026-10-31) · skill prior-art references (Siddhi, Esper, Flink MATCH_RECOGNIZE, ksqlDB/Beam) · text-operator literature review: **pending** (§8, agent running; L1 does not close without it).

@@ -2,6 +2,8 @@
 
 # S1.1a plan check: architecture review (blind)
 
+> **Historical — S1.1a (split at this plan check into S1.1a-1 and S1.1a-2); merged in PR #1.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-plan-check.md) · [design](../sprints/s1-1a-gate-design.md) · [record](../sprints/s1-1a-1-record.md) · reviews: **plan check: architecture**, [plan check: QA](s1-1a-plan-check-qa.md), [design: architecture](s1-1a-design-architecture.md), [design: QA](s1-1a-design-qa.md), [design re-check](s1-1a-design-recheck.md), [build: architecture](s1-1a-1-build-architecture.md), [break-it: QA](s1-1a-1-breakit-qa.md). **← [Phase 1 decomposition review](phase1-decomposition-architecture.md) · [S1.1a-2](../sprints/s1-1a-2-record.md) →**
+
 Reviewer: architect reviewer, applying the-fool's pre-mortem mode. Draft: `docs/sprints/s1-1a-plan-check.md` (2026-11-02), read against `main` @ `0a56632` plus the uncommitted `sprint-plan.md` annotation.
 
 **Premise.** The coordinator relayed mid-review that the owner answered Q1 with **Python**: all gate utility code is stdlib-only Python under a pinned CPython, and a system `python3` only bootstraps. I review the draft as it would be revised for that answer. This answer is not yet recorded in any document I could read: `docs/sprints/` has no `s1-1a-record.md`, and sprint-plan §5 has no entry for it. Findings marked "inferred" are not proven by a cited line or a probe. Probes were run read-only in the session scratchpad.

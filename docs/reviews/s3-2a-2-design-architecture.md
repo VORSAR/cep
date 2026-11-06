@@ -1,5 +1,7 @@
 # S3.2a-2 design note v1 — architecture review
 
+> **Historical — S3.2a-2, the runtime core; merged in PR #11.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-05--s32a-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2a-2-design.md) · [record](../sprints/s3-2a-2-record.md) · reviews: **design: architecture**, [break-it: QA](s3-2a-2-breakit-qa.md). **← [S3.2a-1](../sprints/s3-2a-1-record.md) · [S3.2b-1](../sprints/s3-2b-1-record.md) →**
+
 Artifact: `docs/sprints/s3-2a-2-design.md` (v1), branch `s3-2a-2/integration` at ab15940. Blind review.
 Sources read: the note; the S3.2a card, its "how it runs" note and "Forwarded to S3.2a-2" (`docs/sprints/sprint-plan.md`
 l. 276–312); sprint-plan §5 "S3.1-1's clock" (D1–D8), "S3.2a-1's design" (D1–D7), "S3.2a-2's plan check"; ADR-0006 §1–§6

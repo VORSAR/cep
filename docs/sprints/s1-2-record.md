@@ -1,5 +1,7 @@
 # S1.2 — sprint record
 
+> **Historical — S1.2, the model kernel and spec rev 3; merged in PR #4.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s12-cut-to-the-model-kernel-and-spec-rev-3); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **record**. **← [S1.1b](s1-1b-record.md) · [S2.1](s2-1-record.md) →**
+
 **Sprint:** S1.2 — the model kernel and spec rev 3 · **Routine:** slim, by the owner (2026-11-04) · **Size:** about 7 SP (model 3, spec rev 3 4) · **Branch:** `s1-2/integration`
 
 ## Plan and decisions
@@ -42,4 +44,4 @@ The owner cut S1.2 to `internal/model` plus spec rev 3, and moved its gate extra
 
 ## Retro
 
-*(at close-out)*
+*(No retro was recorded; the sprint closed when PR #4 merged.)*

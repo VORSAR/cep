@@ -1,5 +1,7 @@
 # REVIEW.md — L6 adversarial review (item → finding → fix/exception)
 
+> **Historical — language workstream, L6 review, 2026-10-31 to 2026-11-01.** Normative today: [SPEC.md](SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](errors.md) and the corpus; [SEMANTICS.md](SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](PLAN.md) · [DESIGN (L0)](DESIGN.md) · [PRIOR-ART (L1)](PRIOR-ART.md) · [SEMANTICS (L2)](SEMANTICS.md) · [SYNTAX (L3)](SYNTAX.md) · [SPEC (L4)](SPEC.md) · [EVAL (L5)](EVAL.md) · **REVIEW (L6)**.
+
 2026-10-31. Inputs: the A–F checklist (skill), the 14 L5 generator gap reports ([EVAL.md](EVAL.md) §3, all fixed this date before this review), coordinator pass (below), independent red team ([review/redteam-spec.md](review/redteam-spec.md), findings appended with dispositions).
 
 ## A. Ambiguity and parsing

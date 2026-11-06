@@ -1,5 +1,7 @@
 # S2.1 — sprint record (slim)
 
+> **Historical — S2.1, the parser; merged in PR #5.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s21-the-parser-participle-v2--adr-0002s-goyacc); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **record** · reviews: [participle spike](../language/research/participle-spike.md). **← [S1.2](s1-2-record.md) · [S2.2a](s2-2a-record.md) →**
+
 **Sprint:** S2.1 — the parser · **Routine:** slim, by the owner (2026-11-04: one plan, QA's test material first, no reviews) · **Size:** about 8 SP (the card's items 1, 3, 4, 5; item 2 a pinning test; item 6 moot) · **Branch:** `s2-1/integration`
 
 ## Plan and decisions
@@ -34,4 +36,4 @@ Slim routine: plan above · QA's red tests first · build · `make check` green 
 
 ## Retro
 
-*(at close-out)*
+*(No retro was recorded; the sprint closed when PR #5 merged.)*

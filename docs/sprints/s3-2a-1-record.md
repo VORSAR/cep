@@ -1,5 +1,7 @@
 # S3.2a-1 — sprint record (S3.1's routine)
 
+> **Historical — S3.2a-1, the replay format layer and partitions; merged in PR #10.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-05--s32as-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-2a-1-design.md) · **record** · reviews: [design: architecture](../reviews/s3-2a-1-design-architecture.md), [break-it: QA](../reviews/s3-2a-1-breakit-qa.md). **← [S3.1-2](s3-1-2-record.md) · [S3.2a-2](s3-2a-2-record.md) →**
+
 **Sprint:** S3.2a-1 — the replay format layer and partitions (S3.2a's items 1–2; the owner split S3.2a at its card's line) · **Routine:** by the owner (2026-11-05): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** 5.5 SP of S3.2a's 11.5, before key evaluation moves to S3.2a-2's router · **Branch:** `s3-2a-1/integration`
 **What to build and how each item is proven:** [sprint plan — S3.2a](history.md#s32a--the-replay-format-and-the-runtime-core), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md)
 

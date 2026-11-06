@@ -1,5 +1,7 @@
 # S3.2b-1 — design note: the plan, replay through the runtime, rate limits (v2)
 
+> **Historical — S3.2b-1, the plan, replay through the runtime, rate limits; merged in PR #14.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-06--s32bs-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s3-2b-1-record.md) · reviews: [design: architecture](../reviews/s3-2b-1-design-architecture.md), [combined build: architecture](../reviews/s3-2b-1-combined-architecture.md), [break-it: QA](../reviews/s3-2b-1-breakit-qa.md). **← [S3.2a-2](s3-2a-2-record.md) · [S3.2b-2 (next)](sprint-plan.md#status) →**
+
 **What it covers:** S3.2b's items 1, 2, 6 and 9 ([card](sprint-plan.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time)) and its exits 1 and 5, plus the owner's decisions that land here.
 
 **The owner's answers:**

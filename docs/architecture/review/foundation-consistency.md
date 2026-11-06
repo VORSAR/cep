@@ -1,5 +1,7 @@
 # Foundation consistency review — post-ratification, full document set
 
+> **Historical — a review of the Phase 1 architecture baseline, 2026-11-01; every finding is dispositioned.** Current truth: [ARCHITECTURE.md](../ARCHITECTURE.md) and the [ADRs](../adr/) as annotated since, then the code. **Review set, in order:** [round 1](arch-review.md) · [pre-mortem](fool-premortem.md) · [round 2](arch-review-round2.md) · [round 3](arch-review-round3.md) · [gate red-team](gate-redteam.md) · **foundation consistency**.
+
 **Reviewer:** fresh adversarial architect reviewer (with the-fool: red-team and evidence-audit passes).
 **Reviewed at:** 2026-11-01, against the ratified baseline: ARCHITECTURE.md + ADR-0001…0015 + DEVELOPMENT.md/testing.md/qa-strategy.md + SPEC.md v0.1 rev 2 + SEMANTICS.md + roadmap + ground rules + sprint model + sprint plan, including the uncommitted post-ratification edit wave.
 **Scope:** the two artifacts written after the three review rounds and never reviewed — **ADR-0015** and **qa-strategy.md** — plus drift introduced by the edit wave (status flips, SPEC rev 2, config decision propagation, round-2/3 fixes). Items dispositioned in [arch-review.md](arch-review.md), [arch-review-round2.md](arch-review-round2.md), [arch-review-round3.md](arch-review-round3.md) are not re-reported.

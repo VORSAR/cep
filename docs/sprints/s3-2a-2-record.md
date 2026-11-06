@@ -1,5 +1,7 @@
 # S3.2a-2 — sprint record (S3.1's routine)
 
+> **Historical — S3.2a-2, the runtime core; merged in PR #11.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-05--s32a-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-2a-2-design.md) · **record** · reviews: [design: architecture](../reviews/s3-2a-2-design-architecture.md), [break-it: QA](../reviews/s3-2a-2-breakit-qa.md). **← [S3.2a-1](s3-2a-1-record.md) · [S3.2b-1](s3-2b-1-record.md) →**
+
 **Sprint:** S3.2a-2 — the runtime core (S3.2a's item 3; the owner split S3.2a at its card's line) · **Routine:** by the owner (2026-11-05, all of S3.2a): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** about 7.5 SP (6 carded, plus the drain mechanism and one shared ingest step) · **Branch:** `s3-2a-2/integration`
 **What to build and how each item is proven:** [sprint plan — S3.2a](history.md#s32a--the-replay-format-and-the-runtime-core), its "how it runs" note and the forwards to S3.2a-2 · **Process:** [00-sprint-model.md](00-sprint-model.md)
 

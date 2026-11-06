@@ -2,6 +2,8 @@
 
 # S1.1a-1 design note — architecture review (architect + the-fool pre-mortem)
 
+> **Historical — S1.1a-1, the local gate, coverage and the event kernel; merged in PR #1.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-plan-check.md) · [design](../sprints/s1-1a-gate-design.md) · [record](../sprints/s1-1a-1-record.md) · reviews: [plan check: architecture](s1-1a-plan-check-architecture.md), [plan check: QA](s1-1a-plan-check-qa.md), **design: architecture**, [design: QA](s1-1a-design-qa.md), [design re-check](s1-1a-design-recheck.md), [build: architecture](s1-1a-1-build-architecture.md), [break-it: QA](s1-1a-1-breakit-qa.md). **← [Phase 1 decomposition review](phase1-decomposition-architecture.md) · [S1.1a-2](../sprints/s1-1a-2-record.md) →**
+
 Target: `docs/sprints/s1-1a-gate-design.md` (uncommitted, branch `s1-1a-1/integration`), cited as `GD:<line>`. Other citations: `PC` = `s1-1a-plan-check.md`, `REC` = `s1-1a-1-record.md`, `SP` = `sprint-plan.md`, `ADR15` = ADR-0015, `ARCH` = ARCHITECTURE.md. Probes ran read-only in `<scratchpad>/s1-1a/arch-design-probe/`, with Go 1.27.3 (`GOTOOLCHAIN=local GOENV=off GOFLAGS= GOPROXY=off`, private `GOCACHE`), CPython 3.15.2 and Apple's 3.9.6. "Inferred" marks a claim that no probe or cited line proves. Totals: 4 blockers, 14 should-fix, 6 later.
 
 | # | Severity | Finding (one sentence) | Evidence (file:line or probe, quoted) | Suggested fix |

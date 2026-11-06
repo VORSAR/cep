@@ -1,5 +1,7 @@
 # S2.2b — sprint record (slim, with an architecture review)
 
+> **Historical — S2.2b, the validator; merged in PR #7.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s2-2b-design.md) · **record** · reviews: [design: architecture](../reviews/s2-2b-design-architecture.md). **← [S2.2a](s2-2a-record.md) · [S3.1-1](s3-1-1-record.md) →**
+
 **Sprint:** S2.2b — the validator · **Routine:** slim with an architecture review, by the owner (2026-11-04): QA's test programs first and independent; an architecture review of the design note; the build in the main session; no lanes · **Size:** 13 SP (items 11.5) · **Branch:** `s2-2b/integration`
 
 ## Plan and decisions

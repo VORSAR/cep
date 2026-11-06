@@ -1,5 +1,7 @@
 # Architecture review, round 3 — closure confirmation
 
+> **Historical — a review of the Phase 1 architecture baseline, 2026-11-01; every finding is dispositioned.** Current truth: [ARCHITECTURE.md](../ARCHITECTURE.md) and the [ADRs](../adr/) as annotated since, then the code. **Review set, in order:** [round 1](arch-review.md) · [pre-mortem](fool-premortem.md) · [round 2](arch-review-round2.md) · **round 3** · [gate red-team](gate-redteam.md) · [foundation consistency](foundation-consistency.md).
+
 **Reviewer:** architect reviewer. **Reviewed at:** 2026-11-01, against `docs/architecture/` as of the round-3 revision.
 **Scope per the coordinator:** verify closure of round-2 N1–N8 and the five formerly-open round-1 items; check the ratelimit fold; confirm the exception table, charter, ADR-0001 §4 and both diagrams agree. Sound cores not re-opened.
 

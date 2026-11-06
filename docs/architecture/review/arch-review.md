@@ -1,5 +1,7 @@
 # Architecture review — Phase 1 baseline (ARCHITECTURE.md + ADR-0001…0009)
 
+> **Historical — a review of the Phase 1 architecture baseline, 2026-11-01; every finding is dispositioned.** Current truth: [ARCHITECTURE.md](../ARCHITECTURE.md) and the [ADRs](../adr/) as annotated since, then the code. **Review set, in order:** **round 1** · [pre-mortem](fool-premortem.md) · [round 2](arch-review-round2.md) · [round 3](arch-review-round3.md) · [gate red-team](gate-redteam.md) · [foundation consistency](foundation-consistency.md).
+
 **Reviewer:** architect reviewer (with the-fool: pre-mortem, red-team and evidence-audit passes).
 **Reviewed at:** 2026-11-01, against the untracked `docs/architecture/` baseline on `main` (1b9fff8).
 **Inputs held binding:** SPEC.md v0.1 (frozen), SEMANTICS.md, errors.md, DEVELOPMENT.md, testing.md, 02-roadmap.md Phase 1 slice, `docs/language/checks/executor.py` (reference semantics).

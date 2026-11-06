@@ -1,5 +1,7 @@
 # EVAL.md — L5 measured evaluation, 2026-10-31
 
+> **Historical — language workstream, L5 evaluation, 2026-10-31.** Normative today: [SPEC.md](SPEC.md) (v0.1, revised since; see its change log), the grammar, [errors.md](errors.md) and the corpus; [SEMANTICS.md](SEMANTICS.md) elaborates. Where they disagree with this file, they win. **Workstream:** [PLAN](PLAN.md) · [DESIGN (L0)](DESIGN.md) · [PRIOR-ART (L1)](PRIOR-ART.md) · [SEMANTICS (L2)](SEMANTICS.md) · [SYNTAX (L3)](SYNTAX.md) · [SPEC (L4)](SPEC.md) · **EVAL (L5)** · [REVIEW (L6)](REVIEW.md).
+
 Protocol per the skill's evaluation harness §1: two independent generator agents, spec-only information diet ([SPEC.md](SPEC.md) + [grammar.ebnf](grammar.ebnf) + [errors.md](errors.md) + K=3 tagged examples), 12 held-out intents ([eval/tasks.md](eval/tasks.md)) stratified across constructs, **thresholds and rubric pre-registered before generation** ([eval/rubric.md](eval/rubric.md); DESIGN.md decisions log). Generators were forbidden from running any checker — honest first attempts, graded externally with `grammar_check` plus a manual static/semantic audit against the rubric.
 
 ## 1. Results

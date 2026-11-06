@@ -1,5 +1,7 @@
 # S1.1b — sprint record (slim)
 
+> **Historical — S1.1b, archcheck (slim); merged in PR #3.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-04--s11b-slimmed-toward-engine-code); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **record**. **← [S1.1a-2](s1-1a-2-record.md) · [S1.2](s1-2-record.md) →**
+
 **Sprint:** S1.1b — the analyzers engine code needs · **Routine:** slim, by the owner's decision (2026-11-04): one plan here, no reviews · **Size:** about 5 SP · **Branch:** `s1-1b/integration`
 
 ## Plan and decisions
@@ -22,4 +24,4 @@ Slim routine (owner, 2026-11-04): plan above · build, test-first · T2 green ·
 
 ## Retro
 
-*(at close-out)*
+*(No retro was recorded; the sprint closed when PR #3 merged.)*

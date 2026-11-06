@@ -1,5 +1,7 @@
 # S3.1-2 design note v1: architecture review
 
+> **Historical — S3.1-2, tables and membership, the ingest flag, the schema decoder; merged in PR #9.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-04--s31-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-1-2-design.md) · [record](../sprints/s3-1-2-record.md) · reviews: **design: architecture**, [break-it: QA](s3-1-2-breakit-qa.md). **← [S3.1-1](../sprints/s3-1-1-record.md) · [S3.2a-1](../sprints/s3-2a-1-record.md) →**
+
 Reviewed: `docs/sprints/s3-1-2-design.md` (v1) and stub commit `ee85769` on `s3-1-2/integration`. Bound by P1–P8 (sprint-plan §5, "S3.1-2's plan check"). Read-only review; Go behaviour claims below were checked with throwaway programs on the pinned go1.27.3 and x/text v0.43.0 (outside the repo).
 
 ## Verdict

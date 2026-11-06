@@ -1,6 +1,8 @@
-> **Status (YYYY-MM-DD):** <added at close-out: which blockers were fixed in which PR; which later items are open in known issues>.
+> **Status (closed in PR #1):** both blockers (QB1, QB3) and every other finding but one fixed with a red test first; QB10 is open as [known issue QB10](../product/known-issues.md). Dispositions: [the record's findings](../sprints/s1-1a-1-record.md#findings).
 
 # S1.1a-1 break-it — the local gate and the event kernel (breaker: QA + the-fool)
+
+> **Historical — S1.1a-1, the local gate, coverage and the event kernel; merged in PR #1.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1a-plan-check.md) · [design](../sprints/s1-1a-gate-design.md) · [record](../sprints/s1-1a-1-record.md) · reviews: [plan check: architecture](s1-1a-plan-check-architecture.md), [plan check: QA](s1-1a-plan-check-qa.md), [design: architecture](s1-1a-design-architecture.md), [design: QA](s1-1a-design-qa.md), [design re-check](s1-1a-design-recheck.md), [build: architecture](s1-1a-1-build-architecture.md), **break-it: QA**. **← [Phase 1 decomposition review](phase1-decomposition-architecture.md) · [S1.1a-2](../sprints/s1-1a-2-record.md) →**
 
 **Base:** a1e4646 (`s1-1a-1/integration`). **Branch:** `s1-1a-1/breakit`, not pushed.
 **Red-test commits:** e21f4ce (QB1, QB2), a1eb0ff (QB3), e31f35e (QB4), 624185b (QB5), 9ac345e (QB6).

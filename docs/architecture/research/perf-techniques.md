@@ -1,5 +1,7 @@
 # Performance techniques survey — evidence for the throughput/latency architecture
 
+> **Historical — research, 2026-11-01; evidence only.** What was adopted is [ADR-0010](../adr/ADR-0010-performance-model.md) (as annotated since); measured results live in the sprint records.
+
 Research findings (spike output, ground rule 8). Survey of established mechanisms that high-performance middleware in Go and C++/JVM uses to maximize throughput and minimize latency, assessed against this engine's shape: single-node embeddable Go library; sharded runtime (ADR-0006) with one goroutine per shard and per-key serial execution; bounded mailboxes between ingest and shards; sinks with their own queues (ADR-0008); hot path = JSON ingest → schema validation → route by key hash → ordered buffer → pattern/window evaluation → emit. Objective: sub-millisecond hot-path latency at high throughput.
 
 Honesty convention: **[measured]** = published numbers with method/hardware stated; **[claimed]** = vendor/author numbers without independent reproduction; **[folklore]** = widely repeated, weakly sourced or stale — do not design on it without re-measuring.

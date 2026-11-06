@@ -1,5 +1,7 @@
 # Should the import law allow `internal/expr` → `internal/model`?
 
+> **Historical — S2.2a, the grammar differential and the expression engine; merged in PR #6.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-04--s22a-runs-in-full); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [record](../sprints/s2-2a-record.md) · reviews: **the expr → model edge**. **← [S2.1](../sprints/s2-1-record.md) · [S2.2b](../sprints/s2-2b-record.md) →**
+
 Adversarial architecture review, S2.2a. Read-only. Sources: ADR-0011, ADR-0003, ARCHITECTURE §2a/§3, `tools/importcheck/rules.json`, `internal/model/model.go`, `internal/event/event.go`, the S2.2a card. `internal/expr`, `internal/plan` and `internal/validate` do not exist yet; nothing in Go is affected today.
 
 ## Bottom line (3 lines)

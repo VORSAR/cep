@@ -1,5 +1,7 @@
 # S3.2a-1 — design note: the replay format layer and partitions (v2)
 
+> **Historical — S3.2a-1, the replay format layer and partitions; merged in PR #10.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-05--s32as-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s3-2a-1-record.md) · reviews: [design: architecture](../reviews/s3-2a-1-design-architecture.md), [break-it: QA](../reviews/s3-2a-1-breakit-qa.md). **← [S3.1-2](s3-1-2-record.md) · [S3.2a-2](s3-2a-2-record.md) →**
+
 S3.2a's items 1–2 ([card](history.md#s32a--the-replay-format-and-the-runtime-core)), exit lines 1, 2 and 4, and the forwards from S3.1-2:
 - the table-snapshot carrier (owner D1);
 - the timer snapshot (review F15);
