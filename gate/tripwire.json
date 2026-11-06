@@ -1,0 +1,6 @@
+{
+  "outbox": {"ceiling": 65536, "blocking": true},
+  "sink-depth": {"ceiling": 1024},
+  "drained_pending": {"ceiling": 0, "rules": {"qa-eq": 8}},
+  "partial-count": {"ceiling": "none", "reason": "no pattern state until S4.1"}
+}

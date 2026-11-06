@@ -203,8 +203,8 @@ func TestSaturationProgress(t *testing.T) {
 			t.Errorf("stream %d: stream_late %d, want 0 (one sender per stream, monotone)", sid, n)
 		}
 	}
-	if rs := st.Rules[0][0]; rs != (runtime.RuleStats{}) {
-		t.Errorf("rule burst: %+v, want all zero", rs)
+	if rs := st.Rules[0][0]; rs != (runtime.RuleStats{OutboxHigh: rs.OutboxHigh}) {
+		t.Errorf("rule burst: %+v, want all zero but OutboxHigh (a high-water mark, not a fault)", rs)
 	}
 	if n := st.SinkErrors[0][0]; n != 0 {
 		t.Errorf("sink_errors %d, want 0", n)

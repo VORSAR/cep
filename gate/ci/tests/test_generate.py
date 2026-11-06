@@ -75,6 +75,21 @@ class Render(unittest.TestCase):
                     self.assertIn(f"path: .gate/artifacts/records-{job}-${{{{ github.run_attempt }}}}", block)
                 self.assertEqual(block.count("download-artifact@"), len(jobs))
 
+    def test_the_macos_job_runs_on_macos_and_every_other_on_linux(self):
+        # S3.2b-2 (S3.2b's item 8; owner Q5: the second OS of the determinism proof is macOS).
+        text = generate.render([*ROWS, row("determinism-macos", "determinism-macos", ("T4",))])
+        runners = dict(re.findall(r"^  ([a-z][a-z0-9-]*):\n    runs-on: (\S+)$", text, re.M))
+        self.assertEqual(runners["determinism-macos"], "macos-latest")
+        self.assertEqual(
+            {j: r for j, r in runners.items() if j != "determinism-macos"},
+            {
+                "lint": "ubuntu-latest",
+                "test": "ubuntu-latest",
+                "proofs": "ubuntu-latest",
+                "strict-gate": "ubuntu-latest",
+            },
+        )
+
     def test_without_nightly_rows_there_is_one_workflow(self):
         self.assertEqual([p for p, _ in generate.targets(ROWS)], [".github/workflows/gate.yml"])
 

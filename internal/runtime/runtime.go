@@ -103,6 +103,9 @@ type DrainResult struct {
 type RuleStats struct {
 	ConstructLate, Purged, KeyErrors, Panics int64
 	Suppressed, Errored                      int64 // from each body's plan.Counted (design s3-2b-1 §4)
+	// OutboxHigh is the most outputs the rule emitted from one message on one shard — one Advance's emissions, which
+	// the tripwire's outbox ceiling bounds (ADR-0006 §5; design s3-2b-2 §8); the largest over the shards.
+	OutboxHigh int64
 }
 
 // StreamStats are one source stream's counters (design s3-2b-2 §6).
@@ -125,7 +128,7 @@ type RecordingStats struct {
 type Stats struct {
 	Streams        [][]StreamStats  // [app][stream] (design s3-2b-2 §6)
 	Recording      []RecordingStats // per app; read outside the cut, as SinkErrors (the recorder goroutine's own)
-	OutboxHigh     []int            // per shard: the most items one message's processing appended to the outbox
+	SinkHigh       [][]int          // [app][binding]: the longest its queue has been (sink-depth; design s3-2b-2 §8)
 	Rules          [][]RuleStats    // [app][rule]
 	SinkErrors     [][]int64        // [app][binding]; read atomically, outside the cut
 	PendingHigh    int              // the router's pending FIFO, its longest
@@ -173,6 +176,7 @@ type sinkQ struct {
 	q      chan sinkItem
 	sink   Sink
 	errors atomic.Int64
+	high   int // the router's: the longest q has been after a send
 }
 
 type sinkItem struct {
@@ -257,10 +261,11 @@ type outItem struct {
 }
 
 type shardStats struct {
-	rules  [][]partition.Stats // [app][rule]
-	emits  [][]plan.Stats      // [app][rule]: each body's plan.Counted, zero for a body that is not
-	panics [][]int64           // [app][rule]: the shard boundary's last-resort recoveries
-	parks  int64
+	outHigh [][]int64           // [app][rule]: the most outputs one message made the rule emit
+	rules   [][]partition.Stats // [app][rule]
+	emits   [][]plan.Stats      // [app][rule]: each body's plan.Counted, zero for a body that is not
+	panics  [][]int64           // [app][rule]: the shard boundary's last-resort recoveries
+	parks   int64
 }
 
 type handoff struct {
@@ -721,6 +726,7 @@ func (r *Runtime) route(rt *router) {
 			} else {
 				select {
 				case head.sink.q <- head.si:
+					head.sink.high = max(head.sink.high, len(head.sink.q))
 					rt.pop()
 				case h := <-r.handoff:
 					rt.take(h)
@@ -829,7 +835,6 @@ func (rt *router) ingest(it item) {
 	case iStats:
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
-		st.OutboxHigh = make([]int, len(r.shards))
 		for _, a := range r.apps {
 			st.Streams = append(st.Streams, streamStats(a))
 			st.Recording = append(st.Recording, a.rec.stats())
@@ -1041,6 +1046,7 @@ func (rt *router) take(h handoff) {
 					rs.Panics += int64(ps.Panics) + it.stats.panics[ai][ri]
 					rs.Suppressed += int64(it.stats.emits[ai][ri].Suppressed)
 					rs.Errored += int64(it.stats.emits[ai][ri].Errored)
+					rs.OutboxHigh = max(rs.OutboxHigh, it.stats.outHigh[ai][ri])
 				}
 			}
 			w.stats.SaturatedParks[h.shard] = it.stats.parks
@@ -1054,6 +1060,11 @@ func (rt *router) take(h handoff) {
 					errs[i] = q.errors.Load()
 				}
 				w.stats.SinkErrors = append(w.stats.SinkErrors, errs)
+				high := make([]int, len(a.all))
+				for i, q := range a.all {
+					high[i] = q.high
+				}
+				w.stats.SinkHigh = append(w.stats.SinkHigh, high)
 			}
 			w.reply <- reply{stats: w.stats}
 		}
@@ -1072,6 +1083,9 @@ type shard struct {
 	panics  [][]int64           // [app][rule]
 	outbox  []outItem
 	parks   int64
+	burst   [][]int64 // [app][rule]: outputs emitted by the message being processed
+	outHigh [][]int64 // [app][rule]: the most outputs one message made the rule emit
+	touched [][2]int  // the (app, rule) pairs that emitted during the message: reset after it
 }
 
 func (r *Runtime) newShard(id int) (*shard, error) {
@@ -1081,8 +1095,10 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 		bodies := make([]partition.Body, len(a.app.Rules))
 		arrival := make([]bool, len(a.app.Rules))
 		reads := make([][]int, len(a.app.Streams))
+		sh.burst = append(sh.burst, make([]int64, len(a.app.Rules)))
+		sh.outHigh = append(sh.outHigh, make([]int64, len(a.app.Rules)))
 		for ri, rule := range a.app.Rules {
-			app, streams, name := a.id, a.app.Streams, rule.Name
+			app, streams, name, ai := a.id, a.app.Streams, rule.Name, len(sh.burst)-1
 			emit := func(e event.Event) {
 				if e.StreamID < 0 || e.StreamID >= len(streams) || !streams[e.StreamID].Derived {
 					// a body's fault: partition recovers it and resets the key (owner F10); the router never sees it
@@ -1090,6 +1106,9 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 					panic(fmt.Sprintf("runtime: rule %q emitted on stream %d, which is not a derived stream of app %d", name, e.StreamID, app))
 				}
 				sh.outbox = append(sh.outbox, outItem{kind: oEvent, app: app, ev: e})
+				if sh.burst[ai][ri]++; sh.burst[ai][ri] == 1 {
+					sh.touched = append(sh.touched, [2]int{ai, ri})
+				}
 			}
 			body, err := newBody(rule, emit)
 			if err != nil {
@@ -1155,6 +1174,7 @@ func (sh *shard) run(r *Runtime) {
 // with the message's snapshot (design s3-2b-1 v2 §3). An on-arrival rule's clock takes only its stream's admission
 // watermark, and a drain's or the end's advances (owner D1 of S3.2b-1).
 func (sh *shard) process(m message) {
+	defer sh.foldBursts()
 	if m.kind == mStats {
 		sh.outbox = append(sh.outbox, outItem{kind: oStats, token: m.token, stats: sh.stats()})
 		return
@@ -1196,6 +1216,15 @@ func (sh *shard) process(m message) {
 }
 
 // stats is the shard's counters for a Stats cut.
+// foldBursts ends a message: each rule's outputs from it become its high-water mark if higher (ADR-0006 §5).
+func (sh *shard) foldBursts() {
+	for _, p := range sh.touched {
+		sh.outHigh[p[0]][p[1]] = max(sh.outHigh[p[0]][p[1]], sh.burst[p[0]][p[1]])
+		sh.burst[p[0]][p[1]] = 0
+	}
+	sh.touched = sh.touched[:0]
+}
+
 func (sh *shard) stats() *shardStats {
 	st := &shardStats{parks: sh.parks}
 	for ai, rules := range sh.rules {
@@ -1210,6 +1239,7 @@ func (sh *shard) stats() *shardStats {
 		st.rules = append(st.rules, ps)
 		st.emits = append(st.emits, es)
 		st.panics = append(st.panics, append([]int64(nil), sh.panics[ai]...))
+		st.outHigh = append(st.outHigh, append([]int64(nil), sh.outHigh[ai]...))
 	}
 	return st
 }

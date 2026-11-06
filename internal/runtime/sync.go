@@ -134,10 +134,11 @@ func (s *Sync) Stats() Stats {
 		rules[ri] = RuleStats{
 			ConstructLate: int64(ps.ConstructLate), Purged: int64(ps.Purged), KeyErrors: a.keyErr[ri],
 			Panics: int64(ps.Panics) + sh.panics[0][ri], Suppressed: int64(es.Suppressed), Errored: int64(es.Errored),
+			OutboxHigh: sh.outHigh[0][ri],
 		}
 	}
 	return Stats{
-		Streams: [][]StreamStats{streamStats(a)}, Recording: []RecordingStats{{}}, OutboxHigh: []int{0},
+		Streams: [][]StreamStats{streamStats(a)}, Recording: []RecordingStats{{}}, SinkHigh: [][]int{make([]int, len(a.all))},
 		Rules: [][]RuleStats{rules}, SinkErrors: [][]int64{make([]int64, len(a.all))},
 		PendingHigh: 0, MailboxHigh: []int{0}, SaturatedParks: []int64{sh.parks},
 	}

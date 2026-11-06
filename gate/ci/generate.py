@@ -31,6 +31,8 @@ ACTIONS = {
     "download": ("actions/download-artifact", "9000827ccba6bdab643e8b6fd33ac0654aef8333", "v8.0.2"),
 }
 RUN_ID = "${{ github.run_id }}-${{ github.run_attempt }}"
+# A job's runner when it is not ubuntu-latest: the determinism proof's second OS (S3.2b's item 8; owner Q5: macOS).
+RUNNERS = {"determinism-macos": "macos-latest"}
 # The tool cache stays where a developer has it, outside the checkout: inside it, the project's go.mod would sit
 # above every tool and change what go does (the first CI run, 2026-11-04).
 TOOLS_CACHE = "~/.cache/vorsar/cep/tools"
@@ -65,7 +67,7 @@ def _job(job: str, timeout_min: int, tier: str) -> list[str]:
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
-        "    runs-on: ubuntu-latest",
+        f"    runs-on: {RUNNERS.get(job, 'ubuntu-latest')}",
         f"    timeout-minutes: {timeout_min}",
         "    steps:",
         *_setup_steps(),
