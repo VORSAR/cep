@@ -465,6 +465,102 @@
       ]
     },
     {
+      "id": "tripwire",
+      "job": "test",
+      "tiers": [
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 300,
+      "needs": [],
+      "scope": [
+        "prod",
+        "test"
+      ],
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ],
+      "min_wants": 1,
+      "lands_in": "S3.2b-2",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/gotest.py",
+        "-run",
+        "^TestTripwire$",
+        "./internal/playback"
+      ]
+    },
+    {
+      "id": "determinism",
+      "job": "determinism",
+      "tiers": [
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 300,
+      "needs": [],
+      "scope": [
+        "prod",
+        "test"
+      ],
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ],
+      "min_wants": 1,
+      "lands_in": "S3.2b-2",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/gotest.py",
+        "-run",
+        "^TestDeterminismGolden$",
+        "./internal/playback"
+      ]
+    },
+    {
+      "id": "determinism-macos",
+      "job": "determinism-macos",
+      "tiers": [
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 300,
+      "needs": [],
+      "scope": [
+        "prod",
+        "test"
+      ],
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ],
+      "min_wants": 1,
+      "lands_in": "S3.2b-2",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/gotest.py",
+        "-run",
+        "^TestDeterminismGolden$",
+        "./internal/playback"
+      ]
+    },
+    {
       "id": "proofs",
       "job": "proofs",
       "tiers": [
@@ -480,7 +576,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 15,
+      "min_wants": 18,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [
