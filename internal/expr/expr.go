@@ -107,9 +107,31 @@ func (r *Registry) Build(node model.Expr, scope Scope) (Expr, error) {
 	return b.build(node)
 }
 
+// NotRunnableError is an expression that types but cannot be evaluated by this release: it holds a construct whose
+// Eval always errors until its sprint (What names both, e.g. "text operators (S7)").
+type NotRunnableError struct{ What string }
+
+func (e *NotRunnableError) Error() string { return "expr: " + e.What + " is not executable yet" }
+
+// BuildRunnable is Build for the planner: an expression holding a construct this release cannot evaluate yet is
+// refused with a *NotRunnableError, so a rule that could never fire is never built (S3.2b-1 design v2 §1, review F1).
+// Build itself still accepts it, for the validator's typing.
+func BuildRunnable(node model.Expr, scope Scope) (Expr, error) {
+	b := &builder{reg: Builtins(), scope: scope}
+	e, err := b.build(node)
+	if err != nil {
+		return nil, err
+	}
+	if b.later != "" {
+		return nil, &NotRunnableError{What: b.later}
+	}
+	return e, nil
+}
+
 type builder struct {
 	reg   *Registry
 	scope Scope
+	later string // the first construct built that cannot run yet (a *later node), "" if none
 }
 
 // build compiles one node; an error that carries no position yet takes this node's, so the innermost node that
@@ -119,6 +141,9 @@ func (b *builder) build(n model.Expr) (Expr, error) {
 	var xe *Error
 	if err != nil && errors.As(err, &xe) && xe.Line == 0 && xe.Col == 0 {
 		xe.Line, xe.Col = n.Pos.Line, n.Pos.Col
+	}
+	if l, ok := e.(*later); ok && b.later == "" {
+		b.later = l.what
 	}
 	return e, err
 }
