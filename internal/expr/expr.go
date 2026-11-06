@@ -25,7 +25,10 @@ import (
 // Row is what an expression reads: slot 0 is the plain event, later slots are a pattern's captures.
 type Row interface {
 	Value(slot, attr int) event.Value
-	Invisibles() bool
+	// Invisibles is the engine's invisible-character flag of the event in slot (SEMANTICS §5.1): computed once, at
+	// ingest, over every string attribute; the one value `text_invisibles` reads, declared or not (S3.1-2's F6;
+	// S3.2b's Q3).
+	Invisibles(slot int) bool
 	// Table is table id as it was at the ingest position of the event being evaluated (SEMANTICS §4, owner D1 of
 	// S3.1-2): the runtime takes one snapshot of every table of the app per event, when the event is ingested, and
 	// every rule and shard that evaluates the event reads that snapshot, however late the evaluation runs. Only the
@@ -148,11 +151,28 @@ func (b *builder) build(n model.Expr) (Expr, error) {
 	return e, err
 }
 
+// invisibles compiles `text_invisibles` (or `c.text_invisibles`) to the engine's flag, whether or not the stream
+// declares it: the flag has one home, Row.Invisibles, so a declared slot is never read and cannot go stale (S3.1-2's
+// F6; S3.2b's Q3). A bare name reads slot 0, the plain event.
+func (b *builder) invisibles(n model.Expr) (Expr, error) {
+	slot := 0
+	if n.Qualifier != "" {
+		var ok bool
+		if slot, ok = b.scope.Capture(n.Qualifier); !ok {
+			return nil, nameErr("attribute", dotted(n.Qualifier, n.Name))
+		}
+	}
+	return &invisibles{slot: slot}, nil
+}
+
 func (b *builder) node(n model.Expr) (Expr, error) {
 	switch n.Kind {
 	case model.ExprLiteral:
 		return literalNode(n.Lit)
 	case model.ExprAttr, model.ExprRaw:
+		if n.Kind == model.ExprAttr && n.Name == event.InvisiblesAttr {
+			return b.invisibles(n)
+		}
 		slot, index, typ, ok := b.scope.Attr(n.Qualifier, n.Name)
 		if !ok {
 			return nil, nameErr("attribute", dotted(n.Qualifier, n.Name))

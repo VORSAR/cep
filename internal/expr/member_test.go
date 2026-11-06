@@ -72,7 +72,7 @@ func (r *pinned) Value(slot, attr int) event.Value {
 	return r.vals[attr]
 }
 
-func (r *pinned) Invisibles() bool { return false }
+func (r *pinned) Invisibles(int) bool { return false }
 
 func (r *pinned) Table(id int) *table.Version {
 	if id < 0 || id >= len(r.tables) {

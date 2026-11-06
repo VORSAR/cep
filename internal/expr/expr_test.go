@@ -55,7 +55,7 @@ type row struct {
 }
 
 func (r row) Value(slot, index int) event.Value { return r.slots[slot][index] }
-func (r row) Invisibles() bool                  { return false }
+func (r row) Invisibles(int) bool               { return false }
 func (r row) Table(id int) *table.Version {
 	if r.tables == nil {
 		return nil

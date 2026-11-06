@@ -48,37 +48,87 @@ func (c *checker) partition(r *model.Rule) {
 			c.report("E-PART-002", r.Partition.Pos, "the partition of rule %s keys no attribute of %s, which the rule reads", r.Name, name)
 		}
 	}
-	keyed := map[string]bool{} // a stream keyed twice: one key value per stream in this release (break-it B1 of S3.2b-1)
-	twice := map[*model.PartitionKey]bool{}
+	// The spelling and the shape, in design s3-2b-2 v2 §1.3's order: a group naming an attribute twice (E-PART-006), a
+	// stream keyed twice (E-PART-004), then — over the keys left — the part count (E-PART-007, once, at `partition`)
+	// before the bracket spelling (E-PART-005), so the first fix offered settles the clause (review F12); then the types,
+	// position by position (E-PART-003).
+	bad := map[*model.PartitionKey]bool{}
 	for i := range keys {
 		k := &keys[i]
-		if c.badKey[k] {
-			continue
+		seen := map[string]bool{}
+		for _, a := range k.Attrs {
+			if seen[a.Name] {
+				c.report("E-PART-006", a.Pos, "%s is named twice in the partition key of %s in rule %s: name each attribute once", a.Name, k.Stream, r.Name)
+				bad[k] = true
+				break
+			}
+			seen[a.Name] = true
 		}
-		if keyed[k.Stream] {
-			twice[k] = true
-			c.report("E-PART-004", k.Pos, "%s is keyed twice in the partition of rule %s (by %s again): key each stream on one attribute",
-				k.Stream, r.Name, k.Attrs[0].Name) // S3.2b-2 stub: the message naming (k, j) of S is built after G1
-			continue
-		}
-		keyed[k.Stream] = true
 	}
-	var first *model.PartitionKey
+	first := map[string]*model.PartitionKey{} // a stream keyed twice: never drop a declared key (break-it B1 of S3.2b-1)
 	for i := range keys {
 		k := &keys[i]
-		if c.badKey[k] || twice[k] {
+		f, twice := first[k.Stream]
+		if !twice {
+			first[k.Stream] = k
 			continue
 		}
-		if first == nil {
-			first = k
-			continue
-		}
-		fa, ka := first.Attrs[0].Name, k.Attrs[0].Name // S3.2b-2 stub: one part; per-position checks are built after G1
-		ft, kt := attrOf(c.streams[first.Stream], fa).Type, attrOf(c.streams[k.Stream], ka).Type
-		if kt != ft {
-			c.report("E-PART-003", k.Pos, "partition key %s of %s is %s, but %s of %s is %s", ka, k.Stream, kt, fa, first.Stream, ft)
+		bad[k] = true
+		c.report("E-PART-004", k.Pos, "%s is keyed twice in the partition of rule %s: to key it on both, write (%s) of %s, and give every stream the same number of parts",
+			k.Stream, r.Name, strings.Join(append(attrNamesOf(f), attrNamesOf(k)...), ", "), k.Stream)
+	}
+	var live []*model.PartitionKey
+	for i := range keys {
+		if !bad[&keys[i]] {
+			live = append(live, &keys[i])
 		}
 	}
+	if len(live) == 0 {
+		return
+	}
+	for _, k := range live[1:] {
+		if len(k.Attrs) != len(live[0].Attrs) {
+			counts := make([]string, len(live))
+			for i, k := range live {
+				counts[i] = fmt.Sprintf("%s %d", k.Stream, len(k.Attrs))
+			}
+			c.report("E-PART-007", r.Partition.Pos, "the partition keys of rule %s have different numbers of parts: %s: give every stream the same number of parts",
+				r.Name, strings.Join(counts, ", "))
+			return
+		}
+	}
+	if len(live[0].Attrs) == 1 {
+		for _, k := range live {
+			if k.Grouped {
+				c.report("E-PART-005", k.Pos, "the partition key of %s in rule %s is one attribute in brackets: write %s of %s", k.Stream, r.Name, k.Attrs[0].Name, k.Stream)
+			}
+		}
+	}
+	ref := live[0]
+	for _, k := range live[1:] {
+		for i, a := range k.Attrs {
+			ra := ref.Attrs[i]
+			ft, kt := attrOf(c.streams[ref.Stream], ra.Name).Type, attrOf(c.streams[k.Stream], a.Name).Type
+			if kt == ft {
+				continue
+			}
+			if len(k.Attrs) == 1 {
+				c.report("E-PART-003", k.Pos, "partition key %s of %s is %s, but %s of %s is %s", a.Name, k.Stream, kt, ra.Name, ref.Stream, ft)
+			} else {
+				c.report("E-PART-003", a.Pos, "part %d of the partition key: %s of %s is %s, but %s of %s is %s", i+1, a.Name, k.Stream, kt, ra.Name, ref.Stream, ft)
+			}
+			break // one finding per key: its first differing part
+		}
+	}
+}
+
+// attrNamesOf is a key's attribute names, in written order.
+func attrNamesOf(k *model.PartitionKey) []string {
+	out := make([]string, len(k.Attrs))
+	for i, a := range k.Attrs {
+		out[i] = a.Name
+	}
+	return out
 }
 
 // zeroDurations: within, for, ttl, delay and output first every take a duration > 0 (`idle after` above; `allow`

@@ -157,6 +157,22 @@ func TestGeneratedEvalFindings(t *testing.T) {
 	}
 }
 
+// TestRev5EvalProgramsCheckClean: the five programs of SPEC rev 5's grouped-key evaluation (2026-11-06, S3.2b-2's
+// design §1.6; docs/language/eval/rev5-grouped-keys.md) were audited clean by hand against errors.md before the
+// validator knew grouped keys; the validator agrees.
+func TestRev5EvalProgramsCheckClean(t *testing.T) {
+	t.Parallel()
+	files := glob(t, "eval/generated/rev5/*.cep")
+	if len(files) != 5 {
+		t.Fatalf("found %d rev 5 evaluation programs, want 5", len(files))
+	}
+	for _, path := range files {
+		if got := findings(t, path, readFile(t, path), Options{}); len(got) != 0 {
+			t.Errorf("%s: %v; want none", path, got)
+		}
+	}
+}
+
 // TestEveryStaticCodeIsAccountedFor: each [static] code has a test program, or is unreachable in v0.1 with a unit
 // test of its check, or names the sprint that implements it. Nothing is skipped silently.
 func TestEveryStaticCodeIsAccountedFor(t *testing.T) {

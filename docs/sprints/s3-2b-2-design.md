@@ -98,7 +98,7 @@ Checked in this order, per rule; a key reported by an earlier check is not repor
 |---|---|
 | `docs/language/grammar.lark`, `grammar.ebnf` | §1.2's `part_key`; the differential (T4) re-runs over the corpus |
 | `gate/differential/shapes.py` and `tools/shape` (review F8) | both sides render partition keys — `(key S a)` for `a of S`, `(group S a b)` for `(a, b) of S` — so the differential compares keys, not only accept/reject; a planted swap of the two forms is red |
-| `internal/parser`, `internal/validate` corpus globs | `docs/language/eval/generated-rev5/*.cep` joins the corpus (parser goldens, trivia, the differential, clean check), giving grouped keys corpus coverage |
+| `internal/parser`, `internal/validate` corpus globs | `docs/language/eval/generated/rev5/*.cep` joins the corpus (the differential already reads `eval/generated/**`) (parser goldens, trivia, the differential, clean check), giving grouped keys corpus coverage |
 | `docs/language/SPEC.md` | §0 rev 5 (2026-11-06…); §4.4's syntax line and one sentence of meaning; Appendix A (the grammar is included); Appendix C (the three codes); Appendix E: rev 5's entry (multi-part keys, the three codes, E-PART-003 per position, E-PART-004's message, Q3's `text_invisibles` rule of §5, the rejected record of §7) |
 | `docs/language/errors.md` | E-PART-005/006/007 entries; E-PART-003/004 text |
 | `docs/language/SEMANTICS.md` | §9: §1.1's paragraph and worked example 1; §10: the error table of §6 by reference |

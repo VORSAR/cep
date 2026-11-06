@@ -303,7 +303,7 @@ type row struct {
 }
 
 func (r *row) Value(_, attr int) event.Value { return r.ev.Values[attr] }
-func (r *row) Invisibles() bool              { return r.ev.Invisibles }
+func (r *row) Invisibles(int) bool           { return r.ev.Invisibles }
 func (r *row) Table(id int) *table.Version   { return r.tables.Table(id) }
 
 // body is a plain rule on one shard: filter, project, then the emission stage.
