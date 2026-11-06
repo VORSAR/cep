@@ -51,7 +51,18 @@
 
 ## Measured results
 
-*(filled as the work lands)*
+- **The gate:** T2 `make check` exit 0 (64 s); T3 `make combine-check` exit 0 (68 s), before the review and break-it.
+- **Exit 2, the error table:** `TestErrorSemanticsTable` (QA, 17 rows through `SendPayload` and `Send`), green.
+- **Exit 3, the ingest flag:** `TestIngestFlagUndeclaredStream`, `TestIngestFlagDeclaredStream`, green.
+- **Exit 4, arrival time:** `TestArrivalStampsLiveEventsInArrivalOrder`, `TestArrivalRecordingReplaysByteForByte`, green.
+- **Exit 6, the proof rows:** race (PR #12), leak (`test_leak_planted.py`: the unit row red on a goroutine that never ends), outbox (`test_tripwire_planted.py`: an outbox ceiling of 0 red; a missing ceiling red); `TestOutboxHighIsOneAdvancesEmissions` reads 65,537 from one event.
+- **Exit 7, two OSes:** `determinism` and `determinism-macos` green on macOS against a 1,084-line golden (examples 07, 09, 10 and the equivalence app, seeds 1–20), three runs alike; the map-order plant red. The Linux side runs in CI.
+- **Exit 8, allocations:** zero on the one-thread replay path for a non-matching event of a resident key and for a suppressed match (`TestSuppressedMatchAllocatesNothing`: 1 → 0 with the projection buffer); the live hand-off pinned at 3.00 (one shard) and about 8.1 (four) per event, red with one planted allocation per message; the decoder at one per string of two or more bytes and two per object.
+- **Exit 9, multi-part keys:** QA's `TestMultiPartKeysWorkedExamples` and `TestMultiPartKeysLiveEqualsReplay`; `TestMultiPartKeysAreOneInstancePerTuple` red under two mutations (no length prefix; no −0.0 normalisation); the Python harness check "§9 multi-part keys".
+- **Exit 10, static errors:** `TestGroupedKeyFindings`, the counter-files and `TestRev5EvalProgramsCheckClean`, green; the differential compares partition keys over 69 corpus files, red on a planted key-shape swap.
+- **Exit 11, the recorder:** `TestRecorderReplayGivesTheLiveRun`, `TestRecorderFailureLeavesDetectionRunning`, `TestRecorderCallOrder` (QA); `TestARecordingThatFallsBehindStops` and `TestRecordingStampsNeverFallBelowTheStart` (the build's).
+- **Concurrency:** `internal/runtime` and `internal/playback` race-clean under `-race`; goleak clean in both.
+- **Coverage:** `internal/runtime` 94.9%, `internal/playback` 90.9%, `internal/model` 93.9%.
 
 ## Findings
 

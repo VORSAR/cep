@@ -442,3 +442,19 @@ v2: about 12.5 points (owner D5: one sprint): multi-part keys 3 (the language an
 | G12 | QA | example 10 turns the T4 grammar and differential rows green once the parser lands; the record lists it among the rule-file changes |
 | G13 | QA | as F14 |
 | Eval | — | 5/5 on every measure; the two pre-rev-5 notes go to the spec-cleanup pass (known issue S2.2b-1) |
+
+---
+
+## 16. As built (annotated 2026-11-06, G2: T2 and T3 exit 0)
+
+Where the build differs from v2, and why; everything else is as written.
+
+1. **The outbox high-water mark is per rule:** `RuleStats.OutboxHigh`, the most outputs one rule emitted from one message on one shard (the largest over the shards), not `Stats.OutboxHigh` per shard. ADR-0006 §5 bounds "a single Advance", which is a rule's, and the tripwire then names the rule. `Stats.SinkHigh` is `[app][binding]`.
+2. **The proofs plant in files, not through variables:** the gate cleans every row's environment, so the tripwire proofs write a planted `gate/tripwire.json` into their world and the determinism proof edits the test's plant switch. `CEP_TRIPWIRE_FILE` and `CEP_DETERMINISM_PLANT` stay for a developer's own runs. The rows run through one runner, `gate/runner/rows/gotest.py`.
+3. **Two determinism rows:** `determinism` and `determinism-macos` run the same test; the CI generator gives the second job `macos-latest` (`gate/ci/generate.py`'s `RUNNERS`), since the summary reads one records artifact per job. Locally both run on the owner's macOS.
+4. **The equivalence app's `Double` holds timers** (a test double), so `drained_pending` has a per-rule override for it in `gate/tripwire.json` (`qa-eq`: 8); every real filter rule keeps 0.
+5. **The import law gains `test_external`** (`tools/importcheck/rules.json`, `tools/archcheck`): third-party packages a package's tests only may import — goleak for `internal/runtime` and `internal/playback`. `external` would have let production code import it.
+6. **The rev 5 evaluation's programs** live in `docs/language/eval/generated/rev5/`, which the differential already reads; the parser's corpus and trivia tests and a validator test read them too.
+7. **API details:** `Sync.Reject(stream, arrival)` (the reason is the recording's, counted the same); `Config.RecordQueue` (default 65,536); `playback.Recorder.Flush`, called at `Close` without a drain; `StepRejected`; `event.MaxDepth`, `MaxLogLine`, `CleanObject`, `ExactObject`, `TimestampInRange` exported; `Decoded.Depth`; `Send` also refuses an event whose recording line could exceed the log-line limit (each string counted at its worst-case escaped length).
+8. **Runtime tests mean event time:** `rtSchema` declared every test stream `time arrival`; with live stamping (item 3) that rewrote the tests' event times, so the helper now declares a `ts` time attribute that `rtEv` fills.
+9. **The hand-off's measured budget** is 3.00 allocations per event on one shard and about 8.1 on four (§8; ADR-0010 §1 annotated).
