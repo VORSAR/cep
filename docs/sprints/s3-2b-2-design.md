@@ -99,7 +99,7 @@ Checked in this order, per rule; a key reported by an earlier check is not repor
 | `docs/language/DESIGN.md` | the ledger row (§1.2), a decisions-log row (2026-11-06, the owner's decisions) |
 | `docs/language/examples/10-grouped-keys.cep` (new) | a plain rule keyed `(tenantId, userId) of Grants` with `output first every`, an `intent`, and expect blocks — one fire-path, one near-miss, multi-key (worked example 1 and the null part). Written by QA, outputs derived by hand **before the engine runs**; `skip: not-implemented(S3.3)` until the conformance runner, like 07 and 09. A spec-corpus change: `grammar_check` re-runs and the LAW Δ block lists it |
 | `docs/language/checks/test_semantics.py` | a harness check, "§9 multi-part keys", using the executor's `key` function with a tuple: worked examples 1 and 2; shown red with the extractor narrowed to the first part |
-| `internal/parser/testdata/` | a parse case for grouped keys; the stored goldens regenerate once (with §3) |
+| `internal/parser/testdata/` | a parse case for grouped keys; the goldens of partitioned programs regenerate once, for the key's new canonical shape (`MarshalCanonical` never encodes a `Pos`, so §3 changes none) |
 
 ### 1.5 LLM-generation risks (phase 6, written before the measurement)
 
@@ -136,7 +136,7 @@ type KeyAttr struct {
 }
 ```
 
-`PartitionKey.Attr` goes; every consumer (§2.3) iterates `Attrs`. The model goldens change shape here and in §3, and regenerate once (`CEP_UPDATE_GOLDEN=1 go test ./internal/parser`).
+`PartitionKey.Attr` goes; every consumer (§2.3) iterates `Attrs`. A key's canonical form becomes `{"attrs":[{"name":"k"}],"grouped":false,"stream":"S"}` (positions are never encoded): the goldens of partitioned programs regenerate once (`CEP_UPDATE_GOLDEN=1 go test ./internal/parser`), and `internal/model/canonical_test.go`'s hand-written partition bytes are rewritten by hand first, as that file requires.
 
 ### 2.2 `internal/parser`
 
@@ -207,7 +207,7 @@ func (r *Rule) Offer(key Key, e event.Event) (constructLate bool)
 - `model.Attr` gains `Pos Pos` (the attribute's name); `lower.go` fills it.
 - `exprs.go`'s D3 check (a derived stream's `ts` declared other than `timestamp`) reports E-TYPE-001 at `ts`'s own position; `internal/validate/testdata/e-type-001-derived-ts-not-timestamp.cep`'s expectation moves from `@ 7:1` to `ts`'s line and column.
 - §5's Q3 rule (a `text_invisibles` declaration other than non-optional `bool`) reports at that attribute's position too.
-- The goldens regenerate with §2.1's change, in one commit.
+- No golden changes: `MarshalCanonical` skips every `Pos` field. *(The owner's decision text and the plan check's reading 5 assumed the goldens regenerate; the stub showed they do not.)*
 
 ---
 
