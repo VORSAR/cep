@@ -104,3 +104,32 @@ func TestBreakitPartitionKeyNotDropped(t *testing.T) {
 			p.Rules[0].KeyAttr, len(outs), outs)
 	}
 }
+
+// TestBreakitGuardRateLimitEdges: SEMANTICS §8 with Q1's arrival order, on the Sync path, one key, `first every 5 min`
+// (bkKeyedSrc; n > 100 matches; every event inside S's 1-min bound). 10:00 emits; a tie at 10:00 and an older
+// 09:59:30 (behind the anchor, accepted by the stream) are suppressed and never re-anchor; another key at 10:00:10
+// emits (per key); 10:05:00.000 (= t_out + D) is suppressed; 10:05:00.001 emits and re-anchors; 10:10:00.001 is again
+// exactly t_out + D: suppressed. Suppressed counts 4.
+func TestBreakitGuardRateLimitEdges(t *testing.T) {
+	t.Parallel()
+	p := pbBuild(t, "bk-keyed.cep", bkKeyedSrc)
+	var got []string
+	s := pbSync(t, p, func(e event.Event) { got = append(got, e.Values[0].Str+"@"+ldRFC(e.Ts)) })
+	for _, x := range []struct {
+		k  string
+		at int64
+	}{
+		{"a", 0}, {"a", 0}, {"a", -30 * ldSec}, {"b", 10 * ldSec}, {"a", 5 * ldMin},
+		{"a", 5*ldMin + 1}, {"a", 10*ldMin + 1},
+	} {
+		e := bkS(x.k, 500, ldT0+x.at)
+		pbSyncEvent(s, &e, ldT0+x.at)
+	}
+	want := []string{"a@" + ldRFC(ldT0), "b@" + ldRFC(ldT0+10*ldSec), "a@" + ldRFC(ldT0+5*ldMin+1)}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("outputs %v, want %v", got, want)
+	}
+	if sup := s.Stats().Rules[0][0].Suppressed; sup != 4 {
+		t.Errorf("Suppressed %d, want 4", sup)
+	}
+}
