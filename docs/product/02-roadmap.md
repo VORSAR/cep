@@ -1,6 +1,6 @@
 # Roadmap — complex-events-engine
 
-**Status:** v1.0 · 2026-10-31 · derived from [01-objectives.md](01-objectives.md)
+**Status:** v1.0 · 2026-10-31 (amended 2026-11-01) · derived from [01-objectives.md](01-objectives.md)
 **Ordering:** by dependency, not by date (quality-driven, decision #13). Phases ship when their exit criteria pass, executed as coding-agent waves gated by tests.
 **MVP strategy (owner, 2026-10-31):** pick one real use case where the CEP engine detects a problem and emits a response event that disables an agent (IAM webhook + escalation email), and build *everything required to ship that use case* — a vertical slice through every layer.
 
@@ -104,4 +104,4 @@ Docs site with generated language reference; extension SPI frozen + contribution
 
 ## Next
 
-- [ ] ~~`03-sprint-plan.md`~~ [`../sprints/sprint-plan.md`](../sprints/sprint-plan.md) — Phase 1 decomposed into agent-wave batches with verification gates. *(Amended 2026-10-31: the sprint plan moved to `docs/sprints/` with the adopted sprint process, [00-sprint-model.md](../sprints/00-sprint-model.md).)*
+- [x] ~~`03-sprint-plan.md`~~ [`../sprints/sprint-plan.md`](../sprints/sprint-plan.md) *(done: Phase 1's decomposition approved 2026-11-02; progress is its [§Status](../sprints/sprint-plan.md#status))* — Phase 1 decomposed into agent-wave batches with verification gates. *(Amended 2026-10-31: the sprint plan moved to `docs/sprints/` with the adopted sprint process, [00-sprint-model.md](../sprints/00-sprint-model.md).)*

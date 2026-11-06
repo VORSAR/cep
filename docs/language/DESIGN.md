@@ -123,3 +123,5 @@ Every non-SQL construct is priced here before it enters SYNTAX.md.
 | 7 (L6) | REVIEW.md | **closed 2026-11-01** — A–F checklist + independent red team (28 findings: 26 fixed, 2 accepted, 0 rejected); **SPEC v0.1 FROZEN**; engine Phase 1 unblocked |
 
 *Spec rev 3 (2026-11-04, sprint S1.2): the owner's decisions of 2026-11-01/02 applied — `E-GRAPH-004`, `E-PART-003`, `E-TIME-003` added (60 codes); `late events allow` removed for v0.1; cron admission pinned to SPEC §6.1 (executor aligned, 41/41 harness checks); `text_invisibles` engine-owned; keyword sets over tables use the per-event snapshot; `time arrival` kept. No new design decisions.*
+
+*Spec rev 4 (2026-11-06, sprint S3.2b-1): `E-NULL-003` and `E-PART-004` added (62 codes; invalid/ holds 24 files); harness 48/48 checks.*

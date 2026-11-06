@@ -2,7 +2,7 @@
 
 **Document ID:** SPRINT-CEE-001
 **Version:** 1.1 — 2026-10-31: explicit entry and exit criteria for sprints and phases, named gates G0–G5, sprint cards, and architecture and QA review at every stage (§3, §4, §6, §8, §9). *Amended 2026-11-03 (owner, S1.1a-1 retro): batched fix rounds (§6), lanes sized to one usage window (§11), the cheapest proving run (§10).*
-**Status:** Authoritative. Governs **how** every sprint runs. [sprint-plan.md](sprint-plan.md) says **what** runs next; [02-roadmap.md](../product/02-roadmap.md) holds the arc; [DEVELOPMENT.md](../development/DEVELOPMENT.md) and [testing.md](../development/testing.md) hold the tools, the gate and the test rules. Sprint document formats: [README.md](README.md) and [templates/](templates/).
+**Status:** Authoritative. Governs **how** every sprint runs. [sprint-plan.md](sprint-plan.md) says **what** runs next and [decisions.md](decisions.md) records the owner's decisions; [02-roadmap.md](../product/02-roadmap.md) holds the arc; [DEVELOPMENT.md](../development/DEVELOPMENT.md) and [testing.md](../development/testing.md) hold the tools, the gate and the test rules. Sprint document formats: [README.md](README.md) and [templates/](templates/).
 
 ---
 
@@ -98,7 +98,7 @@ The coordinator names the routine at the plan check and asks the owner before ex
 | | **G0 — Entry** (§4) | Owner | The sprint starts |
 | 1 | **Design.** Semantics get the **blind three-reviewer panel**: a breaker re-implements from the sources (the papers, the SQL:2016 row-pattern spec, other engines' actual code and observed behaviour), a state-of-the-art challenger measures the alternatives, and the architect reviewer with the-fool checks contracts, concurrency and failure modes. None sees the others; every claim cites a source opened in that session. | Specialists | A design doc + the panel's reports |
 | 2 | **Design review.** The architect reviewer and the-fool on structure; **the QA agent on testability**: every rule in the design has a test that can fail. | Reviewers | Findings, ranked |
-| 3 | **Owner decisions**: plain-language options with pros and cons, the recommendation first, many at once as one list. Lasting decisions become ADRs. | Coordinator → owner | Decisions recorded in the design, the record and the ADRs |
+| 3 | **Owner decisions**: plain-language options with pros and cons, the recommendation first, many at once as one list. Lasting decisions become ADRs. | Coordinator → owner | Decisions recorded in [decisions.md](decisions.md), the design, the record and the ADRs |
 | | **G1 — Design approved**: review findings resolved, decisions recorded. **No code for the parts the design covers before G1**; stubs and unrelated lanes may proceed. | Coordinator | — |
 | 4 | **Build in lanes.** Each lane in its own worktree and branch; **at most two agents at once** unless the owner says otherwise; tests on the real code; commit early. A lane is "done" at **T2 `make check`**, plus the conformance and replay suites for semantic lanes. | Specialists | Lane branches |
 | 5 | **Combine, then gate once**: linear cherry-picks onto the integration branch; cross-lane conflicts re-resolved there; **T3 `make combine-check`** once on the combined branch. Never edit a worktree while a gate runs in it. | Coordinator | The integration branch, T3 green |
@@ -108,10 +108,10 @@ The coordinator names the routine at the plan check and asks the owner before ex
 | 8 | **One fix round**, split by file. Every breaker's failing test is committed as a regression test (a conformance case when it is semantic), never left in a worktree. | Specialists | Fixes on the integration branch |
 | | **G3 — Reviewed**: every finding fixed, or forwarded to known issues with the owner's consent for a blocker. | Coordinator → owner | — |
 | 9 | **The full gate**: **T4 `make strict-gate`** locally, or CI on the pushed branch when the owner says so. Green only from the real exit code of a run that completed (§10). | Coordinator | T4 green |
-| 10 | **The owner's check**: a short checklist written from the sprint's diff, plus one standing line (owner, 2026-11-01): **"LAW Δ block read and intended"** — the gate summary's top block lists every rule-file change in the sprint (ADR-0015 §1.3). *By running*: the demo, the quickstart, the CLI. *By reading*: deploy-time errors, emitted events and their evidence chains, the docs for the shipped subset. *By hand*: whatever the sprint changed that a person touches. | Owner | Pass / fail per item |
+| 10 | **The owner's check**: a short checklist written from the sprint's diff, plus one standing line (owner, 2026-11-01): **"LAW Δ block read and intended"** — the gate summary's top block lists every rule-file change in the sprint (ADR-0015 §1.3). *(Until S1.1c builds the block, the record lists the sprint's rule-file changes by hand.)* *By running*: the demo, the quickstart, the CLI. *By reading*: deploy-time errors, emitted events and their evidence chains, the docs for the shipped subset. *By hand*: whatever the sprint changed that a person touches. | Owner | Pass / fail per item |
 | | **G4 — Verified**: T4 exit 0 and the owner's check passed. | Owner | — |
 | 11 | **Merge.** The owner merges by hand. **Main's CI run on the merge commit is the real gate**: a red main run is fixed forward at once, and nothing is tagged on a red main. | Owner; coordinator fixes forward | Main green |
-| 12 | **Close-out.** The sprint record with a five-line retro; known issues updated; the [sprint-plan §Status](sprint-plan.md#status) line; documents reconciled (plan and reasons only); memory updated; lane worktrees removed after the PR merged and the fix round is done. | Coordinator | — |
+| 12 | **Close-out.** The sprint record with a five-line retro; known issues updated; the [sprint-plan §Status](sprint-plan.md#status) line replaced, the old one appended to [history.md](history.md#the-status-log), and the closed card moved there; documents reconciled (plan and reasons only); memory updated; lane worktrees removed after the PR merged and the fix round is done. | Coordinator | — |
 | | **G5 — Exit** (§4): done-done ticked with evidence. The next sprint that depends on this one may pass its G0. | Coordinator | The sprint closed |
 
 **One fix round, not a loop.** Findings after the fix round that are not blockers go to known issues with a forward; the owner decides whether a blocker reopens the sprint.
@@ -177,7 +177,7 @@ A roadmap phase is a set of sprints with its own edges.
 | T3 | `make combine-check` | before pushing an integration branch (G2) |
 | T4 | `make strict-gate` = `make ci` = CI | the sprint's full gate (G4) |
 
-*(None of the tiers exists on 2026-10-31. The gate is an enabler (§16): it lands before the first feature that needs it.)*
+*(All five tiers run since S1.1a-2; `gate/registry.json` is the tier map. Not yet: golangci lint and suppressions (S1.1c). The gate is an enabler (§16): it lands before the first feature that needs it.)*
 
 - **One pinned toolchain** (Go and every gate tool at an exact version, in one manifest) in every checkout and worktree; T1 refuses a push otherwise. A hook is never bypassed.
 - **Green means the real exit code** of a gate run that finished: read the `exit:` line, never a piped tail or a background task's wrapper. The same holds for an agent's "green".
@@ -222,7 +222,7 @@ A roadmap phase is a set of sprints with its own edges.
 - **Lasting technical decisions become ADRs** in `docs/architecture/` (the architecture-designer skill's template): the context, the options, the decision, the consequences.
 - **Cross-cutting decisions** (a re-plan, a change to the language's semantics, a reversal of a recorded decision) use the reconciliation method: blind independent reviewers on the plan *and* the code → one merged, ranked synthesis → decision cards (options, pros and cons, what a rule author would see) → an impact map (what each answer changes in the plan) → a pre-mortem by the-fool → the owner decides card by card → the plan rewritten → a cross-check of every changed document against the decisions and each other.
 - **Where things live:**
-  - the sprint cards, the forward schedule and the one prose status line: [sprint-plan.md](sprint-plan.md);
+  - the open sprint cards, the forward schedule and the one prose status line: [sprint-plan.md](sprint-plan.md); the owner's decisions, dated: [decisions.md](decisions.md); closed cards and the old status lines: [history.md](history.md);
   - the product brainstorm and its decisions, the objectives and the arc: [docs/product/](../product/);
   - stories and acceptance: `docs/product/backlog.md`; open defects with forwards: `docs/product/known-issues.md` (each created with its first entry);
   - sprint plan checks, records, ledgers and break-it reports: `docs/sprints/`;
@@ -288,7 +288,9 @@ Enablers come before the features that depend on them (the gate, playback mode a
 
 ## Related documents
 
-- [sprint-plan.md](sprint-plan.md): the sprint cards, what runs next, and the one status line.
+- [sprint-plan.md](sprint-plan.md): the open sprint cards, what runs next, and the one status line.
+- [decisions.md](decisions.md): every owner decision, dated, with an index.
+- [history.md](history.md): the closed sprint cards and the old status lines.
 - [README.md](README.md): the sprint documents, their names and their templates.
 - [02-roadmap.md](../product/02-roadmap.md): the phases and the MVP slice.
 - [01-objectives.md](../product/01-objectives.md): the objectives and the operating model.
@@ -297,4 +299,4 @@ Enablers come before the features that depend on them (the gate, playback mode a
 
 ---
 
-**Last updated:** 2026-10-31
+**Last updated:** 2026-11-06

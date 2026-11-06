@@ -2,7 +2,7 @@
 
 The toolchain, the gate, and the code rules every change follows. The process that runs them is [00-sprint-model.md](../sprints/00-sprint-model.md); the test rules are [testing.md](testing.md).
 
-> **Not built yet (2026-10-31).** No Go module, gate, hooks or CI exist. This guide is the contract they are built to. The gate is an enabler: it lands before the first feature that needs it ([sprint model §16](../sprints/00-sprint-model.md#16-sequencing)). Command names below are the intended ones; the sprint that builds them updates this file to what exists, and the "proposed" tool choices are settled at that sprint's plan check. *(Annotated 2026-11-02: settled at S1.1a's plan check. The pins are Go 1.27.3, golangci-lint v2.15.0, CPython 3.15.2 and ruff 0.17.3. The gate's own tooling is stdlib Python, never shell (owner decision); see [decisions](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0).)* *(Annotated 2026-11-03, S1.1a-1: built now are the Go module, `tools.json` with parity, the gate runner (`gate/run.py`, rows in `gate/registry.json`) and the T2–T4 targets `make check`, `make combine-check` and `make strict-gate`. Not yet built: the hooks and CI (S1.1a-2), the LAW Δ block and the analyzers (S1.1b).)* *(Annotated 2026-11-04, S1.1a-2: the hooks and CI are built. Run `make setup` once per clone: it turns the hooks on, and `make check` refuses until you have. The pre-commit and pre-merge-commit hooks refuse a staged file that also has unstaged changes, then run T0 in place on the staged files: parity, `gofmt`, `ruff`. The pre-push hook runs T1 on a clean HEAD and leaves any other push to CI. CI (`.github/workflows/gate.yml`) is generated from the registry by `make ci-workflow`; its `strict-gate` job is the one check to require. The hooks are a convenience; CI is the net.)*
+> **What exists (2026-11-06).** The Go module; `tools.json` (Go 1.27.3, golangci-lint v2.15.0, CPython 3.15.2 and 3.12.16, ruff 0.17.3, lark 1.3.1) with parity; the gate runner (`gate/run.py`, its rows in `gate/registry.json`, which is the tier map); `make check`, `make combine-check` and `make strict-gate`; the hooks; CI (`.github/workflows/gate.yml`, generated from the registry by `make ci-workflow`, and `nightly.yml`). The gate's own tooling is stdlib Python, never shell ([owner, S1.1a's plan check](../sprints/decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0)). **Not built yet:** the LAW Δ block, the suppressions checker, `todocheck` and golangci-lint's `smells` (S1.1c, after S3.3); the conformance suite (S3.3). Run `make setup` once per clone: it turns the hooks on, and `make check` refuses until you have. The pre-commit and pre-merge-commit hooks refuse a staged file that also has unstaged changes, then run T0 in place on the staged files: parity, `gofmt`, `ruff`. The pre-push hook runs T1 on a clean HEAD and leaves any other push to CI. The hooks are a convenience; CI is the net. ~~CI's `strict-gate` job is the one check to require~~ `strict-gate` is the one CI check to read; no status check is required on `main` ([owner, 2026-11-05](../sprints/decisions.md#owner-decisions-2026-11-05--branch-protection)).
 
 ---
 
@@ -19,7 +19,7 @@ The toolchain, the gate, and the code rules every change follows. The process th
 
 > The gate's full mechanism catalog — architecture analyzers with planted-failure proofs, suppression liveness, freshness checks, hostility rules — is [ADR-0015](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md); the assurance strategy is [qa-strategy.md](qa-strategy.md).
 
-The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, exclusive, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge. *(Annotated 2026-11-03: the LAW Δ block lands in S1.1b.)*
+The gate is a **registry**, not a script: every check is one row. **The row schema is stated once, normatively, in [ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)** (id, job, tiers, blocking, timeout, needs, scope, expected_scope, min_wants, lands_in, exclusive, command). Every local tier, every `make` target and every CI job runs the same rows, so the two cannot diverge. The summary opens with the **LAW Δ block** (ADR-0015 §1.3): every change to a gate/spec/architecture law file in the diff, printed where the owner reads at merge. *(Annotated 2026-11-03: the LAW Δ block lands in ~~S1.1b~~ S1.1c ([owner, 2026-11-04](../sprints/decisions.md#owner-decisions-2026-11-04--s11b-slimmed-toward-engine-code)); until then the record lists the sprint's rule-file changes by hand.)*
 
 **Parallel by default** (owner, 2026-11-02): independent rows run at the same time, each starting as soon as the rows it `needs` finish; only rows marked `exclusive` (benchmarks, latency, stress under load) run alone. Go builds and tests run packages in parallel and share one cache; CI runs its jobs concurrently. The summary stays in registry order, so a parallel run reads exactly like a serial one ([ADR-0015 §1.1](../architecture/adr/ADR-0015-build-enforcement-hostile-gate.md)).
 
@@ -36,6 +36,8 @@ The gate is a **registry**, not a script: every check is one row. **The row sche
 | T2 | `make check` | a lane says "done" | T1 + build, `go vet`, the linter, unit tests, the conformance suite, the coverage floor |
 | T3 | `make combine-check` | before pushing an integration branch | T2 + the race detector, deterministic-replay checks, the slow suites, the demo scenario |
 | T4 | `make strict-gate` == `make ci` == CI | each PR, main, each tag | everything, incl. the grammar differential, the planted proofs, the vulnerability scan and the dependency licence check (Apache-2-compatible only) |
+
+*(As built, 2026-11-06: `race` runs at T4, as its own CI job, and nightly as `race-stress`; golangci lint, suppressions, the vulnerability scan and the licence check are S1.1c's; the conformance suite is S3.3's. `gate/registry.json` gives each row's tiers.)*
 
 **Reading a run.** CI shows the same table as the summary of one **`strict-gate`** check, which is the one check to read. A job that did not report (cancelled, timed out, crashed) is a failure, never an absence of failures. A run on `main` is never cancelled.
 
@@ -60,6 +62,8 @@ These follow from decided objectives; each names its source.
 
 ## Suppression policy
 
+*The policy holds now; its checker and golangci-lint's `nolintlint` land in S1.1c (owner, 2026-11-04). Until then review enforces it.*
+
 Every lint suppression in first-party code is **accountable**, checked by the gate. The metadata rides on the same line as the directive:
 
 ```go
@@ -71,6 +75,8 @@ Every lint suppression in first-party code is **accountable**, checked by the ga
 Rules: the linter name is mandatory (no bare `//nolint`; golangci's `nolintlint` with require-specific + require-explanation is the first net); exactly one of PERMANENT or TEMP; a `reason="…"` of at least 12 characters; **PERMANENT carries `ref=<ADR-nnnn or docs path#anchor>` resolving to a recorded decision — the checker verifies the target exists** (a permanent exception must trace to a decision, never to convenience); TEMP carries `expiry=YYYY-MM-DD` (fails once past) or `issue=<#id|url>`; every suppression carries `sprint=S<n>` (the sprint that introduced it); a suppression for a linter that is not enabled is dead and fails. The gate summary prints `suppressions: N (+Δ this diff)`. The same grammar governs every allowlist file (ADR-0015 §3.10). Fix the code first; suppress only a genuine, documented necessity, never to quiet the gate.
 
 ## TODO policy
+
+*`todocheck` lands in S1.1c (owner, 2026-11-04). Until then review enforces this.*
 
 A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// TODO(ramith): …`, `// TODO(#42): …`. A bare `// TODO` is not allowed. The same rule covers the synonym family `FIXME`/`HACK`/`XXX`; a named sprint must be ≤ current + 2, and a marker naming a closed sprint fails T4 (ADR-0015 §2 `todocheck`).
 
@@ -90,4 +96,4 @@ A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// T
 
 ---
 
-**Last updated:** 2026-11-01 (aligned with ADR-0015's revision after the foundation adversarial review)
+**Last updated:** 2026-11-06 (what exists; the checks moved to S1.1c; no required status check)

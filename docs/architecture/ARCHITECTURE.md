@@ -2,14 +2,14 @@
 
 **Status:** RATIFIED (owner, 2026-11-01) after three adversarial review rounds; the ratification conditions — build-time constraint enforcement, the hostile gate, and the QA strategy — are ADR-0015 and [docs/development/qa-strategy.md](../development/qa-strategy.md).
 **Audience:** coding agents implementing Phase 1, and reviewers. Written deliberately verbose and explicit (owner directive 2026-11-01): a coding agent MUST be able to implement from this document plus the named references without inferring anything that is not written.
-**Binding inputs this document may not contradict:** the frozen language spec [docs/language/SPEC.md](../language/SPEC.md) (**v0.1 rev 2**, owner-ratified 2026-11-01 — the in-repo file is authoritative; the old `bfab8d5` pin predates rev 2), the semantics [docs/language/SEMANTICS.md](../language/SEMANTICS.md), the roadmap Phase 1 slice [docs/product/02-roadmap.md](../product/02-roadmap.md), the gate and code rules [docs/development/DEVELOPMENT.md](../development/DEVELOPMENT.md), the test contract [docs/development/testing.md](../development/testing.md). Where this document and those disagree, those win and this document is fixed.
+**Binding inputs this document may not contradict:** the frozen language spec [docs/language/SPEC.md](../language/SPEC.md) (**v0.1 rev 2**, owner-ratified 2026-11-01 — the in-repo file is authoritative; the old `bfab8d5` pin predates rev 2; *rev 4 since 2026-11-06, SPEC Appendix E*), the semantics [docs/language/SEMANTICS.md](../language/SEMANTICS.md), the roadmap Phase 1 slice [docs/product/02-roadmap.md](../product/02-roadmap.md), the gate and code rules [docs/development/DEVELOPMENT.md](../development/DEVELOPMENT.md), the test contract [docs/development/testing.md](../development/testing.md). Where this document and those disagree, those win and this document is fixed.
 **Decisions:** every numbered decision lives in an ADR under [adr/](adr/). This file is the map; the ADRs are the law.
 
 ---
 
 ## 1. What Phase 1 builds (one paragraph)
 
-An embeddable, single-node Go library (plus a thin binary) that: parses rule files written in the frozen CEP language v0.1 (or accepts the same rules built through a typed Go API), validates them against the 57-code error catalog, compiles them to an executable rule model, and runs them over event streams with exactly the semantics of SEMANTICS.md — event-time watermarks, continuously-monitored absences, per-key partitions with TTL, four window kinds, deterministic text matching, and rate-limited alert output — deterministically replayable in playback mode, demonstrated end-to-end by the Agent Kill Switch scenario and the attack gallery.
+An embeddable, single-node Go library (plus a thin binary) that: parses rule files written in the frozen CEP language v0.1 (or accepts the same rules built through a typed Go API), validates them against the 62-code error catalog (SPEC rev 4), compiles them to an executable rule model, and runs them over event streams with exactly the semantics of SEMANTICS.md — event-time watermarks, continuously-monitored absences, per-key partitions with TTL, four window kinds, deterministic text matching, and rate-limited alert output — deterministically replayable in playback mode, demonstrated end-to-end by the Agent Kill Switch scenario and the attack gallery.
 
 ## 2. System context
 
@@ -27,7 +27,7 @@ graph TD
         PB["Playback driver\nvirtual clock"] -. replaces arrival + clock .-> ING
     end
     %% annotated 2026-11-04: the parser is participle v2, not goyacc (ADR-0002 as amended)
-    RULES["rule files (.cep)\nor Go builder calls"] --> PARSE["Parser (goyacc) + Validator\n57-code catalog"] --> MODEL["Rule model (IR)"] --> PLAN["Planner"] --> RT
+    RULES["rule files (.cep)\nor Go builder calls"] --> PARSE["Parser (participle v2) + Validator\n62-code catalog"] --> MODEL["Rule model (IR)"] --> PLAN["Planner"] --> RT
 ```
 
 Everything runs in one process. There is no server, no cluster, no external store in Phase 1. The same engine object runs live (real arrival, wall-clock-driven idleness) and in playback (virtual clock, byte-identical outputs) — one code path, two clock implementations (ADR-0005).
@@ -89,7 +89,7 @@ graph TB
 1. An import that violates the layer table (gate: importcheck).
 2. Time read outside `internal/clock` handles (gate: lint allowlist).
 3. A goroutine outside `internal/runtime` (which owns ingest/router, shards and the sink flushers), the built-in connector packages `io/*` (their own I/O only — e.g. an HTTP listener) or `cmd/*` (gate: `puritycheck`, **module-wide** — ADR-0015 §2; the one goroutine allowlist, stated once).
-4. Package-level mutable state (gate: `globalscheck` with const-like defined in the analyzer — ADR-0015 §2; DEVELOPMENT.md).
+4. Package-level mutable state (gate: `globalscheck` with const-like defined in the analyzer — ADR-0015 §2; DEVELOPMENT.md). *(Annotated owner, 2026-11-04, S1.1b slimmed ([decisions](../sprints/decisions.md#owner-decisions-2026-11-04--s11b-slimmed-toward-engine-code)): rules 1–4 are the import, clock, purity and globals checks of one standard-library program, `tools/archcheck`, run by the `archcheck` row; the lint allowlist and golangci `smells` are S1.1c's.)*
 5. An operator reaching around `clock.Instance` to compute a watermark, deadline or ordering itself — even correctly.
 6. A type exported from `internal/*` solely so another package can poke its fields: define the seam interface instead.
 7. Special-case branches keyed on *which rule* or *which example* is running (the kill-switch is a corpus member, never a code path).
@@ -97,7 +97,7 @@ graph TB
 
 *A fix that cannot meet the bar in its sprint is not merged with a TODO; it goes back to the plan check (sprint model: finish or revert).*
 
-*Rules 5–8 are review-only — no analyzer can see them. The full review-only residue (seven items, these four among them; *an eighth (the gate's Python has no coverage floor) and a ninth (unpinned git, make and bootstrap Python), both added 2026-11-02 by owner decision*) is recorded in ADR-0015 §3.6 and was accepted knowingly by the owner (2026-11-01).*
+*Rules 5–8 are review-only — no analyzer can see them. The full review-only residue (seven items, these four among them; *an eighth (the gate's Python has no coverage floor) and a ninth (unpinned git, make and bootstrap Python), both added 2026-11-02 by owner decision; a tenth (leftover processes a stop cannot reach), added 2026-11-03*) is recorded in ADR-0015 §3.6 and was accepted knowingly by the owner (2026-11-01).*
 
 ## 3. Repository and package layout (normative — ADR-0001)
 
@@ -140,6 +140,8 @@ api/exports.golden                        the hand-written public-export law fil
 .githooks/, Makefile, tools.json          the gate (ADR-0005; DEVELOPMENT.md is the doctrine; ADR-0015 the mechanism catalog)
 ```
 
+*(Annotated 2026-11-06 — built so far: the 13 packages `internal/{event, model, parser, validate, expr, clock, metrics, table, text, partition, plan, playback, runtime}`; `gate/`; `tools/archcheck/` (the import, clock, purity and globals checks); `tools/shape/` (the grammar differential's Go side); `tools/importcheck/rules.json` (the layer law `archcheck` reads); `tools/deps-allowlist.json`; `.githooks/`, `Makefile`, `tools.json`. Everything else above is design for later sprints: `tools/analyzers/`, `tools/allowlists/` and `gate/law.json` are S1.1c's, `api/exports.golden` is S3.3's, and the cards in [sprint-plan.md](../sprints/sprint-plan.md) name the sprint for the rest.)*
+
 **Import rules (MUST; enforced by a gate check).** *Owner decision 2026-11-02: where a rule below lists the packages a package may import, the list is **exhaustive** — §2a's "any lower layer" is the outer bound, not a licence; a connection not listed here or in the exception table is red, and adding one is a `rules.json` change visible in the LAW Δ block.*
 1. `internal/event` imports nothing from this module. Everything else may import it.
 2. `internal/model` imports only `internal/event`.
@@ -158,7 +160,7 @@ api/exports.golden                        the hand-written public-export law fil
    | `cep → playback` (L4 same-layer) | the Deploy pipeline's expect sandbox (ADR-0005 §4) |
    | `cep → io` (L4 same-layer) | the facade's API (`Table.Upsert`, `InputHandler.SendRow`, source/sink registration) is written in the connector contracts' types; `io` is a leaf, so no cycle (owner decision 2026-11-02 — replaces the former `io → cep` row, which with this edge formed an import cycle) |
    | `io/* → cep`, `io/* → io` (L4 same-layer) | each built-in connector sub-package consumes only the public facade and the contracts (round-3 R4's intent, kept) |
-6. `internal/runtime` imports `clock`, `partition`, `plan` and the operator packages; it is the only package that owns goroutines besides `io` and `playback`.
+6. `internal/runtime` imports `clock`, `partition`, `plan` and the operator packages; it is the only package that owns goroutines besides `io` and `playback`. *(Corrected 2026-11-06 per §6 and `archcheck`'s purity check: besides `io/*` and `cmd/*`; `internal/playback` owns none.)*
 7. Public packages (`cep`, `rule`, `io`) never appear in an `internal/*` import list — the engine never imports its own facade.
 8. No package anywhere imports `cmd/*`.
 
@@ -220,9 +222,9 @@ type Event struct {
 
 This narrative is normative for component responsibilities. Rule: [docs/language/examples/01-agent-kill-switch.cep](../language/examples/01-agent-kill-switch.cep).
 
-1. **Deploy.** `cep.Runtime.Deploy(appSource)` → `internal/parser` lexes and parses (goyacc; a parse error carries line/col and one of the 23 parse codes) → AST → lowering to `internal/model.App` → `internal/validate` runs every static rule in [docs/language/errors.md](../language/errors.md) marked **[static]** (34 codes; the catalog is a table in `internal/validate/catalog.go`, one entry per code, so the gate can assert 1:1 coverage) → `internal/plan` builds one executable graph per rule: ingest spec → partition router spec → operator chain → sink bindings. Alternatively the same `model.App` arrives from package `rule` (the Go builder); from `model` onward the path is identical — this is what the parity test proves (ADR-0003). *(Annotated 2026-11-04, owner: the parser is participle v2, not goyacc; ADR-0002 as amended.)*
+1. **Deploy.** `cep.Runtime.Deploy(appSource)` → `internal/parser` lexes and parses (goyacc; a parse error carries line/col and one of the 23 parse codes) → AST → lowering to `internal/model.App` → `internal/validate` runs every static rule in [docs/language/errors.md](../language/errors.md) marked **[static]** (39 codes at rev 4; the catalog is a table in `internal/validate/catalog.go`, one entry per code, so the gate can assert 1:1 coverage) → `internal/plan` builds one executable graph per rule: ingest spec → partition router spec → operator chain → sink bindings. Alternatively the same `model.App` arrives from package `rule` (the Go builder); from `model` onward the path is identical — this is what the parity test proves (ADR-0003). *(Annotated 2026-11-04, owner: the parser is participle v2, not goyacc; ADR-0002 as amended.)*
 2. **Ingest.** A source (`io/http`) delivers a JSON event for `AgentActions`. The router validates it against the schema — runtime policy (round-2 F23): an UNKNOWN attribute in the payload is skipped without materialization (tolerant ingestion, O4; counted in `unknown_attrs`); a MISSING non-optional attribute or a null/absent timestamp is a stream-level event error (drop + log + `errored_events`, SEMANTICS §10); E-NAME-001 is deploy-time only. It then computes `Invisibles` over all string attributes (one pass, `internal/text.IngestFlags`), stamps `Seq`, and hands it to the runtime.
-3. **Routing.** The router (ingest side) evaluates the rule's compiled key expression (an `expr.Expr`) for this stream (`agentId`) — null key = per-rule event error — hashes the key to a shard, and enqueues `(instanceKey, event)`; the stream's watermark advance (if any) follows as a control message to every shard (ADR-0004 §3), so even quiet keys' clocks move.
+3. **Routing.** The router (ingest side) evaluates the rule's compiled key expression (an `expr.Expr`) for this stream (`agentId`) — null key = per-rule event error — hashes the key to a shard, and enqueues `(instanceKey, event)`; the stream's watermark advance (if any) follows as a control message to every shard (ADR-0004 §3), so even quiet keys' clocks move. *(Annotated 2026-11-06, S3.2b-1 as built: a key is one attribute per input stream (`plan.Rule.KeyAttr`), which the router reads directly; no key `Expr` is compiled.)*
 4. **Clocking.** `internal/clock` tracks, per stream: admission watermark `max(Ts seen) − d` (monotonic). Per rule instance it tracks the construct clock: `max(previous, min over input streams of contribution)` where contribution = admission wm raised by idleness (live) or the virtual clock (playback) — SEMANTICS §2.1 as pinned. Events behind their stream's admission wm are stream-late (dropped + counted); events behind the construct clock are construct-late (dropped + counted separately).
 5. **Ordering.** Per rule instance, admitted events buffer in a min-heap keyed by `(Ts, StreamID, Seq)` and release when `Ts ≤ construct clock`, in order. *(Annotated owner, 2026-11-06, S3.2b's plan check Q1: a plain rule buffers nothing — its body sees each accepted event at arrival, and its keys expire on the stream's admission watermark (S3.2b-1 D1).)*
 6. **Matching.** `internal/pattern` consumes released events: the `every read = …` step opens a partial per qualifying read; the absence constraint (`and not HumanApprovals[…] for …`) is monitored continuously from each partial's `t_first` — a qualifying approval defeats the partial immediately, even before the egress step matches (SEMANTICS §6.4). At each construct-clock advance the engine performs, in this exact order: (a) release buffered events, (b) fire due completions/absence resolutions, (c) discard overrun partials (SEMANTICS §6.4 "watermark-advance ordering"). Completion emits named captures + `chain(read, egress)` with original attribute values, match end = max(last positive Ts, absence deadlines).
@@ -241,7 +243,7 @@ graph LR
     end
     DSL -->|produces| IR["internal/model.App\n(the one IR)"]
     BLD -->|produces| IR
-    IR --> VAL["internal/validate\n57-code catalog"]
+    IR --> VAL["internal/validate\n62-code catalog"]
     VAL --> PLN["internal/plan\noperator graphs"]
     PLN --> RT["internal/runtime"]
     subgraph "seam interfaces (owned low, implemented high)"
@@ -327,7 +329,7 @@ Sibling-repo adapters (decision #10) implement exactly the three Phase-1 interfa
 
 - N shards (default `GOMAXPROCS`), each one goroutine, each owning a disjoint set of partition keys (hash routing). **Within a key everything is serial** — no locks in operator code, no shared mutable state between shards.
 - Operator packages are **pure libraries**: they own no goroutines, do no I/O, and read time only from `internal/clock` handles passed in (DEVELOPMENT.md: no wall clock in engine logic).
-- Goroutines exist only in: `internal/runtime` (shards + the ingest/router + the sink flushers — moved here from `io` by the 2026-11-02 `io` split, ADR-0008 §2), the built-in connector packages `io/*` (source readers and other connector I/O), and `cmd/*` (the `/metrics`+`/healthz` HTTP listener in `cepd` — L5, public-API consumer); `internal/playback` owns none — playback is single-threaded by design. This is the one allowlist `puritycheck` enforces module-wide (ADR-0015 §2; consistency review S6 unified the three divergent statements). Shards never block (bounded work, outbox handoff); only ingest/router blocks, and only toward sources.
+- Goroutines exist only in: `internal/runtime` (shards + the ingest/router + the sink flushers — moved here from `io` by the 2026-11-02 `io` split, ADR-0008 §2), the built-in connector packages `io/*` (source readers and other connector I/O), and `cmd/*` (the `/metrics`+`/healthz` HTTP listener in `cepd` — L5, public-API consumer); `internal/playback` owns none — playback is single-threaded by design. This is the one allowlist `puritycheck` (`archcheck`'s purity check, S1.1b) enforces module-wide (ADR-0015 §2; consistency review S6 unified the three divergent statements). Shards never block (bounded work, outbox handoff); only ingest/router blocks, and only toward sources.
 - **Playback mode MUST be bit-deterministic:** one thread, events fed in merged-log order, the virtual clock advancing as SEMANTICS §2.1 defines; equal inputs ⇒ byte-identical outputs, asserted by the replay layer of the test contract.
 - **Live mode** uses the same operator code; nondeterminism is confined to (a) arrival interleaving across shards and (b) idleness timing — both only affect *when*, and construct-late drops are counted (SEMANTICS §2.1's scoped guarantee).
 

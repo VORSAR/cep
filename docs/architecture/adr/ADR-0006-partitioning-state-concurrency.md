@@ -53,7 +53,7 @@ SEMANTICS §9: per-key isolation of ALL state (partials, completion marks, windo
 
 ## Implementation notes for coding agents
 - The shard map is `map[instanceKeyString]*partition.Instance` private to the shard goroutine; instanceKey = appID + "\x00" + ruleID + "\x00" + canonical key encoding (AppID-scoped — two apps may share rule ids; round-2 N5.6). Canonical key encoding = the ADR-0003 canonical JSON of the key value.
-- `LastActivity` updates on every routed event (any input stream — SEMANTICS §9).
+- `LastActivity` updates on every routed event (any input stream — SEMANTICS §9). *(Annotated: it is counted at release, §3 as annotated (S3.1-1 D1); an on-arrival rule's key takes the largest event time seen at `Offer` (S3.2b-1).)*
 - The TTL static check (TTL ≥ bounds/extents/rate intervals, E-TTL-002) is the validator's job (deploy time), NOT the runtime's; the runtime trusts the model.
 - Metrics counters (`internal/metrics`) are per-shard, summed on scrape — no atomic contention on the hot path; per-shard hot structs are cache-line padded (perf study §2.6, measured false-sharing effect in Go).
 - Conformance case "one TTL timer per instance" guards the verified Siddhi purge defect class (siddhi-core study §7): timers scheduled at birth, re-armed on activity, never one-per-event.

@@ -407,6 +407,8 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 ### Still open for the owner
 
 - **Three lasting-rule proposals from retros:** (1) a design claim about a library's behaviour is checked with a scratch program before review ([S3.1-2 retro](s3-1-2-record.md#retro)); (2) a new CI workflow is run once by hand in the sprint that adds it ([S3.2a-2 retro](s3-2a-2-record.md#retro)); (3) a guard test that pins wiring is proven red by a mutation before it counts ([S3.2b-1 retro](s3-2b-1-record.md#retro)).
+- **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1: the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`) has no sprint: S1.1b's slim scope did not build it and S1.1c's list does not name it.
+- **Known issue S2.2a-1** looks resolved by PR #13 (the fuzz rows are blocking): close it, or keep it for the nightly-only cadence ([known issues](../product/known-issues.md)).
 - **Language questions for a spec-cleanup pass:** the five contradictions in the language documents ([known issue S2.2b-1](../product/known-issues.md)) and integer overflow ([known issue S3.2b-1-1](../product/known-issues.md)).
 
 *Resolved items move to [history.md](history.md#resolved-owner-items).*
