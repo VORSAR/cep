@@ -69,7 +69,7 @@ Every non-SQL construct is priced here before it enters SYNTAX.md.
 | mandatory time/watermark clause on streams | ksqlDB `WITH(timestamp=…)` | clock explicit per stream | more typing | candidate (L2) |
 | mandatory lateness clause | ksqlDB `GRACE PERIOD` | no silent late-drop | more typing | candidate (L2) |
 | mandatory emission clause | ksqlDB `EMIT`, Timeplus | replaces Siddhi current/expired/all leak | more typing | candidate (L2) |
-| partition block + idle-key TTL clause | Siddhi `partition with` + `@purge` | per-agent isolated state, safe cardinality | TTL clause is new surface | candidate (L3) |
+| partition block + idle-key TTL clause | Siddhi `partition with` + `@purge` | per-agent isolated state, safe cardinality | TTL clause is new surface | candidate (L3) *(rev 5, 2026-11-06: grouped keys `(k, j) of S` replace concatenated keys — `concat(a, '|', b)` collides and hides types; cost: one bracket form, and parts that correspond by position across streams, so a swapped pairing of same-typed parts is caught only by `intent` and `expect` — no rule against crossed names, since request/response pairing crosses them on purpose)* |
 | bounded repetition | Siddhi `<n:m>`, Kleene, M_R `{n,m}` | readable, always bounded | new wording | candidate (L3, P2) |
 | after-match policy | MATCH_RECOGNIZE/Esper annotations | explicit multiplicity | reserved | candidate (reserved) |
 | `in` table membership | SQL `IN` (list/subquery) | allowlist checks in filters | overloads SQL `IN` meaning | candidate (L2) |
@@ -125,3 +125,5 @@ Every non-SQL construct is priced here before it enters SYNTAX.md.
 *Spec rev 3 (2026-11-04, sprint S1.2): the owner's decisions of 2026-11-01/02 applied — `E-GRAPH-004`, `E-PART-003`, `E-TIME-003` added (60 codes); `late events allow` removed for v0.1; cron admission pinned to SPEC §6.1 (executor aligned, 41/41 harness checks); `text_invisibles` engine-owned; keyword sets over tables use the per-event snapshot; `time arrival` kept. No new design decisions.*
 
 *Spec rev 4 (2026-11-06, sprint S3.2b-1): `E-NULL-003` and `E-PART-004` added (62 codes; invalid/ holds 24 files); harness 48/48 checks.*
+
+*Spec rev 5 (2026-11-06, sprint S3.2b-2; the owner's decisions of S3.2b-1's break-it and S3.2b-2's plan check): multi-part partition keys `(k, j) of S`, one spelling; `E-PART-005`, `E-PART-006`, `E-PART-007` added (65 codes); `text_invisibles` readable everywhere, declared only as non-optional `bool`.*

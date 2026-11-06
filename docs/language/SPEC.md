@@ -2,7 +2,7 @@
 
 ## 0. Status and scope
 
-**FROZEN v0.1 (2026-11-01), rev 4 (2026-11-06); pre-release revisions are listed in Appendix E** — the MVP surface; changes now require a version bump and a change-log entry. **Normative:** this document, [grammar.ebnf](grammar.ebnf) (= [grammar.lark](grammar.lark), machine-checked equivalent), [errors.md](errors.md), the valid corpus [examples/](examples/) and counter-corpus [invalid/](invalid/). **Informative:** [SEMANTICS.md](SEMANTICS.md) (extended rationale and worked boundary examples; where this document is terse, that one is the elaboration — they never disagree, and §6 here is the binding summary). Constructs marked **reserved** are not in v0.1: using one is error `E-RES-001`, never silent acceptance.
+**FROZEN v0.1 (2026-11-01), rev 5 (2026-11-06); pre-release revisions are listed in Appendix E** — the MVP surface; changes now require a version bump and a change-log entry. **Normative:** this document, [grammar.ebnf](grammar.ebnf) (= [grammar.lark](grammar.lark), machine-checked equivalent), [errors.md](errors.md), the valid corpus [examples/](examples/) and counter-corpus [invalid/](invalid/). **Informative:** [SEMANTICS.md](SEMANTICS.md) (extended rationale and worked boundary examples; where this document is terse, that one is the elaboration — they never disagree, and §6 here is the binding summary). Constructs marked **reserved** are not in v0.1: using one is error `E-RES-001`, never silent acceptance.
 
 Purpose: rules describe temporal patterns over streams of AI-agent activity and emit response events. Audiences: **generators** (LLMs writing rules, with a compile-and-repair loop), **readers** (SQL-literate security engineers who must answer "what fires, when, on which clock" from the text), **tweakers** (the same readers changing only parameters). Compile target: this engine's rule model, authored equivalently through this language or the Go builder API (Appendix D).
 
@@ -82,7 +82,9 @@ rule Example
 rule Name
   intent '<one sentence>'            -- required (E-INT-001)
   [partition by k of S, … ttl D]     -- required for stateful bodies (E-PART-001/002, E-TTL-001);
-                                     -- the keys share one type (E-PART-003, rev 3)
+                                     -- a key is one attribute, or two or more in brackets:
+                                     -- (k, j) of S (rev 5); same number of parts on every
+                                     -- stream (E-PART-007); part i one type (E-PART-003)
   from <body>                        -- §5
   [expect given … then …]            -- optional; executed (E-EXP-001)
   [todo '<open question>']           -- always fails compile (E-TODO-001)
@@ -90,6 +92,8 @@ rule Name
   [output first every D]             -- alert-storm suppression
   insert into Target;
 ```
+
+**Partition keys (rev 5).** A key names, for one stream, one attribute (`k of S`) or two or more different attributes in brackets (`(k, j) of S`); there is one spelling for each (`(k) of S` is `E-PART-005`, an attribute twice in one group `E-PART-006`, a stream named twice `E-PART-004`). Every stream in one clause has a key with the same number of parts (`E-PART-007`), and part *i* of every key has one type (`E-PART-003`, naming the position). Parts correspond **by position**, not by name: `partition by (src, dst) of Requests, (dst, src) of Responses` pairs a request from a to b with the response from b to a. An event's key is the tuple of its key values; two events share partition state iff their tuples are equal part by part; a null in any part is that rule's key error (SEMANTICS §9, §10). English: `partition by (tenantId, userId) of Grants` — "keep separate state for each tenant-and-user pair of Grants".
 
 ## 5. Rule bodies and static rules
 
@@ -143,7 +147,7 @@ from Prompts[text has_any_ci('ignore previous', 'disregard instructions')
 
 **5.7 Output modes**: pattern/cron/delay/batch rules produce append streams; `sort` produces a changelog (+insert/−evict). Append-only sinks reject changelog producers at deploy (`E-SINK-001`).
 
-**5.8 Select-to-target binding** *(pinned 2026-10-31; scope corrected 2026-11-01)*: each select item binds to the target attribute named by its alias, or by the bare/last name component when unaliased, left to right. The target's `ts` is **auto-filled** with the rule's output timestamp (§6.3/§6.4) and must not be selected explicitly; after `ts`, every target attribute must be bound by exactly one select item (`E-SEL-001`). In an **aggregating window rule (cron, batch)**, a select item must be the partition key, an aggregate, or a constant (`E-SEL-002` — other per-event attributes need `group by`, reserved). In a **per-row window rule (sort, delay)**, select items are attributes of the single emitted row/event, plus constants.
+**5.8 Select-to-target binding** *(pinned 2026-10-31; scope corrected 2026-11-01)*: each select item binds to the target attribute named by its alias, or by the bare/last name component when unaliased, left to right. The target's `ts` is **auto-filled** with the rule's output timestamp (§6.3/§6.4) and must not be selected explicitly; after `ts`, every target attribute must be bound by exactly one select item (`E-SEL-001`). In an **aggregating window rule (cron, batch)**, a select item must be the partition key (rev 5: any part of it), an aggregate, or a constant (`E-SEL-002` — other per-event attributes need `group by`, reserved). In a **per-row window rule (sort, delay)**, select items are attributes of the single emitted row/event, plus constants.
 
 **5.9 Table membership**: `x in T` compares `x` against `T`'s **primary key**, which in v0.1 must be a single column (`E-TBL-001`; composite-key membership is reserved).
 
@@ -198,7 +202,7 @@ The identifier exclusion list in `grammar.lark`'s NAME terminal is normative: al
 
 ## Appendix C. Error codes
 
-See [errors.md](errors.md) — 62 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 24 files), 39 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`; rev 4 added `E-NULL-003`, `E-PART-004`).
+See [errors.md](errors.md) — 65 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 24 files), 42 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`; rev 4 added `E-NULL-003`, `E-PART-004`; rev 5 added `E-PART-005`, `E-PART-006`, `E-PART-007`).
 
 ## Appendix D. Go builder API mapping (informative until the API spec lands)
 
@@ -255,6 +259,7 @@ Aggregates beyond `count` (sum, avg, `distinctCount`, …) are **reserved** for 
 ## Appendix E. Change log
 
 - v0.1 draft (2026-10-31): initial MVP surface; adversarially reviewed semantics; grammar machine-checked.
+- v0.1 rev 5 (2026-11-06, pre-release; the owner's decisions at sprint S3.2b-2): **multi-part partition keys** — a key is one attribute or two or more in brackets, `(k, j) of S` (grammar: `part_key` gains the bracket form); one spelling only (`E-PART-005` a single key in brackets, `E-PART-006` an attribute twice in one group, new); every stream's key has the same number of parts (`E-PART-007`, new); `E-PART-003` compares types position by position and names the position; `E-PART-004`'s message shows the grouped form; parts correspond by position; a null in any part is the rule's key error. `text_invisibles` can be read on every source stream, declared or not; a declaration of it other than a non-optional `bool` is `E-TYPE-001` at the declaration. Error positions: a derived stream's `ts` error (`E-TYPE-001`, rev 4) points at the attribute. A playback recording may hold a `rejected` record for a live event whose payload failed its stream's schema.
 - v0.1 rev 4 (2026-11-06, pre-release; the owner's decisions at sprint S3.2b-1): a select item that can be null is never bound to a non-optional output attribute (`E-NULL-003`, new; a rule's own partition key is never null where the rule runs); a stream named twice in a partition clause is refused (`E-PART-004`, new — multi-part keys `(k, j) of S` follow in S3.2b-2); a derived stream's `ts`, which holds the output timestamp, is declared `timestamp` (`E-TYPE-001`); a plain rule emits as soon as its stream accepts an event, its rate limit compares event times in arrival order, and its keys expire on the stream's admission watermark (§5.1 as annotated).
 - v0.1 rev 3 (2026-11-04, pre-release; the owner's decisions of 2026-11-01 and 2026-11-02, applied at sprint S1.2): a rule reads source streams only (`E-GRAPH-004`; `E-GRAPH-001` unreachable in v0.1, kept for Phase 2); a cross-stream partition-key type mismatch is rejected at deploy (`E-PART-003`, naming both streams and both types); `late events allow` removed for v0.1 (`E-LATE-002` wherever it appears; example 02 now `late events drop`); cron admission pinned to §6.1 (an event behind the admission watermark is dropped even if its bucket is open; the reference executor aligned, a new harness check pins it); `text_invisibles` engine-owned; keyword sets over a table read its per-event snapshot like `in`; `time arrival` stays (playback logs carry the recorded stamp as `ts`); a `time <attr>` must name a `timestamp` attribute (`E-TIME-003`). The grammar is unchanged.
 - v0.1 rev 2 (2026-11-01, pre-release; owner-approved at architecture ratification): expect blocks gain `given table <Name> [rows]` seeding (playback logs gain a table-load record); regex `_ci` defined as RE2 folding, distinct from the simple fold of text operators. Grammar re-verified.

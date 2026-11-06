@@ -42,6 +42,7 @@ stream AgentKillSwitch (agentId string, sessionId string,
 rule <Name>
   intent "<one sentence>"
   partition by <key> of <Stream> [, <key> of <Stream>]... ttl <duration>
+                                     -- <key> is <attr> or (<attr>, <attr>, ...) (rev 5)
   from <pattern | windowed input>
   within <duration>                  -- patterns only; mandatory
   after match skip past last        -- patterns only; mandatory

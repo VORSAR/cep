@@ -58,6 +58,7 @@ rule_decl: "rule" cname intent_clause partition_clause? body extra* select_claus
 intent_clause: "intent" STRING
 partition_clause: "partition" "by" part_key ("," part_key)* "ttl" duration_or_param
 part_key: cname "of" cname
+        | "(" cname ("," cname)* ")" "of" cname -> part_group
 
 extra: "expect" expect_block -> expect_clause
      | "todo" STRING -> todo_clause
