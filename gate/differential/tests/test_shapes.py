@@ -98,6 +98,22 @@ class Shapes(unittest.TestCase):
             ],
         )
 
+    def test_partition_keys_lead_their_rule(self):
+        # S3.2b-2 (review F8): a rule's keys come first, in written order — `(key S a)` for `a of S`, `(group S a b)`
+        # for `(a, b) of S`, a one-attribute group included — then its filters and select items.
+        src = (
+            HEAD + "rule K intent 'x' partition by (a, `b`) of S ttl 1 min from S[a > 1] select a "
+            "output first every 1 min insert into Out;\n"
+            "rule L intent 'x' partition by s of S ttl 1 min from S select a insert into Out;\n"
+            "rule M intent 'x' partition by (t) of S ttl 1 min from S select a insert into Out;\n"
+        )
+        verdict, found = self.grammar.judge(src)
+        self.assertEqual(verdict, "accept")
+        self.assertEqual(
+            found,
+            ["(group S a b)", "(cmp > name literal)", "name", "(key S s)", "name", "(group S t)", "name"],
+        )
+
     def test_a_grammar_reject_is_a_verdict_with_no_shapes(self):
         self.assertEqual(self.grammar.judge(program("a = 1")), ("reject", []))
         self.assertEqual(self.grammar.judge("not a program"), ("reject", []))
