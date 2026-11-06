@@ -24,6 +24,26 @@ type OpState interface {
 	Timers(dst []clock.Timer) []clock.Timer
 }
 
+// NoTimers is embedded by an OpState that implies no timers (a plain body's): its Timers returns dst unchanged, so a
+// package that may not import clock can still implement OpState.
+type NoTimers struct{}
+
+// Timers implies nothing.
+func (NoTimers) Timers(dst []clock.Timer) []clock.Timer { return dst }
+
+// TimerFree is embedded by a Body whose states imply no timers (a plain body's): OnTimers, OnDiscard and OnPurge do
+// nothing, so a package that may not import clock can still implement Body.
+type TimerFree struct{}
+
+// OnTimers does nothing: no timer is ever scheduled for such a body.
+func (TimerFree) OnTimers(*Instance, []clock.Timer, any) {}
+
+// OnDiscard does nothing.
+func (TimerFree) OnDiscard(*Instance, []uint64) {}
+
+// OnPurge does nothing: such a body's state has nothing to retract.
+func (TimerFree) OnPurge(*Instance) {}
+
 // Body is a rule body's per-key logic: patterns (S4.1), windows (S8), test doubles now. A Body MUST NOT schedule
 // clock.TTLPurge, and MUST NOT keep an Instance's clock past OnPurge.
 type Body interface {
