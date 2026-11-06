@@ -198,6 +198,7 @@ A roadmap phase is a set of sprints with its own edges.
 
 **Every brief says:**
 - the goal, what is already ruled out, and the files to read (the brief is the agent's only context);
+- the symbols to `impact` in the code graph before editing; callers, imports and blast radius come from the graph, never from reading files ([DEVELOPMENT.md](../development/DEVELOPMENT.md#the-code-graph-gitnexus));
 - the agent's working directory (its own worktree) and **the files or packages it owns** (one owner per file when lanes run in parallel);
 - read-only or write; never commit, push or merge unless the brief says so;
 - the pinned toolchain first on `PATH`;
@@ -215,7 +216,7 @@ A roadmap phase is a set of sprints with its own edges.
 - **Monitoring:** rely on the completion notification. Never judge an agent stalled by its transcript's size or modification time: it writes only between tool rounds. The stall ladder: check the deliverable → nudge → resume by raw agent ID → the coordinator does the step.
 - **Resuming across sessions** works by the agent's raw ID, not its name. Active IDs are recorded only under the active sprint's resume point in memory, and deleted when the work closes.
 - **Keep an agent's worktree until its sprint closes**: a fix round may need to resume it.
-- **Verify, don't relay.** Check every agent claim on the combined branch; read the gate's exit code yourself.
+- **Verify, don't relay.** Check every agent claim on the combined branch: `detect_changes` first, then the diff it points at; read the gate's exit code yourself.
 
 ---
 
