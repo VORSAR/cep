@@ -49,6 +49,7 @@
 | 2026-11-06 | [the code graph re-indexes itself](#owner-decisions-2026-11-06--the-code-graph-re-indexes-itself) |
 | 2026-11-06 | [S3.2b-2's plan check](#owner-decisions-2026-11-06--s32b-2s-plan-check) |
 | 2026-11-06 | [S3.2b-2's design (after the architecture review)](#owner-decisions-2026-11-06--s32b-2s-design-after-the-architecture-review) |
+| 2026-11-06 | [S3.2b-2's review and break-it](#owner-decisions-2026-11-06--s32b-2s-review-and-break-it) |
 
 ## The decisions
 
@@ -443,3 +444,10 @@ The review ([s3-2b-2-design-architecture.md](../reviews/s3-2b-2-design-architect
 5. **S3.2b-2 stays one sprint** (as recommended): about 12.5 points after the review's fixes and these answers, under the 13-point cap. The gate checks land with the code they guard.
 
 Not owner decisions, recorded for the record: the tripwire keeps a ceiling per metric with an optional per-rule override, so every metric and rule pair has a ceiling as ADR-0015 §3.11 requires (review F10, question D); the review's F19 (skip ticks for apps with no idle stream) is rejected, since a caller's tick raises the stamp that later `time arrival` events take.
+
+### Owner decisions, 2026-11-06 — S3.2b-2's review and break-it
+
+The combined-build review ([s3-2b-2-combined-architecture.md](../reviews/s3-2b-2-combined-architecture.md): 1 blocker, 3 should-fix, 3 later) and the QA break-it ([s3-2b-2-breakit-qa.md](../reviews/s3-2b-2-breakit-qa.md): 4 blockers, 3 should-fix, 1 later; two blockers the review's too) raised two questions, asked in plain language; both as recommended. The coordinator re-ran every behaviour finding: all reproduce.
+
+1. **Stopping an app waits for its recording only until the stop's deadline** (review C4). If the recording has not finished by then — a stuck disk — it is marked failed and the stop still reports success, every alert having gone out. Rejected: not waiting at all (the recording's status not final when the stop returns); today's behaviour (the stop fails with a timeout although detection did not).
+2. **The per-rule burst gauge (`RuleStats.OutboxHigh`) is left out of the live-equals-replay check** (break-it S3). It measures what one worker holds at once — a capacity mark, like the queue high-water marks — so it depends on the number of shards; alerts and every detection counter must still match exactly, and the runaway-rule ceiling keeps working per worker. Rejected: counting it across all workers (more bookkeeping on the hot path).
