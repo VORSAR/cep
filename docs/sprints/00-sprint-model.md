@@ -182,6 +182,9 @@ A roadmap phase is a set of sprints with its own edges.
 - **One pinned toolchain** (Go and every gate tool at an exact version, in one manifest) in every checkout and worktree; T1 refuses a push otherwise. A hook is never bypassed.
 - **Green means the real exit code** of a gate run that finished: read the `exit:` line, never a piped tail or a background task's wrapper. The same holds for an agent's "green".
 - **The cheapest proving run** (owner, 2026-11-03): prove a claim with the cheapest run that proves it. An existing proof stands unless a later change touches what it covered; ask before a heavy re-run.
+- **Prove a library claim first** ([owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure), from S3.1-2's retro): a design claim about how a library or a standard table behaves (a Unicode table, a parser's grammar, a conversion's range) is checked with a scratch program before the design goes to review.
+- **A new CI workflow runs once by hand** (owner, 2026-11-06, from S3.2a-2's retro): the sprint that adds a workflow runs it once and reads its summary before the PR.
+- **A guard test counts once it has been red** (owner, 2026-11-06, from S3.2b-1's retro): a test that pins wiring is shown failing with the line it guards removed before it counts.
 - **Tests** follow [testing.md](../development/testing.md)'s four rules: time only ever breaks a hang; measure the component, never the machine; each test owns its world; every run has a ceiling. A rule is tested in the package that owns it; never through a mirror. A new timing- or concurrency-sensitive test is stressed under load before it merges.
 - **A flaky test is fixed at its root immediately**: never quarantined, never retried.
 - **A linter finding is fixed at its root**, never suppressed to get past it. Suppressions carry the metadata DEVELOPMENT.md requires.
