@@ -1,0 +1,13 @@
+-- expect: E-TYPE-001 (a derived stream's ts holds the output timestamp) @ 7:1
+language cep/0.1;
+
+stream S (k string, kind string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Alerts (k string, ts string);
+
+rule R
+  intent 'Forward matching events.'
+  from S[kind == 'x']
+  select k
+  insert into Alerts;
