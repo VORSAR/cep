@@ -66,7 +66,7 @@ func TestBkFailedRedrainReopensSend(t *testing.T) {
 	err := r.Send(ctx, 0, rtEv(0, rtAt(3), rtStr("a")))
 	st := rtStats(t, ctx, r)
 	if !errors.Is(err, runtime.ErrDrained) {
-		t.Fatalf("Send after Drain, then a second Drain whose context had expired: %v, want ErrDrained (owner F5; the event went to AfterDrain=%v)", err, st.AfterDrain)
+		t.Fatalf("Send after Drain, then a second Drain whose context had expired: %v, want ErrDrained (owner F5; the event went to AfterDrain=%v)", err, st.Streams)
 	}
 }
 
@@ -304,8 +304,8 @@ func TestBkGuardTinyCapacityDrainFlushesEverything(t *testing.T) {
 	side.Wait()
 	st := rtStats(t, ctx, r)
 	for a := 0; a < apps; a++ {
-		if st.AfterDrain[a][0] != 0 || st.StreamLate[a][0] != 0 {
-			t.Errorf("app %d: AfterDrain %d, StreamLate %d, want 0", a, st.AfterDrain[a][0], st.StreamLate[a][0])
+		if st.Streams[a][0].AfterDrain != 0 || st.Streams[a][0].Late != 0 {
+			t.Errorf("app %d: AfterDrain %d, StreamLate %d, want 0", a, st.Streams[a][0].AfterDrain, st.Streams[a][0].Late)
 		}
 	}
 }
@@ -342,8 +342,8 @@ func TestBkGuardSendRacingDrainNeverLost(t *testing.T) {
 		atDrain := got.Load()
 		rtWait(t, ctx, done, "the sender seeing ErrDrained")
 		st := rtStats(t, ctx, r)
-		if atDrain+st.AfterDrain[0][0] != ok.Load() {
-			t.Fatalf("try %d: %d Sends returned nil; %d outputs by Drain's return + %d AfterDrain = %d", try, ok.Load(), atDrain, st.AfterDrain[0][0], atDrain+st.AfterDrain[0][0])
+		if atDrain+st.Streams[0][0].AfterDrain != ok.Load() {
+			t.Fatalf("try %d: %d Sends returned nil; %d outputs by Drain's return + %d AfterDrain = %d", try, ok.Load(), atDrain, st.Streams[0][0].AfterDrain, atDrain+st.Streams[0][0].AfterDrain)
 		}
 	}
 }

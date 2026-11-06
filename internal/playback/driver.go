@@ -83,6 +83,9 @@ func (d *Driver) Step(rec Record) Step {
 	case RecStop:
 		st.Kind = StepStop
 		st.Advances, _ = d.sync.Drain()
+	case RecRejected:
+		d.sync.Reject(rec.Stream, rec.Arrival)
+		st.Kind, st.Stream = StepRejected, rec.Stream
 	default:
 		panic(fmt.Sprintf("playback: line %d: record kind %d", rec.Line, rec.Kind))
 	}
@@ -98,7 +101,7 @@ func (d *Driver) event(rec Record) Step {
 	if d.recording {
 		arrival = rec.Arrival
 	}
-	late, adv := d.sync.Event(&e, arrival)
+	late, adv := d.sync.Event(&e, arrival, rec.Info)
 	if late {
 		return Step{Kind: StepStreamLate, Line: rec.Line, Event: e}
 	}

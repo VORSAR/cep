@@ -37,7 +37,7 @@ func TestCvIngestVirtualAndEnd(t *testing.T) {
 	step := func(sid int, ts int64, wantSeq uint64, wantLate bool, want []clock.WMAdvance) {
 		t.Helper()
 		e := event.Event{StreamID: sid, Ts: ts}
-		late, adv := g.Event(&e, ts)
+		late, adv := g.Event(&e, ts, event.Decoded{})
 		if e.Seq != wantSeq || late != wantLate || !slices.Equal(adv, want) {
 			t.Errorf("Event(s%d @%d): Seq %d, late %v, advances %v; want %d, %v, %v", sid, ts, e.Seq, late, adv, wantSeq, wantLate, want)
 		}
@@ -255,7 +255,7 @@ func TestCvStreamLateAndRedrain(t *testing.T) {
 	if got, want := log.get("R/a"), []string{"ev s0#3 @16000", "ev s0#1 @20000"}; !rtEqual(got, want) {
 		t.Errorf("R/a %v, want %v", got, want)
 	}
-	if n := rtStats(t, ctx, r).StreamLate[0][0]; n != 1 {
+	if n := rtStats(t, ctx, r).Streams[0][0].Late; n != 1 {
 		t.Errorf("stream_late %d, want 1", n)
 	}
 	// A second Drain waits for the same flush and returns its result (owner, 2026-11-05, the break-it's question; it

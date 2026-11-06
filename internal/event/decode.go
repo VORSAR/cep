@@ -11,9 +11,13 @@ import (
 // InvisiblesAttr is the engine-owned attribute name (SPEC §4.2, rev 3): a payload value under it is ignored.
 const InvisiblesAttr = "text_invisibles"
 
-// maxDepth is encoding/json's nesting limit, the top-level object counted: a payload nested deeper is a syntax
+// MaxDepth is encoding/json's nesting limit, the top-level object counted: a payload nested deeper is a syntax
 // fault, as it is there.
-const maxDepth = 10000
+const MaxDepth = 10000
+
+// MaxLogLine is the longest line a playback log may hold (16 MiB). A live payload is accepted only when its recording
+// line fits, and only nested one level less than MaxDepth, since the envelope adds one (design s3-2b-2 §6, review F4).
+const MaxLogLine = 16 << 20
 
 // Decoder decodes one JSON object per call into one stream's values (ADR-0010 §3; design note s3-1-2 §4). It is
 // immutable after NewDecoder and safe for concurrent use.
@@ -41,6 +45,7 @@ type Decoded struct {
 	Ts       int64 // the event time from the schema's time attribute; 0 for a `time arrival` stream
 	Unknown  int   // payload keys the schema does not declare, each occurrence: skipped
 	Reserved bool  // the payload carried InvisiblesAttr: ignored
+	Depth    int   // the payload's deepest nesting, the top-level object counted 1 (design s3-2b-2 §6, review F4)
 }
 
 // DecodeReason classifies a rejected payload.
@@ -88,6 +93,7 @@ func (d *Decoder) Decode(b []byte, dst []Value) ([]Value, Decoded, error) {
 	if err != nil {
 		return nil, Decoded{}, err
 	}
+	info.Depth = max(s.most, 1)
 	vals := dst[:0]
 	for i := range n {
 		v, err := d.value(b, i, spans[i], closing)
@@ -234,6 +240,25 @@ func cleanObject(raw []byte) string {
 	}
 	return string(out)
 }
+
+// CleanObject is raw — one valid JSON object or array, as a decoded payload is — in the form an object value is
+// stored in: whitespace outside strings removed, member order kept, malformed UTF-8 replaced by U+FFFD (owner D4 of
+// S3.2a-1). A recording keeps a live payload in this form (owner D3 of S3.2b-2's design).
+func CleanObject(raw []byte) string { return cleanObject(raw) }
+
+// ExactObject says text is an object value a log line holds as it is (owner D1 of S3.2b-2's design): one JSON object
+// or array, valid, already in CleanObject's form, nested no deeper than an event line allows (the line and its attrs
+// are two levels).
+func ExactObject(text string) bool {
+	if text == "" || (text[0] != '{' && text[0] != '[') || !compactAndValid([]byte(text)) {
+		return false
+	}
+	s := scanner{b: []byte(text), depth: 2}
+	return s.value() == nil && s.i == len(s.b)
+}
+
+// TimestampInRange says ms is an instant RFC 3339 can write: the years 0000 to 9999, in UTC (S3.2a-1's K2).
+func TimestampInRange(ms int64) bool { return ms >= minRFC3339 && ms <= maxRFC3339 }
 
 // compactAndValid says raw has no whitespace outside its strings and no malformed UTF-8: it is stored as it is.
 func compactAndValid(raw []byte) bool {
@@ -428,6 +453,7 @@ type scanner struct {
 	b     []byte
 	i     int
 	depth int
+	most  int // the deepest depth reached
 }
 
 func (s *scanner) syntax(at int, what string) error {
@@ -554,7 +580,8 @@ func (s *scanner) value() error {
 
 func (s *scanner) enter() error {
 	s.depth++
-	if s.depth > maxDepth {
+	s.most = max(s.most, s.depth)
+	if s.depth > MaxDepth {
 		return s.syntax(s.i, "nested deeper than 10000")
 	}
 	s.i++

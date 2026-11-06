@@ -253,7 +253,7 @@ func eqLive(t testing.TB, p *plan.App, recs []playback.Record, n int) (*eqResult
 	if extra > 0 {
 		return nil, fmt.Errorf("Config.Now read %d times beyond once at Start and once per event (design §7.8)", extra)
 	}
-	res.streamLate, res.rules = st.StreamLate[0], st.Rules[0]
+	res.streamLate, res.rules = lateRow(st.Streams[0]), st.Rules[0]
 	return res, nil
 }
 
@@ -295,7 +295,7 @@ func eqSync(t testing.TB, p *plan.App, recs []playback.Record) *eqResult {
 		}
 	}
 	st := s.Stats()
-	res.streamLate, res.rules = st.StreamLate[0], st.Rules[0]
+	res.streamLate, res.rules = lateRow(st.Streams[0]), st.Rules[0]
 	return res
 }
 

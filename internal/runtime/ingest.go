@@ -6,6 +6,7 @@ import (
 	"github.com/vorsar/cep/internal/clock"
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/table"
+	"github.com/vorsar/cep/internal/text"
 )
 
 // Ingest is one app's ingest arithmetic, used by one goroutine: the live router, or the playback driver (owner,
@@ -19,25 +20,46 @@ type Ingest struct {
 	virtual bool
 	stamp   int64 // the monotone wall stamp of arrivals and ticks (design s3-2b-1 v2 §4, review F7)
 	buf     []clock.WMAdvance
+	counts  []streamCounts // per stream (design s3-2b-2 §6)
+}
+
+// streamCounts are one stream's intake counters the ingest step keeps, live and in replay alike.
+type streamCounts struct {
+	rejected, unknown, overrides int64
 }
 
 // NewIngest: start is the deployment's start (wall ms); virtual is playback's fixture mode (the virtual floor after
 // every admitted event). A nil set means no tables. The set may be shared with its owner: Ingest only takes snapshots.
+// Live and in a recording the stamp starts at start, so no arrival or tick falls below it (review F5, MUST 15); a
+// fixture's stamps are its events' times.
 func NewIngest(specs []clock.StreamSpec, start int64, set *table.Set, virtual bool) *Ingest {
 	if set == nil {
 		set = table.NewSet(nil)
 	}
+	stamp := start
+	if virtual {
+		stamp = math.MinInt64
+	}
 	return &Ingest{
 		specs: specs, reg: clock.NewStreamRegistry(specs, start), set: set, seq: make([]uint64, len(specs)),
-		vnow: math.MinInt64, virtual: virtual, stamp: math.MinInt64,
+		vnow: math.MinInt64, virtual: virtual, stamp: stamp, counts: make([]streamCounts, len(specs)),
 	}
 }
 
-// Event stamps e (Seq per stream from 1, a stream-late event included; Tables = the current snapshot), then judges it
-// with the registry; arrival is first raised to the last stamp, as the router's is. The advances are its own stream's, then (virtual) the virtual floors; valid until the next call.
-func (g *Ingest) Event(e *event.Event, arrival int64) (late bool, advances []clock.WMAdvance) {
+// Event stamps e (Seq per stream from 1, a stream-late event included; Tables = the current snapshot; the
+// invisible-character flag, computed here and nowhere else: design s3-2b-2 §5, MUST 7), counts its decode report (an
+// unknown key, a payload's own text_invisibles: §6), then judges it with the registry; arrival is first raised to the
+// last stamp, as the router's is. The advances are its own stream's, then (virtual) the virtual floors; valid until
+// the next call.
+func (g *Ingest) Event(e *event.Event, arrival int64, info event.Decoded) (late bool, advances []clock.WMAdvance) {
 	g.stamp = max(g.stamp, arrival)
 	arrival = g.stamp
+	c := &g.counts[e.StreamID]
+	c.unknown += int64(info.Unknown)
+	if info.Reserved {
+		c.overrides++
+	}
+	e.Invisibles = text.IngestFlags(e.Values)
 	g.seq[e.StreamID]++
 	e.Seq = g.seq[e.StreamID]
 	e.Tables = g.set.Snapshot()
@@ -55,6 +77,16 @@ func (g *Ingest) Event(e *event.Event, arrival int64) (late bool, advances []clo
 	}
 	return false, g.buf
 }
+
+// Reject is a payload that failed its stream's schema (owner Q1 of S3.2b-2; design §6, MUST 8): it raises the stamp,
+// as an arrival does, and is counted; it takes no Seq, reaches no clock and no rule.
+func (g *Ingest) Reject(stream int, arrival int64) {
+	g.stamp = max(g.stamp, arrival)
+	g.counts[stream].rejected++
+}
+
+// Stamp is the last stamp: what a tick or an arrival is raised to.
+func (g *Ingest) Stamp() int64 { return g.stamp }
 
 // Tick is a live idle tick (ObserveTick).
 func (g *Ingest) Tick(now int64) []clock.WMAdvance {

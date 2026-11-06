@@ -127,6 +127,12 @@ func appendString(dst []byte, s string) []byte {
 // only when set, ts only when s has no time attribute (owner D2 of S3.2a-1). Keys are sorted bytewise; every declared
 // attribute appears, a null as null. It allocates nothing into a buffer with room, for up to 64 attributes.
 func AppendEvent(dst []byte, s event.Schema, e event.Event) ([]byte, error) {
+	return appendEvent(dst, s, e, "")
+}
+
+// appendEvent is AppendEvent leaving out the attribute named skip ("" for none): a recording leaves out the
+// engine-owned text_invisibles, which the engine computes and a payload never sets (design s3-2b-2 §5, review F3).
+func appendEvent(dst []byte, s event.Schema, e event.Event, skip string) ([]byte, error) {
 	n := s.NumAttrs()
 	if len(e.Values) != n {
 		return dst, fmt.Errorf("playback: stream %q: an event with %d values for %d attributes", s.Stream(), len(e.Values), n)
@@ -143,15 +149,20 @@ func AppendEvent(dst []byte, s event.Schema, e event.Event) ([]byte, error) {
 		}
 	}
 	dst = append(dst, `{"attrs":{`...)
-	for k, i := range order {
+	k := 0
+	for _, i := range order {
 		a := s.Attr(i)
 		v := e.Values[i]
+		if skip != "" && a.Name == skip {
+			continue
+		}
 		if v.Kind != a.Type {
 			return dst, fmt.Errorf("playback: stream %q: attribute %q holds a %v value; it is declared %v", s.Stream(), a.Name, v.Kind, a.Type)
 		}
 		if k > 0 {
 			dst = append(dst, ',')
 		}
+		k++
 		dst = appendString(dst, a.Name)
 		dst = append(dst, ':')
 		var err error

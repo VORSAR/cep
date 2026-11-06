@@ -37,7 +37,7 @@ func syncNew(t testing.TB, app runtime.App, start int64, virtual bool, out func(
 // syncEvent is one Sync event step. The architecture review changes Sync.Event to take *event.Event (stamping Seq
 // and Tables in place, as Ingest.Event does): this one line becomes `return s.Event(&e, arrival)`.
 func syncEvent(s *runtime.Sync, e event.Event, arrival int64) (bool, []clock.WMAdvance) {
-	return s.Event(&e, arrival)
+	return s.Event(&e, arrival, event.Decoded{})
 }
 
 // syncApp: S (source, `time arrival` schema with k; delay d), then the derived streams OA (an on-arrival rule's
@@ -198,8 +198,8 @@ func TestSyncMatchesLiveOneShard(t *testing.T) {
 	if lres != sres {
 		t.Errorf("drain: live %+v, replay %+v", lres, sres)
 	}
-	if !slices.Equal(lst.StreamLate[0], sst.StreamLate[0]) || lst.StreamLate[0][0] != 1 {
-		t.Errorf("StreamLate: live %v, replay %v; want [1 0 0] both", lst.StreamLate, sst.StreamLate)
+	if !slices.Equal(rtLate(lst.Streams[0]), rtLate(sst.Streams[0])) || lst.Streams[0][0].Late != 1 {
+		t.Errorf("StreamLate: live %v, replay %v; want [1 0 0] both", rtLate(lst.Streams[0]), rtLate(sst.Streams[0]))
 	}
 	if !slices.Equal(lst.Rules[0], sst.Rules[0]) {
 		t.Errorf("rule stats: live %+v, replay %+v", lst.Rules[0], sst.Rules[0])
