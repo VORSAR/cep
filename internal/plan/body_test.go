@@ -304,15 +304,15 @@ func TestRatePanicResetStartsFresh(t *testing.T) {
 		}
 		out = append(out, e)
 	})
-	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
+	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
 	if err != nil {
 		t.Fatal(err)
 	}
-	pr.Offer(pqStr("a"), qaK(0, "a"))
+	pr.Offer(partition.Single(pqStr("a")), qaK(0, "a"))
 	if pr.Stats().Panics != 1 {
 		t.Fatalf("Panics %d after the planted emit, want 1 (the key reset)", pr.Stats().Panics)
 	}
-	pr.Offer(pqStr("a"), qaK(pqMin, "a"))
+	pr.Offer(partition.Single(pqStr("a")), qaK(pqMin, "a"))
 	if len(out) != 1 || out[0].Ts != pqT0+pqMin {
 		t.Errorf("outputs %+v after the reset, want a@1 min (no stale anchor)", out)
 	}
@@ -369,7 +369,7 @@ func TestFilterNoMatchAllocatesNothing(t *testing.T) {
 	rule := pqRuleNamed(t, p, "Gt")
 	var out []event.Event
 	body := rule.NewBody(func(e event.Event) { out = append(out, e) })
-	in := &partition.Instance{Key: pqStr("a")}
+	in := &partition.Instance{Key: partition.Single(pqStr("a"))}
 	in.Op = body.NewState(in)
 	e := qaS(0, "a", 1, 1, pqI(3)) // 3 > 5 is false
 	allocs := testing.AllocsPerRun(200, func() { body.OnEvent(in, e) })

@@ -51,7 +51,7 @@ func TestTimerTablesIndependentOfShards(t *testing.T) {
 				Streams: []clock.StreamSpec{rtSrc("in", 0)},
 				Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
 				Tables:  table.NewSet([]*table.Table{tb}),
-				Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: body}},
+				Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: body}},
 			}
 			r := rtStart(t, runtime.Config{Shards: shards}, app)
 			for i := 1; i <= 8; i++ {

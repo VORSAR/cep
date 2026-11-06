@@ -105,7 +105,7 @@ type body struct {
 }
 
 func (b *body) NewState(in *partition.Instance) partition.OpState {
-	k := keyName(in.Key)
+	k := keyName(in.Key.First)
 	b.log = append(b.log, N(k, in.Clock.Ordinal()))
 	st := &state{key: k}
 	if b.plant != nil {
@@ -115,14 +115,14 @@ func (b *body) NewState(in *partition.Instance) partition.OpState {
 }
 
 func (b *body) OnEvent(in *partition.Instance, e event.Event) {
-	b.log = append(b.log, Ev(keyName(in.Key), in.Clock.Ordinal(), e.Ts))
+	b.log = append(b.log, Ev(keyName(in.Key.First), in.Clock.Ordinal(), e.Ts))
 	if in.Op == nil {
-		b.t.Errorf("OnEvent(%s, ts %d) with Op nil: the birth comes first (design §3)", keyName(in.Key), e.Ts)
+		b.t.Errorf("OnEvent(%s, ts %d) with Op nil: the birth comes first (design §3)", keyName(in.Key.First), e.Ts)
 		return
 	}
 	if in.LastActivity != e.Ts {
 		b.t.Errorf("OnEvent(%s, ts %d): LastActivity %d, want the event's time (set before OnEvent, design §3)",
-			keyName(in.Key), e.Ts, in.LastActivity)
+			keyName(in.Key.First), e.Ts, in.LastActivity)
 	}
 	if b.schedule == nil {
 		return
@@ -136,7 +136,7 @@ func (b *body) OnEvent(in *partition.Instance, e event.Event) {
 }
 
 func (b *body) OnTimers(in *partition.Instance, fires []clock.Timer, tables any) {
-	r := Tm(keyName(in.Key), in.Clock.Ordinal(), slices.Clone(fires)...)
+	r := Tm(keyName(in.Key.First), in.Clock.Ordinal(), slices.Clone(fires)...)
 	r.Tables = tables
 	b.log = append(b.log, r)
 	for _, tm := range fires {
@@ -150,7 +150,7 @@ func (b *body) OnTimers(in *partition.Instance, fires []clock.Timer, tables any)
 }
 
 func (b *body) OnDiscard(in *partition.Instance, refs []uint64) {
-	b.log = append(b.log, rec{Cb: "discard", Key: keyName(in.Key), Ord: in.Clock.Ordinal(), Refs: slices.Clone(refs)})
+	b.log = append(b.log, rec{Cb: "discard", Key: keyName(in.Key.First), Ord: in.Clock.Ordinal(), Refs: slices.Clone(refs)})
 	if st, ok := in.Op.(*state); ok {
 		st.timers = slices.DeleteFunc(st.timers, func(x clock.Timer) bool {
 			return x.Kind == clock.Discard && slices.Contains(refs, x.Ref)
@@ -159,7 +159,7 @@ func (b *body) OnDiscard(in *partition.Instance, refs []uint64) {
 }
 
 func (b *body) OnPurge(in *partition.Instance) {
-	b.log = append(b.log, rec{Cb: "purge", Key: keyName(in.Key), Ord: in.Clock.Ordinal(), OpSet: in.Op != nil,
+	b.log = append(b.log, rec{Cb: "purge", Key: keyName(in.Key.First), Ord: in.Clock.Ordinal(), OpSet: in.Op != nil,
 		Last: in.LastActivity, Pending: in.Clock.Timers(nil)})
 }
 
@@ -194,7 +194,7 @@ func newWorldKeyed(t *testing.T, kt event.Type, ttl int64, b *body, inputs ...in
 	if b.t == nil {
 		b.t = t
 	}
-	r, err := partition.NewRule(partition.Config{Inputs: inputs, KeyType: kt, TTL: ttl, Body: b})
+	r, err := partition.NewRule(partition.Config{Inputs: inputs, KeyTypes: []event.Type{kt}, TTL: ttl, Body: b})
 	if err != nil {
 		t.Fatalf("NewRule: %v", err)
 	}
@@ -224,7 +224,7 @@ func (w *world) advance() {
 func (w *world) arrive(c int64, key event.Value, e event.Event) (constructLate bool) {
 	w.t.Helper()
 	w.apply(c)
-	constructLate = w.r.Offer(key, e)
+	constructLate = w.r.Offer(partition.Single(key), e)
 	w.advance()
 	return constructLate
 }
@@ -245,7 +245,7 @@ func instances(r *partition.Rule) []*partition.Instance {
 // find is the resident instance whose key renders as k, or nil.
 func find(r *partition.Rule, k string) *partition.Instance {
 	for _, in := range instances(r) {
-		if keyName(in.Key) == k {
+		if keyName(in.Key.First) == k {
 			return in
 		}
 	}

@@ -29,9 +29,9 @@ func bkApp(t testing.TB, delay int64, outSID int, sinks ...runtime.Sink) runtime
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", delay), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("k", event.TString), rtA("seq", event.TInt))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
-				b.emit(event.Event{StreamID: outSID, Ts: e.Ts, Values: []event.Value{in.Key, rtInt(int64(e.Seq))}})
+				b.emit(event.Event{StreamID: outSID, Ts: e.Ts, Values: []event.Value{in.Key.First, rtInt(int64(e.Seq))}})
 			}})}},
 	}
 	for _, s := range sinks {
@@ -379,10 +379,10 @@ func TestBkGuardEveryKeyTypeOneInstance(t *testing.T) {
 		var rules []runtime.Rule
 		for i, ty := range types {
 			attrs = append(attrs, rtA(fmt.Sprint("a", i), ty))
-			rules = append(rules, runtime.Rule{Name: fmt.Sprint("R", i), Inputs: []int{0}, KeyAttr: []int{i}, KeyType: ty, TTL: 3600 * rtSec,
+			rules = append(rules, runtime.Rule{Name: fmt.Sprint("R", i), Inputs: []int{0}, KeyAttrs: [][]int{{i}}, KeyTypes: []event.Type{ty}, TTL: 3600 * rtSec,
 				NewBody: rtBodies(rtBody{rule: fmt.Sprint("R", i), log: log, births: births})})
 		}
-		rules = append(rules, runtime.Rule{Name: "L", Inputs: []int{0}, KeyType: event.TString, NewBody: rtBodies(rtBody{rule: "L", log: log, births: births})})
+		rules = append(rules, runtime.Rule{Name: "L", Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, NewBody: rtBodies(rtBody{rule: "L", log: log, births: births})})
 		r := rtStart(t, runtime.Config{Shards: shards, Mailbox: 1, Intake: 1}, runtime.App{
 			Streams: []clock.StreamSpec{rtSrc("in", 0)}, Schemas: []event.Schema{rtSchema(t, "in", attrs...)}, Rules: rules,
 		})
@@ -420,7 +420,7 @@ func TestBkGuardPanicStorm(t *testing.T) {
 	ctx := rtCeiling(t)
 	var sinkCalls atomic.Int64
 	body := rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
-		b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{in.Key, rtInt(int64(e.Seq))}})
+		b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{in.Key.First, rtInt(int64(e.Seq))}})
 		in.Clock.Schedule(e.Ts+500, clock.TimerKind(1), e.Seq)
 		in.Op.(*rtState).timers = append(in.Op.(*rtState).timers, clock.Timer{Due: e.Ts + 500, Kind: clock.TimerKind(1), Ref: e.Seq})
 		if e.Seq%3 == 0 {
@@ -468,7 +468,7 @@ func TestBkDuplicateInputDoublesEvents(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0)},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0, 0}, KeyAttr: []int{0, 0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0, 0}, KeyAttrs: [][]int{{0}, {0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R", log: log})}},
 	}
 	r, err := runtime.Start(runtime.Config{Shards: 2, Now: rtNow}, []runtime.App{app})

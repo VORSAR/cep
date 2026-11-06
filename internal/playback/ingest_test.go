@@ -164,7 +164,7 @@ type lvBody struct {
 func (b *lvBody) NewState(*partition.Instance) partition.OpState { return &ldState{} }
 
 func (b *lvBody) OnEvent(in *partition.Instance, e event.Event) {
-	b.log.add(b.spec.Name+"/"+in.Key.Str, lvEv(e.StreamID, e.Seq, e.Ts))
+	b.log.add(b.spec.Name+"/"+in.Key.First.Str, lvEv(e.StreamID, e.Seq, e.Ts))
 	st := in.Op.(*ldState)
 	st.n++
 	if b.spec.Sched != nil {
@@ -179,7 +179,7 @@ func (b *lvBody) OnEvent(in *partition.Instance, e event.Event) {
 func (b *lvBody) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) {
 	st := in.Op.(*ldState)
 	for _, tm := range fires {
-		b.log.add(b.spec.Name+"/"+in.Key.Str, lvTm(tm))
+		b.log.add(b.spec.Name+"/"+in.Key.First.Str, lvTm(tm))
 		st.drop(tm.Kind, tm.Ref)
 	}
 }
@@ -187,7 +187,7 @@ func (b *lvBody) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) {
 func (b *lvBody) OnDiscard(*partition.Instance, []uint64) {}
 
 func (b *lvBody) OnPurge(in *partition.Instance) {
-	b.log.add(b.spec.Name+"/"+in.Key.Str, lvPurge(in.LastActivity+b.spec.TTL))
+	b.log.add(b.spec.Name+"/"+in.Key.First.Str, lvPurge(in.LastActivity+b.spec.TTL))
 }
 
 func lvEv(sid int, seq uint64, ts int64) string {
@@ -275,12 +275,12 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 			var rules []runtime.Rule
 			for i := range specs {
 				spec := &specs[i]
-				keyAttr := make([]int, len(spec.Inputs))
-				for j := range keyAttr {
-					keyAttr[j] = 1 // ldStd: ts, k, x, v
+				keyAttrs := make([][]int, len(spec.Inputs))
+				for j := range keyAttrs {
+					keyAttrs[j] = []int{1} // ldStd: ts, k, x, v
 				}
-				rules = append(rules, runtime.Rule{Name: spec.Name, Inputs: spec.Inputs, KeyAttr: keyAttr,
-					KeyType: event.TString, TTL: spec.TTL,
+				rules = append(rules, runtime.Rule{Name: spec.Name, Inputs: spec.Inputs, KeyAttrs: keyAttrs,
+					KeyTypes: []event.Type{event.TString}, TTL: spec.TTL,
 					NewBody: func(runtime.Emit) partition.Body { return &lvBody{log: live, spec: spec} }})
 			}
 			var streams []clock.StreamSpec

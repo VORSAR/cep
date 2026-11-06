@@ -63,8 +63,9 @@ func TestSaturationProgress(t *testing.T) {
 	var streams []clock.StreamSpec
 	var schemas []event.Schema
 	inputs := make([]int, G)
-	keyAttr := make([]int, G)
+	keyAttrs := make([][]int, G)
 	for g := 0; g < G; g++ {
+		keyAttrs[g] = []int{0}
 		name := fmt.Sprintf("s%d", g)
 		streams = append(streams, rtSrc(name, 0))
 		schemas = append(schemas, rtSchema(t, name, rtA("k", event.TString)))
@@ -97,10 +98,10 @@ func TestSaturationProgress(t *testing.T) {
 	body := rtBodies(rtBody{rule: "burst", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
 		for j := 0; j < Burst; j++ {
 			b.emit(event.Event{StreamID: out, Ts: e.Ts, Values: []event.Value{
-				in.Key, rtInt(int64(e.StreamID)), rtInt(int64(e.Seq)), rtInt(int64(j)),
+				in.Key.First, rtInt(int64(e.StreamID)), rtInt(int64(e.Seq)), rtInt(int64(j)),
 			}})
 		}
-		if in.Key.Str == "w0" {
+		if in.Key.First.Str == "w0" {
 			holdOnce.Do(func() {
 				close(bodyHeld)
 				<-bodyRelease // the held shard: stuck mid-message with a non-empty outbox
@@ -110,7 +111,7 @@ func TestSaturationProgress(t *testing.T) {
 	app := runtime.App{
 		Streams: streams, Schemas: schemas,
 		Rules: []runtime.Rule{{
-			Name: "burst", Inputs: inputs, KeyAttr: keyAttr, KeyType: event.TString, TTL: 24 * 3600 * rtSec,
+			Name: "burst", Inputs: inputs, KeyAttrs: keyAttrs, KeyTypes: []event.Type{event.TString}, TTL: 24 * 3600 * rtSec,
 			NewBody: body,
 		}},
 		Sinks: []runtime.SinkBinding{{Stream: out, Sink: sink}},

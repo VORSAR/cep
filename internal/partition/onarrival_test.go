@@ -30,25 +30,27 @@ type oaBody struct {
 }
 
 func (b *oaBody) NewState(in *partition.Instance) partition.OpState {
-	b.log = append(b.log, "new "+keyName(in.Key))
+	b.log = append(b.log, "new "+keyName(in.Key.First))
 	return oaState{}
 }
 
 func (b *oaBody) OnEvent(in *partition.Instance, e event.Event) {
-	b.log = append(b.log, "ev "+keyName(in.Key)+" @"+itoa(e.Ts))
+	b.log = append(b.log, "ev "+keyName(in.Key.First)+" @"+itoa(e.Ts))
 	if b.onEvent != nil {
 		b.onEvent(in, e)
 	}
 }
 func (b *oaBody) OnTimers(*partition.Instance, []clock.Timer, any) {}
 func (b *oaBody) OnDiscard(*partition.Instance, []uint64)          {}
-func (b *oaBody) OnPurge(in *partition.Instance)                   { b.log = append(b.log, "purge "+keyName(in.Key)) }
+func (b *oaBody) OnPurge(in *partition.Instance) {
+	b.log = append(b.log, "purge "+keyName(in.Key.First))
+}
 
 func itoa(i int64) string { return keyName(event.Value{Kind: event.TInt, I: i}) }
 
 func oaRule(t *testing.T, onArrival bool, ttl int64, b *oaBody) *partition.Rule {
 	t.Helper()
-	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyType: event.TString, TTL: ttl, Body: b, OnArrival: onArrival})
+	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: ttl, Body: b, OnArrival: onArrival})
 	if err != nil {
 		t.Fatalf("NewRule: %v", err)
 	}
@@ -73,7 +75,7 @@ func TestOnArrivalSeesEventAtOffer(t *testing.T) {
 	t.Parallel()
 	b := &oaBody{}
 	r := oaRule(t, true, 10*minute, b)
-	if late := r.Offer(str("a"), ev(0, 0, 1)); late {
+	if late := r.Offer(partition.Single(str("a")), ev(0, 0, 1)); late {
 		t.Fatal("Offer returned construct-late on an on-arrival rule (§7.2)")
 	}
 	oaWant(t, b, "new a", "ev a @0")
@@ -96,7 +98,7 @@ func TestOnArrivalBehindClock(t *testing.T) {
 	b := &oaBody{}
 	r := oaRule(t, true, 30*minute, b)
 	oaTo(r, 10*minute)
-	if late := r.Offer(str("a"), ev(0, 5*minute, 1)); late {
+	if late := r.Offer(partition.Single(str("a")), ev(0, 5*minute, 1)); late {
 		t.Error("Offer behind the clock returned construct-late on an on-arrival rule (§7.2)")
 	}
 	oaWant(t, b, "new a", "ev a @300000")
@@ -111,8 +113,8 @@ func TestOnArrivalLastActivityIsMax(t *testing.T) {
 	t.Parallel()
 	b := &oaBody{}
 	r := oaRule(t, true, 30*minute, b)
-	r.Offer(str("a"), ev(0, 10*minute, 1))
-	r.Offer(str("a"), ev(0, 5*minute, 2))
+	r.Offer(partition.Single(str("a")), ev(0, 10*minute, 1))
+	r.Offer(partition.Single(str("a")), ev(0, 5*minute, 2))
 	oaWant(t, b, "new a", "ev a @600000", "ev a @300000")
 	in := find(r, "a")
 	if in == nil || in.LastActivity != 10*minute || !slices.Equal(in.Clock.Timers(nil), []clock.Timer{ttl(40 * minute)}) {
@@ -129,7 +131,7 @@ func TestOnArrivalPurgeAfterTTL(t *testing.T) {
 	t.Parallel()
 	b := &oaBody{}
 	r := oaRule(t, true, 10*minute, b)
-	r.Offer(str("a"), ev(0, 0, 1))
+	r.Offer(partition.Single(str("a")), ev(0, 0, 1))
 	oaTo(r, 10*minute)
 	if r.Stats().Purged != 0 || r.Len() != 1 {
 		t.Fatalf("Purged %d, Len %d at clock 10 min; want 0, 1", r.Stats().Purged, r.Len())
@@ -138,7 +140,7 @@ func TestOnArrivalPurgeAfterTTL(t *testing.T) {
 	if r.Stats().Purged != 1 || r.Len() != 0 {
 		t.Fatalf("Purged %d, Len %d at clock 10 min + 1 ms; want 1, 0", r.Stats().Purged, r.Len())
 	}
-	r.Offer(str("a"), ev(0, 11*minute, 2))
+	r.Offer(partition.Single(str("a")), ev(0, 11*minute, 2))
 	oaWant(t, b, "new a", "ev a @0", "purge a", "new a", "ev a @660000")
 }
 
@@ -153,11 +155,11 @@ func TestOnArrivalPanicResetsKey(t *testing.T) {
 		}
 	}}
 	r := oaRule(t, true, 10*minute, b)
-	r.Offer(str("a"), ev(0, 0, 1))
+	r.Offer(partition.Single(str("a")), ev(0, 0, 1))
 	if st := r.Stats(); st.Panics != 1 {
 		t.Errorf("Panics %d, want 1", st.Panics)
 	}
-	r.Offer(str("a"), ev(0, second, 2))
+	r.Offer(partition.Single(str("a")), ev(0, second, 2))
 	oaWant(t, b, "new a", "ev a @0", "new a", "ev a @1000")
 	if err := r.CheckTimers(); err != nil {
 		t.Error(err)

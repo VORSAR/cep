@@ -12,6 +12,7 @@ import (
 	"hash/fnv"
 	"math"
 	goruntime "runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -162,8 +163,8 @@ type appState struct {
 }
 
 type route struct {
-	rule int
-	attr int // -1: key-less
+	rule  int
+	attrs []int // the key's attributes in part order; nil: key-less
 }
 
 type sinkQ struct {
@@ -228,7 +229,7 @@ type message struct {
 
 type offer struct {
 	rule int
-	key  event.Value
+	key  partition.Key // Rest fresh per event, read-only (design s3-2b-2 §2.6)
 }
 
 type outKind uint8
@@ -328,11 +329,11 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 		}
 		for ri, rule := range app.Rules {
 			for k, sid := range rule.Inputs {
-				attr := -1
-				if rule.KeyAttr != nil {
-					attr = rule.KeyAttr[k]
+				var attrs []int
+				if rule.KeyAttrs != nil {
+					attrs = rule.KeyAttrs[k]
 				}
-				a.byStream[sid] = append(a.byStream[sid], route{rule: ri, attr: attr})
+				a.byStream[sid] = append(a.byStream[sid], route{rule: ri, attrs: attrs})
 			}
 		}
 		for _, b := range app.Sinks {
@@ -371,14 +372,16 @@ func validateApp(i int, a *App) error {
 			return bad("reads no stream")
 		case rule.NewBody == nil:
 			return bad("has no body")
-		case rule.KeyAttr != nil && len(rule.KeyAttr) != len(rule.Inputs):
-			return bad("%d key attributes for %d inputs", len(rule.KeyAttr), len(rule.Inputs))
-		case rule.KeyAttr != nil && rule.TTL <= 0:
+		case len(rule.KeyTypes) == 0:
+			return bad("a key has at least one part (a key-less rule: one string part)")
+		case rule.KeyAttrs != nil && len(rule.KeyAttrs) != len(rule.Inputs):
+			return bad("%d key attribute lists for %d inputs", len(rule.KeyAttrs), len(rule.Inputs))
+		case rule.KeyAttrs != nil && rule.TTL <= 0:
 			return bad("a keyed rule needs a TTL above 0")
-		case rule.KeyAttr == nil && (rule.TTL != 0 || rule.KeyType != event.TString):
+		case rule.KeyAttrs == nil && (rule.TTL != 0 || len(rule.KeyTypes) != 1 || rule.KeyTypes[0] != event.TString):
 			return bad("a key-less rule has TTL 0 and the string pseudo-key")
-		case rule.KeyType < event.TString || rule.KeyType >= event.TObject:
-			return bad("key type %v cannot key a partition", rule.KeyType)
+		case slices.ContainsFunc(rule.KeyTypes, func(t event.Type) bool { return t < event.TString || t >= event.TObject }):
+			return bad("key types %v: a part of these types cannot key a partition", rule.KeyTypes)
 		}
 		seen := map[int]bool{}
 		for k, sid := range rule.Inputs {
@@ -389,12 +392,17 @@ func validateApp(i int, a *App) error {
 				return bad("input %d is listed twice (break-it V2)", sid)
 			}
 			seen[sid] = true
-			if rule.KeyAttr == nil {
+			if rule.KeyAttrs == nil {
 				continue
 			}
-			attr := rule.KeyAttr[k]
-			if attr < 0 || attr >= a.Schemas[sid].NumAttrs() || a.Schemas[sid].Attr(attr).Type != rule.KeyType {
-				return bad("key attribute %d of stream %d is not a %v attribute", attr, sid, rule.KeyType)
+			attrs := rule.KeyAttrs[k]
+			if len(attrs) != len(rule.KeyTypes) {
+				return bad("stream %d's key has %d parts, the rule's %d", sid, len(attrs), len(rule.KeyTypes))
+			}
+			for p, attr := range attrs {
+				if attr < 0 || attr >= a.Schemas[sid].NumAttrs() || a.Schemas[sid].Attr(attr).Type != rule.KeyTypes[p] {
+					return bad("key attribute %d of stream %d is not a %v attribute", attr, sid, rule.KeyTypes[p])
+				}
 			}
 		}
 	}
@@ -803,18 +811,12 @@ func (rt *router) event(a *appState, e *event.Event, arrival int64) (late bool, 
 		rt.offers[i] = rt.offers[i][:0]
 	}
 	for _, rr := range a.byStream[e.StreamID] {
-		key := event.Value{Kind: event.TString}
-		if rr.attr >= 0 {
-			key = e.Values[rr.attr]
-			if key.Null || (key.Kind == event.TFloat && math.IsNaN(key.F)) {
-				a.keyErr[rr.rule]++
-				continue
-			}
-			if key.Kind == event.TFloat && key.F == 0 {
-				key.F = 0 // -0.0 is +0.0: one key, one shard
-			}
+		key, ok := routeKey(rr.attrs, e.Values)
+		if !ok {
+			a.keyErr[rr.rule]++ // a null or NaN part: this rule's key error only (SEMANTICS §9, §10)
+			continue
 		}
-		sid := rt.shardOf(a.id, rr.rule, rr.attr >= 0, key)
+		sid := rt.shardOf(a.id, rr.rule, rr.attrs != nil, key)
 		rt.offers[sid] = append(rt.offers[sid], offer{rule: rr.rule, key: key})
 	}
 	for sid := range rt.r.shards {
@@ -870,8 +872,43 @@ func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, ta
 	}
 }
 
-// shardOf is fnv-1a over (app, rule, the key): a key-less rule hashes (app, rule).
-func (rt *router) shardOf(app AppID, rule int, keyed bool, key event.Value) int {
+// routeKey is an event's key for a route (design s3-2b-2 §2.5): part i is the event's value of attrs[i]; ok is false
+// when a part is null or a NaN float. A float zero part is stored as +0.0 (one key, one shard); the router is the only
+// writer of a key's parts (MUST 16). A key-less route's key is the pseudo-key "". Rest is fresh per event: the
+// message owns it (ADR-0010 §4).
+func routeKey(attrs []int, values []event.Value) (partition.Key, bool) {
+	if attrs == nil {
+		return partition.Single(event.Value{Kind: event.TString}), true
+	}
+	part := func(attr int) (event.Value, bool) {
+		v := values[attr]
+		if v.Null || (v.Kind == event.TFloat && math.IsNaN(v.F)) {
+			return v, false
+		}
+		if v.Kind == event.TFloat && v.F == 0 {
+			v.F = 0 // -0.0 is +0.0
+		}
+		return v, true
+	}
+	first, ok := part(attrs[0])
+	if !ok {
+		return partition.Key{}, false
+	}
+	key := partition.Single(first)
+	if len(attrs) > 1 {
+		key.Rest = make([]event.Value, len(attrs)-1)
+		for i, attr := range attrs[1:] {
+			if key.Rest[i], ok = part(attr); !ok {
+				return partition.Key{}, false
+			}
+		}
+	}
+	return key, true
+}
+
+// shardOf is fnv-1a over (app, rule, the key's parts in order): a key-less rule hashes (app, rule). A single-part key
+// hashes as it did before multi-part keys.
+func (rt *router) shardOf(app AppID, rule int, keyed bool, key partition.Key) int {
 	h := fnv.New64a()
 	var b [8]byte
 	binary.LittleEndian.PutUint64(b[:], uint64(app))
@@ -879,27 +916,30 @@ func (rt *router) shardOf(app AppID, rule int, keyed bool, key event.Value) int 
 	binary.LittleEndian.PutUint64(b[:], uint64(rule))
 	h.Write(b[:])
 	if keyed {
-		h.Write([]byte{byte(key.Kind)})
-		switch key.Kind {
-		case event.TString:
-			h.Write([]byte(key.Str))
-		case event.TInt:
-			binary.LittleEndian.PutUint64(b[:], uint64(key.I))
-			h.Write(b[:])
-		case event.TTimestamp:
-			binary.LittleEndian.PutUint64(b[:], uint64(key.T))
-			h.Write(b[:])
-		case event.TDuration:
-			binary.LittleEndian.PutUint64(b[:], uint64(key.D))
-			h.Write(b[:])
-		case event.TFloat:
-			binary.LittleEndian.PutUint64(b[:], math.Float64bits(key.F))
-			h.Write(b[:])
-		case event.TBool:
-			if key.B {
-				h.Write([]byte{1})
-			} else {
-				h.Write([]byte{0})
+		for i := range key.Parts() { // inline: a hasher passed on as an interface escapes, one allocation per event
+			key := key.Part(i)
+			h.Write([]byte{byte(key.Kind)})
+			switch key.Kind {
+			case event.TString:
+				h.Write([]byte(key.Str))
+			case event.TInt:
+				binary.LittleEndian.PutUint64(b[:], uint64(key.I))
+				h.Write(b[:])
+			case event.TTimestamp:
+				binary.LittleEndian.PutUint64(b[:], uint64(key.T))
+				h.Write(b[:])
+			case event.TDuration:
+				binary.LittleEndian.PutUint64(b[:], uint64(key.D))
+				h.Write(b[:])
+			case event.TFloat:
+				binary.LittleEndian.PutUint64(b[:], math.Float64bits(key.F))
+				h.Write(b[:])
+			case event.TBool:
+				if key.B {
+					h.Write([]byte{1})
+				} else {
+					h.Write([]byte{0})
+				}
 			}
 		}
 	}
@@ -999,7 +1039,7 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 			if err != nil {
 				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
 			}
-			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
+			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
 			if err != nil {
 				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
 			}

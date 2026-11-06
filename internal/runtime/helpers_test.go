@@ -271,7 +271,7 @@ type rtBody struct {
 	onTimers func(b *rtBody, in *partition.Instance, fires []clock.Timer, tables any)
 }
 
-func (b *rtBody) key(in *partition.Instance) string { return b.rule + "/" + rtKey(in.Key) }
+func (b *rtBody) key(in *partition.Instance) string { return b.rule + "/" + rtKey(in.Key.First) }
 
 func (b *rtBody) NewState(in *partition.Instance) partition.OpState {
 	if b.births != nil {

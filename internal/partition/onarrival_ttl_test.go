@@ -13,7 +13,7 @@ import (
 func TestOnArrivalOneTTLTimerPerKey(t *testing.T) {
 	t.Parallel()
 	const ttl = 10 * 60_000
-	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyType: event.TString, TTL: ttl, Body: &oaBody{}, OnArrival: true})
+	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: ttl, Body: &oaBody{}, OnArrival: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,10 +23,10 @@ func TestOnArrivalOneTTLTimerPerKey(t *testing.T) {
 		if i%3 == 0 {
 			ts -= 1500 // out of order
 		}
-		r.Offer(key("a"), event.Event{StreamID: 0, Ts: ts})
+		r.Offer(partition.Single(key("a")), event.Event{StreamID: 0, Ts: ts})
 	}
 	for i := range 100 {
-		r.Offer(key("k"+itoa(int64(i))), event.Event{StreamID: 0, Ts: 0})
+		r.Offer(partition.Single(key("k"+itoa(int64(i)))), event.Event{StreamID: 0, Ts: 0})
 	}
 	if err := r.CheckTimers(); err != nil {
 		t.Fatal(err)

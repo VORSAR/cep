@@ -58,7 +58,7 @@ func TestDrainBarrier(t *testing.T) {
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("what", event.TString))},
 		Tables:  table.NewSet([]*table.Table{tb}),
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R",
 				sched: func(e event.Event, n uint64) []clock.Timer {
 					return []clock.Timer{{Due: e.Ts + 8*rtSec, Kind: clock.Completion, Ref: n}}
@@ -69,7 +69,7 @@ func TestDrainBarrier(t *testing.T) {
 	app1 := runtime.App{
 		Streams: []clock.StreamSpec{{Name: "q", IdleAfter: 5 * rtSec}, rtDerived("out1")},
 		Schemas: []event.Schema{rtSchema(t, "q", rtA("k", event.TString)), rtSchema(t, "out1", rtA("what", event.TString))},
-		Rules: []runtime.Rule{{Name: "Q", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "Q", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "Q",
 				sched: func(e event.Event, n uint64) []clock.Timer {
 					return []clock.Timer{{Due: e.Ts + 1*rtSec, Kind: clock.Completion, Ref: 1}}
@@ -143,7 +143,7 @@ func TestDrainWithExpiredContextLeavesTheAppLive(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("what", event.TString))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R"})}},
 		Sinks: []runtime.SinkBinding{{Stream: 1, Sink: func(event.Event) error { return nil }}},
 	}

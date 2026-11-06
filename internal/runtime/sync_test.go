@@ -5,6 +5,7 @@ package runtime_test
 // helpers_test.go's (rt*); Sync's stub panics, so syncNew recovers it into a failure naming the call.
 
 import (
+	"reflect"
 	goruntime "runtime"
 	"slices"
 	"sync"
@@ -51,16 +52,16 @@ func syncApp(t testing.TB, d, ttl int64, log, births *rtLog) runtime.App {
 		Streams: []clock.StreamSpec{rtSrc("S", d), rtDerived("OA"), rtDerived("OB")},
 		Schemas: []event.Schema{rtSchema(t, "S", k), rtSchema(t, "OA", k, n), rtSchema(t, "OB", k, n)},
 		Rules: []runtime.Rule{
-			{Name: "A", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: ttl, OnArrival: true,
+			{Name: "A", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: ttl, OnArrival: true,
 				NewBody: rtBodies(rtBody{rule: "A", log: log, births: births, onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
-					b.emit(rtEv(1, e.Ts, in.Key, rtInt(int64(e.Seq))))
+					b.emit(rtEv(1, e.Ts, in.Key.First, rtInt(int64(e.Seq))))
 				}})},
-			{Name: "B", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: ttl,
+			{Name: "B", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: ttl,
 				NewBody: rtBodies(rtBody{rule: "B", sched: func(e event.Event, n uint64) []clock.Timer {
 					return []clock.Timer{{Due: e.Ts + 10*rtSec, Kind: clock.Completion, Ref: e.Seq}}
 				}, onTimers: func(b *rtBody, in *partition.Instance, fires []clock.Timer, tables any) {
 					for _, f := range fires {
-						b.emit(rtEv(2, f.Due, in.Key, rtInt(int64(f.Ref))))
+						b.emit(rtEv(2, f.Due, in.Key.First, rtInt(int64(f.Ref))))
 					}
 				}})},
 		},
@@ -241,7 +242,7 @@ func TestFromPlan(t *testing.T) {
 	emitted := 0
 	p := &plan.App{
 		Streams: []plan.Stream{{Schema: sch, Delay: 5 * rtSec, IdleAfter: 60 * rtSec}, {Schema: osch, Derived: true}},
-		Rules: []plan.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 60 * rtSec, OnArrival: true,
+		Rules: []plan.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 60 * rtSec, OnArrival: true,
 			NewBody: func(emit func(event.Event)) partition.Body {
 				emit(rtEv(1, 0, rtStr("x")))
 				return &rtBody{rule: "R"}
@@ -265,7 +266,7 @@ func TestFromPlan(t *testing.T) {
 		t.Fatalf("%d rules, want 1", len(app.Rules))
 	}
 	r := app.Rules[0]
-	if r.Name != "R" || !slices.Equal(r.Inputs, []int{0}) || !slices.Equal(r.KeyAttr, []int{0}) || r.KeyType != event.TString || r.TTL != 60*rtSec || !r.OnArrival || r.NewBody == nil {
+	if r.Name != "R" || !slices.Equal(r.Inputs, []int{0}) || !reflect.DeepEqual(r.KeyAttrs, [][]int{{0}}) || !slices.Equal(r.KeyTypes, []event.Type{event.TString}) || r.TTL != 60*rtSec || !r.OnArrival || r.NewBody == nil {
 		t.Errorf("rule %+v; want R's routing, TTL 1 min, OnArrival and a body", r)
 	}
 	if len(app.Sinks) != 1 || app.Sinks[0].Stream != 1 {

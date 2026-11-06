@@ -98,7 +98,7 @@ func (b *eqDouble) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) 
 		if b.plant {
 			n += b.shard * 1000 // planted: the output depends on the shard that built the body
 		}
-		b.emit(event.Event{StreamID: eqOD, Ts: f.Due, Values: []event.Value{in.Key, {Kind: event.TInt, I: n}, {Kind: event.TTimestamp, T: f.Due}}})
+		b.emit(event.Event{StreamID: eqOD, Ts: f.Due, Values: []event.Value{in.Key.First, {Kind: event.TInt, I: n}, {Kind: event.TTimestamp, T: f.Due}}})
 	}
 }
 func (b *eqDouble) OnDiscard(*partition.Instance, []uint64) {}
@@ -111,7 +111,7 @@ func eqPlan(t testing.TB, plant bool) *plan.App {
 	p := pbBuild(t, "qa-eq.cep", qaEqSrc)
 	var mu sync.Mutex
 	n := int64(0)
-	p.Rules[2] = plan.Rule{Name: "Double", Inputs: []int{eqA, eqB}, KeyAttr: []int{0, 0}, KeyType: event.TString, TTL: 3 * ldMin,
+	p.Rules[2] = plan.Rule{Name: "Double", Inputs: []int{eqA, eqB}, KeyAttrs: [][]int{{0}, {0}}, KeyTypes: []event.Type{event.TString}, TTL: 3 * ldMin,
 		NewBody: func(emit func(event.Event)) partition.Body {
 			mu.Lock()
 			defer mu.Unlock()
