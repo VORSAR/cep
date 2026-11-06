@@ -165,6 +165,10 @@ func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance {
 // Contribution is a stream's current contribution.
 func (r *StreamRegistry) Contribution(sid int) int64 { return r.streams[sid].contrib }
 
+// Admission is a stream's admission watermark: max(own admitted event times) − d, moved by nothing else (SEMANTICS
+// §2.1). An on-arrival rule's keys expire on it (owner D1 of S3.2b-1).
+func (r *StreamRegistry) Admission(sid int) int64 { return r.streams[sid].adm }
+
 // Drain raises every stream's contribution to one past the largest event time admitted on any of the app's streams
 // (ADR-0012 §3's Stop under owner D1 of S3.2a-1: that instant is complete once the sources are stopped, so it
 // finalizes; any deadline after it stays unfired). Nothing admitted: no advance.
