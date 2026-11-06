@@ -80,7 +80,7 @@ func paramName(ref string) string {
 func (l *lowerer) attrs(in []*Attr) []model.Attr {
 	out := []model.Attr{}
 	for _, a := range in {
-		out = append(out, model.Attr{Name: name(a.Name), Type: attrType(a.Type), Optional: a.Optional})
+		out = append(out, model.Attr{Name: name(a.Name), Type: attrType(a.Type), Optional: a.Optional, Pos: pos(a.Pos)})
 	}
 	return out
 }
@@ -149,7 +149,8 @@ func (l *lowerer) rule(r *RuleDecl) model.Rule {
 		out.Partition.Pos = pos(p.Pos)
 		for _, k := range p.Keys {
 			out.Partition.Keys = append(out.Partition.Keys, model.PartitionKey{
-				Attr: name(k.Attr), Stream: name(k.Stream.Value), Pos: pos(k.Pos), StreamPos: pos(k.Stream.Pos),
+				Attrs:  []model.KeyAttr{{Name: name(k.Attr), Pos: pos(k.Pos)}},
+				Stream: name(k.Stream.Value), Pos: pos(k.Pos), StreamPos: pos(k.Stream.Pos),
 			})
 		}
 		out.Partition.TTL = l.durationOrParam(p.TTL)

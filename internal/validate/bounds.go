@@ -58,7 +58,7 @@ func (c *checker) partition(r *model.Rule) {
 		if keyed[k.Stream] {
 			twice[k] = true
 			c.report("E-PART-004", k.Pos, "%s is keyed twice in the partition of rule %s (by %s again): key each stream on one attribute",
-				k.Stream, r.Name, k.Attr)
+				k.Stream, r.Name, k.Attrs[0].Name) // S3.2b-2 stub: the message naming (k, j) of S is built after G1
 			continue
 		}
 		keyed[k.Stream] = true
@@ -73,9 +73,10 @@ func (c *checker) partition(r *model.Rule) {
 			first = k
 			continue
 		}
-		ft, kt := attrOf(c.streams[first.Stream], first.Attr).Type, attrOf(c.streams[k.Stream], k.Attr).Type
+		fa, ka := first.Attrs[0].Name, k.Attrs[0].Name // S3.2b-2 stub: one part; per-position checks are built after G1
+		ft, kt := attrOf(c.streams[first.Stream], fa).Type, attrOf(c.streams[k.Stream], ka).Type
 		if kt != ft {
-			c.report("E-PART-003", k.Pos, "partition key %s of %s is %s, but %s of %s is %s", k.Attr, k.Stream, kt, first.Attr, first.Stream, ft)
+			c.report("E-PART-003", k.Pos, "partition key %s of %s is %s, but %s of %s is %s", ka, k.Stream, kt, fa, first.Stream, ft)
 		}
 	}
 }

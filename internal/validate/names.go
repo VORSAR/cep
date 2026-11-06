@@ -70,9 +70,13 @@ func (c *checker) names() {
 			case s == nil:
 				c.unknown(k.StreamPos, "stream", k.Stream, streamNames(c.app.Streams))
 				c.badKey[k] = true
-			case attrOf(s, k.Attr) == nil:
-				c.unknown(k.Pos, "attribute of "+s.Name, k.Attr, attrNames(s.Attrs))
-				c.badKey[k] = true
+			default:
+				for _, a := range k.Attrs {
+					if attrOf(s, a.Name) == nil {
+						c.unknown(a.Pos, "attribute of "+s.Name, a.Name, attrNames(s.Attrs))
+						c.badKey[k] = true
+					}
+				}
 			}
 		}
 		if c.streams[r.InsertInto] == nil {

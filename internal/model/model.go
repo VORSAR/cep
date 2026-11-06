@@ -53,6 +53,7 @@ type Attr struct {
 	Name     string
 	Type     event.Type
 	Optional bool
+	Pos      Pos // the attribute's name (owner, S3.2b-1's review: D3's error points at it)
 }
 
 // Stream is `stream Name (attrs) [time-clause];` with its annotations (SPEC §4.2). A derived stream has no
@@ -162,19 +163,36 @@ type Rule struct {
 	TodoPos          []Pos // each `todo`, in order
 }
 
-// Partition is `partition by k of S, … ttl D` (SPEC §4.4).
+// Partition is `partition by k of S, … ttl D`, a key being `k` or `(k, j, …)` (SPEC §4.4, rev 5).
 type Partition struct {
 	Keys []PartitionKey
 	TTL  DurationOrParam
 	Pos  Pos // `partition`
 }
 
-// PartitionKey is `k of S`.
+// PartitionKey is `k of S` or `(k, j, …) of S` (SPEC §4.4, rev 5): one stream's key attributes, in written order.
 type PartitionKey struct {
-	Attr      string
+	Attrs     []KeyAttr // ≥ 1; one when written without brackets
+	Grouped   bool      // written in brackets, even with one attribute (E-PART-005)
 	Stream    string
-	Pos       Pos // the attribute
+	Pos       Pos // the key's first token: the attribute, or `(`
 	StreamPos Pos // the stream after `of`
+}
+
+// KeyAttr is one attribute of a partition key.
+type KeyAttr struct {
+	Name string
+	Pos  Pos
+}
+
+// Has reports whether attr is one of the key's attributes.
+func (k PartitionKey) Has(attr string) bool {
+	for _, a := range k.Attrs {
+		if a.Name == attr {
+			return true
+		}
+	}
+	return false
 }
 
 // BodyKind names the rule body's form (SPEC §5).

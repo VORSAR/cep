@@ -592,7 +592,7 @@ func patternApp() model.App {
 	return model.App{Rules: []model.Rule{{
 		Name: "Brute",
 		Partition: model.Partition{
-			Keys: []model.PartitionKey{{Attr: "user", Stream: "Fails"}, {Attr: "user", Stream: "Logins"}},
+			Keys: []model.PartitionKey{{Attrs: []model.KeyAttr{{Name: "user"}}, Stream: "Fails"}, {Attrs: []model.KeyAttr{{Name: "user"}}, Stream: "Logins"}},
 			TTL:  model.DurationOrParam{Ms: 3600000},
 		},
 		Body: model.Body{Kind: model.BodyPattern, Pattern: model.Pattern{
@@ -668,7 +668,8 @@ func TestMarshalCanonicalPatternRule(t *testing.T) {
 	assertBytes(t, body["source"], zeroSource)
 	assertBytes(t, body["window"], zeroWindow)
 	assertBytes(t, rule["partition"],
-		`{"keys":[{"attr":"user","stream":"Fails"},{"attr":"user","stream":"Logins"}],"ttl":{"ms":3600000,"param":""}}`)
+		`{"keys":[{"attrs":[{"name":"user"}],"grouped":false,"stream":"Fails"},`+
+			`{"attrs":[{"name":"user"}],"grouped":false,"stream":"Logins"}],"ttl":{"ms":3600000,"param":""}}`)
 	assertBytes(t, rule["select"], `[{"as":"","expr":`+attrJSON("f", "user")+`}]`)
 	assertBytes(t, rule["expects"], `[]`)
 	assertBytes(t, rule["todos"], `[]`)

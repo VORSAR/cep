@@ -61,6 +61,7 @@ type StreamDecl struct {
 }
 
 type Attr struct {
+	Pos      Position
 	Name     string `parser:"@(Ident|Backticked)"`
 	Type     string `parser:"@('string'|'int'|'float'|'bool'|'timestamp'|'duration'|'object')"`
 	Optional bool   `parser:"@'optional'?"`
