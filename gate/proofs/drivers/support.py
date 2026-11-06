@@ -223,6 +223,8 @@ class World:
         """gate/proofs's go.mod and the named planted packages, at this repository's root: the coverage rows then
         run exactly as registered, and their real default scope (./internal/...) sees the plants (QA Q16)."""
         self.copy("gate/proofs/go.mod", "go.mod")
+        if self.tracked("gate/proofs/go.sum"):  # goleak's sums, for the leak proof (S3.2b-2)
+            self.copy("gate/proofs/go.sum", "go.sum")
         for package in packages:
             prefix = f"gate/proofs/internal/{package}/"
             for rel in self.tracked(prefix):

@@ -52,6 +52,9 @@ type Rules struct {
 	// TestFences are extra identifier prefixes a package's _test.go files may use from a fenced import, never its
 	// production files (owner, 2026-11-04, S3.1-2: internal/expr's tests build tables with table.New).
 	TestFences map[string]map[string][]string `json:"test_fences"`
+	// TestExternal are third-party packages a package's _test.go files may import, never its production files (owner,
+	// 2026-11-06, S3.2b's plan check Q6: goleak is test-only).
+	TestExternal map[string][]string `json:"test_external"`
 }
 
 // LoadRules reads the import law.
@@ -192,7 +195,8 @@ func (c *checker) imports() {
 			c.report(spec.Pos(), "imports: %s may not import %s (ARCHITECTURE §3; %s)", name(c.dir), name(target), RulesPath)
 		case stdlib(p):
 		default:
-			if !slices.ContainsFunc(c.rules.External[key], func(prefix string) bool { return strings.HasPrefix(p, prefix) }) {
+			listed := func(prefix string) bool { return strings.HasPrefix(p, prefix) }
+			if !slices.ContainsFunc(c.rules.External[key], listed) && !(c.test && slices.ContainsFunc(c.rules.TestExternal[key], listed)) {
 				c.report(spec.Pos(), "imports: %s may not import the third-party package %s (%s)", name(c.dir), p, RulesPath)
 			}
 		}
