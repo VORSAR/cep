@@ -19,6 +19,11 @@ the shape is the operator spine, which is what precedence and associativity deci
 One S-expression per expression of the program, in document order: every `[filter]` (plain, window and pattern
 sources, absences included), then, per rule, every `select` item. No other clause holds an expression.
 
+Each rule's partition keys come first, one per key in written order *(S3.2b-2, review F8)*: `(key S a)` for
+`a of S` and `(group S a b …)` for `(a, b, …) of S`, a one-attribute group included, names without backticks. The
+engine side renders them from `model.PartitionKey` (`Grouped`, `Attrs`), the lark side from `part_key` and
+`part_group`.
+
 ## The S-expression
 
 ```

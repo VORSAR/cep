@@ -61,10 +61,22 @@ func judge(path, src string) report {
 	return r
 }
 
-// shapes lists every expression of the program in document order: each source's filter, then the select items.
+// shapes lists every partition key and expression of the program in document order: per rule its keys, each
+// source's filter, then the select items.
 func shapes(app *model.App) []string {
 	out := []string{}
 	for _, rule := range app.Rules {
+		for _, k := range rule.Partition.Keys { // S3.2b-2, review F8: the keys first, `(key S a)` or `(group S a b)`
+			form := "key"
+			if k.Grouped {
+				form = "group"
+			}
+			names := make([]string, len(k.Attrs))
+			for i, a := range k.Attrs {
+				names[i] = a.Name
+			}
+			out = append(out, "("+form+" "+k.Stream+" "+strings.Join(names, " ")+")")
+		}
 		switch rule.Body.Kind {
 		case model.BodyPattern:
 			for _, el := range rule.Body.Pattern.Elements {

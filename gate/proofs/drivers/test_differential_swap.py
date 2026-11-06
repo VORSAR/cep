@@ -16,6 +16,9 @@ SUM_OPS, TERM_OPS = "@('+'|'-')", "@('*'|'/'|'%')"
 T09 = "docs/language/eval/generated/torture/t09-mixed-arith-cmp.cep"
 LARK = "(and (cmp > (arith + name (arith * name name)) name) (cmp > (arith - name name) (arith / param literal)))"
 SWAPPED = "(and (cmp > (arith * (arith + name name) name) name) (cmp > (arith - name name) (arith / param literal)))"
+SHAPE = "tools/shape/main.go"
+GROUP_FORM = 'form = "group"'
+EX10 = "docs/language/examples/10-grouped-keys.cep"
 CORPUS = ("docs/language/examples", "docs/language/eval/generated", "docs/language/invalid")
 ENGINE = ("internal/event", "internal/model", "internal/parser")
 
@@ -47,8 +50,31 @@ class DifferentialSwap(support.DriverTest):
         self.assertEqual(record["verdict"], "fail", run.stdout)
         stderr = run.row_file("test", "differential", "stderr")
         self.assertTrue(record["reason"].startswith("exit 1: docs/language/"), f"{record['reason']}\n{stderr}")
-        self.assertEqual((record["covered"], record["expected"]), (63, 63), record)  # every file was judged
+        self.assertEqual((record["covered"], record["expected"]), (69, 69), record)  # every file was judged
         failed = [line for line in run.row_stdout("test", "differential").split("\n") if line.startswith("failed: ")]
         self.assertIn(f"failed: {T09}: expression 1 differs: lark {LARK} / engine {SWAPPED}", failed)
         self.assertEqual([line for line in failed if "differs" not in line], [], failed)  # verdicts agree
         self.assertEqual([line for line in failed if "/invalid/" in line], [], failed)
+
+    def test_a_grouped_key_shaped_as_a_single_key_is_red(self):
+        # S3.2b-2 (review F8): the differential compares partition keys. Planted: the engine side shapes every group
+        # `(a, b) of S` as `(key S a b)`; the lark side still says `(group S a b)`, so every grouped key differs.
+        self.engine_world()
+        path = os.path.join(self.world.repo, SHAPE)
+        text = support.read_text(path)
+        self.assertEqual(text.count(GROUP_FORM), 1, "the plant's anchor moved")
+        self.world.write(SHAPE, text.replace(GROUP_FORM, 'form = "key"'))
+        self.world.commit()
+
+        run = self.world.run(registry=self.world.registry(support.registry_row("differential")), tier="T4")
+
+        self.assertParityPassed(run, "test")
+        record = run.record("test", "differential")
+        self.assertEqual(record["verdict"], "fail", run.stdout)
+        failed = [line for line in run.row_stdout("test", "differential").split("\n") if line.startswith("failed: ")]
+        self.assertIn(
+            f"failed: {EX10}: expression 1 differs: "
+            "lark (group Grants tenantId userId) / engine (key Grants tenantId userId)",
+            failed,
+        )
+        self.assertEqual([line for line in failed if "differs" not in line], [], failed)  # verdicts agree

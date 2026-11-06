@@ -16,6 +16,9 @@ GRAMMAR = os.path.join("docs", "language", "grammar.lark")
 
 # The tree nodes that are one expression in the grammar; each holds its expression as its first child.
 HOLDERS = frozenset({"filter", "sel_item"})
+# A partition key: `a of S` (part_key) and `(a, b, ...) of S` (part_group), shaped `(key S a)` and `(group S a b)`
+# (S3.2b-2, review F8: the differential compares keys, not only accept/reject).
+KEYS = frozenset({"part_key", "part_group"})
 # The literal rules (the ?literal alternatives that are not a bare STRING token).
 LITERALS = frozenset({"number", "duration", "true_lit", "false_lit", "ts_lit"})
 TEXT_OPS = frozenset({"text_op", "set_op", "regex_op"})
@@ -54,7 +57,7 @@ def is_tree(node) -> bool:
 
 
 def expressions(tree) -> list:
-    """Every filter's and select item's expression, in document order (a pre-order walk; holders never nest)."""
+    """Every partition key, filter and select item, in document order (a pre-order walk; holders never nest)."""
     out: list = []
 
     def walk(node) -> None:
@@ -62,6 +65,9 @@ def expressions(tree) -> list:
             return
         if node.data in HOLDERS:
             out.append(node.children[0])
+            return
+        if node.data in KEYS:
+            out.append(node)
             return
         for child in node.children:
             walk(child)
@@ -78,6 +84,9 @@ def shape(node) -> str:
     if not is_tree(node):  # a token: the only one an expression position holds is a STRING literal
         return "literal" if node.type == "STRING" else f"?token:{node.type}"
     d, c = node.data, node.children
+    if d in KEYS:  # the attributes, then the stream after `of`
+        names = [cname(n) for n in c]
+        return f"({'group' if d == 'part_group' else 'key'} {names[-1]} {' '.join(names[:-1])})"
     if d in LITERALS:
         return "literal"
     if d == "param_ref":
