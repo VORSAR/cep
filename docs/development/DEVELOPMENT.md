@@ -103,6 +103,13 @@ The repository is indexed as a GitNexus knowledge graph: every symbol with its c
 - **What it does not know.** Markdown is a bare file node (no doc-to-code edges); a symbol added on a branch is absent until the next re-index; `.cep` example files are files, not rules. Those questions still need the file.
 - **Agents** have the graph tools in their `tools:` list and a "code graph first" section in their definition; a brief names the symbols to `impact` before editing. The coordinator verifies a lane with `detect_changes` on the combined branch before reading its diff.
 
+## Project memory (Hindsight)
+
+A local Hindsight bank (`coding-agent::cep`) holds knowledge pages distilled from commit messages and past sessions: decisions, conventions, and why things are the way they are. It is a past record: the code, the ADRs and [decisions.md](../sprints/decisions.md) win, and a stale page is fixed by a `Correction:` document, never by trusting it.
+
+- **The coordinator** searches the pages before writing a brief, plan, review or commit, and copies every decided value a lane relies on into the brief, quoted.
+- **Agents** have only the two read-only page tools (`hindsight_search_knowledge_pages`, `hindsight_read_knowledge_page`) and a "project memory first" section in their definition: search when the brief is silent (builders) or before calling a decided choice a defect (reviewers), confirm in a tracked source, at most three searches, and report each fact used. `hindsight_reflect` is left out of their lists because its model call is too slow for a time-boxed lane.
+
 ---
 
 ## Code review checklist (before commit)
