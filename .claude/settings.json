@@ -11,6 +11,10 @@
       "mcp__gitnexus__check",
       "mcp__gitnexus__explain",
       "mcp__gitnexus__pdg_query",
+      "mcp__hindsight__hindsight_search_knowledge_pages",
+      "mcp__hindsight__hindsight_read_knowledge_page",
+      "mcp__hindsight__hindsight_list_knowledge_pages",
+      "mcp__hindsight__hindsight_sync_status",
       "ReadMcpResourceTool"
     ]
   },
