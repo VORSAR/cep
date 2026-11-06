@@ -3,6 +3,7 @@ package validate
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/vorsar/cep/internal/event"
@@ -282,6 +283,9 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 			c.report("E-SEL-001", item.Pos, "%s.%s is bound twice", target.Name, name)
 		case !assignable(typ, a.Type):
 			c.report("E-TYPE-001", item.Pos, "select item %s is %s; %s.%s is %s", name, typ, target.Name, name, a.Type)
+		case !a.Optional && c.mayBeNull(&item.Expr, sc):
+			c.report("E-NULL-003", item.Pos, "%s can be null and %s.%s is not optional: wrap it in coalesce(...) or declare %s.%s optional",
+				exprText(item.Expr), target.Name, name, target.Name, name)
 		case window && aggregating(r.Body.Window.Kind):
 			if attr := c.perEvent(r, &item.Expr); attr != "" {
 				c.report("E-SEL-002", item.Pos, "%s is a per-event attribute; a %s window's select holds the partition key, aggregates or constants", attr, r.Body.Window.Kind)
@@ -293,6 +297,10 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 	}
 	if target == nil {
 		return
+	}
+	if ts := attrOf(target, "ts"); ts != nil && target.Time.Kind == model.TimeNone && ts.Type != event.TTimestamp && !c.badTs[target] {
+		c.badTs[target] = true // once per stream, at its declaration (owner D3 of S3.2b-1)
+		c.report("E-TYPE-001", target.Pos, "%s.ts is filled with the output timestamp: declare it timestamp, not %s", target.Name, ts.Type)
 	}
 	for _, a := range target.Attrs {
 		if broken {
@@ -329,4 +337,47 @@ func (c *checker) perEvent(r *model.Rule, item *model.Expr) string {
 		found = n.Name
 	})
 	return found
+}
+
+// mayBeNull says whether n can evaluate to null (owner D4 of S3.2b-1; SEMANTICS §1.1), conservatively: an optional
+// attribute (a capture's too) can; arithmetic, negation and a function call follow the function's own null rule in
+// expr's registry (null in, null out by default); a literal, a param, a comparison, membership, a text operator, the
+// boolean operators and `is [not] null` never can, being two-valued.
+func (c *checker) mayBeNull(n *model.Expr, sc *scope) bool {
+	switch n.Kind {
+	case model.ExprLiteral:
+		return n.Lit.Kind == model.LitNull
+	case model.ExprAttr, model.ExprRaw:
+		a := sc.attr(n)
+		return a == nil || a.Optional
+	case model.ExprNeg, model.ExprArith:
+		return slices.ContainsFunc(n.Args, func(x model.Expr) bool { return c.mayBeNull(&x, sc) })
+	case model.ExprNot, model.ExprAnd, model.ExprOr, model.ExprCompare, model.ExprIsNull, model.ExprIn, model.ExprText:
+		return false
+	case model.ExprCall:
+		name := n.Name
+		if n.Namespace != "" {
+			name = n.Namespace + ":" + n.Name
+		}
+		d, _ := c.reg.Lookup(name)
+		args := n.Args
+		switch d.Null {
+		case expr.NullNever:
+			return false
+		case expr.NullIfAll:
+			return !slices.ContainsFunc(args, func(x model.Expr) bool { return !c.mayBeNull(&x, sc) })
+		case expr.NullIfBranch:
+			args = args[1:]
+		}
+		return slices.ContainsFunc(args, func(x model.Expr) bool { return c.mayBeNull(&x, sc) })
+	}
+	return true
+}
+
+// exprText names a select item in a message: its dotted name when it is an attribute, else "the select item".
+func exprText(n model.Expr) string {
+	if isAttr(n) {
+		return dotted(n)
+	}
+	return "the select item"
 }

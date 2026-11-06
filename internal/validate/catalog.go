@@ -27,6 +27,7 @@ var catalog = map[string]Entry{
 	"E-NAME-002":  {Title: "Capture shadows a declared name", Fix: "rename the capture."},
 	"E-NULL-001":  {Title: "Null-hazard comparison in an absence predicate", Fix: "wrap with `coalesce(attr, '<sentinel>')`, or guard with `attr is not null`."},
 	"E-NULL-002":  {Title: "Null-blind predicate over a nullable attribute (lint)", Fix: "`coalesce(x, '<sentinel>')` before the operator, or guard with `is null`."},
+	"E-NULL-003":  {Title: "A value that can be null bound to a non-optional output attribute", Fix: "wrap it in `coalesce(x, '<sentinel>')`, or declare the output attribute `optional`."},
 	"E-PARAM-001": {Title: "Undeclared or ill-typed parameter reference", Fix: "declare the param with a default, or correct the value's type."},
 	"E-PART-001":  {Title: "Stateful rule outside a partition", Fix: "add `partition by <key> of <Stream> … ttl <duration>`."},
 	"E-PART-002":  {Title: "Consumed stream with no partition key", Fix: "add `, <key> of <ThatStream>` to the partition clause."},

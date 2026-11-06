@@ -115,6 +115,10 @@ Fix: wrap with `coalesce(attr, '<sentinel>')`, or guard with `attr is not null`.
 Rule: SEMANTICS §1.1 — `!=`, `in` and `not in` evaluate false when the operand is null; over a nullable attribute that is usually a missed event, not an intent.
 Fix: `coalesce(x, '<sentinel>')` before the operator, or guard with `is null`.
 
+### E-NULL-003 A value that can be null bound to a non-optional output attribute **[static]**
+Rule: SEMANTICS §1.1, SPEC §4.2 — an output stream's non-optional attribute always holds a value, so a select item that can be null (an `optional` attribute, or arithmetic or a function over one; `coalesce` only when every argument can be) may not be bound to it *(owner, 2026-11-06, S3.2b-1 D4)*.
+Fix: wrap it in `coalesce(x, '<sentinel>')`, or declare the output attribute `optional`.
+
 ### E-REGEX-001 Unsupported regex construct **[static]**
 Rule: SEMANTICS §5.2 — regex is linear-time (RE2 class): no backreferences, no lookaround.
 Message names the construct and its position. Fix: rewrite without it, or use keyword-set/substring operators.
@@ -202,7 +206,7 @@ Rule: SEMANTICS §8 — legal pairs: cron→close, sort→change, delay→due, b
 Fix: the message names the kind's mode.
 
 ### E-TYPE-001 Ill-typed expression **[static]**
-Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, any operator on `object` except `is [not] null`.
+Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, any operator on `object` except `is [not] null`; and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
 Message names the operand and expected type. Fix: cast explicitly, or restructure.
 
 ### E-FN-001 Unknown function arity or argument kind **[static]**
