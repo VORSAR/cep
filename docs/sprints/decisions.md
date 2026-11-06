@@ -47,6 +47,7 @@
 | 2026-11-06 | [S3.2b-1's review and break-it](#owner-decisions-2026-11-06--s32b-1s-review-and-break-it) |
 | 2026-11-06 | [the docs restructure](#owner-decisions-2026-11-06--the-docs-restructure) |
 | 2026-11-06 | [the code graph re-indexes itself](#owner-decisions-2026-11-06--the-code-graph-re-indexes-itself) |
+| 2026-11-06 | [S3.2b-2's plan check](#owner-decisions-2026-11-06--s32b-2s-plan-check) |
 
 ## The decisions
 
@@ -416,3 +417,16 @@ Asked to make sure `gitnexus analyze` runs automatically when the code changes.
 
 1. **Nothing at OS level** (≠ R: a macOS launchd job watching `.git/logs/HEAD` was proposed first; the next recommendation was git hooks in `.githooks`). No launchd, systemd or cron job.
 2. **A Claude Code hook keeps the index at HEAD**, as recommended: [`gate/hooks/gitnexus_reindex.py`](../../gate/hooks/gitnexus_reindex.py), registered in `.claude/settings.json` for every prompt and for every Bash call that runs git. When HEAD differs from the commit the GitNexus registry records, it starts `gitnexus analyze --index-only` in the background. A `git pull` in the owner's own terminal is picked up at the next prompt, before the graph is used.
+
+### Owner decisions, 2026-11-06 — S3.2b-2's plan check
+
+The owner released the sprint the same day ("lets resume the work in current sprint"). Three questions, asked in plain language with the options ranked by the accuracy of what a rule detects and what a replay reproduces; all three as recommended. The readings are under the S3.2b card.
+
+1. **A recording keeps a rejected live event as a "rejected" line** (Q1). Live, a payload that fails its stream's schema is dropped and counted (SEMANTICS §10). The recorder writes a line naming the stream, the arrival stamp and the reason; replay counts it and skips it, so replaying a recording gives the live run's alerts and its error counts. A format change: a record kind beside S3.2a-1's D3 records, about +0.5 point.
+   - **Why:** SEMANTICS §10 lets live and replay differ only in counted construct-late drops.
+   - **Rejected:** leaving it out (the same alerts, but the replay's error count lower than live's); writing the payload as received (replay stops at its line under S3.2a-1's D6, so every alert after it is not reproduced).
+2. **When the recording cannot be written, detection goes on** (Q2). The recording stops at the failure; the engine counts the failure and reports where the recording broke. No alert is lost; the recording is incomplete from that point.
+   - **Rejected:** pausing intake until the recording can be written (alerts late, sources blocked, possibly for hours); stopping the app (every alert after the failure lost).
+3. **Grouped partition keys have one spelling** (Q3). A single key is written without brackets, `k of S`; a group is two or more different attributes in brackets, `(k, j) of S`; every stream in one clause names the same number of parts. `(k) of S`, an attribute named twice in one group, and a part-count mismatch between streams are each a deploy error whose message shows the valid form. Each gets its code, its entry in SPEC rev 5's change log and an invalid example.
+   - **Why:** SPEC's "one way only" rule: one spelling is easier for a generator to write and a reviewer to read. Detections are the same either way.
+   - **Rejected:** accepting `(k)` as `k` and an attribute repeated in a group as named once. A part-count mismatch is an error under either option: positions cannot be matched.
