@@ -1,7 +1,9 @@
 # S3.2b-2 — sprint record (S3.1's routine)
 
+> **Historical — S3.2b-2, multi-part keys, arrival time, the recorder, error counts, the gate's proofs; merged in PR #19.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-2b-2-design.md) · **record** · reviews: [design: architecture](../reviews/s3-2b-2-design-architecture.md), [combined build: architecture](../reviews/s3-2b-2-combined-architecture.md), [break-it: QA](../reviews/s3-2b-2-breakit-qa.md). **← [S3.2b-1](s3-2b-1-record.md) · [S3.3 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S3.2b-2 — arrival time, the recorder, the ingest flag, error semantics, the gate's leak, tripwire and two-OS proofs, multi-part partition keys and D3's position (S3.2b's items 3–5, 7, 8 and the owner's additions) · **Routine:** S3.1's, by the owner (2026-11-06): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** about 12.5 SP · **Branch:** `s3-2b-2/integration`
-**What to build and how each item is proven:** [sprint plan — S3.2b](sprint-plan.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time), its "how it runs" note and S3.2b-2's plan-check readings · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.2b-1](s3-2b-1-record.md)
+**What to build and how each item is proven:** [sprint plan — S3.2b](history.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time), its "how it runs" note and S3.2b-2's plan-check readings · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.2b-1](s3-2b-1-record.md)
 
 ## Plan and decisions
 
@@ -96,10 +98,10 @@ Build (G2)   ☐ T2 (make check exit 0) ☐ T3 (exit 0) ☐ conformance cases fo
 Review (G3)  ☑ architecture review of the combined diff (1 blocker, 3 should-fix, 3 later) ☑ QA break-it (4 blockers, 3 should-fix, 1 later)
              ☑ every finding fixed, or settled by the owner (C4, S3); every breaker's red test committed
 Verify (G4)  ☑ T4 exit 0, run complete (19 rows, 162 s; the first run red: a skipped helper test and a data race the fix round's B1
-               made — both fixed) ☐ owner's check passed ☑ exits 2–4 and 6–11 met by their proofs (Measured results)
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
-             ☐ worktrees removed ☐ points and duration
+               made — both fixed) ☑ owner's check passed (merged) ☑ exits 2–4 and 6–11 met by their proofs (Measured results)
+Exit (G5)    ☑ one PR (#19, 35 commits), merged by the owner ☐ main CI green on the merge commit (the owner reports it)
+             ☑ record + retro ☑ known issues (none new) ☑ status line ☑ documents reconciled ☑ memory updated
+             ☑ worktrees removed ☑ points and duration
 ```
 
 ## For the owner (the owner's check)
@@ -112,6 +114,12 @@ Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green 
 - **Rule-file changes, by hand** (the LAW Δ block's instrument is S1.1c's): `tools/importcheck/rules.json` (`test_external`: goleak in runtime's and playback's tests only); `tools/deps-allowlist.json` (goleak v1.3.0 and its test graph); `gate/registry.json` (rows `tripwire`, `determinism`, `determinism-macos`; the proofs row's minimum 18); `gate/tripwire.json` (new: the ceilings); `.github/workflows/gate.yml` (generated: the macOS job); SPEC rev 5, `grammar.lark`, `grammar.ebnf`, `errors.md`, SEMANTICS §9 and §10, SYNTAX, DESIGN; example 10 and the rev 5 evaluation programs with their goldens; the harness check in `docs/language/checks/test_semantics.py`.
 - **One new dependency, approved:** `go.uber.org/goleak` v1.3.0, test-only (S3.2b's Q6).
 
+**Closed (G5), 2026-11-06.** PR #19 merged by the owner (35 commits, main b0797fa). Its CI run passed every job, and the new `determinism-macos` job — read before the merge, as the lasting rule asks — ran on a macOS arm64 image and matched the golden the Linux `determinism` job matched. Points: about 12.5; duration: about one day (plan check 2026-11-06 to merge 2026-11-06, with a pause before the review).
+
 ## Retro
 
-*(at close-out)*
+- **Worked:** the language-design pass with a spec-only evaluation settled grouped keys before code (5/5, the crossed pairing right); scratch-program reviews again found blockers before code (typed `Send` values a recording could not copy; a recorder able to stall the router), and the owner's answers (D1–D5) closed them; QA's tests, written first against a stub, specified the engine side.
+- **Hurt:** the fix round's B1 fix (writing the flag into a declared slot) raced with the recorder goroutine — caught only at T4 by the race row; a break-it test that ran a helper as a skipped test reached T4 before the gate refused it; one stub claim (goldens regenerating for D3) was wrong and corrected mid-sprint; the gate workflow runs on pull requests only, so the new macOS job could run only through a draft PR.
+- **Keep:** re-run each agent's scratch proof on a fresh copy before acting; red-first tests in one batch and one verification run; mutation-proving every guard.
+- **Change next sprint:** run the race row on a fix round's commits before T4; check cherry-picked agent tests for skips at T2.
+- **Lasting-rule proposals for the owner:** (1) a fix round's changes run under the race detector before T4; (2) a sprint that adds a CI job opens its PR as a draft to get that job's first run, and marks it ready after reading it.

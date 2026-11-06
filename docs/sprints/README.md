@@ -75,6 +75,7 @@ One row per closed sprint, oldest first. The card each sprint was built from is 
 | S3.2a-2 | The runtime core | [design](s3-2a-2-design.md) · [record](s3-2a-2-record.md) | [design](../reviews/s3-2a-2-design-architecture.md) · [break-it](../reviews/s3-2a-2-breakit-qa.md) | #11 |
 | — | CI: the nightly's summary and the race row; fuzz rows blocking | [decisions](decisions.md#owner-decisions-2026-11-05--the-nightly-build-and-cis-coverage) | — | #12, #13 |
 | S3.2b-1 | The plan, replay through the runtime, rate limits | [design](s3-2b-1-design.md) · [record](s3-2b-1-record.md) | [design](../reviews/s3-2b-1-design-architecture.md) · [combined](../reviews/s3-2b-1-combined-architecture.md) · [break-it](../reviews/s3-2b-1-breakit-qa.md) | #14 |
+| S3.2b-2 | Multi-part keys, arrival time, the recorder, error counts, the gate's proofs | [design](s3-2b-2-design.md) · [record](s3-2b-2-record.md) | [design](../reviews/s3-2b-2-design-architecture.md) · [combined](../reviews/s3-2b-2-combined-architecture.md) · [break-it](../reviews/s3-2b-2-breakit-qa.md) | #19 |
 
 ---
 

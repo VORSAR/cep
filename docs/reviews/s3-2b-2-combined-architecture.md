@@ -1,5 +1,7 @@
 # S3.2b-2 combined build: architecture review (step 7, blind)
 
+> **Historical — S3.2b-2, multi-part keys, arrival time, the recorder, error counts, the gate's proofs; merged in PR #19.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2b-2-design.md) · [record](../sprints/s3-2b-2-record.md) · reviews: [design: architecture](s3-2b-2-design-architecture.md), **combined build: architecture**, [break-it: QA](s3-2b-2-breakit-qa.md). **← [S3.2b-1](../sprints/s3-2b-1-record.md) · [S3.3 (next)](../sprints/sprint-plan.md#status) →**
+
 Reviewed: worktree `/Users/ramith/code/cep-wt/s3-2b-2-review`, detached at 6f65447 (`f32fd41..6f65447`, 24 commits), against `docs/sprints/s3-2b-2-design.md` v2 (§1.3, §2, §4–§10, §15, §16), the owner's decisions (S3.2b's plan check; S3.2b-1's review and break-it; S3.2b-2's plan check; S3.2b-2's design), and ADR-0005 §3, ADR-0006 §5, ADR-0010 §1, ADR-0015 §3.11.
 
 ## Summary

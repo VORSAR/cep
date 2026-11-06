@@ -18,7 +18,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ## 2. Where we are today
 
-> **The one status line is [§Status](#status); the code and git are authoritative.** Closed sprints: the [records index](README.md#records) and their cards in [history.md](history.md). What is left: the open cards in §3, from S3.2b-2 on, and the items in [Still open for the owner](#still-open-for-the-owner).
+> **The one status line is [§Status](#status); the code and git are authoritative.** Closed sprints: the [records index](README.md#records) and their cards in [history.md](history.md). What is left: the open cards in §3, from S3.3 on, and the items in [Still open for the owner](#still-open-for-the-owner).
 
 ---
 
@@ -54,7 +54,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | S2.2b [✓](s2-2b-record.md) | The validator | 13 (11.5) | full | S2.2a |
 | S3.1 ✓ ([S3.1-1](s3-1-1-record.md), [S3.1-2](s3-1-2-record.md)) | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
 | S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
-| S3.2b ([S3.2b-1](s3-2b-1-record.md) ✓; S3.2b-2 next) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
+| S3.2b ✓ ([S3.2b-1](s3-2b-1-record.md), [S3.2b-2](s3-2b-2-record.md)) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
 | S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b |
 | S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* *(and the one-module check of ADR-0001 §1: [owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure))* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
@@ -100,53 +100,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ---
 
-*Closed cards (S1.1a to S3.2a) are in [history.md](history.md#closed-sprint-cards), word for word. Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates. At close-out the card moves to history.md.*
-
-#### S3.2b — One runtime, live and replay: rate limits, errors, arrival time
-
-| | |
-|---|---|
-| **Goal** | A plain filter rule wired through `internal/plan` runs live (sharded) and in replay (the same runtime, one shard, stepped synchronously) with identical per-key output, and rate limiting, errors, arrival time and the invisible-character flag behave exactly per SEMANTICS. |
-| **Routine · size** | Full loop (concurrency; changes what rules emit) · 13 SP (items 12.5) |
-| **Depends on** | S3.2a |
-| **In scope** | 1. `internal/plan` (minimal): the `StreamNode` graph consuming the validated graph, the routing table, filter-rule operator chains [2]. · 2. **The replay drive loop = the runtime with one shard and a synchronous step API** (ADR-0005 §3), re-running S3.1's and S3.2a's lines through it [1.5]. · 3. **`time arrival`** (owner 2026-11-02): live stamping at ingest; replay of the recorded stamp [1]. · 4. **`text_invisibles` engine-owned** (owner 2026-11-02): always computed; a payload value ignored, overwritten and counted [0.5]. · 5. **Error semantics** (SEMANTICS §10): per-rule expression errors; the stream error policy; null key; unknown attributes skipped and counted [1.5]. · 6. The emission stage with **rate limiting** (`output first every`; anchors in `partition.Instance`; suppressed outputs counted) and the three §8 harness ports [2]. · 7. Race step + goleak proof; the metric-tripwire step (outbox ceiling blocking); `allocgate` ingest → filter [2]. · 8. The two-OS determinism proof [1]. · 9. **Test material for 07 and 09** (QA, before the engine runs): fire-path and near-miss expect blocks — 09 gains a second event inside its rate-limit interval; they run green in S3.3 [1]. |
-| **Not in scope** | `cep.Deploy`, the connector contracts and the conformance runner → S3.3. |
-| *Forwarded* | *(Annotated 2026-11-05, owner: item 7's race step — `go test -race ./...` on every PR, with its planted-race proof — and a nightly 20× race rerun of `internal/runtime` land before this sprint, in the nightly-fix PR; item 7 keeps goleak and the metric tripwire. From S3.2a-2: the allocation budget for ingest → shard, `time arrival` stamping (item 3), randomized live/replay equivalence (exit 1).)* |
-| *Forwarded* | *(Annotated 2026-11-04, from S3.1-2's review: item 4 — `text_invisibles` has one home, `Row.Invisibles()`; `expr.Build` compiles the name to a node reading it, so a declared slot cannot go stale (F6); whether an undeclared `text_invisibles` is readable, and that a declaration must be `bool`, are validator questions for the owner (F6, F7). Item 8 — the decoder's allocation budget per event (one per non-empty string value, two per object value; F12) and ADR-0010 §1's annotation.)* |
-| **Entry criteria** | The standard ones. |
-| **Exit criteria** | The done-done block, plus: |
-| | 1. The same log run live (N shards) and in replay (one shard) gives identical per-key output order — **proof:** the live/replay equivalence test. |
-| | 2. Two rules on one stream: one divides by an attribute that is 0 on one event; the other still fires on that event; per-rule `errored_events` counts it; a null key, a missing non-optional attribute, an unknown attribute and a failed `cast` are each counted where SEMANTICS §10 says — **proof:** the error-semantics table test. |
-| | 3. A payload without `text_invisibles` gets the computed flag; a payload saying `false` over text containing a zero-width space yields `true` and increments the override counter — **proof:** the ingest-flag test. |
-| | 4. A `time arrival` stream: live events are stamped at ingest in arrival order; replaying the recorded log reproduces the output byte for byte — **proof:** the arrival-time test. |
-| | 5. A second output inside the rate-limit interval is suppressed and counted; a key-less rule uses one global anchor — **proof:** the three §8 ports. |
-| | 6. A planted data race, a planted goroutine leak, and a single `Advance` emitting past the outbox ceiling are each red — **proof:** three proof rows. |
-| | 7. The two-OS byte diff is green and catches a planted map-iteration nondeterminism — **proof:** the T4 proof row. |
-| | 8. Zero allocations per event from ingest through filter evaluation — **proof:** `allocgate`. |
-| **Owner's check** | *By reading:* the error-semantics table and the live/replay equivalence scenario. |
-| **Split line** | **S3.2b-1** = items 1, 2, 6, 9 (plan, replay loop, rate limits, material); **S3.2b-2** = items 3–5, 7, 8. |
-
-*How it runs (owner, 2026-11-06, §5 "S3.2b's plan check"):* S3.1's routine — QA's tests first and independent; an architecture review of each design note; the build in the main session; a QA break-it. As since S2.2b, the plan check had no separate review pass; the reviews sit on the design notes. Split along the card's line, two sprints and two PRs, one at a time:
-- **S3.2b-1** = items 1, 2, 6, 9, plus the on-arrival path for plain rules (owner Q1) → exits 1, 5; about 7 points. Exit 1 carries S3.2a-2's forward: randomized live/replay comparisons.
-- **S3.2b-2** = items 3–5, 7, 8, plus the recorder (S3.2a-1's D3: "S3.2b's recorder writes them"), which exit 4 needs → exits 2, 3, 4, 6, 7, 8; about 6 points (item 7 is 1 point, its race step having landed in PR #12). *(Annotated owner, 2026-11-06, S3.2b-1's review and break-it, §5: S3.2b-2 also carries **multi-part partition keys**, written `(k, j) of S`, with no limit on the number of parts and their language-design step first (about +2.5), and **D3's error at the `ts` attribute itself**, model attributes gaining a source position (about +1): about 9.5 points. Nothing decided is dropped.)*
-
-*The plan check's readings (coordinator, against `main` @ a5dbc2d):*
-1. **There is no separate validated-graph type:** `validate.Check` returns the checked `*model.App`, which `internal/plan` consumes. `plan` may not import `runtime` (`tools/importcheck/rules.json`), so `plan` owns its description types and the runtime builds from them; `runtime.Rule`, written "as S3.2b's planner will describe it", adapts.
-2. **Replay through the real runtime** (ADR-0005 §3) calls the runtime's own router step and shard step on one thread, with one shard and no goroutines (ARCHITECTURE §6: playback owns none). Today `runtime.Start` always starts goroutines, and the playback driver runs the shared ingest step but no rules.
-3. **Every rule goes through partition's release buffer today**, so a plain rule's alert waits for its stream's clock; on a stream with no `idle after` (example 07) it can wait for the next event. Owner Q1 decides it.
-4. **Malformed input:** a malformed row from Go code stays refused to its caller (S3.1-2's D2, the Go API boundary). A payload is decoded by schema, and its faults, unknown keys and a payload's own `text_invisibles` are counted per stream (SEMANTICS §10, item 5). Logging the cause is S5.2's item 5.
-5. **Neither arrival stamping nor the invisible-character flag is computed anywhere yet**, live or in replay: the router never sets a `time arrival` event's time, and nothing calls `text.IngestFlags`. Items 3 and 4 build both.
-6. **`allocgate` stays `testing.AllocsPerRun` tests run by the `unit` row** (S2.2a's decision). The decode and encode gates are S5.2's item 8; S3.1-2's decode budget (F12) and ADR-0010 §1's annotation land in S3.2b-2 with the hand-off budget (owner Q4).
-7. **A derived stream's `ts` is the output timestamp,** and a `select` may widen `int` to `float` (`internal/validate`): the filter rule's projection follows both.
-
-*S3.2b-2's plan check (coordinator, against `main` @ f32fd41; answered by the owner 2026-11-06, [decisions](decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check)):* S3.1's routine as for S3.2b-1 — QA's tests first and independent; an architecture review of the design note, in which multi-part keys get the language-design skill's full pass (semantics, syntax, evaluation); the build in the main session; a QA break-it. One sprint, one PR; about 11 points by item count (item 3 with the recorder 2, item 4 with Q3's validator rule 1, item 5 1.5, item 7 1.5, item 8 1, multi-part keys 2.5, D3's position 1, the rejected-line record kind 0.5), under the cap. Order: the model changes first (keys and the attribute position together, so the parser's goldens regenerate once), then ingest (arrival, the flag, the payload intake, the recorder), then the gate rows. The readings:
-1. **No live event gets a `time arrival` stamp:** the router passes its wall stamp to the stream registry only, and the event keeps the `ts` its caller gave (`runtime.Ingest.Event`). The replay side reads recordings already (S3.2a-1's D3: start, arrival, tick, stop), but nothing writes one: `playback` encodes events only. The recorder sits on the router goroutine, the one place that sees the whole intake in order; the line encoding is `playback`'s.
-2. **The invisible-character flag is computed nowhere:** `text.IngestFlags` has no caller and no expression node reads `Row.Invisibles()`; the decoder already reports a payload's own `text_invisibles`. The flag is computed once in the shared ingest step, so live and replay cannot differ.
-3. **Per-rule expression errors and null keys are counted since S3.2b-1; nothing is counted per stream, and no live path takes a raw payload:** `runtime.Send` takes a typed event and refuses a malformed one (S3.1-2's D2, which stands). Item 5 adds an internal payload intake that decodes by schema and counts rejected payloads, unknown attributes and overridden flags per stream; the recorder writes a rejected payload as a "rejected" line (owner Q1).
-4. **A partition key is one value end to end:** the grammar (`part_key: cname "of" cname`), the parser, `model.PartitionKey`, `plan.Rule` (one key attribute per input, one key type), the router's shard hash and `partition`'s map key and `Instance.Key`. Multi-part keys change each; the Python reference executor takes any key function, so a tuple serves and a new harness check pins "each combination is its own key". SPEC goes to rev 5.
-5. **`model.Attr` has no source position;** adding one regenerates the parser's 39 stored model goldens (`internal/parser/testdata/golden`). *(Corrected 2026-11-06, while building the stub: `model.MarshalCanonical` never encodes a `Pos` field, so the position changes no golden; the multi-part key's new shape is what regenerates the goldens of partitioned programs.)*
-6. **goleak is not in `go.mod`, and nothing counts one step's emissions,** so the outbox ceiling needs a runtime high-water mark as well as the T4 tripwire step, its ceilings (S3.2b's Q7) and a planted proof. The race proof landed in PR #12.
-7. **Every CI job runs on `ubuntu-latest`, and the workflow generator has no per-row runner,** so the macOS job (S3.2b's Q5) needs one, with a committed replay output both systems must match byte for byte and the planted map-order proof.
+*Closed cards (S1.1a to S3.2b) are in [history.md](history.md#closed-sprint-cards), word for word. Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates. At close-out the card moves to history.md.*
 
 #### S3.3 — The Deploy pipeline and the conformance runner — clock freeze
 
@@ -415,13 +369,14 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Still open for the owner
 
+- **Two lasting-rule proposals from [S3.2b-2's retro](s3-2b-2-record.md#retro):** a fix round's changes run under the race detector before T4; a sprint that adds a CI job opens its PR as a draft to get that job's first run, and marks it ready after reading it.
 - **Language questions for a spec-cleanup pass:** the five contradictions in the language documents ([known issue S2.2b-1](../product/known-issues.md)) and integer overflow ([known issue S3.2b-1-1](../product/known-issues.md)).
 
 *Resolved items move to [history.md](history.md#resolved-owner-items).*
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2b-1 merged (PRs #1–#14, the last on 2026-11-06). S3.2b-2 built (G2, 2026-11-06): multi-part partition keys `(k, j) of S` with one spelling (SPEC rev 5), D3's error at `ts`, arrival stamping, the recorder (on its own goroutine; off unless turned on), the ingest flag, per-stream error counts, the Go boundary's refusals, goleak, the metric tripwire and the macOS determinism proof; T2 and T3 exit 0 → next: the architecture review of the combined diff and QA's break-it, one fix round, T4, the owner's check.**
+**Phase 1 in progress: S1.1a-1 to S3.2b-2 merged (PRs #1–#19, the last on 2026-11-06); S3.2b is complete. Next: S3.3's plan check — the Deploy pipeline and the conformance runner, the clock freeze — with its forwards (recording off unless turned on, the expect sandbox's arrival order and output count, `Deploy` not mutating the checked model).**
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
 

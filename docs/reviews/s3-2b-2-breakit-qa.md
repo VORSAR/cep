@@ -1,5 +1,7 @@
 # S3.2b-2 QA break-it
 
+> **Historical — S3.2b-2, multi-part keys, arrival time, the recorder, error counts, the gate's proofs; merged in PR #19.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2b-2-design.md) · [record](../sprints/s3-2b-2-record.md) · reviews: [design: architecture](s3-2b-2-design-architecture.md), [combined build: architecture](s3-2b-2-combined-architecture.md), **break-it: QA**. **← [S3.2b-1](../sprints/s3-2b-1-record.md) · [S3.3 (next)](../sprints/sprint-plan.md#status) →**
+
 Branch `s3-2b-2/breakit` (worktree `/Users/ramith/code/cep-wt/s3-2b-2-breakit`), base 6f65447, commits 991f922..8626c92 (7 commits: 6 red, 1 guard).
 Final run (one, `go test -race ./internal/playback ./internal/runtime -run TestBreakit -count=1`): 8 tests red, 2 guards green.
 GitNexus: I did not read the index-freshness resource (no MCP-resource tool in this session). I found code by reading the source.

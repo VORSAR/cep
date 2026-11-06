@@ -1,6 +1,8 @@
 # S3.2b-2 — design note: multi-part keys, arrival time, the recorder, the ingest flag, errors, the gate's proofs (v2)
 
-**What it covers:** S3.2b's items 3, 4, 5, 7 and 8 ([card](sprint-plan.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time)) with the recorder, the owner's additions (multi-part partition keys, D3's position), and exits 2–4 and 6–11 ([record](s3-2b-2-record.md)).
+> **Historical — S3.2b-2, multi-part keys, arrival time, the recorder, error counts, the gate's proofs; merged in PR #19.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s3-2b-2-record.md) · reviews: [design: architecture](../reviews/s3-2b-2-design-architecture.md), [combined build: architecture](../reviews/s3-2b-2-combined-architecture.md), [break-it: QA](../reviews/s3-2b-2-breakit-qa.md). **← [S3.2b-1](s3-2b-1-record.md) · [S3.3 (next)](sprint-plan.md#status) →**
+
+**What it covers:** S3.2b's items 3, 4, 5, 7 and 8 ([card](history.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time)) with the recorder, the owner's additions (multi-part partition keys, D3's position), and exits 2–4 and 6–11 ([record](s3-2b-2-record.md)).
 
 **The owner's answers this note carries out:**
 - at S3.2b-2's plan check ([decisions](decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check)): **Q1** a rejected live event is a "rejected" line in the recording, counted and skipped by replay; **Q2** a recording that cannot be written stops, and detection goes on; **Q3** grouped keys have one spelling;
