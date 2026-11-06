@@ -19,6 +19,7 @@ import (
 	"github.com/vorsar/cep/internal/clock"
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/partition"
+	"github.com/vorsar/cep/internal/plan"
 	"github.com/vorsar/cep/internal/table"
 )
 
@@ -26,19 +27,10 @@ import (
 type AppID int
 
 // Emit is a body's output: an event on a derived stream (e.StreamID); it goes to that stream's sinks.
-type Emit func(e event.Event)
+type Emit = func(e event.Event)
 
-// Rule is one rule of an app, as S3.2b's planner will describe it.
-type Rule struct {
-	Name    string
-	Inputs  []int      // the stream ids the rule reads
-	KeyAttr []int      // per input, the key attribute's index in that stream; nil: key-less (the pseudo-key "")
-	KeyType event.Type // the keys' type; TString for a key-less rule
-	TTL     int64      // ms; 0 for a key-less rule
-	NewBody func(emit Emit) partition.Body
-	// OnArrival: a plain rule's body sees each event as its stream accepts it (owner Q1 of S3.2b; design s3-2b-1 §3).
-	OnArrival bool
-}
+// Rule is one rule of an app: the planner's description (one description, design s3-2b-1 v2 §1, review F6).
+type Rule = plan.Rule
 
 // Sink receives one derived stream's outputs on its own flusher goroutine. An error is counted.
 type Sink func(e event.Event) error
@@ -186,13 +178,16 @@ const (
 )
 
 type message struct {
-	kind   msgKind
-	app    AppID
-	adv    []clock.WMAdvance
-	tables *table.Snapshot
-	ev     event.Event
-	offers []offer
-	token  uint64
+	kind      msgKind
+	app       AppID
+	adv       []clock.WMAdvance
+	tables    *table.Snapshot
+	ev        event.Event
+	offers    []offer
+	token     uint64
+	admStream int   // an event message: its stream, whose admission watermark is adm (owner D1 of S3.2b-1); -1: none
+	adm       int64 // what an on-arrival rule's clock takes, in place of the stream's advances
+	final     bool  // a drain or the end: on-arrival rules take the advances too, as nothing arrives after them
 }
 
 type offer struct {
@@ -219,6 +214,7 @@ type outItem struct {
 
 type shardStats struct {
 	rules  [][]partition.Stats // [app][rule]
+	emits  [][]plan.Stats      // [app][rule]: each body's plan.Counted, zero for a body that is not
 	panics [][]int64           // [app][rule]: the shard boundary's last-resort recoveries
 	parks  int64
 }
@@ -230,6 +226,34 @@ type handoff struct {
 
 // Start validates the apps, builds every shard's rules, and starts the router, the shards and the sink flushers.
 func Start(cfg Config, apps []App) (*Runtime, error) {
+	r, err := build(cfg, apps)
+	if err != nil {
+		return nil, err
+	}
+	rt := newRouter(r)
+	rt.deliver = rt.send // a message crosses goroutines: its views are copied
+	r.wg.Add(1)
+	go r.route(rt)
+	for _, sh := range r.shards {
+		r.wg.Add(1)
+		go sh.run(r)
+	}
+	for _, a := range r.apps {
+		for _, q := range a.all {
+			r.wg.Add(1)
+			go q.run(r)
+		}
+	}
+	if r.cfg.TickEvery > 0 {
+		r.wg.Add(1)
+		go r.tick()
+	}
+	return r, nil
+}
+
+// build validates the apps and builds their state and every shard's rules; it starts nothing (Start and NewSync
+// share it, design s3-2b-1 v2 §4).
+func build(cfg Config, apps []App) (*Runtime, error) {
 	if cfg.Shards <= 0 {
 		cfg.Shards = goruntime.GOMAXPROCS(0)
 	}
@@ -285,22 +309,6 @@ func Start(cfg Config, apps []App) (*Runtime, error) {
 			return nil, err
 		}
 		r.shards = append(r.shards, sh)
-	}
-	r.wg.Add(1)
-	go r.route()
-	for _, sh := range r.shards {
-		r.wg.Add(1)
-		go sh.run(r)
-	}
-	for _, a := range r.apps {
-		for _, q := range a.all {
-			r.wg.Add(1)
-			go q.run(r)
-		}
-	}
-	if cfg.TickEvery > 0 {
-		r.wg.Add(1)
-		go r.tick()
 	}
 	return r, nil
 }
@@ -574,15 +582,30 @@ type router struct {
 	token       uint64
 	drains      map[uint64]*drainWait
 	stats       map[uint64]*statsWait
-	offers      [][]offer
+	offers      [][]offer // per shard, reused: a message's offers are a view into it until delivered (review F4)
+	// deliver hands one shard its message; the message's adv and offers are views valid only during the call. Live:
+	// send, which copies them; Sync: the shard's step, in place.
+	deliver func(shard int, m message)
 }
 
-func (r *Runtime) route() {
-	defer r.wg.Done()
-	rt := &router{
+func newRouter(r *Runtime) *router {
+	return &router{
 		r: r, mailboxHigh: make([]int, len(r.shards)), stamp: math.MinInt64, drains: map[uint64]*drainWait{},
 		stats: map[uint64]*statsWait{}, offers: make([][]offer, len(r.shards)),
 	}
+}
+
+// send is the live deliver: the message crosses goroutines, so its views are copied.
+func (rt *router) send(shard int, m message) {
+	m.adv = append([]clock.WMAdvance(nil), m.adv...)
+	if len(m.offers) > 0 {
+		m.offers = append([]offer(nil), m.offers...)
+	}
+	rt.push(send{shard: shard, msg: m})
+}
+
+func (r *Runtime) route(rt *router) {
+	defer r.wg.Done()
 	for {
 		if r.stopping() {
 			return
@@ -646,7 +669,12 @@ func (rt *router) ingest(it item) {
 	r := rt.r
 	switch it.kind {
 	case iEvent:
-		rt.event(r.apps[it.app], it.ev)
+		a := r.apps[it.app]
+		if a.drained {
+			a.after[it.ev.StreamID]++
+			return
+		}
+		rt.event(a, &it.ev, rt.now(r.cfg.Now()))
 	case iTick:
 		stamp := rt.now(it.now)
 		for _, a := range r.apps {
@@ -654,7 +682,7 @@ func (rt *router) ingest(it item) {
 				continue
 			}
 			if adv := a.ing.Tick(stamp); len(adv) > 0 {
-				rt.broadcast(a, mWalk, adv, a.ing.Snapshot(), 0)
+				rt.broadcast(a, mWalk, adv, a.ing.Snapshot(), 0, false)
 			}
 		}
 	case iWrite:
@@ -686,7 +714,7 @@ func (rt *router) ingest(it item) {
 		rt.token++
 		a.drainTok = rt.token
 		rt.drains[rt.token] = &drainWait{app: a, replies: []chan reply{it.reply}}
-		rt.broadcast(a, mDrain, a.ing.Drain(), a.ing.Snapshot(), rt.token)
+		rt.broadcast(a, mDrain, a.ing.Drain(), a.ing.Snapshot(), rt.token, true)
 	case iStats:
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
@@ -707,17 +735,18 @@ func (rt *router) ingest(it item) {
 	}
 }
 
-// event is design §4: the ingest step, the offers by key, and one message per shard.
-func (rt *router) event(a *appState, e event.Event) {
-	if a.drained {
-		a.after[e.StreamID]++
-		return
-	}
-	late, adv := a.ing.Event(&e, rt.now(rt.r.cfg.Now()))
+// event is design §4: the ingest step (stamping e in place), the offers by key, and one message per shard, each a
+// view delivered before the next step (design s3-2b-1 v2 §4). The caller checks the app is not drained and gives the
+// arrival stamp. adv is the ingest step's, valid until its next call.
+func (rt *router) event(a *appState, e *event.Event, arrival int64) (late bool, adv []clock.WMAdvance) {
+	reg := a.ing.Registry()
+	before := reg.Admission(e.StreamID)
+	late, adv = a.ing.Event(e, arrival)
 	if late {
 		a.late[e.StreamID]++
-		return
+		return true, adv
 	}
+	adm := reg.Admission(e.StreamID)
 	tables, _ := e.Tables.(*table.Snapshot) // the event's own snapshot: its walk's timers read it too (D5)
 	for i := range rt.offers {
 		rt.offers[i] = rt.offers[i][:0]
@@ -738,21 +767,23 @@ func (rt *router) event(a *appState, e event.Event) {
 		rt.offers[sid] = append(rt.offers[sid], offer{rule: rr.rule, key: key})
 	}
 	for sid := range rt.r.shards {
-		if len(rt.offers[sid]) == 0 && len(adv) == 0 {
+		if len(rt.offers[sid]) == 0 && len(adv) == 0 && adm == before {
 			continue
 		}
-		m := message{kind: mWalk, app: a.id, adv: append([]clock.WMAdvance(nil), adv...), tables: tables}
+		m := message{kind: mWalk, app: a.id, adv: adv, tables: tables, admStream: e.StreamID, adm: adm}
 		if len(rt.offers[sid]) > 0 {
-			m.ev, m.offers = e, append([]offer(nil), rt.offers[sid]...)
+			m.ev, m.offers = *e, rt.offers[sid]
 		}
-		rt.push(send{shard: sid, msg: m})
+		rt.deliver(sid, m)
 	}
+	return false, adv
 }
 
-// broadcast sends one advance-only (or drain) message to every shard, with the app's snapshot (owner D5 of S3.2a-1).
-func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, tables *table.Snapshot, token uint64) {
+// broadcast delivers one advance-only (or drain) message to every shard, with the app's snapshot (owner D5 of
+// S3.2a-1); final marks a drain or the end, whose advances on-arrival rules take too (owner D1 of S3.2b-1).
+func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, tables *table.Snapshot, token uint64, final bool) {
 	for sid := range rt.r.shards {
-		rt.push(send{shard: sid, msg: message{kind: kind, app: a.id, adv: append([]clock.WMAdvance(nil), adv...), tables: tables, token: token}})
+		rt.deliver(sid, message{kind: kind, app: a.id, adv: adv, tables: tables, token: token, admStream: -1, final: final})
 	}
 }
 
@@ -829,6 +860,8 @@ func (rt *router) take(h handoff) {
 					rs.ConstructLate += int64(ps.ConstructLate)
 					rs.Purged += int64(ps.Purged)
 					rs.Panics += int64(ps.Panics) + it.stats.panics[ai][ri]
+					rs.Suppressed += int64(it.stats.emits[ai][ri].Suppressed)
+					rs.Errored += int64(it.stats.emits[ai][ri].Errored)
 				}
 			}
 			w.stats.SaturatedParks[h.shard] = it.stats.parks
@@ -854,6 +887,8 @@ type shard struct {
 	id      int
 	mailbox chan message
 	rules   [][]*partition.Rule // [app][rule]
+	bodies  [][]partition.Body  // [app][rule]: for their plan.Counted
+	arrival [][]bool            // [app][rule]: an on-arrival rule (owner Q1 and D1 of S3.2b)
 	reads   [][][]int           // [app][stream]: the rules reading it
 	panics  [][]int64           // [app][rule]
 	outbox  []outItem
@@ -864,6 +899,8 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 	sh := &shard{id: id, mailbox: make(chan message, r.cfg.Mailbox)}
 	for _, a := range r.apps {
 		rules := make([]*partition.Rule, len(a.app.Rules))
+		bodies := make([]partition.Body, len(a.app.Rules))
+		arrival := make([]bool, len(a.app.Rules))
 		reads := make([][]int, len(a.app.Streams))
 		for ri, rule := range a.app.Rules {
 			app, streams, name := a.id, a.app.Streams, rule.Name
@@ -879,16 +916,18 @@ func (r *Runtime) newShard(id int) (*shard, error) {
 			if err != nil {
 				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
 			}
-			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body})
+			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
 			if err != nil {
 				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
 			}
-			rules[ri] = pr
+			rules[ri], bodies[ri], arrival[ri] = pr, body, rule.OnArrival
 			for _, sid := range rule.Inputs {
 				reads[sid] = append(reads[sid], ri)
 			}
 		}
 		sh.rules = append(sh.rules, rules)
+		sh.bodies = append(sh.bodies, bodies)
+		sh.arrival = append(sh.arrival, arrival)
 		sh.reads = append(sh.reads, reads)
 		sh.panics = append(sh.panics, make([]int64, len(rules)))
 	}
@@ -933,25 +972,33 @@ func (sh *shard) run(r *Runtime) {
 	}
 }
 
-// process is design §4's shard step: apply, offer, then walk every rule of the app with the message's snapshot.
+// process is design §4's shard step: apply, walk the on-arrival rules offered, offer, then walk every rule of the app
+// with the message's snapshot (design s3-2b-1 v2 §3). An on-arrival rule's clock takes only its stream's admission
+// watermark, and a drain's or the end's advances (owner D1 of S3.2b-1).
 func (sh *shard) process(m message) {
 	if m.kind == mStats {
-		st := &shardStats{parks: sh.parks}
-		for ai, rules := range sh.rules {
-			ps := make([]partition.Stats, len(rules))
-			for ri, pr := range rules {
-				ps[ri] = pr.Stats()
-			}
-			st.rules = append(st.rules, ps)
-			st.panics = append(st.panics, append([]int64(nil), sh.panics[ai]...))
-		}
-		sh.outbox = append(sh.outbox, outItem{kind: oStats, token: m.token, stats: st})
+		sh.outbox = append(sh.outbox, outItem{kind: oStats, token: m.token, stats: sh.stats()})
 		return
 	}
-	rules := sh.rules[m.app]
+	rules, arrival := sh.rules[m.app], sh.arrival[m.app]
 	for _, a := range m.adv {
 		for _, ri := range sh.reads[m.app][a.StreamID] {
-			rules[ri].Apply(a)
+			if !arrival[ri] || m.final {
+				rules[ri].Apply(a)
+			}
+		}
+	}
+	if m.admStream >= 0 && m.adm != math.MinInt64 {
+		adv := clock.WMAdvance{StreamID: m.admStream, Contribution: m.adm, Moved: true}
+		for _, ri := range sh.reads[m.app][m.admStream] {
+			if arrival[ri] {
+				rules[ri].Apply(adv)
+			}
+		}
+	}
+	for _, o := range m.offers {
+		if arrival[o.rule] { // a purge that fell due before this event comes first (design s3-2b-1 v2 §3)
+			sh.advance(m.app, o.rule, m.tables)
 		}
 	}
 	for _, o := range m.offers {
@@ -967,6 +1014,25 @@ func (sh *shard) process(m message) {
 		}
 		sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token, pending: pending})
 	}
+}
+
+// stats is the shard's counters for a Stats cut.
+func (sh *shard) stats() *shardStats {
+	st := &shardStats{parks: sh.parks}
+	for ai, rules := range sh.rules {
+		ps := make([]partition.Stats, len(rules))
+		es := make([]plan.Stats, len(rules))
+		for ri, pr := range rules {
+			ps[ri] = pr.Stats()
+			if c, ok := sh.bodies[ai][ri].(plan.Counted); ok {
+				es[ri] = c.Stats()
+			}
+		}
+		st.rules = append(st.rules, ps)
+		st.emits = append(st.emits, es)
+		st.panics = append(st.panics, append([]int64(nil), sh.panics[ai]...))
+	}
+	return st
 }
 
 func (sh *shard) offer(app AppID, o offer, e event.Event) {

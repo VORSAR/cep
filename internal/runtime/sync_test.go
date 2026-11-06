@@ -36,7 +36,7 @@ func syncNew(t testing.TB, app runtime.App, start int64, virtual bool, out func(
 // syncEvent is one Sync event step. The architecture review changes Sync.Event to take *event.Event (stamping Seq
 // and Tables in place, as Ingest.Event does): this one line becomes `return s.Event(&e, arrival)`.
 func syncEvent(s *runtime.Sync, e event.Event, arrival int64) (bool, []clock.WMAdvance) {
-	return s.Event(e, arrival)
+	return s.Event(&e, arrival)
 }
 
 // syncApp: S (source, `time arrival` schema with k; delay d), then the derived streams OA (an on-arrival rule's

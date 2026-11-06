@@ -17,6 +17,7 @@ type Ingest struct {
 	seq     []uint64
 	vnow    int64
 	virtual bool
+	stamp   int64 // the monotone wall stamp of arrivals and ticks (design s3-2b-1 v2 §4, review F7)
 	buf     []clock.WMAdvance
 }
 
@@ -28,13 +29,15 @@ func NewIngest(specs []clock.StreamSpec, start int64, set *table.Set, virtual bo
 	}
 	return &Ingest{
 		specs: specs, reg: clock.NewStreamRegistry(specs, start), set: set, seq: make([]uint64, len(specs)),
-		vnow: math.MinInt64, virtual: virtual,
+		vnow: math.MinInt64, virtual: virtual, stamp: math.MinInt64,
 	}
 }
 
 // Event stamps e (Seq per stream from 1, a stream-late event included; Tables = the current snapshot), then judges it
-// with the registry. The advances are its own stream's, then (virtual) the virtual floors; valid until the next call.
+// with the registry; arrival is first raised to the last stamp, as the router's is. The advances are its own stream's, then (virtual) the virtual floors; valid until the next call.
 func (g *Ingest) Event(e *event.Event, arrival int64) (late bool, advances []clock.WMAdvance) {
+	g.stamp = max(g.stamp, arrival)
+	arrival = g.stamp
 	g.seq[e.StreamID]++
 	e.Seq = g.seq[e.StreamID]
 	e.Tables = g.set.Snapshot()
@@ -55,7 +58,8 @@ func (g *Ingest) Event(e *event.Event, arrival int64) (late bool, advances []clo
 
 // Tick is a live idle tick (ObserveTick).
 func (g *Ingest) Tick(now int64) []clock.WMAdvance {
-	g.buf = g.reg.ObserveTick(now, g.buf[:0])
+	g.stamp = max(g.stamp, now)
+	g.buf = g.reg.ObserveTick(g.stamp, g.buf[:0])
 	return g.buf
 }
 
