@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/vorsar/cep/internal/event"
@@ -160,5 +161,142 @@ func TestBreakitSendBatchIDBeyondTheLine(t *testing.T) {
 	res := live.finish()
 	if rs := res.stats.Recording[0]; err == nil && rs.Failed {
 		t.Errorf("Send accepted an event (err nil) whose BatchID the recording cannot hold: Recording %+v (owner D1, MUST 14)", rs)
+	}
+}
+
+// bk2ObjSrc: S carries an optional object; Fwd forwards it, so a replayed object is compared byte for byte.
+const bk2ObjSrc = `language cep/0.1;
+
+stream S (k string, o object optional, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream O (k string, o object optional, ts timestamp);
+
+rule Fwd
+  intent 'Every event with its object.'
+  from S
+  select k, o
+  insert into O;
+`
+
+// TestBreakitDepthLimitsRoundTrip (guard; design §6, review F4, owner D1): the deepest payload SendPayload accepts
+// (9,999 levels, here inside an undeclared member and inside the object attribute) and the deepest object value Send
+// accepts are recorded and replayed to the live run's outputs and counters; one level more is refused by Send.
+func TestBreakitDepthLimitsRoundTrip(t *testing.T) {
+	t.Parallel()
+	p := pbBuild(t, "bk2-obj.cep", bk2ObjSrc)
+	w := &rcRec{}
+	live := q2Start(t, p, 1, q2NewClock(ldT0, ldSec).now, playback.NewRecorder(w, p))
+	nest := func(n int) string { return strings.Repeat("[", n) + strings.Repeat("]", n) }
+	live.payload(0, fmt.Sprintf(`{"k":"u","x":%s,"ts":%q}`, nest(event.MaxDepth-2), ldRFC(ldT0)))
+	live.payload(0, fmt.Sprintf(`{"k":"o","o":%s,"ts":%q}`, nest(event.MaxDepth-2), ldRFC(ldT0+ldSec)))
+	typed := func(n int, at int64) event.Event {
+		return event.Event{StreamID: 0, Ts: at, Values: []event.Value{ldStr("t"), {Kind: event.TObject, Obj: nest(n)}, {Kind: event.TTimestamp, T: at}}}
+	}
+	if err := live.r.Send(live.ctx, 0, typed(event.MaxDepth-2, ldT0+2*ldSec)); err != nil {
+		t.Errorf("Send of an object %d deep (its line %d deep): %v; want accepted", event.MaxDepth-2, event.MaxDepth, err)
+	}
+	if err := live.r.Send(live.ctx, 0, typed(event.MaxDepth-1, ldT0+3*ldSec)); err == nil {
+		t.Errorf("Send of an object %d deep (its line %d deep): accepted; want refused", event.MaxDepth-1, event.MaxDepth+1)
+	}
+	res := live.finish()
+	if rs := res.stats.Recording[0]; rs.Failed {
+		t.Fatalf("the recording failed: %s", rs.Err)
+	}
+	replay := q2Replay(t, p, w.text())
+	o := q2Stream(t, p, "O")
+	if len(res.outs[o]) != 3 || !slices.Equal(res.outs[o], replay.outs[o]) {
+		t.Errorf("live %d outputs, replay %d; want 3, equal byte for byte", len(res.outs[o]), len(replay.outs[o]))
+	}
+	rcCounters(t, res, replay, len(p.Streams), len(p.Rules))
+	if ss := q2StreamStats(t, res.stats, 0); ss.Unknown != 1 || ss.Rejected != 0 {
+		t.Errorf("live S %+v; want Unknown 1, Rejected 0", ss)
+	}
+}
+
+// bk2KeyedSrc: a two-part keyed, rate-limited rule and a key-less forwarder on one stream, so per-key order and
+// suppression both depend on intake order.
+const bk2KeyedSrc = `language cep/0.1;
+
+stream S (a string, b int, note string optional, ts timestamp)
+  time ts watermark bounded 1 hour;
+
+stream O (p1 string, p2 int, ts timestamp);
+stream F (p1 string, p2 int, note string optional, ts timestamp);
+
+rule Keyed
+  intent 'The first event per (a, b) every ten seconds.'
+  partition by (a, b) of S ttl 1 hour
+  from S
+  select a as p1, b as p2
+  output first every 10 sec
+  insert into O;
+
+rule All
+  intent 'Every accepted event.'
+  from S
+  select a as p1, b as p2, note
+  insert into F;
+`
+
+// TestBreakitConcurrentPayloadsReplay (guard; MUST 10, design §6 "event.Decoder is safe for concurrent use"): eight
+// goroutines SendPayload at once on four shards — good payloads, rejected ones, unknown keys, payload
+// text_invisibles, invisible characters — and the recording, which is the intake's order, replays to the live run's
+// per-key outputs and exact counters. Run with -race.
+func TestBreakitConcurrentPayloadsReplay(t *testing.T) {
+	t.Parallel()
+	p := pbBuild(t, "bk2-keyed.cep", bk2KeyedSrc)
+	w := &rcRec{}
+	live := q2Start(t, p, 4, q2NewClock(ldT0, 7).now, playback.NewRecorder(w, p))
+	const workers, each = 8, 150
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for g := range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range each {
+				ts := ldRFC(ldT0 + int64(i)*ldSec)
+				var js string
+				switch i % 5 {
+				case 0:
+					js = fmt.Sprintf(`{"a":"g%d","b":%d,"ts":%q}`, g%3, i%4, ts)
+				case 1:
+					js = fmt.Sprintf(`{"a":"g%d","ts":%q}`, g%3, ts) // rejected: b missing
+				case 2:
+					js = fmt.Sprintf(`{"a":"g%d","b":%d,"zz":[1,{"q":2}],"ts":%q}`, g%3, i%4, ts)
+				case 3:
+					js = fmt.Sprintf(`{"a":"g%d","b":%d,"note":"x%sy","text_invisibles":true,"ts":%q}`, g%3, i%4, qeZWSP, ts)
+				default:
+					js = fmt.Sprintf(`{ "a" : "g%d" , "b" : %d , "ts" : %q }`, g%3, i%4, ts)
+				}
+				buf := []byte(js)
+				if err := live.r.SendPayload(live.ctx, 0, 0, buf); err != nil {
+					errs <- err
+					return
+				}
+				for j := range buf { // the caller may reuse payload once SendPayload returns (design §6)
+					buf[j] = 'X'
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatalf("SendPayload: %v", err)
+	}
+	res := live.finish()
+	if rs := res.stats.Recording[0]; rs.Failed {
+		t.Fatalf("the recording failed: %s", rs.Err)
+	}
+	replay := q2Replay(t, p, w.text())
+	if d := q2Diff(t, p, res, replay, 2); d != "" {
+		t.Errorf("live ≠ replay per key (MUST 10): %s", d)
+	}
+	rcCounters(t, res, replay, len(p.Streams), len(p.Rules))
+	want := runtime.StreamStats{Rejected: workers * each / 5, Unknown: workers * each / 5, FlagOverrides: workers * each / 5}
+	if ss := q2StreamStats(t, res.stats, 0); ss != want {
+		t.Errorf("live S %+v; want %+v", ss, want)
 	}
 }
