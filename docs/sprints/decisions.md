@@ -46,6 +46,7 @@
 | 2026-11-06 | [S3.2b-1's design (after the architecture review)](#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review) |
 | 2026-11-06 | [S3.2b-1's review and break-it](#owner-decisions-2026-11-06--s32b-1s-review-and-break-it) |
 | 2026-11-06 | [the docs restructure](#owner-decisions-2026-11-06--the-docs-restructure) |
+| 2026-11-06 | [the code graph re-indexes itself](#owner-decisions-2026-11-06--the-code-graph-re-indexes-itself) |
 
 ## The decisions
 
@@ -408,3 +409,10 @@ Asked to bring the docs up to date so that old information is read only when it 
 7. **SPEC §0 names its current revision**, rev 4; the language is unchanged.
 8. **Three lasting rules from retros join the sprint model** ([§10](00-sprint-model.md#10-the-quality-bar)): a design claim about a library's behaviour is proven by a scratch program before review (S3.1-2); a sprint that adds a CI workflow runs it once by hand and reads its summary (S3.2a-2); a guard test counts only once it is shown red with the line it guards removed (S3.2b-1).
 9. **The docs link checker becomes a gate row in this PR** (≠ R: the recommendation was S1.1c): `doclinks`, at T1–T4, fails on any relative link or `#anchor` in a tracked Markdown file that does not resolve.
+
+### Owner decisions, 2026-11-06 — the code graph re-indexes itself
+
+Asked to make sure `gitnexus analyze` runs automatically when the code changes.
+
+1. **Nothing at OS level** (≠ R: a macOS launchd job watching `.git/logs/HEAD` was proposed first; the next recommendation was git hooks in `.githooks`). No launchd, systemd or cron job.
+2. **A Claude Code hook keeps the index at HEAD**, as recommended: [`gate/hooks/gitnexus_reindex.py`](../../gate/hooks/gitnexus_reindex.py), registered in `.claude/settings.json` for every prompt and for every Bash call that runs git. When HEAD differs from the commit the GitNexus registry records, it starts `gitnexus analyze --index-only` in the background. A `git pull` in the owner's own terminal is picked up at the next prompt, before the graph is used.
