@@ -241,7 +241,7 @@ func pbSync(t testing.TB, p *plan.App, out func(event.Event)) *runtime.Sync {
 
 // pbSyncEvent is one Sync event step; with the review's pointer form this line becomes s.Event(e, arrival).
 func pbSyncEvent(s *runtime.Sync, e *event.Event, arrival int64) (bool, []clock.WMAdvance) {
-	return s.Event(*e, arrival)
+	return s.Event(e, arrival)
 }
 
 func pbTables(t testing.TB, p *plan.App) *table.Set {

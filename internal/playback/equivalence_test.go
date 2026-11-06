@@ -38,7 +38,7 @@ stream B (k string, v int, ts timestamp)
 
 table T (k string) primary key (k);
 
-stream OK (k string, v int, ts timestamp);
+stream OK (k string optional, v int, ts timestamp); -- k can be null on A: optional (E-NULL-003, owner D4)
 stream OG (k string, v int, ts timestamp);
 stream OD (k string, n int, ts timestamp);
 

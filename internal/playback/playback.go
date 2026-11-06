@@ -1,6 +1,7 @@
 // Package playback is the replay format layer (ADR-0005 §3): the log format and its reader, the virtual-clock
-// driver, the canonical output encoder and the canonical trace. The drive loop through the runtime is S3.2b's.
-// Design: docs/sprints/s3-2a-1-design.md §5.
+// driver, the canonical output encoder and the canonical trace. The driver replays through the real runtime: it owns a
+// runtime.Sync, one shard stepped on its caller's goroutine (ADR-0005 §3). Designs: docs/sprints/s3-2a-1-design.md §5,
+// docs/sprints/s3-2b-1-design.md §4.
 package playback
 
 import (
@@ -8,29 +9,20 @@ import (
 
 	"github.com/vorsar/cep/internal/clock"
 	"github.com/vorsar/cep/internal/event"
+	"github.com/vorsar/cep/internal/plan"
 	"github.com/vorsar/cep/internal/table"
 )
 
-// Stream is one declared stream; its index in App.Streams is its stream id (SEMANTICS §2.2's declaration order).
-type Stream struct {
-	Schema    event.Schema // name, attributes, time attribute (event.ArrivalTime for `time arrival`)
-	Delay     int64        // d_s, ms
-	IdleAfter int64        // ms; 0: the stream declares no idleness (a recording's ticks never move it)
-	Derived   bool         // a rule's output: never in a log (v0.1)
-}
+// Stream is one declared stream; its index in App.Streams is its stream id (SEMANTICS §2.2's declaration order). It is
+// the planner's: one description of an app (design s3-2b-1 v2 §1, review F6). A derived stream is never in a log
+// (v0.1).
+type Stream = plan.Stream
 
 // Table is one declared table; its index in App.Tables is its table id.
-type Table struct {
-	Name  string
-	Attrs []event.Attr
-	Key   []string
-}
+type Table = plan.Table
 
-// App is what a log is read against.
-type App struct {
-	Streams []Stream
-	Tables  []Table
-}
+// App is what a log is read against, and, with rules, what a plan driver replays.
+type App = plan.App
 
 // RecordKind is a log line's kind.
 type RecordKind uint8
