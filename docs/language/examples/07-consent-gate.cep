@@ -1,4 +1,5 @@
--- constructs: plain-rule table-membership not-in coalesce single-event gallery-shape
+-- constructs: plain-rule partitioned-plain-rule rate-limit-per-key table-membership not-in
+--             coalesce single-event gallery-shape given-table defeat-path-expect
 language cep/0.1;
 
 stream ConsentGrants (tenantId string, appId string optional, grantedBy string,
@@ -11,7 +12,31 @@ stream ConsentAlerts (tenantId string, appId string, ts timestamp);
 
 rule UnknownAppConsent
   intent 'A consent grant to an app identity not in the registered-apps table.'
+  partition by tenantId of ConsentGrants ttl 10 min
   from ConsentGrants[coalesce(appId, 'missing') not in RegisteredApps]
+  expect given table RegisteredApps [ {appId: 'crm'} ]
+         given ConsentGrants [ {tenantId: 't1', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then ConsentAlerts [ {tenantId: 't1', appId: 'rogue', ts: timestamp '2026-01-01T10:00:00Z'} ]
+  expect given table RegisteredApps [ {appId: 'crm'} ]
+         given ConsentGrants [ {tenantId: 't1', appId: 'crm', grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then ConsentAlerts [ ]
+  expect given table RegisteredApps [ {appId: 'crm'} ]
+         given ConsentGrants [ {tenantId: 't1', appId: null, grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then ConsentAlerts [ {tenantId: 't1', appId: 'missing', ts: timestamp '2026-01-01T10:00:00Z'} ]
+  expect given ConsentGrants [ {tenantId: 't1', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:00Z'},
+                               {tenantId: 't1', appId: 'other', grantedBy: 'admin', ts: timestamp '2026-01-01T10:04:00Z'},
+                               {tenantId: 't1', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:05:00Z'},
+                               {tenantId: 't1', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:05:00.001Z'} ]
+         then ConsentAlerts [ {tenantId: 't1', appId: 'rogue', ts: timestamp '2026-01-01T10:00:00Z'},
+                              {tenantId: 't1', appId: 'rogue', ts: timestamp '2026-01-01T10:05:00.001Z'} ]
+  expect given ConsentGrants [ {tenantId: 't1', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:00Z'},
+                               {tenantId: 't2', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:02:00Z'},
+                               {tenantId: 't1', appId: 'rogue', grantedBy: 'admin', ts: timestamp '2026-01-01T10:03:00Z'} ]
+         then ConsentAlerts [ {tenantId: 't1', appId: 'rogue', ts: timestamp '2026-01-01T10:00:00Z'},
+                              {tenantId: 't2', appId: 'rogue', ts: timestamp '2026-01-01T10:02:00Z'} ]
+  expect given ConsentGrants [ {tenantId: 't1', appId: 'app-b', grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:30Z'},
+                               {tenantId: 't1', appId: 'app-a', grantedBy: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then ConsentAlerts [ {tenantId: 't1', appId: 'app-b', ts: timestamp '2026-01-01T10:00:30Z'} ]
   select tenantId, coalesce(appId, 'missing') as appId
   output first every 5 min
   insert into ConsentAlerts;
