@@ -117,8 +117,8 @@ func glob(t *testing.T, patterns ...string) []string {
 func TestCorpusClean(t *testing.T) {
 	t.Parallel()
 	files := glob(t, "examples/*.cep", "examples/torture/*.cep")
-	if len(files) != 11 {
-		t.Fatalf("found %d example programs, want 11", len(files))
+	if len(files) != 12 { // example 10 (grouped keys) joins at S3.2b-2
+		t.Fatalf("found %d example programs, want 12", len(files))
 	}
 	for _, path := range files {
 		t.Run(strings.TrimPrefix(path, languageDocs+"/"), func(t *testing.T) {
