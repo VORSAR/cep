@@ -421,7 +421,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2b-1 merged (PRs #1–#14, the last on 2026-11-06). S3.2b-2 passed G0 (2026-11-06): its card's items 3–5, 7, 8 and the recorder, multi-part partition keys `(k, j) of S` with one spelling, and D3's error at the `ts` attribute; about 11 points → next: its design note with the language-design pass for grouped keys, QA's tests first, the architecture review, then G1.**
+**Phase 1 in progress: S1.1a-1 to S3.2b-1 merged (PRs #1–#14, the last on 2026-11-06). S3.2b-2 built (G2, 2026-11-06): multi-part partition keys `(k, j) of S` with one spelling (SPEC rev 5), D3's error at `ts`, arrival stamping, the recorder (on its own goroutine; off unless turned on), the ingest flag, per-stream error counts, the Go boundary's refusals, goleak, the metric tripwire and the macOS determinism proof; T2 and T3 exit 0 → next: the architecture review of the combined diff and QA's break-it, one fix round, T4, the owner's check.**
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
 
