@@ -65,6 +65,12 @@ class Doclinks(support.GateTest):
         self.track("a.md", "[loose](loose.md)\n")
         self.assertEqual(self.doclinks(), "exit 1: a.md:1: loose.md (missing file)")
 
+    def test_a_tracked_file_gone_from_the_work_tree_is_missing(self):
+        self.track("b.md", TARGET)
+        self.track("a.md", "[gone](b.md#dup)\n")
+        os.remove(os.path.join(self.repo, "b.md"))
+        self.assertEqual(self.doclinks(), "exit 1: a.md:1: b.md#dup (missing file)")
+
     def test_a_missing_anchor_is_named(self):
         self.track("b.md", TARGET)
         self.track("a.md", "[two headings make dup and dup-1, never dup-2](b.md#dup-2)\n")
