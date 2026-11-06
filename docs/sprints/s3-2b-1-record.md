@@ -75,14 +75,31 @@
 ## Done-done
 
 ```
-Sprint S3.2b-1 — the plan, the replay loop, rate limits, the material · routine: S3.1's (QA first + architecture review + break-it) · SP ~7 · cap 2 weeks
+Sprint S3.2b-1 — the plan, the replay loop, rate limits, the material · routine: S3.1's (QA first + architecture review + break-it) · SP ~10.5 · cap 2 weeks
 Entry (G0)   ☑ card complete and approved (S3.2b's, v3) ☑ dependencies merged, main green (S3.2a-2's PR #11; PRs #12, #13; nightly run by hand green)
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (2026-11-06) ☑ test material: QA's tests and item 9, items
 Design (G1)  ☑ architecture review resolved (design v2 §12) ☑ QA testability (34 tests red first; G1–G7 placed) ☑ owner decisions recorded (D1–D5) ☑ ADRs, SEMANTICS and SPEC annotated
 Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (exit 0) ☑ tests on the real code (QA's, red first)
 Review (G3)  ☑ architecture review of the combined diff (0 blockers) ☑ QA break-it (1 blocker) ☑ every finding fixed, forwarded or rejected (table above)
-Verify (G4)  ☐ T4 exit 0 ☐ owner's check ☐ exits 1 and 5 met by their proofs
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
-             ☐ record + retro ☐ known issues ☐ status line
-             ☐ documents reconciled ☐ memory updated ☐ worktrees removed ☐ points and duration
+Verify (G4)  ☑ T4 exit 0 (final tree, wall 95.8 s) ☑ CI on PR #14 (lint, test, race, proofs, strict-gate: pass) ☑ owner's check (merged)
+             ☑ exits 1 and 5 met by their proofs (TestLiveEqualsReplay; the three §8 ports)
+Exit (G5)    ☑ one PR (#14, 40 commits), merged by the owner ☐ main CI green on the merge commit (the owner reports it)
+             ☑ record + retro ☑ known issues (S3.2b-1-1) ☑ status line
+             ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
+
+## For the owner (the owner's check)
+
+- **By reading:** the live/replay scenario (`internal/playback/equivalence_test.go`); examples 07 and 09's expect blocks; the three new deploy errors (`go test ./internal/validate -run 'TestStatic/(e-part-004|e-null-003|e-type-001)' -v`).
+- **Rule-file changes, by hand** (the LAW Δ block's instrument is S1.1c's): `tools/importcheck/rules.json` (test imports), SPEC rev 4, SEMANTICS §8 and §9, errors.md, examples 07 and 09 with their parser goldens.
+- **No new dependency.**
+
+**Closed (G5), 2026-11-06.** PR #14 merged by the owner (40 commits, main 4ffcee9); CI green on the PR. Points: about 10.5; duration: about one day (plan check 2026-11-05 to merge 2026-11-06).
+
+## Retro
+
+- **Worked:** blind reviews that proved each claim with a scratch program found two design blockers before any code (F1: rules that could never fire were built; F2: a purge re-opened a suppression) and the break-it found a third after it (B1: two keys of one stream merged). QA's 34 tests, written first against a stub, specified the build: the plan package went green on its first build.
+- **Hurt:** design v1 moved the rate anchor against a recorded annotation (F5) and missed the multi-stream purge (F2); a network error and a session restart stopped the material agent twice; one exit code was read from `head` instead of the command (caught and re-run); the one-input check was written before its test.
+- **Keep:** re-run an agent's key scratch program on a fresh copy before acting on it; prove a guard test red by removing the line it guards; ask the owner through the question dialog in small batches, options ranked by accuracy.
+- **Change next sprint:** S3.2b-2 grew to about 9.5 points with multi-part keys and D3's position; its plan check starts with the language-design step for `(k, j) of S`.
+- **Lasting-rule proposals still open for the owner:** (1) a design claim about a library's behaviour is checked with a scratch program before review; (2) a new CI workflow is run once by hand in the sprint that adds it; (3) new: a guard test that pins wiring (not a defect) is proven red by a mutation before it counts.
