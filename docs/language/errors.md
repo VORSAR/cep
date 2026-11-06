@@ -97,11 +97,23 @@ Fix: add `, <key> of <ThatStream>` to the partition clause.
 
 ### E-PART-003 Partition keys of different types **[static]**
 Rule: SPEC §4.4 (rev 3) — one partition block keys every stream on the same value, so its keys share one type.
-Message names both streams and both types. Fix: key each stream on an attribute of the same type, or declare the attributes with one type.
+Message names both streams and both types; for a key of two or more parts it names the position (rev 5: `part 2 of the partition key: session of B is int, but sessionId of A is string`). Fix: key each position with attributes of one type, or declare them with one type.
 
 ### E-PART-004 A stream keyed twice in one partition clause **[static]**
 Rule: SEMANTICS §9 — a partition clause names one key for every stream the rule consumes; naming a stream twice (`k of S, j of S`) would leave all but one key unused, and a rule keyed on fewer attributes than written merges keys and loses alerts *(owner, 2026-11-06, S3.2b-1, break-it B1; multi-part keys are written `(k, j) of S` from S3.2b-2, owner decision)*.
-Message names the stream and the repeated key. Fix: key each stream on one attribute.
+Message names the stream and the repeated key, and shows the grouped form (rev 5: `to key it on both, write (k, j) of S, and give every stream the same number of parts`). Fix: key each stream once; group its attributes, `(k, j) of S`, and give every stream's key the same number of parts.
+
+### E-PART-005 A single key in brackets **[static]**
+Rule: SPEC §4.4 (rev 5) — one spelling for each key: brackets group two or more attributes; one attribute is written bare.
+Reported only when every stream's key has one part (otherwise the clause is E-PART-007). Message names the stream and the attribute. Fix: write `k of S`; brackets group two or more attributes: `(k, j) of S`.
+
+### E-PART-006 An attribute named twice in one key group **[static]**
+Rule: SPEC §4.4 (rev 5) — a group names two or more *different* attributes; a repeat adds nothing and hides a missing part.
+Message names the attribute and the stream. Fix: name each attribute once: `(k, j) of S`.
+
+### E-PART-007 Partition keys with different numbers of parts **[static]**
+Rule: SPEC §4.4 (rev 5), SEMANTICS §9 — key parts correspond by position across streams, so every stream's key has the same number of parts.
+Reported once per rule, at `partition`; the message lists every stream's count (a one-attribute group counts 1), e.g. `the partition keys of rule R have different numbers of parts: S 2, T 1`. Checked before E-PART-005, so the first fix offered is the one that settles the clause. Fix: give every stream's key the same number of parts, matched by position: `(k, j) of S, (k2, j2) of T`.
 
 ### E-TTL-002 TTL smaller than a contained bound **[static]**
 Rule: SEMANTICS §9/§11.3 — TTL ≥ every pattern bound, window extent, and rate-limit interval.
@@ -156,7 +168,7 @@ Rule: SPEC §5.8 — every target attribute after the auto-filled `ts` is bound 
 Fix: add/alias a select item per missing attribute; remove the explicit `ts`.
 
 ### E-SEL-002 Per-event attribute in a window select **[static]**
-Rule: SPEC §5.8 — window-rule select items are the partition key, aggregates, or constants.
+Rule: SPEC §5.8 — window-rule select items are the partition key (rev 5: any part of it), aggregates, or constants.
 Fix: aggregate the attribute, or wait for `group by` (reserved).
 
 ### E-TBL-001 Membership against a composite key **[static]**

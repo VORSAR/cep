@@ -36,7 +36,8 @@ rule-decl      = "rule", name, intent-clause, [ partition-clause ], body,
 intent-clause  = "intent", string ;
 partition-clause = "partition", "by", part-key, { ",", part-key },
                    "ttl", duration-or-param ;
-part-key       = name, "of", name ;
+part-key       = name, "of", name
+               | "(", name, { ",", name }, ")", "of", name ;
 extra          = "expect", expect-block | "todo", string ;
 
 body           = pattern-body | windowed-body | plain-body ;
