@@ -361,7 +361,7 @@ type Recorder interface {
 6. `time arrival` stamping MUST happen in the live intake only, before the recorder and the ingest step; `Sync` MUST NOT stamp.
 7. The invisible-character flag MUST be computed in `Ingest.Event` only; no other code sets `Event.Invisibles`.
 8. A rejected payload MUST NOT reach the ingest step's Seq, clock or offers; it MUST raise the stamp, be counted and be recorded.
-9. Each record MUST be queued by the router in intake order, before the recorded step, and handed to the Recorder by the app's recorder goroutine only; after its first error or panic the Recorder MUST NOT be called again, and the app MUST go on. *(Corrected at the fix round, review C5: v2 still said "called on the router goroutine", which §7 and MUST 13 replace.)*
+9. Each record MUST be queued by the router in intake order — an event's right after the ingest step that stamps it (T4's race row: the step writes the flag slot) — and handed to the Recorder by the app's recorder goroutine only; after its first error or panic the Recorder MUST NOT be called again, and the app MUST go on. *(Corrected at the fix round, review C5: v2 still said "called on the router goroutine", which §7 and MUST 13 replace.)*
 10. Replaying a recording MUST give the live run's outputs, per-key order, `RuleStats` and `StreamStats` but `AfterDrain` — and but `RuleStats.OutboxHigh`, a per-worker capacity mark (owner, 2026-11-06, [S3.2b-2's review and break-it](decisions.md#owner-decisions-2026-11-06--s32b-2s-review-and-break-it), decision 2).
 11. A tracked metric with no ceiling MUST fail the tripwire step.
 12. No new keyword; no change to a single-key program's meaning.
