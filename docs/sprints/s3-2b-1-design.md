@@ -3,8 +3,8 @@
 **What it covers:** S3.2b's items 1, 2, 6 and 9 ([card](sprint-plan.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time)) and its exits 1 and 5, plus the owner's decisions that land here.
 
 **The owner's answers:**
-- at the plan check ([sprint-plan §5, "S3.2b's plan check"](sprint-plan.md#owner-decisions-2026-11-06--s32bs-plan-check)): Q1 (a plain rule sees each event as its stream accepts it; a rate limit compares event times in arrival order), Q2 (S3.1's routine; this half of the split);
-- after the architecture review ([§5, "S3.2b-1's design"](sprint-plan.md#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review)): **D1** an on-arrival rule forgets a key on its own stream's admission watermark; **D2** example 07 is partitioned by tenant; **D3** a derived stream's `ts` declared other than `timestamp` is a deploy error with a code; **D4 (≠ R)** a select that can be null into a non-optional output attribute is a deploy error; **D5** D3 and D4 land in this sprint.
+- at the plan check ([sprint-plan §5, "S3.2b's plan check"](decisions.md#owner-decisions-2026-11-06--s32bs-plan-check)): Q1 (a plain rule sees each event as its stream accepts it; a rate limit compares event times in arrival order), Q2 (S3.1's routine; this half of the split);
+- after the architecture review ([§5, "S3.2b-1's design"](decisions.md#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review)): **D1** an on-arrival rule forgets a key on its own stream's admission watermark; **D2** example 07 is partitioned by tenant; **D3** a derived stream's `ts` declared other than `timestamp` is a deploy error with a code; **D4 (≠ R)** a select that can be null into a non-optional output attribute is a deploy error; **D5** D3 and D4 land in this sprint.
 
 **Routine (owner):** QA's tests first and independent; an architecture review of this note; the build in the main session; a QA break-it.
 

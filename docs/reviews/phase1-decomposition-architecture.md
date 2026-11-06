@@ -229,7 +229,7 @@ These items are on the critical path and should come earlier:
 
 ## Dispositions (2026-11-02) — every finding per ground rule 16
 
-Verified first-hand by the coordinator against the cited documents before acting (one partial correction, DA-09). Applied in [sprint-plan.md §3, decomposition DRAFT v2](../sprints/sprint-plan.md#phase-1-decomposition--draft-v2-for-owner-approval-2026-11-02); owner decisions in sprint-plan §5 "Owner decisions, 2026-11-02 — decomposition review".
+Verified first-hand by the coordinator against the cited documents before acting (one partial correction, DA-09). Applied in [sprint-plan.md §3, decomposition DRAFT v2](../sprints/sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02); owner decisions in sprint-plan §5 "Owner decisions, 2026-11-02 — decomposition review".
 
 | ID | Disposition | Where |
 |---|---|---|

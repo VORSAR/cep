@@ -4,7 +4,7 @@
 
 ## Plan and decisions
 
-- **The plan check:** the owner's eight answers, P1–P8 ([sprint-plan §5, "S3.1-2's plan check"](sprint-plan.md#owner-decisions-2026-11-04--s31-2s-plan-check)), all as recommended. They pin the decoder's JSON forms (RFC 3339 text timestamps, integer-millisecond durations, object or array for `object`, last repeated key wins), an exact Unicode-version match, its Go test, the `fuzz-decoder` row, and U+FFFD for malformed UTF-8 (whether to flag it is S7's question).
+- **The plan check:** the owner's eight answers, P1–P8 ([sprint-plan §5, "S3.1-2's plan check"](decisions.md#owner-decisions-2026-11-04--s31-2s-plan-check)), all as recommended. They pin the decoder's JSON forms (RFC 3339 text timestamps, integer-millisecond durations, object or array for `object`, last repeated key wins), an exact Unicode-version match, its Go test, the `fuzz-decoder` row, and U+FFFD for malformed UTF-8 (whether to flag it is S7's question).
 - **Before G0:** x/text v0.43.0 selects its Unicode 17.0.0 tables under Go 1.27, equal to Go 1.27.3's `unicode.Version`. Main's CI was green on S3.1-1's merge.
 - **The design:** [s3-1-2-design.md](s3-1-2-design.md) v2.
   - v1's review ([s3-1-2-design-architecture.md](../reviews/s3-1-2-design-architecture.md)) found 3 blockers, 12 should-fix and 9 later.

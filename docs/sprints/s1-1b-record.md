@@ -4,7 +4,7 @@
 
 ## Plan and decisions
 
-The owner cut S1.1b to what engine code needs from its first line, and moved the rest to S1.1c ([sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-04--s11b-slimmed-toward-engine-code)). The plan:
+The owner cut S1.1b to what engine code needs from its first line, and moved the rest to S1.1c ([decisions](decisions.md#owner-decisions-2026-11-04--s11b-slimmed-toward-engine-code)). The plan:
 - **One Go program, standard library only:** `tools/archcheck`, reading each file's syntax with `go/parser`. No `golang.org/x/tools` dependency. It deviates from ADR-0015 §2.2's "every instrument is a `go/analysis` analyzer", and the deviation is noted here.
 - **One gate row,** `archcheck` (lint, T0–T4), over every first-party `.go` file outside `gate/` and `tools/`. At T0 it sees only the staged files (the S1.1a-2 runner).
 - **The import law** is `tools/importcheck/rules.json`: one flat, exhaustive list per package of the module packages it may import, from ARCHITECTURE §3 (rules 1–8 and the exception table). For packages §3 does not list, the list is §2a's layer bound. A package missing from the file is red.

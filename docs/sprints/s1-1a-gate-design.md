@@ -1,6 +1,6 @@
 # S1.1a-1 — design note: the local gate and the event kernel (v2)
 
-*Step 1 of the full loop for [S1.1a-1](sprint-plan.md#s11a-1--the-local-gate-coverage-and-the-event-kernel), by the coordinator. **v2, 2026-11-02**, revised after the blind design review: architect + the-fool **24** findings (4 blocker / 14 should-fix / 6 later), QA **36** (10 / 21 / 5). The coordinator re-verified every blocker by probe or reasoning; §11 gives each finding's disposition, and none is rejected. It also folds in the owner's decisions of 2026-11-02 ([sprint-plan §5](sprint-plan.md#5-decisions)).*
+*Step 1 of the full loop for [S1.1a-1](history.md#s11a-1--the-local-gate-coverage-and-the-event-kernel), by the coordinator. **v2, 2026-11-02**, revised after the blind design review: architect + the-fool **24** findings (4 blocker / 14 should-fix / 6 later), QA **36** (10 / 21 / 5). The coordinator re-verified every blocker by probe or reasoning; §11 gives each finding's disposition, and none is rejected. It also folds in the owner's decisions of 2026-11-02 ([decisions](decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1)).*
 
 ***v2.1**, the same day: after the owner's focused re-check. A fresh agent probed v2 against the real tools and archives. It confirmed 6 of 10 claims and refuted 4, and found 3 new blockers, 11 should-fix and 5 later issues. The coordinator verified the blockers and their fixes by probe. All are fixed below and listed in §11's "Re-check" table.*
 
@@ -463,7 +463,7 @@ The `proofs` row's `min_wants` is **10**. Deleting a driver gives covered 9 < 10
 
 ## 12. S1.1a-2: the hooks and CI (2026-11-03; G1 approved by the owner 2026-11-04: "implement this fast and get it over")
 
-*Written at S1.1a-2's G0 from its [plan check](s1-1a-2-plan-check.md) (v3) §2 and §5 (owner's G0 answers: [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0)). Where this section and the plan check differ, this section wins.*
+*Written at S1.1a-2's G0 from its [plan check](s1-1a-2-plan-check.md) (v3) §2 and §5 (owner's G0 answers: [decisions](decisions.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0)). Where this section and the plan check differ, this section wins.*
 
 **12.1 T0 in place, with a guard** *(owner, 2026-11-04: no separate checked tree)*. The pre-commit hook runs in the work tree.
 - **The guard:** the paths in both `git diff --cached --name-only -z --diff-filter=ACMR` and `git diff --name-only -z` (index against work tree), under whatever `GIT_INDEX_FILE` git set. If any, the hook prints `<path> has unstaged changes: stage them or stash them, so the check sees what you commit` for each one and exits 1.

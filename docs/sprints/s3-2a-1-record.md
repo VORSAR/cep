@@ -1,11 +1,11 @@
 # S3.2a-1 — sprint record (S3.1's routine)
 
 **Sprint:** S3.2a-1 — the replay format layer and partitions (S3.2a's items 1–2; the owner split S3.2a at its card's line) · **Routine:** by the owner (2026-11-05): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** 5.5 SP of S3.2a's 11.5, before key evaluation moves to S3.2a-2's router · **Branch:** `s3-2a-1/integration`
-**What to build and how each item is proven:** [sprint plan — S3.2a](sprint-plan.md#s32a--the-replay-format-and-the-runtime-core), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S3.2a](history.md#s32a--the-replay-format-and-the-runtime-core), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 ## Plan and decisions
 
-- **The plan check (owner, 2026-11-05):** four answers, all as recommended ([sprint-plan §5, "S3.2a's plan check"](sprint-plan.md#owner-decisions-2026-11-05--s32as-plan-check)):
+- **The plan check (owner, 2026-11-05):** four answers, all as recommended ([sprint-plan §5, "S3.2a's plan check"](decisions.md#owner-decisions-2026-11-05--s32as-plan-check)):
   - S3.1's routine;
   - S3.2a split along its card's line;
   - S1.1c placed after S3.3;
@@ -27,7 +27,7 @@
 - **The design (G1, 2026-11-05):** [s3-2a-1-design.md](s3-2a-1-design.md) v2.
   - **v1's review** ([s3-2a-1-design-architecture.md](../reviews/s3-2a-1-design-architecture.md)) found 1 blocker, 8 should-fix and 4 later. Its blocker, F1: walking a shard's clock once per batch of messages changes results, against ADR-0010 §2.
   - **QA's partition tests** (27, on `s3-2a-1/qa-partition`, red on the stub) raised gaps A1–A9.
-  - **The owner's decisions:** D1–D7 ([sprint-plan §5, "S3.2a-1's design"](sprint-plan.md#owner-decisions-2026-11-05--s32a-1s-design-after-the-architecture-review)). On F1 and on punctuation records, the owner asked first which option is algorithmically correct, then chose it:
+  - **The owner's decisions:** D1–D7 ([sprint-plan §5, "S3.2a-1's design"](decisions.md#owner-decisions-2026-11-05--s32a-1s-design-after-the-architecture-review)). On F1 and on punctuation records, the owner asked first which option is algorithmically correct, then chose it:
     - **D1:** an instant is finalized only once the clock is past it, and S3.1-1's seal is retired. This fixes an older defect in the clock and the oracle; measured on scratch copies, it changes 3 of the oracle's 47 checks and 20 of the clock's 43 tests.
     - **D2:** `ts` only when a stream has no time attribute.
     - **D3:** recording records (start, arrival, tick, stop).

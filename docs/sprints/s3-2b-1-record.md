@@ -5,7 +5,7 @@
 
 ## Plan and decisions
 
-- **The plan check (owner, 2026-11-06):** seven answers, all as recommended ([sprint-plan §5, "S3.2b's plan check"](sprint-plan.md#owner-decisions-2026-11-06--s32bs-plan-check)). Those that bind this sprint:
+- **The plan check (owner, 2026-11-06):** seven answers, all as recommended ([sprint-plan §5, "S3.2b's plan check"](decisions.md#owner-decisions-2026-11-06--s32bs-plan-check)). Those that bind this sprint:
   - **Q1:** a plain filter rule's alert goes out as soon as its stream accepts the event; a rate limit compares event times in arrival order;
   - **Q2:** S3.1's routine, and the split along the card's line.
 
@@ -26,10 +26,10 @@
     - F1: a plain rule using an expression that cannot run yet (text operators, `count`, `chain`) was built and never fired;
     - F2: purging an on-arrival key on the rule clock re-opened a suppression in multi-stream replays and live after idleness.
   - **QA's tests first** (34, red on the stub; every existing test green; `go vet` clean) raised gaps G1–G7.
-  - **The owner's decisions** ([sprint-plan §5, "S3.2b-1's design"](sprint-plan.md#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review)): test imports for `plan` and `playback`; D1 (purge on the stream's admission); D2 (07 per tenant); D3 (a derived `ts` must be a timestamp, E-TYPE-001); D4 (≠ R: a nullable select into a non-optional attribute is a deploy error, E-NULL-003); D5 (both here).
+  - **The owner's decisions** ([sprint-plan §5, "S3.2b-1's design"](decisions.md#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review)): test imports for `plan` and `playback`; D1 (purge on the stream's admission); D2 (07 per tenant); D3 (a derived `ts` must be a timestamp, E-TYPE-001); D4 (≠ R: a nullable select into a non-optional attribute is a deploy error, E-NULL-003); D5 (both here).
   - **The rate anchor** stays in the body's per-key state, as ADR-0006 §2 records (review F5); design v1 had moved it.
   - **Annotated:** SEMANTICS §8 and §9, SPEC §5.1, ARCHITECTURE §5, ADR-0005 §3, ADR-0006 §2.
-- **The review and break-it (G3, 2026-11-06):** the combined-build review ([s3-2b-1-combined-architecture.md](../reviews/s3-2b-1-combined-architecture.md)) found 0 blockers, 3 should-fix and 6 later; the QA break-it ([s3-2b-1-breakit-qa.md](../reviews/s3-2b-1-breakit-qa.md)) found 1 blocker and 2 later. The owner's decisions ([sprint-plan §5, "S3.2b-1's review and break-it"](sprint-plan.md#owner-decisions-2026-11-06--s32b-1s-review-and-break-it)):
+- **The review and break-it (G3, 2026-11-06):** the combined-build review ([s3-2b-1-combined-architecture.md](../reviews/s3-2b-1-combined-architecture.md)) found 0 blockers, 3 should-fix and 6 later; the QA break-it ([s3-2b-1-breakit-qa.md](../reviews/s3-2b-1-breakit-qa.md)) found 1 blocker and 2 later. The owner's decisions ([sprint-plan §5, "S3.2b-1's review and break-it"](decisions.md#owner-decisions-2026-11-06--s32b-1s-review-and-break-it)):
   - **multi-part partition keys are supported** (≠ R), written `(k, j) of S` (as R), with no limit on the parts (≠ R); S3.2b-1 refuses a stream keyed twice with E-PART-004 meanwhile (as R); "don't drop anything";
   - **D3's error points at the `ts` attribute** (≠ R), once model attributes carry a position;
   - **the work splits into parts of about 10 points each:** both additions are S3.2b-2's.
