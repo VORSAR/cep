@@ -122,3 +122,43 @@ func TestBreakitTableWriteBeyondTheLineIsRefused(t *testing.T) {
 		t.Errorf("TableWrite accepted a %d-byte string (err nil) that the recording cannot hold: Recording %+v (owner D1, MUST 14)", len(big), rs)
 	}
 }
+
+// TestBreakitRecordsCountsEveryLine (QA G5; design §7: "Records int64: the records written — every line, the header
+// and the stop included"): a table write of two rows is two table lines (one per row, rev 2's table records), and a
+// write of no rows is none; Records counts one per Recorder call instead, so it disagrees with the recording. (Three
+// rows and an empty write: two rows would cancel the empty write's extra count.)
+func TestBreakitRecordsCountsEveryLine(t *testing.T) {
+	t.Parallel()
+	p := pbBuild(t, "bk2-fwd.cep", bk2FwdSrc)
+	w := &rcRec{}
+	live := q2Start(t, p, 1, q2NewClock(ldT0, ldSec).now, playback.NewRecorder(w, p))
+	if err := live.r.TableWrite(live.ctx, 0, 0, runtime.TablePut, [][]event.Value{{ldStr("x")}, {ldStr("y")}, {ldStr("z")}}); err != nil {
+		t.Fatalf("TableWrite: %v", err)
+	}
+	if err := live.r.TableWrite(live.ctx, 0, 0, runtime.TableDelete, nil); err != nil {
+		t.Fatalf("TableWrite (no rows): %v", err)
+	}
+	live.payload(0, fmt.Sprintf(`{"k":"b","ts":%q}`, ldRFC(ldT0)))
+	res := live.finish()
+	log := w.text()
+	lines := int64(strings.Count(log, "\n"))
+	if rs := res.stats.Recording[0]; rs.Records != lines {
+		t.Errorf("Recording.Records %d, but the recording holds %d lines (QA G5: every line):\n%s", rs.Records, lines, log)
+	}
+}
+
+// TestBreakitSendBatchIDBeyondTheLine: Send's line bound (design §16.7: "Send also refuses an event whose recording
+// line could exceed the log-line limit") leaves out e.BatchID, which the typed line writes as "batch": a typed Send
+// with a BatchID longer than a line is accepted and ends the recording (owner D1, MUST 14).
+func TestBreakitSendBatchIDBeyondTheLine(t *testing.T) {
+	t.Parallel()
+	p := pbBuild(t, "bk2-fwd.cep", bk2FwdSrc)
+	w := &rcRec{}
+	live := q2Start(t, p, 1, q2NewClock(ldT0, ldSec).now, playback.NewRecorder(w, p))
+	e := event.Event{StreamID: 0, Ts: ldT0, BatchID: strings.Repeat("b", event.MaxLogLine), Values: []event.Value{ldStr("a"), {Kind: event.TTimestamp, T: ldT0}}}
+	err := live.r.Send(live.ctx, 0, e)
+	res := live.finish()
+	if rs := res.stats.Recording[0]; err == nil && rs.Failed {
+		t.Errorf("Send accepted an event (err nil) whose BatchID the recording cannot hold: Recording %+v (owner D1, MUST 14)", rs)
+	}
+}
