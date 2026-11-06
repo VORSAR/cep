@@ -300,3 +300,35 @@ func TestBreakitConcurrentPayloadsReplay(t *testing.T) {
 		t.Errorf("live S %+v; want %+v", ss, want)
 	}
 }
+
+// TestBreakitTickBeyondYear9999StaysReadable (owner D1: the Go entry points refuse every value a recording cannot
+// copy exactly; owner Q2: a recording that cannot be written stops): Runtime.Tick takes any int64. A tick past the
+// year 9999 raises the stamp there; the recorder writes the tick, and every later arrival, in a form RFC 3339 cannot
+// hold, without failing — so Stats says the recording is sound while the reader faults on it. Tick MUST refuse such
+// a time, or the recording MUST end at it.
+func TestBreakitTickBeyondYear9999StaysReadable(t *testing.T) {
+	t.Parallel()
+	p := pbBuild(t, "bk2-fwd.cep", bk2FwdSrc)
+	w := &rcRec{}
+	live := q2Start(t, p, 1, q2NewClock(ldT0, ldSec).now, playback.NewRecorder(w, p))
+	live.payload(0, fmt.Sprintf(`{"k":"a","ts":%q}`, ldRFC(ldT0)))
+	const y10000 int64 = 253402300800000 // 10000-01-01T00:00:00Z
+	tickErr := live.r.Tick(live.ctx, y10000)
+	live.payload(0, fmt.Sprintf(`{"k":"b","ts":%q}`, ldRFC(ldT0+ldSec)))
+	res := live.finish()
+	if tickErr != nil || res.stats.Recording[0].Failed {
+		return // refused, or the recording ended at it: both honour D1 / Q2
+	}
+	log := w.text()
+	r := ldReader(t, pbApp(p), log)
+	for {
+		_, err := r.Next()
+		if ldEOF(err) {
+			return
+		}
+		if err != nil {
+			t.Errorf("Tick(10000-01-01) was accepted and the recording reports %+v, but it does not read back: %v\nrecording:\n%s", res.stats.Recording[0], err, log)
+			return
+		}
+	}
+}
