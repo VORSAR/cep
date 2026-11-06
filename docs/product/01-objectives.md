@@ -135,4 +135,4 @@ No traditional-CEP vertical investment (IoT/edge, fraud, generic observability c
 ## Next
 
 - [x] `02-roadmap.md` — dependency-ordered phases (what unblocks what), no dates. **MVP strategy (owner):** one vertical-slice use case — detect, then disable the agent via IAM webhook + escalation email — building everything required to ship it.
-- [ ] ~~`03-sprint-plan.md`~~ [`../sprints/sprint-plan.md`](../sprints/sprint-plan.md) — agent-wave execution plan: decomposed, verifiable task batches with human review gates. *(Amended 2026-10-31: moved to `docs/sprints/` with the adopted sprint process, [00-sprint-model.md](../sprints/00-sprint-model.md).)*
+- [x] ~~`03-sprint-plan.md`~~ [`../sprints/sprint-plan.md`](../sprints/sprint-plan.md) *(done: Phase 1's decomposition approved 2026-11-02; progress is its [§Status](../sprints/sprint-plan.md#status))* — agent-wave execution plan: decomposed, verifiable task batches with human review gates. *(Amended 2026-10-31: moved to `docs/sprints/` with the adopted sprint process, [00-sprint-model.md](../sprints/00-sprint-model.md).)*

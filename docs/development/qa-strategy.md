@@ -15,15 +15,15 @@ Owner condition at the 2026-11-01 architecture ratification; **revised 2026-11-0
 | Layer | Proves | Instrument | Cadence |
 |---|---|---|---|
 | Architecture analyzers | the layer charter, purity, clock discipline, API partition | ADR-0015 §2 table, each with teeth | T0–T2 |
-| Law-change visibility | no gate/spec/architecture rule changes silently | the LAW Δ block (ADR-0015 §1.3), read by the owner at every merge | every tier |
+| Law-change visibility | no gate/spec/architecture rule changes silently | the LAW Δ block (ADR-0015 §1.3), read by the owner at every merge *(lands in S1.1c; until then the record lists rule-file changes by hand)* | every tier |
 | Conformance suite | SEMANTICS.md construct by construct | golden cases ported from `docs/language/checks/` (each Go case cites its Python source) + every corpus `expect` via playback, incl. `given table` seeding (SPEC §6.8 rev 2; ADR-0005 §4) | T2 |
 | Grammar differential | SPEC grammar ≡ engine parser | lark vs goyacc over examples/ + invalid/ + eval/generated: accept/reject verdicts AND canonical operator-spine shapes (ADR-0002 §5, RC7), counts asserted | T4 *(annotated 2026-11-04: the engine side is participle v2, ADR-0002 as amended)* |
 | Determinism | byte-identical replay | same-log same-build byte diff; two-OS T4 job; planted map-iteration fixture must be caught | T3/T4 |
 | Allocation gate | the zero-alloc hot path (ADR-0010 §1) | `allocgate`: AllocsPerRun per stage fails on > 0; freelist-warm spawn benchmark | T2 |
 | Oracle & property tests | the pattern engine against an independent mind | a brute-force reference matcher (exhaustive over small windows) vs the engine on 200–300 seeded-random streams per shape; counters prove the interesting branches ran (`matches > N`, `defeats > N`); state-space caps recorded as skips, never silent | T3 |
 | Metamorphic suite (CEP-specific) | semantics invariances no example can pin | see §2 — each law scoped to where the semantics actually promise it | T3 |
-| Stress/race | concurrency seams | `-race` on T3; shuffle + `-count=N` + CPU-hog harness for new concurrency-sensitive tests, pass rate stated in the PR (testing.md) | T3 + per-PR |
-| Fuzz | parser and decoder robustness | Go native fuzzing: grammar fuzzer (seeded from the corpus) on the parser; byte fuzzer on the JSON decoder (differential vs encoding/json) | nightly, advisory→blocking per ADR-0015 §3.9 aging |
+| Stress/race | concurrency seams | ~~`-race` on T3~~ `-race` at T4, its own CI job, and nightly as `race-stress` (as built, 2026-11-05); shuffle + `-count=N` + CPU-hog harness for new concurrency-sensitive tests, pass rate stated in the PR (testing.md) | T3 + per-PR |
+| Fuzz | parser and decoder robustness | Go native fuzzing: grammar fuzzer (seeded from the corpus) on the parser; byte fuzzer on the JSON decoder (differential vs encoding/json) | nightly, ~~advisory→blocking per ADR-0015 §3.9 aging~~ blocking (owner, 2026-11-05, PR #13) |
 | End-to-end | the shipped thing | the packaged binary drives the demo scenario; exit-code contract; gallery apps run via conformance | T3/T4 |
 | Benchmarks | throughput/latency objectives | ADR-0010 §8: open-loop load, in-repo histograms, benchstat tripwires vs stored baselines | T4 + nightly |
 
@@ -54,6 +54,6 @@ Each law reruns conformance scenarios and compares outputs mechanically — no n
 
 ## 5. Review process hooks (people and agents)
 
-Per the sprint model §8: QA writes the failing test at the plan check; the architect reviews each combined diff against ARCHITECTURE §2b rules **5–8 and the rest of ADR-0015 §3.6's review-only residue** (seven items, accepted by the owner 2026-11-01; *an eighth (the gate's Python has no coverage floor) and a ninth (unpinned git, make and bootstrap Python), both accepted 2026-11-02* — rule 5 is review-only too: hand-computed watermarks use no banned time API, so clockcheck cannot see them); the owner reads the **LAW Δ block** at every merge (sprint model §8 step 10); the break-it phase before each release commits its red tests and may run the sampled constant-flip spot-check (ADR-0015 §4). Every sprint card's exit criteria enumerate the conformance cases it adds — a construct without cases does not ship (`skip: not-implemented(S<n>)` is visible, never green, and fails T4 once its sprint closes).
+Per the sprint model §8: QA writes the failing test at the plan check; the architect reviews each combined diff against ARCHITECTURE §2b rules **5–8 and the rest of ADR-0015 §3.6's review-only residue** (seven items, accepted by the owner 2026-11-01; *an eighth (the gate's Python has no coverage floor) and a ninth (unpinned git, make and bootstrap Python), both accepted 2026-11-02; a tenth (leftover processes a stop cannot reach), added 2026-11-03* — rule 5 is review-only too: hand-computed watermarks use no banned time API, so clockcheck cannot see them); the owner reads the **LAW Δ block** at every merge (sprint model §8 step 10; S1.1c builds it, by hand until then); the break-it phase before each release commits its red tests and may run the sampled constant-flip spot-check (ADR-0015 §4). Every sprint card's exit criteria enumerate the conformance cases it adds — a construct without cases does not ship (`skip: not-implemented(S<n>)` is visible, never green, and fails T4 once its sprint closes).
 
-**Last updated:** 2026-11-01 (created at the architecture ratification; revised same day after the foundation adversarial review).
+**Last updated:** 2026-11-06 (fuzz blocking, race at T4, LAW Δ forward to S1.1c, the tenth residue item).

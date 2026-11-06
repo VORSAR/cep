@@ -331,3 +331,5 @@ Deterministic rules catch what you can specify; many agentic attacks are **seman
 
 1. Freeze this into **high-level objectives** (next doc: `01-objectives.md`).
 2. Derive the **roadmap** (feature areas → releases) and **sprint plan**.
+
+*(Done: [01-objectives.md](01-objectives.md), [02-roadmap.md](02-roadmap.md) and the [sprint plan](../sprints/sprint-plan.md); the decisions in §10 still stand unless [decisions.md](../sprints/decisions.md) records a change.)*

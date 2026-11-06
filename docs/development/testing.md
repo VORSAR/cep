@@ -2,7 +2,7 @@
 
 This is the test contract for complex-events-engine. The gate that runs it is in [DEVELOPMENT.md](DEVELOPMENT.md#the-gate).
 
-> **Not built yet (2026-10-31).** No test rig exists. These rules are what it is built to; the sprint that builds each layer adds its concrete helpers and commands here. *(Annotated 2026-11-03, S1.1a-1: the gate's Python side has its rig. `gate/wait.py` is the one wait helper (ruff bans `time.sleep` everywhere else), and `gate/runner/stress.py` runs test modules 50 times each under load. The Go-side wait helper lands with the first Go test that needs one.)*
+> **What exists (2026-11-06).** Go unit tests in every `internal/*` package, under the coverage floor; replay with byte-equal output through `internal/playback`; the reference executor's 48 checks (the `semantics` row); `race` (T4) and the nightly `race-stress`, `fuzz-parser` and `fuzz-decoder` rows. On the gate's Python side, `gate/wait.py` is the one wait helper (ruff bans `time.sleep` everywhere else), and `gate/runner/stress.py` runs test modules 50 times each under load. **Not built yet:** the conformance suite (S3.3), the rule unit-test framework, and a Go-side wait helper (it lands with the first Go test that needs one).
 
 **Tests are the spec.** Agent-written code is only as trustworthy as the gates it must pass, so the conformance suite, deterministic replay and the rule unit-test framework are the development method, built before the operators they test ([01-objectives](../product/01-objectives.md), operating model).
 
@@ -45,4 +45,4 @@ Fixtures are synthetic: generated agent traffic, scripted event streams, stub en
 
 ---
 
-**Last updated:** 2026-11-01
+**Last updated:** 2026-11-06
