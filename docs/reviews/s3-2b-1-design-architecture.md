@@ -1,6 +1,6 @@
 # S3.2b-1 design note v1: architecture review
 
-> **Historical — S3.2b-1, the plan, replay through the runtime, rate limits; merged in PR #14.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2b-1-design.md) · [record](../sprints/s3-2b-1-record.md) · reviews: **design: architecture**, [combined build: architecture](s3-2b-1-combined-architecture.md), [break-it: QA](s3-2b-1-breakit-qa.md). **← [S3.2a-2](../sprints/s3-2a-2-record.md) · [S3.2b-2 (next)](../sprints/sprint-plan.md#status) →**
+> **Historical — S3.2b-1, the plan, replay through the runtime, rate limits; merged in PR #14.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2b-1-design.md) · [record](../sprints/s3-2b-1-record.md) · reviews: **design: architecture**, [combined build: architecture](s3-2b-1-combined-architecture.md), [break-it: QA](s3-2b-1-breakit-qa.md). **← [S3.2a-2](../sprints/s3-2a-2-record.md) · [S3.2b-2](../sprints/s3-2b-2-record.md) →**
 
 Artifact: `docs/sprints/s3-2b-1-design.md` (v1), branch `s3-2b-1/integration` at 15d037c. This is a blind review: the QA branch was not read.
 
