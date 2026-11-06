@@ -48,10 +48,25 @@ func (c *checker) partition(r *model.Rule) {
 			c.report("E-PART-002", r.Partition.Pos, "the partition of rule %s keys no attribute of %s, which the rule reads", r.Name, name)
 		}
 	}
-	var first *model.PartitionKey
+	keyed := map[string]bool{} // a stream keyed twice: one key value per stream in this release (break-it B1 of S3.2b-1)
+	twice := map[*model.PartitionKey]bool{}
 	for i := range keys {
 		k := &keys[i]
 		if c.badKey[k] {
+			continue
+		}
+		if keyed[k.Stream] {
+			twice[k] = true
+			c.report("E-PART-004", k.Pos, "%s is keyed twice in the partition of rule %s (by %s again): key each stream on one attribute",
+				k.Stream, r.Name, k.Attr)
+			continue
+		}
+		keyed[k.Stream] = true
+	}
+	var first *model.PartitionKey
+	for i := range keys {
+		k := &keys[i]
+		if c.badKey[k] || twice[k] {
 			continue
 		}
 		if first == nil {

@@ -32,6 +32,7 @@ var catalog = map[string]Entry{
 	"E-PART-001":  {Title: "Stateful rule outside a partition", Fix: "add `partition by <key> of <Stream> … ttl <duration>`."},
 	"E-PART-002":  {Title: "Consumed stream with no partition key", Fix: "add `, <key> of <ThatStream>` to the partition clause."},
 	"E-PART-003":  {Title: "Partition keys of different types", Fix: "key each stream on an attribute of the same type, or declare the attributes with one type."},
+	"E-PART-004":  {Title: "A stream keyed twice in one partition clause", Fix: "key each stream on one attribute."},
 	"E-PAT-006":   {Title: "Duplicate capture name", Fix: "rename one step."},
 	"E-PRAG-002":  {Title: "Unsupported language version", Fix: "use `language cep/0.1;`, or deploy on an engine supporting the named version."},
 	"E-REGEX-001": {Title: "Unsupported regex construct", Fix: "rewrite without it, or use keyword-set/substring operators."},

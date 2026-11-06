@@ -99,6 +99,10 @@ Fix: add `, <key> of <ThatStream>` to the partition clause.
 Rule: SPEC §4.4 (rev 3) — one partition block keys every stream on the same value, so its keys share one type.
 Message names both streams and both types. Fix: key each stream on an attribute of the same type, or declare the attributes with one type.
 
+### E-PART-004 A stream keyed twice in one partition clause **[static]**
+Rule: SEMANTICS §9 — a partition clause names one key for every stream the rule consumes; naming a stream twice (`k of S, j of S`) would leave all but one key unused, and a rule keyed on fewer attributes than written merges keys and loses alerts *(owner, 2026-11-06, S3.2b-1, break-it B1; multi-part keys are written `(k, j) of S` from S3.2b-2, owner decision)*.
+Message names the stream and the repeated key. Fix: key each stream on one attribute.
+
 ### E-TTL-002 TTL smaller than a contained bound **[static]**
 Rule: SEMANTICS §9/§11.3 — TTL ≥ every pattern bound, window extent, and rate-limit interval.
 Message carries both numbers. Fix: raise `ttl`, or shorten the bound/interval.
