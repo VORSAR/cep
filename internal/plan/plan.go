@@ -158,6 +158,9 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 		if k.Stream != r.Body.Source.Stream {
 			continue
 		}
+		if pr.KeyAttr != nil { // a second key of one stream is E-PART-004: never drop a declared key (break-it B1)
+			return Rule{}, fmt.Errorf("stream %s is keyed twice (E-PART-004; Build is given only a checked model)", k.Stream)
+		}
 		for i := range sc.schema.NumAttrs() {
 			if a := sc.schema.Attr(i); a.Name == k.Attr {
 				pr.KeyAttr, pr.KeyType, pr.TTL = []int{i}, a.Type, r.Partition.TTL.Ms
