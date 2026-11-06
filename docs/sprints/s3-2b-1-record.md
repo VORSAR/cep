@@ -1,6 +1,6 @@
 # S3.2b-1 — sprint record (S3.1's routine)
 
-**Sprint:** S3.2b-1 — the plan, the replay loop through the runtime, rate limits and the material (S3.2b's items 1, 2, 6, 9; the owner split S3.2b at its card's line) · **Routine:** by the owner (2026-11-06): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** about 7 SP (6.5 carded, plus the on-arrival path for plain rules) · **Branch:** `s3-2b-1/integration`
+**Sprint:** S3.2b-1 — the plan, the replay loop through the runtime, rate limits and the material (S3.2b's items 1, 2, 6, 9; the owner split S3.2b at its card's line) · **Routine:** by the owner (2026-11-06): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** about 10.5 SP (6.5 carded; the owner's additions below) · **Branch:** `s3-2b-1/integration`
 **What to build and how each item is proven:** [sprint plan — S3.2b](sprint-plan.md#s32b--one-runtime-live-and-replay-rate-limits-errors-arrival-time), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 ## Plan and decisions
@@ -13,7 +13,7 @@
 - **In this sprint:**
   - **Item 1 — `internal/plan` (minimal):** the stream-node graph from the checked `*model.App`, the routing table, filter-rule operator chains (filter, projection, emission). `plan` owns its description types; the runtime builds from them (plan-check reading 1).
   - **Item 2 — the replay drive loop is the runtime with one shard and a synchronous step** (ADR-0005 §3): the runtime's router and shard steps on one thread, no goroutines, fed by the playback driver; S3.1's and S3.2a's exit lines re-run through it.
-  - **Item 6 — the emission stage with rate limiting:** `output first every D`, the anchor per key in `partition.Instance` (one global anchor for a key-less rule), suppressed outputs counted; the three §8 harness checks ported as Go tests naming their source.
+  - **Item 6 — the emission stage with rate limiting:** `output first every D`, the anchor per key in the body's per-key state, as ADR-0006 §2 records *(annotated 2026-11-06, combined review C3: the card's "in `partition.Instance`" was superseded at the design)* (one global anchor for a key-less rule), suppressed outputs counted; the three §8 harness checks ported as Go tests naming their source.
   - **Item 9 — test material for examples 07 and 09** (QA, before the engine runs): at least one fire-path and one near-miss expect block each; 09 gains a second event inside its rate-limit interval. They run green in S3.3.
   - **Owner Q1 — the on-arrival path for plain rules**, with SEMANTICS §8 and SPEC §5.1 annotated at G1.
 - **Exits:**
@@ -29,21 +29,48 @@
   - **The owner's decisions** ([sprint-plan §5, "S3.2b-1's design"](sprint-plan.md#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review)): test imports for `plan` and `playback`; D1 (purge on the stream's admission); D2 (07 per tenant); D3 (a derived `ts` must be a timestamp, E-TYPE-001); D4 (≠ R: a nullable select into a non-optional attribute is a deploy error, E-NULL-003); D5 (both here).
   - **The rate anchor** stays in the body's per-key state, as ADR-0006 §2 records (review F5); design v1 had moved it.
   - **Annotated:** SEMANTICS §8 and §9, SPEC §5.1, ARCHITECTURE §5, ADR-0005 §3, ADR-0006 §2.
+- **The review and break-it (G3, 2026-11-06):** the combined-build review ([s3-2b-1-combined-architecture.md](../reviews/s3-2b-1-combined-architecture.md)) found 0 blockers, 3 should-fix and 6 later; the QA break-it ([s3-2b-1-breakit-qa.md](../reviews/s3-2b-1-breakit-qa.md)) found 1 blocker and 2 later. The owner's decisions ([sprint-plan §5, "S3.2b-1's review and break-it"](sprint-plan.md#owner-decisions-2026-11-06--s32b-1s-review-and-break-it)):
+  - **multi-part partition keys are supported** (≠ R), written `(k, j) of S` (as R), with no limit on the parts (≠ R); S3.2b-1 refuses a stream keyed twice with E-PART-004 meanwhile (as R); "don't drop anything";
+  - **D3's error points at the `ts` attribute** (≠ R), once model attributes carry a position;
+  - **the work splits into parts of about 10 points each:** both additions are S3.2b-2's.
 - **Forwards this sprint carries:** the routing-table type `internal/runtime` defines, which the planner now produces (S3.2a's plan-check reading 2); `runtime.Rule`, written "as S3.2b's planner will describe it".
 
 ## Scope changes
 
 - **2026-11-06 (owner, plan check):** the on-arrival path for plain rules (Q1), +0.5. S3.2b-1 6.5 → about 7 points; nothing moved out.
 - **2026-11-06 (owner, design):** D3 and D4 in the validator (+2, D5), D1's admission purge (+0.5), the review's other fixes (about +0.5). About 7 → about 10 points, under the cap; nothing moved out.
+- **2026-11-06 (owner, review and break-it):** E-PART-004 (+0.5) here. Multi-part keys (about 2.5) and D3's position at the attribute (about 1) go to S3.2b-2 by the owner's split into parts of about 10 points each (S3.2b-1 about 10.5, S3.2b-2 about 9.5).
 
 ## Measured results
 
-*(filled as the sprint runs)*
+- **Exit 1, live against replay:** `TestLiveEqualsReplay`, 200 seeded recordings × 1, 2, 4 and 7 shards, per rule and key identical outputs and equal counters; its teeth red with a shard-dependent body. The playback package runs in about 2.5 s.
+- **Exit 5, the three §8 ports:** `TestRatePortWorkedExample`, `TestRatePortTie`, `TestRatePortGlobalAnchor` (each naming its source check), green.
+- **Owner D1:** `TestOnArrivalPurgesOnItsStreamsAdmission` gives the written rule's 2 alerts; with design v1's feed planted, 4.
+- **Allocation:** a non-matching event of a resident key through `Sync`, 0 allocations, with the watermarks moving every step (break-it guard) and steady (QA).
+- **Tests first:** QA's 34 tests were red on the stub, every existing test green. Each later behaviour change had a red test, except the one-input check (C6); the D1 feed, the stamp clamp and the two C1 guards were shown red by removing their line.
+- **Concurrency:** 7 shards under `-race` with concurrent senders, table writes, ticks and stats scrapes, race-clean (break-it guard, 3 runs).
+- **Coverage:** `internal/plan` 97.3% (first run 88.0%, under the floor; tests added).
+- **The gate:** T2 `make check` exit 0 (52 s); T3 `make combine-check` exit 0 (53 s), before the fix round.
 
 ## Findings
 
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
+| F1–F12 | design review | 2 blockers, 7 should-fix, 3 later | see [the design's §12](s3-2b-1-design.md#12-review-and-test-gap-dispositions) | each placed in design v2 and built |
+| B1 | break-it | blocker | `k of S, j of S` passed Check; Build kept only `j`, merging keys and losing alerts | fixed: E-PART-004 at deploy and Build refuses it (red test 3358258); multi-part keys → S3.2b-2 (owner) |
+| L1 | break-it | later | E-NULL-003 refused selecting a rule's own optional partition key, never null where the rule runs | fixed (test first); flow-sensitive cases rejected: conservative by design, `coalesce` is the fix |
+| L2 | break-it | later | a built plan compiles bodies from the checked model at `Start`; mutating it after Build would change rules | forwarded to S3.3 (Deploy owns the model) |
+| — | break-it | later | integer overflow wraps silently (older code) | known issue S3.2b-1-1, for the owner's spec pass |
+| C1 | combined review | should-fix | two D1 lines (drain/end feed; admission-only message) had no test | fixed: two guards, each red with its line removed |
+| C2 | combined review | should-fix | D3's error at the stream's declaration, not the attribute | owner: at the attribute, S3.2b-2; annotated meanwhile |
+| C3 | combined review | should-fix | three docs still put anchors in `partition.Instance` | fixed: annotated (ARCHITECTURE §3, the card's item 6, this record) |
+| C4 | combined review | later | Sync copied the router's tick, write and drain glue | fixed: one shared step each |
+| C5 | combined review | later | the replay's Walk yields only Seq counters | accepted deviation, recorded in design §13 (Phase 2's snapshot seam) |
+| C6 | combined review | later | the one-input check was not red first | recorded; a mutation shows its test catches removal |
+| C7 | combined review | later | the MUST 10 test's comment said keyed | fixed: comment; the keyed path is the break-it guard's |
+| C8 | combined review | later | the default null rule is wrong for an aggregate | forwarded to S8 |
+| C9 | combined review | later | TimerFree dropped a timer silently; patterns and windows cannot call plan | fixed: it panics (test first); the wrapping forwarded to S4.1 |
+| M1, M2 | material | — | the spec does not define a given list's arrival order or require the output count to match | forwarded to S3.3 |
 
 ## Done-done
 
@@ -51,9 +78,9 @@
 Sprint S3.2b-1 — the plan, the replay loop, rate limits, the material · routine: S3.1's (QA first + architecture review + break-it) · SP ~7 · cap 2 weeks
 Entry (G0)   ☑ card complete and approved (S3.2b's, v3) ☑ dependencies merged, main green (S3.2a-2's PR #11; PRs #12, #13; nightly run by hand green)
              ☑ fits the cap, no lanes ☑ plan check answered by the owner (2026-11-06) ☑ test material: QA's tests and item 9, items
-Design (G1)  ☐ architecture review resolved ☐ QA testability ☐ owner decisions recorded ☐ ADRs, SEMANTICS and SPEC annotated
-Build (G2)   ☐ T2 (make check exit 0) ☐ T3 ☐ tests on the real code (QA's, red first)
-Review (G3)  ☐ architecture review of the combined diff ☐ QA break-it ☐ every finding fixed, forwarded or rejected
+Design (G1)  ☑ architecture review resolved (design v2 §12) ☑ QA testability (34 tests red first; G1–G7 placed) ☑ owner decisions recorded (D1–D5) ☑ ADRs, SEMANTICS and SPEC annotated
+Build (G2)   ☑ T2 (make check exit 0) ☑ T3 (exit 0) ☑ tests on the real code (QA's, red first)
+Review (G3)  ☑ architecture review of the combined diff (0 blockers) ☑ QA break-it (1 blocker) ☑ every finding fixed, forwarded or rejected (table above)
 Verify (G4)  ☐ T4 exit 0 ☐ owner's check ☐ exits 1 and 5 met by their proofs
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line
