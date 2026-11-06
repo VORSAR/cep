@@ -313,8 +313,8 @@ func TestRatePurgeStartsFreshAnchor(t *testing.T) {
 }
 
 // TestSyncNoMatchAllocatesNothing: design §7.10 and §8.8 — a non-matching event through the Sync path allocates
-// nothing. Steady state: one keyed rule (09's shape, filter false for this event), the same event time every step,
-// so no watermark moves. Not parallel: AllocsPerRun measures the process. See the report's gap on what "the Sync
+// nothing. Steady state: one key-less rule (09's shape, filter false for this event), the same event time every step,
+// so no watermark moves (the keyed path, with moving watermarks, is the break-it guard's; combined review C7). Not parallel: AllocsPerRun measures the process. See the report's gap on what "the Sync
 // path" covers in S3.2b-1.
 func TestSyncNoMatchAllocatesNothing(t *testing.T) {
 	p := pbBuild(t, "09", pbExample(t, "09-params-and-quoting.cep"))
