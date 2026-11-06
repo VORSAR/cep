@@ -1,0 +1,13 @@
+-- expect: E-TYPE-001 (text_invisibles is engine-owned: declared only as a non-optional bool) @ 4:34
+language cep/0.1;
+
+stream S (k string, note string, text_invisibles bool optional, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward every event.'
+  from S
+  select k
+  insert into Out;
