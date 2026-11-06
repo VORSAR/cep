@@ -21,6 +21,7 @@ type Ingest struct {
 	stamp   int64 // the monotone wall stamp of arrivals and ticks (design s3-2b-1 v2 §4, review F7)
 	buf     []clock.WMAdvance
 	counts  []streamCounts // per stream (design s3-2b-2 §6)
+	flags   []int          // per stream: its declared text_invisibles slot, or -1; nil: none known (break-it B1)
 }
 
 // streamCounts are one stream's intake counters the ingest step keeps, live and in replay alike.
@@ -60,6 +61,9 @@ func (g *Ingest) Event(e *event.Event, arrival int64, info event.Decoded) (late 
 		c.overrides++
 	}
 	e.Invisibles = text.IngestFlags(e.Values)
+	if g.flags != nil && g.flags[e.StreamID] >= 0 { // a declared slot holds the engine's flag, so a key on it is the flag
+		e.Values[g.flags[e.StreamID]] = event.Value{Kind: event.TBool, B: e.Invisibles}
+	}
 	g.seq[e.StreamID]++
 	e.Seq = g.seq[e.StreamID]
 	e.Tables = g.set.Snapshot()
@@ -115,4 +119,20 @@ func (g *Ingest) Walk(fn func(component, key string, state any)) {
 	for i, s := range g.specs {
 		fn("seq", s.Name, g.seq[i])
 	}
+}
+
+// withFlagSlots records each stream's declared text_invisibles slot (break-it B1): the ingest step writes the engine's
+// flag there, so whatever reads the slot — a partition key, the recording's omission — sees the one flag, live and in
+// replay alike.
+func (g *Ingest) withFlagSlots(schemas []event.Schema) *Ingest {
+	g.flags = make([]int, len(schemas))
+	for sid, sch := range schemas {
+		g.flags[sid] = -1
+		for i := range sch.NumAttrs() {
+			if sch.Attr(i).Name == event.InvisiblesAttr {
+				g.flags[sid] = i
+			}
+		}
+	}
+	return g
 }

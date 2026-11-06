@@ -126,8 +126,9 @@ func TestRecorderErrorEndsTheRecording(t *testing.T) {
 }
 
 // TestRecorderQueueFullEndsTheRecording (owner D2 of S3.2b-2's design; MUST 13): a recorder that does not keep up
-// never holds the router: a full queue ends the recording, named, and Close still stops its goroutine once the
-// recorder returns; Close flushes a recorder that has Flush.
+// never holds the router: a full queue ends the recording at once, named; the records already queued are still
+// written and flushed (review C3), and Close stops the goroutine once the recorder returns; Close flushes a recorder
+// that has Flush.
 func TestRecorderQueueFullEndsTheRecording(t *testing.T) {
 	t.Parallel()
 	d := &rrDouble{hold: make(chan struct{})}
@@ -141,7 +142,7 @@ func TestRecorderQueueFullEndsTheRecording(t *testing.T) {
 		rtSend(t, ctx, r, 0, rtEv(0, rtAt(float64(1+i)), rtStr("a")))
 	}
 	st := rtStats(t, ctx, r)
-	if rs := st.Recording[0]; !rs.Failed || !strings.Contains(rs.Err, "recording queue full at record") {
+	if rs := st.Recording[0]; !rs.Failed || !strings.Contains(rs.Err, "recording queue full after record") {
 		t.Errorf("Recording %+v; want Failed: queue full", rs)
 	}
 	close(d.hold)
@@ -150,8 +151,8 @@ func TestRecorderQueueFullEndsTheRecording(t *testing.T) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.flushed != 0 {
-		t.Errorf("Flush called %d times after the recording failed; want 0", d.flushed)
+	if d.flushed == 0 || slices.Contains(d.calls, "stop") {
+		t.Errorf("Flush called %d times, calls %v; want the queued records written and flushed, no stop (review C3)", d.flushed, d.calls)
 	}
 	d2 := &rrDouble{}
 	r2, err := runtime.Start(runtime.Config{Shards: 1, Now: rtNow}, []runtime.App{rrApp(t, d2, func(event.Event) error { return nil })})

@@ -32,7 +32,7 @@ func NewSync(app App, start int64, virtual bool, out func(e event.Event)) (*Sync
 		return nil, err
 	}
 	s := &Sync{r: r, a: r.apps[0], sh: r.shards[0], out: out}
-	s.a.ing = NewIngest(app.Streams, start, app.Tables, virtual)
+	s.a.ing = NewIngest(app.Streams, start, app.Tables, virtual).withFlagSlots(app.Schemas)
 	s.rt = newRouter(r)
 	s.rt.deliver = func(_ int, m message) {
 		s.sh.process(m)
@@ -57,7 +57,7 @@ func (s *Sync) flush() {
 
 // Begin is a recording's header: live ingest from start. It is legal only before the first event.
 func (s *Sync) Begin(start int64) {
-	s.a.ing = NewIngest(s.a.app.Streams, start, s.a.app.Tables, false)
+	s.a.ing = NewIngest(s.a.app.Streams, start, s.a.app.Tables, false).withFlagSlots(s.a.app.Schemas)
 }
 
 // Event is one event step: the shared ingest step (stamping e's Seq and Tables in place), the offers, the walks;

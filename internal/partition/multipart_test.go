@@ -68,3 +68,19 @@ func TestMultiPartOfferPanicsOnAMalformedKey(t *testing.T) {
 		})
 	}
 }
+
+// TestOfferLeavesRestUntouched (design s3-2b-2 MUST 16; review C7): partition reads a key's Rest and never writes it —
+// one event's Rest may be shared by several rules' offers on other shards; normalising a part is the router's.
+func TestOfferLeavesRestUntouched(t *testing.T) {
+	t.Parallel()
+	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString, event.TFloat, event.TString},
+		TTL: 60_000, Body: &oaBody{}, OnArrival: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rest := []event.Value{mpFloat(math.Copysign(0, -1)), str("x")}
+	r.Offer(mpKey(str("k"), rest...), ev(0, 1, 1))
+	if !math.Signbit(rest[0].F) || rest[1] != str("x") {
+		t.Errorf("Rest after Offer: %+v; want it as given (-0.0, x)", rest)
+	}
+}
