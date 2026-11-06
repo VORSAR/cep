@@ -48,6 +48,7 @@
 | 2026-11-06 | [the docs restructure](#owner-decisions-2026-11-06--the-docs-restructure) |
 | 2026-11-06 | [the code graph re-indexes itself](#owner-decisions-2026-11-06--the-code-graph-re-indexes-itself) |
 | 2026-11-06 | [S3.2b-2's plan check](#owner-decisions-2026-11-06--s32b-2s-plan-check) |
+| 2026-11-06 | [S3.2b-2's design (after the architecture review)](#owner-decisions-2026-11-06--s32b-2s-design-after-the-architecture-review) |
 
 ## The decisions
 
@@ -430,3 +431,15 @@ The owner released the sprint the same day ("lets resume the work in current spr
 3. **Grouped partition keys have one spelling** (Q3). A single key is written without brackets, `k of S`; a group is two or more different attributes in brackets, `(k, j) of S`; every stream in one clause names the same number of parts. `(k) of S`, an attribute named twice in one group, and a part-count mismatch between streams are each a deploy error whose message shows the valid form. Each gets its code, its entry in SPEC rev 5's change log and an invalid example.
    - **Why:** SPEC's "one way only" rule: one spelling is easier for a generator to write and a reviewer to read. Detections are the same either way.
    - **Rejected:** accepting `(k)` as `k` and an attribute repeated in a group as named once. A part-count mismatch is an error under either option: positions cannot be matched.
+
+### Owner decisions, 2026-11-06 — S3.2b-2's design (after the architecture review)
+
+The review ([s3-2b-2-design-architecture.md](../reviews/s3-2b-2-design-architecture.md): 2 blockers, 10 should-fix, 8 later, each behaviour claim proven by a scratch program; the coordinator re-ran the proofs on a fresh copy) raised three questions, and the answers raised two more. Asked in plain language with the options ranked by accuracy. [s3-2b-2-design.md](s3-2b-2-design.md) v2 places every finding.
+
+1. **The Go entry points refuse every value a recording cannot copy exactly** (review F1; ≠ R: the recommendation refused broken values and tidied harmless ones). A typed event is refused with an error to its caller when its time field differs from its timestamp attribute, a string holds malformed UTF-8, an object's text is not valid JSON already in its compact form, or a timestamp is outside the years 0000–9999. Nothing is changed silently; a recording always replays to the live run's alerts.
+2. **When the recording falls behind, it stops; detection never waits** (review F2, as recommended). The recorder writes on its own goroutine behind a bounded queue; a full queue ends the recording, counted and reported with the record where it stopped, as a write error does (S3.2b-2's Q2). **The owner added: a product setting turns recording off entirely.**
+3. **A recording keeps each payload as sent**, its whitespace removed, undeclared fields included (review question C, note open point 4; ≠ R: the recommendation recorded declared fields plus counts). Replay decodes the same bytes and so counts unknown fields and flag overrides exactly. Recordings can hold fields no rule reads.
+4. **Recording is off unless turned on** (≠ R: the recommendation was on unless turned off). A deployment that says nothing records nothing; the setting is the deployment's (S3.3's `Deploy`, then `cepd`).
+5. **S3.2b-2 stays one sprint** (as recommended): about 12.5 points after the review's fixes and these answers, under the 13-point cap. The gate checks land with the code they guard.
+
+Not owner decisions, recorded for the record: the tripwire keeps a ceiling per metric with an optional per-rule override, so every metric and rule pair has a ceiling as ADR-0015 §3.11 requires (review F10, question D); the review's F19 (skip ticks for apps with no idle stream) is rejected, since a caller's tick raises the stamp that later `time arrival` events take.

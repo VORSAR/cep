@@ -1,0 +1,27 @@
+language cep/0.1;
+
+stream ConnRequests (src string, dst string, ts timestamp)
+  time ts watermark bounded 30 sec idle after 1 min;
+
+stream Resets (src string, dst string, ts timestamp)
+  time ts watermark bounded 30 sec idle after 1 min;
+
+stream ConnResetAlerts (src string, dst string, ts timestamp);
+
+rule RequestThenReset
+  intent 'A connection request from host A to host B, then a reset from B back to A within 30 seconds.'
+  partition by (src, dst) of ConnRequests, (dst, src) of Resets ttl 5 min
+  from every req = ConnRequests
+    -> rst = Resets
+  within 30 sec
+  after match skip past last
+  late events drop
+  expect given ConnRequests [ {src: 'a', dst: 'b', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         given Resets [ {src: 'b', dst: 'a', ts: timestamp '2026-01-01T10:00:10Z'} ]
+         then ConnResetAlerts [ {src: 'a', dst: 'b', ts: timestamp '2026-01-01T10:00:10Z'} ]
+  expect given ConnRequests [ {src: 'a', dst: 'b', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         given Resets [ {src: 'a', dst: 'b', ts: timestamp '2026-01-01T10:00:10Z'},
+                        {src: 'b', dst: 'a', ts: timestamp '2026-01-01T10:00:31Z'} ]
+         then ConnResetAlerts [ ]
+  select req.src, req.dst
+  insert into ConnResetAlerts;

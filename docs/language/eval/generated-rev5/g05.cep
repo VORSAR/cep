@@ -1,0 +1,30 @@
+language cep/0.1;
+
+stream ApiCalls (tenantId string, service string, endpoint string, denied bool,
+                 ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream DeniedApiCallAlerts (tenantId string, service string, endpoint string,
+                            ts timestamp);
+
+rule DeniedApiCall
+  intent 'Alert on every denied API call, at most once per tenant, service and endpoint every 5 minutes.'
+  partition by (tenantId, service, endpoint) of ApiCalls ttl 10 min
+  from ApiCalls[denied == true]
+  expect given ApiCalls [ {tenantId: 't1', service: 'billing', endpoint: '/login', denied: true, ts: timestamp '2026-01-01T10:00:00Z'},
+                          {tenantId: 't1', service: 'billing', endpoint: '/orders', denied: true, ts: timestamp '2026-01-01T10:01:00Z'},
+                          {tenantId: 't1', service: 'billing', endpoint: '/login', denied: true, ts: timestamp '2026-01-01T10:03:00Z'},
+                          {tenantId: 't1', service: 'search', endpoint: '/login', denied: true, ts: timestamp '2026-01-01T10:04:00Z'},
+                          {tenantId: 't2', service: 'billing', endpoint: '/login', denied: true, ts: timestamp '2026-01-01T10:04:30Z'},
+                          {tenantId: 't1', service: 'billing', endpoint: '/login', denied: true, ts: timestamp '2026-01-01T10:05:00Z'},
+                          {tenantId: 't1', service: 'billing', endpoint: '/login', denied: true, ts: timestamp '2026-01-01T10:05:00.001Z'} ]
+         then DeniedApiCallAlerts [ {tenantId: 't1', service: 'billing', endpoint: '/login', ts: timestamp '2026-01-01T10:00:00Z'},
+                                    {tenantId: 't1', service: 'billing', endpoint: '/orders', ts: timestamp '2026-01-01T10:01:00Z'},
+                                    {tenantId: 't1', service: 'search', endpoint: '/login', ts: timestamp '2026-01-01T10:04:00Z'},
+                                    {tenantId: 't2', service: 'billing', endpoint: '/login', ts: timestamp '2026-01-01T10:04:30Z'},
+                                    {tenantId: 't1', service: 'billing', endpoint: '/login', ts: timestamp '2026-01-01T10:05:00.001Z'} ]
+  expect given ApiCalls [ {tenantId: 't1', service: 'billing', endpoint: '/login', denied: false, ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then DeniedApiCallAlerts [ ]
+  select tenantId, service, endpoint
+  output first every 5 min
+  insert into DeniedApiCallAlerts;
