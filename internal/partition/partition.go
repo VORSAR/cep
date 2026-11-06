@@ -45,9 +45,7 @@ type Instance struct {
 	Key          event.Value     // the first event's key value; a float zero is stored as +0.0 (break-it K1)
 	Clock        *clock.Instance // the key's release buffer and timers
 	Op           OpState         // nil until birth, and from a purge until rebirth
-	LastActivity int64           // the event time of the key's last released event; math.MinInt64 before any
-	Anchor       int64           // the rate limit's last emission time (SEMANTICS §8); meaningful when Anchored
-	Anchored     bool            // cleared by every reset, a purge or a panic (design s3-2b-1 §3)
+	LastActivity int64           // the event time of the key's last released event (on arrival: the largest seen); math.MinInt64 before any
 
 	pending bool // listed for freeing after a purge (once: review F10)
 }
@@ -58,8 +56,8 @@ type Config struct {
 	KeyType event.Type // the keys' one type (E-PART-003); TString for a key-less rule's pseudo-key ""
 	TTL     int64      // ms, > 0; 0 only for a key-less rule, which is never purged
 	Body    Body
-	// OnArrival: the body sees each event at Offer, never buffered and never construct-late (owner Q1 of S3.2b;
-	// design s3-2b-1 §3). Stub: not honoured yet.
+	// OnArrival: the body sees each event at Offer, never buffered and never construct-late; exactly one input
+	// (owner Q1 of S3.2b; design s3-2b-1 v2 §3). Its clock is fed its stream's admission watermark (D1): the runtime's.
 	OnArrival bool
 }
 
@@ -94,6 +92,7 @@ type Rule struct {
 	stats   Stats
 	tables  any // the snapshot of the walk in progress (owner D5): what its timers read
 	cb      clock.Callbacks
+	arrival bool // Config.OnArrival
 }
 
 // keyT is a key value as a map key: the type's own field only, so a lookup allocates nothing, and float keys compare
@@ -149,10 +148,12 @@ func NewRule(cfg Config) (*Rule, error) {
 		return nil, errNegTTL
 	case cfg.Body == nil:
 		return nil, errNilBody
+	case cfg.OnArrival && len(cfg.Inputs) != 1:
+		return nil, fmt.Errorf("partition: an on-arrival rule reads exactly one stream, not %d (design s3-2b-1 v2 §3)", len(cfg.Inputs))
 	}
 	r := &Rule{
 		clock: clock.NewRuleClock(cfg.Inputs), keyType: cfg.KeyType, ttl: cfg.TTL, body: cfg.Body,
-		byKey: map[keyT]*Instance{}, byClock: map[*clock.Instance]*Instance{},
+		byKey: map[keyT]*Instance{}, byClock: map[*clock.Instance]*Instance{}, arrival: cfg.OnArrival,
 	}
 	r.cb = clock.Callbacks{OnEvent: r.onEvent, OnTimers: r.onTimers, OnDiscard: r.onDiscard}
 	return r, nil
@@ -183,6 +184,14 @@ func (r *Rule) Offer(key event.Value, e event.Event) (constructLate bool) {
 			key.F = 0 // -0.0 and +0.0 are one key, stored as +0.0, whichever arrives first (break-it K1)
 		}
 		in = &Instance{Key: key, Clock: r.clock.NewInstance(), LastActivity: math.MinInt64}
+	}
+	if r.arrival {
+		if !resident { // in both maps before the body runs, so a panic's reset and free find it (review F11)
+			r.byKey[k] = in
+			r.byClock[in.Clock] = in
+		}
+		r.arrive(in, e)
+		return false
 	}
 	if in.Clock.Buffer(e) {
 		r.stats.ConstructLate++
@@ -216,6 +225,20 @@ func (r *Rule) onEvent(ci *clock.Instance, e event.Event) {
 	in.LastActivity = e.Ts
 	if r.ttl > 0 {
 		ci.Schedule(addSat(e.Ts, r.ttl), clock.TTLPurge, 0)
+	}
+	r.body.OnEvent(in, e)
+}
+
+// arrive is an on-arrival rule's event (owner Q1 of S3.2b; design s3-2b-1 v2 §3 step 4): never buffered, never
+// construct-late; LastActivity is the largest event time seen, and the key's one TTL timer is re-armed from it.
+func (r *Rule) arrive(in *Instance, e event.Event) {
+	defer r.recoverBody(in)
+	if in.Op == nil {
+		in.Op = r.body.NewState(in)
+	}
+	in.LastActivity = max(in.LastActivity, e.Ts)
+	if r.ttl > 0 {
+		in.Clock.Schedule(addSat(in.LastActivity, r.ttl), clock.TTLPurge, 0)
 	}
 	r.body.OnEvent(in, e)
 }
@@ -324,6 +347,7 @@ func (r *Rule) Walk(fn func(component, key string, state any)) {
 	fn("clock", "", r.clock.State())
 	for _, in := range r.ordered() {
 		birth, born := in.Clock.Birth()
+		born = born || (r.arrival && in.Op != nil) // a key-less on-arrival key schedules nothing, so the clock never bears it (review F11)
 		fn("instance", strconv.FormatUint(in.Clock.Ordinal(), 10), InstanceState{
 			Key: in.Key, LastActivity: in.LastActivity, Birth: birth, Born: born,
 			Events: in.Clock.Events(nil), Timers: in.Clock.Timers(nil),
