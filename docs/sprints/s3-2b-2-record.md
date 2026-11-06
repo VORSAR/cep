@@ -47,6 +47,7 @@
 ## Scope changes
 
 - **2026-11-06 (owner, plan check):** Q1's rejected-line record kind (+0.5). Re-estimated item by item at the plan check: item 7 +0.5 (the tripwire step is a new gate instrument, not only a test), Q3 of S3.2b's validator rule +0.5. About 9.5 → about 11 points, under the cap; nothing moved out.
+- **2026-11-06 (owner, review and break-it):** two answers, both as recommended ([decisions](decisions.md#owner-decisions-2026-11-06--s32b-2s-review-and-break-it)): a drain waits for the recording only until its deadline; the burst gauge leaves the live-equals-replay check. No points moved.
 - **2026-11-06 (owner, design):** D1's refusals at the Go boundary (+0.5), D2's recorder goroutine and queue (+0.5), the review's fixes (the differential's key shapes, the sink high-water and the tripwire corpus, the in-path determinism plant, the projection buffer, the test migration: about +1.5); D3's position shrank (no golden changes: −0.75). About 11 → about 12.5 points, under the cap; the owner kept one sprint (D5); nothing moved out.
 
 ## Measured results
@@ -68,6 +69,19 @@
 
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
+| F1–F20, G1–G13 | design review, QA's tests | 2 blockers, 10 should-fix, 8 later; 13 gaps | see [the design's §15](s3-2b-2-design.md#15-review-test-gap-and-evaluation-dispositions-v2) | placed in design v2 and built; F19 rejected |
+| C1 = B2 | combined review, break-it | blocker | a payload of malformed UTF-8 under the line limit grows past it when cleaned and ends the recording | fixed: `SendPayload` measures `event.CleanLen` (`TestBreakitMalformedUTF8PayloadStaysRecordable`, red first) |
+| C2 = B3, L1 | combined review, break-it | should-fix (B3 blocker) | `TableWrite` never checked the log line; `Send`'s bound left out the batch id | fixed: a row bound and the batch id (`TestBreakitTableWriteBeyondTheLineIsRefused`, `TestBreakitSendBatchIDBeyondTheLine`) |
+| C3 | combined review | should-fix | after a full queue the queued records were skipped and the file torn mid-line | fixed: written and flushed, whole lines, `Records` = lines (`TestARecordingThatOverflowsStaysReadable`) |
+| C4 | combined review | should-fix | a stuck recorder held `Drain` until its deadline, then failed it | owner decision 1: the drain waits until its deadline, then marks the recording failed and succeeds (`TestDrainWaitsForTheRecordingOnlyUntilItsDeadline`) |
+| C5 | combined review | later | MUST 9 and the `Recorder` comment said "the router goroutine" | fixed: both reworded |
+| C6 | combined review | later | §8 named `gate/law.json`; override keys differ by metric | fixed: §8 and ADR-0015 annotated |
+| C7 | combined review | later | no test pinned MUST 16 | fixed: `TestOfferLeavesRestUntouched`, red with a planted write |
+| B1 | break-it | blocker | a key part on a declared `text_invisibles` slot keyed on the caller's value live, false in replay | fixed: the ingest step writes the flag into the slot (`TestBreakitInvisiblesSlotAsKeyPartReplays`) |
+| B4 | break-it | blocker | a panicking recorder crashed the process | fixed: recovered as the recording's failure (`TestBreakitRecorderPanicLeavesDetectionRunning`) |
+| S1 | break-it | should-fix | `Records` counted calls, not lines | fixed: one record per table row (`TestBreakitRecordsCountsEveryLine`) |
+| S2 | break-it | should-fix | a tick past year 9999 made an unreadable recording that reported healthy | fixed: `Tick` refuses it, the recorder fails on it (`TestBreakitTickBeyondYear9999StaysReadable`, `TestTickRefusesATimeARecordingCannotWrite`) |
+| S3 | break-it | should-fix | the burst gauge differs with the shard count | owner decision 2: left out of live-equals-replay; the test is now a guard on every other counter |
 
 ## Done-done
 
@@ -79,7 +93,8 @@ Entry (G0)   ☑ card complete and approved (S3.2b's, v3; the owner's additions 
 Design (G1)  ☑ architecture review resolved (design v2 §15) ☑ QA testability (14 tests red first; G1–G13 placed) ☑ owner decisions recorded (D1–D5)
              ☑ ADRs, SEMANTICS and SPEC annotated ☑ language evaluation 5/5
 Build (G2)   ☐ T2 (make check exit 0) ☐ T3 (exit 0) ☐ conformance cases for every construct changed ☐ tests on the real code
-Review (G3)  ☐ architecture review of the combined diff ☐ QA break-it ☐ every finding fixed, forwarded or rejected
+Review (G3)  ☑ architecture review of the combined diff (1 blocker, 3 should-fix, 3 later) ☑ QA break-it (4 blockers, 3 should-fix, 1 later)
+             ☑ every finding fixed, or settled by the owner (C4, S3); every breaker's red test committed
 Verify (G4)  ☐ T4 exit 0, run complete ☐ owner's check passed ☐ exits 2–4 and 6–11 met by their proofs
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
