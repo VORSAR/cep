@@ -85,9 +85,6 @@ func (g *Ingest) Reject(stream int, arrival int64) {
 	g.counts[stream].rejected++
 }
 
-// Stamp is the last stamp: what a tick or an arrival is raised to.
-func (g *Ingest) Stamp() int64 { return g.stamp }
-
 // Tick is a live idle tick (ObserveTick).
 func (g *Ingest) Tick(now int64) []clock.WMAdvance {
 	g.stamp = max(g.stamp, now)
