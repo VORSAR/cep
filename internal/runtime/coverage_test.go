@@ -112,7 +112,7 @@ func TestCvKeyTypesIndependentOfShards(t *testing.T) {
 				ctx := rtCeiling(t)
 				log, births := newRTLog(), newRTLog()
 				body := rtBodies(rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
-					log.add(cvKey(in.Key), fmt.Sprintf("ev s%d#%d @%d", e.StreamID, e.Seq, e.Ts-rtT0))
+					log.add(cvKey(in.Key.First), fmt.Sprintf("ev s%d#%d @%d", e.StreamID, e.Seq, e.Ts-rtT0))
 				}})
 				newBody := func(emit runtime.Emit) partition.Body {
 					b := body(emit).(*rtBody)
@@ -122,7 +122,7 @@ func TestCvKeyTypesIndependentOfShards(t *testing.T) {
 				app := runtime.App{
 					Streams: []clock.StreamSpec{rtSrc("in", 0)},
 					Schemas: []event.Schema{rtSchema(t, "in", rtA("key", c.ty))},
-					Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: c.ty, TTL: 3600 * rtSec, NewBody: newBody}},
+					Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{c.ty}, TTL: 3600 * rtSec, NewBody: newBody}},
 				}
 				r := rtStart(t, runtime.Config{Shards: shards}, app)
 				for i := 0; i < 6; i++ {
@@ -164,7 +164,7 @@ func TestCvInternalTicker(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{{Name: "q", IdleAfter: 5 * rtSec}, rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "q", rtA("k", event.TString)), rtSchema(t, "out", rtA("what", event.TString))},
-		Rules: []runtime.Rule{{Name: "Q", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "Q", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "Q",
 				sched: func(e event.Event, n uint64) []clock.Timer {
 					return []clock.Timer{{Due: e.Ts + rtSec, Kind: clock.Completion, Ref: 1}}
@@ -212,7 +212,7 @@ func TestCvDefaults(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0)},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
-		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R", log: log})}},
+		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R", log: log})}},
 	}
 	r, err := runtime.Start(runtime.Config{}, []runtime.App{app})
 	if err != nil {
@@ -245,7 +245,7 @@ func TestCvStreamLateAndRedrain(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 5*rtSec)},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
-		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R", log: log})}},
+		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R", log: log})}},
 	}
 	r := rtStart(t, runtime.Config{Shards: 2}, app)
 	for _, s := range []float64{20, 10, 16} {
@@ -273,7 +273,7 @@ func TestCvStartRefusesMore(t *testing.T) {
 		return runtime.App{
 			Streams: []clock.StreamSpec{rtSrc("in", 0)},
 			Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
-			Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R"})}},
+			Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R"})}},
 		}
 	}
 	for _, c := range []struct {
@@ -281,8 +281,8 @@ func TestCvStartRefusesMore(t *testing.T) {
 		bad  func(a *runtime.App)
 	}{
 		{"schemas_not_aligned", func(a *runtime.App) { a.Schemas = nil }},
-		{"no_inputs", func(a *runtime.App) { a.Rules[0].Inputs = nil; a.Rules[0].KeyAttr = nil; a.Rules[0].TTL = 0 }},
-		{"object_key", func(a *runtime.App) { a.Rules[0].KeyType = event.TObject }},
+		{"no_inputs", func(a *runtime.App) { a.Rules[0].Inputs = nil; a.Rules[0].KeyAttrs = nil; a.Rules[0].TTL = 0 }},
+		{"object_key", func(a *runtime.App) { a.Rules[0].KeyTypes = []event.Type{event.TObject} }},
 		{"nil_body", func(a *runtime.App) { a.Rules[0].NewBody = func(runtime.Emit) partition.Body { return nil } }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestCvCallerContextsAndClose(t *testing.T) {
 	app0 := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("n", event.TInt))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
 				for n := 0; n < 3; n++ {
 					b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{rtInt(int64(n))}})
@@ -334,7 +334,7 @@ func TestCvCallerContextsAndClose(t *testing.T) {
 	app1 := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in1", 0)},
 		Schemas: []event.Schema{rtSchema(t, "in1", rtA("k", event.TString))},
-		Rules:   []runtime.Rule{{Name: "R1", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R1"})}},
+		Rules:   []runtime.Rule{{Name: "R1", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R1"})}},
 	}
 	r, err := runtime.Start(runtime.Config{Shards: 2, Intake: 2, SinkQueue: 1, Now: rtNow}, []runtime.App{app0, app1})
 	if err != nil {

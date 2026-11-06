@@ -88,12 +88,12 @@ func TestOneTTLTimerPerInstance_HundredKeys(t *testing.T) {
 	for _, in := range instances(w.r) {
 		for _, tm := range in.Clock.Timers(nil) {
 			if tm.Kind != clock.TTLPurge {
-				t.Errorf("key %s: unexpected timer %+v", keyName(in.Key), tm)
+				t.Errorf("key %s: unexpected timer %+v", keyName(in.Key.First), tm)
 				continue
 			}
 			ttls++
 			if tm.Due != in.LastActivity+ttlMs {
-				t.Errorf("key %s: TTL due %d, want LastActivity %d + %d", keyName(in.Key), tm.Due, in.LastActivity, ttlMs)
+				t.Errorf("key %s: TTL due %d, want LastActivity %d + %d", keyName(in.Key.First), tm.Due, in.LastActivity, ttlMs)
 			}
 		}
 	}
@@ -121,7 +121,7 @@ func (q *quiet) OnPurge(*partition.Instance)                      {}
 // re-arms the TTL in place (§4.3: a replacing Schedule MUST NOT allocate).
 func TestOneTTLTimerPerInstance_ReArmAllocatesNothing(t *testing.T) {
 	const ttlMs = 5 * minute
-	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyType: event.TString, TTL: ttlMs, Body: &quiet{}})
+	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: ttlMs, Body: &quiet{}})
 	if err != nil {
 		t.Fatalf("NewRule: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestOneTTLTimerPerInstance_ReArmAllocatesNothing(t *testing.T) {
 		ts += second
 		seq++
 		r.Apply(clock.WMAdvance{StreamID: 0, Contribution: ts, Moved: true})
-		r.Offer(key, event.Event{StreamID: 0, Ts: ts, Seq: seq})
+		r.Offer(partition.Single(key), event.Event{StreamID: 0, Ts: ts, Seq: seq})
 		r.Advance(nil)
 	}
 	for range 16 { // birth and warm-up: the instance, its map entries, the heaps' capacity

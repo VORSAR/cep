@@ -7,6 +7,7 @@ package plan_test
 
 import (
 	"errors"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -78,8 +79,8 @@ func TestBuildExample07(t *testing.T) {
 	if r.Name != "UnknownAppConsent" || !slices.Equal(r.Inputs, []int{0}) {
 		t.Errorf("rule %q reads %v, want UnknownAppConsent reading [0]", r.Name, r.Inputs)
 	}
-	if !slices.Equal(r.KeyAttr, []int{0}) || r.KeyType != event.TString || r.TTL != 10*pqMin {
-		t.Errorf("rule %s: KeyAttr %v, KeyType %v, TTL %d; want [0] (tenantId), string, 10 min (owner D2)", r.Name, r.KeyAttr, r.KeyType, r.TTL)
+	if !reflect.DeepEqual(r.KeyAttrs, [][]int{{0}}) || !slices.Equal(r.KeyTypes, []event.Type{event.TString}) || r.TTL != 10*pqMin {
+		t.Errorf("rule %s: KeyAttrs %v, KeyTypes %v, TTL %d; want [[0]] (tenantId), [string], 10 min (owner D2)", r.Name, r.KeyAttrs, r.KeyTypes, r.TTL)
 	}
 	if !r.OnArrival {
 		t.Errorf("rule %s: OnArrival false; a plain body sees each event on arrival (owner Q1, design §1 step 3)", r.Name)
@@ -104,7 +105,7 @@ func TestBuildExample09(t *testing.T) {
 		t.Fatalf("%d rules, want 1", len(p.Rules))
 	}
 	r := p.Rules[0]
-	if r.Name != "HighRisk" || !slices.Equal(r.Inputs, []int{0}) || r.KeyAttr != nil || r.KeyType != event.TString || r.TTL != 0 || !r.OnArrival {
+	if r.Name != "HighRisk" || !slices.Equal(r.Inputs, []int{0}) || r.KeyAttrs != nil || !slices.Equal(r.KeyTypes, []event.Type{event.TString}) || r.TTL != 0 || !r.OnArrival {
 		t.Errorf("rule %+v; want HighRisk reading [0], key-less (KeyAttr nil, string, TTL 0), OnArrival", r)
 	}
 }
@@ -177,10 +178,10 @@ func TestBuildPartitionedAndTimeClauses(t *testing.T) {
 		t.Fatalf("%d rules, want 2", len(p.Rules))
 	}
 	byN, byK := p.Rules[0], p.Rules[1]
-	if byN.Name != "ByN" || !slices.Equal(byN.Inputs, []int{0}) || !slices.Equal(byN.KeyAttr, []int{1}) || byN.KeyType != event.TInt || byN.TTL != pqHr || !byN.OnArrival {
+	if byN.Name != "ByN" || !slices.Equal(byN.Inputs, []int{0}) || !reflect.DeepEqual(byN.KeyAttrs, [][]int{{1}}) || !slices.Equal(byN.KeyTypes, []event.Type{event.TInt}) || byN.TTL != pqHr || !byN.OnArrival {
 		t.Errorf("rule %+v; want ByN reading [0], KeyAttr [1] (n), KeyType int, TTL 1 h, OnArrival", byN)
 	}
-	if byK.Name != "ByK" || !slices.Equal(byK.Inputs, []int{2}) || !slices.Equal(byK.KeyAttr, []int{0}) || byK.KeyType != event.TString || byK.TTL != 20*pqMin || !byK.OnArrival {
+	if byK.Name != "ByK" || !slices.Equal(byK.Inputs, []int{2}) || !reflect.DeepEqual(byK.KeyAttrs, [][]int{{0}}) || !slices.Equal(byK.KeyTypes, []event.Type{event.TString}) || byK.TTL != 20*pqMin || !byK.OnArrival {
 		t.Errorf("rule %+v; want ByK reading [2], KeyAttr [0] (k), KeyType string, TTL 20 min, OnArrival", byK)
 	}
 }

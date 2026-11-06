@@ -44,12 +44,12 @@ func (b *bkBody) sched(in *partition.Instance, due int64, k clock.TimerKind, ref
 }
 
 func (b *bkBody) NewState(in *partition.Instance) partition.OpState {
-	b.log = append(b.log, "new "+bkKeyText(in.Key))
+	b.log = append(b.log, "new "+bkKeyText(in.Key.First))
 	return &bkState{}
 }
 
 func (b *bkBody) OnEvent(in *partition.Instance, e event.Event) {
-	b.log = append(b.log, fmt.Sprintf("event %s s%d #%d @%d", bkKeyText(in.Key), e.StreamID, e.Seq, e.Ts))
+	b.log = append(b.log, fmt.Sprintf("event %s s%d #%d @%d", bkKeyText(in.Key.First), e.StreamID, e.Seq, e.Ts))
 	ref := uint64(e.StreamID)<<32 | e.Seq
 	if b.complete > 0 {
 		b.sched(in, e.Ts+b.complete-1, clock.Completion, ref)
@@ -60,7 +60,7 @@ func (b *bkBody) OnEvent(in *partition.Instance, e event.Event) {
 }
 
 func (b *bkBody) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) {
-	b.log = append(b.log, fmt.Sprintf("timers %s %v", bkKeyText(in.Key), fires))
+	b.log = append(b.log, fmt.Sprintf("timers %s %v", bkKeyText(in.Key.First), fires))
 	st := in.Op.(*bkState)
 	st.timers = slices.DeleteFunc(st.timers, func(x clock.Timer) bool { return slices.Contains(fires, x) })
 	if b.chain {
@@ -73,7 +73,7 @@ func (b *bkBody) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) {
 }
 
 func (b *bkBody) OnDiscard(in *partition.Instance, refs []uint64) {
-	b.log = append(b.log, fmt.Sprintf("discard %s %v", bkKeyText(in.Key), refs))
+	b.log = append(b.log, fmt.Sprintf("discard %s %v", bkKeyText(in.Key.First), refs))
 	st := in.Op.(*bkState)
 	st.timers = slices.DeleteFunc(st.timers, func(x clock.Timer) bool {
 		return x.Kind == clock.Discard && slices.Contains(refs, x.Ref)
@@ -81,7 +81,7 @@ func (b *bkBody) OnDiscard(in *partition.Instance, refs []uint64) {
 }
 
 func (b *bkBody) OnPurge(in *partition.Instance) {
-	b.log = append(b.log, fmt.Sprintf("purge %s last=%d", bkKeyText(in.Key), in.LastActivity))
+	b.log = append(b.log, fmt.Sprintf("purge %s last=%d", bkKeyText(in.Key.First), in.LastActivity))
 }
 
 // bkMsg is one message of the step contract: advances, then an optional event under a key.
@@ -97,7 +97,7 @@ type bkMsg struct {
 func bkRun(t *testing.T, kt event.Type, ttl int64, mk func() *bkBody, inputs []int, msgs []bkMsg, walkAfter func(i int) bool) ([]string, partition.Stats, []bool) {
 	t.Helper()
 	b := mk()
-	r, err := partition.NewRule(partition.Config{Inputs: inputs, KeyType: kt, TTL: ttl, Body: b})
+	r, err := partition.NewRule(partition.Config{Inputs: inputs, KeyTypes: []event.Type{kt}, TTL: ttl, Body: b})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func bkRun(t *testing.T, kt event.Type, ttl int64, mk func() *bkBody, inputs []i
 			r.Apply(a)
 		}
 		if m.event {
-			late = append(late, r.Offer(m.key, m.e))
+			late = append(late, r.Offer(partition.Single(m.key), m.e))
 		}
 		if walkAfter(i) {
 			walk()
@@ -228,7 +228,7 @@ func (q *bkQuiet) OnPurge(*partition.Instance)                      {}
 // that allocates nothing allocates nothing (ADR-0010 §1), the TTL re-arm included, for a string and a float key.
 func TestBreakitGuardResidentKeyAllocatesNothing(t *testing.T) {
 	for _, key := range []event.Value{bkStr("k"), bkFloat(math.Copysign(0, -1))} {
-		r, err := partition.NewRule(partition.Config{Inputs: []int{0, 1}, KeyType: key.Kind, TTL: 1000, Body: &bkQuiet{}})
+		r, err := partition.NewRule(partition.Config{Inputs: []int{0, 1}, KeyTypes: []event.Type{key.Kind}, TTL: 1000, Body: &bkQuiet{}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -238,7 +238,7 @@ func TestBreakitGuardResidentKeyAllocatesNothing(t *testing.T) {
 			c++
 			r.Apply(bkAdv(0, c))
 			r.Apply(bkAdv(1, c))
-			r.Offer(key, event.Event{StreamID: 0, Ts: c, Seq: uint64(c), Values: vals})
+			r.Offer(partition.Single(key), event.Event{StreamID: 0, Ts: c, Seq: uint64(c), Values: vals})
 			r.Advance(nil)
 		}
 		for range 64 {
@@ -253,17 +253,17 @@ func TestBreakitGuardResidentKeyAllocatesNothing(t *testing.T) {
 // TestBreakitGuardOfferAfterEndOfInput: after +inf every key purged and was freed; an event offered then is
 // construct-late, counted, and leaves no instance.
 func TestBreakitGuardOfferAfterEndOfInput(t *testing.T) {
-	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyType: event.TString, TTL: 5, Body: &bkBody{}})
+	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: 5, Body: &bkBody{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Offer(bkStr("a"), event.Event{Ts: 1, Seq: 1})
+	r.Offer(partition.Single(bkStr("a")), event.Event{Ts: 1, Seq: 1})
 	r.Apply(bkAdv(0, math.MaxInt64))
 	r.Advance(nil)
 	if r.Len() != 0 || r.Stats().Purged != 1 {
 		t.Fatalf("after +inf: Len %d, Purged %d; want 0 and 1", r.Len(), r.Stats().Purged)
 	}
-	if !r.Offer(bkStr("a"), event.Event{Ts: 100, Seq: 2}) || r.Len() != 0 || r.Stats().ConstructLate != 1 {
+	if !r.Offer(partition.Single(bkStr("a")), event.Event{Ts: 100, Seq: 2}) || r.Len() != 0 || r.Stats().ConstructLate != 1 {
 		t.Errorf("an offer after +inf: want construct-late, no instance; Len %d, stats %+v", r.Len(), r.Stats())
 	}
 	r.Advance(nil)

@@ -11,10 +11,10 @@ import (
 // purge argument and its admission-fed clock (owner D1) assume one.
 func TestOnArrivalReadsOneStream(t *testing.T) {
 	b := &oaBody{}
-	if _, err := partition.NewRule(partition.Config{Inputs: []int{0, 1}, KeyType: event.TString, TTL: 10, Body: b, OnArrival: true}); err == nil {
+	if _, err := partition.NewRule(partition.Config{Inputs: []int{0, 1}, KeyTypes: []event.Type{event.TString}, TTL: 10, Body: b, OnArrival: true}); err == nil {
 		t.Fatal("NewRule accepted an on-arrival rule reading two streams")
 	}
-	if _, err := partition.NewRule(partition.Config{Inputs: []int{0, 1}, KeyType: event.TString, TTL: 10, Body: b}); err != nil {
+	if _, err := partition.NewRule(partition.Config{Inputs: []int{0, 1}, KeyTypes: []event.Type{event.TString}, TTL: 10, Body: b}); err != nil {
 		t.Fatalf("a buffered rule reading two streams: %v", err)
 	}
 }

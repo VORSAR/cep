@@ -87,7 +87,7 @@ func TestStepContract_BatchInvariance(t *testing.T) {
 			w.r.Apply(clock.WMAdvance{StreamID: 0, Contribution: m.c0, Moved: true})
 			w.r.Apply(clock.WMAdvance{StreamID: 1, Contribution: m.c1, Moved: true})
 			if m.has {
-				w.r.Offer(str(m.key), m.e)
+				w.r.Offer(partition.Single(str(m.key)), m.e)
 			}
 			if every > 0 && (i+1)%every == 0 {
 				w.advance()
@@ -138,7 +138,7 @@ func TestApplyReportsTheClockAndDoesNotWalk(t *testing.T) {
 	t.Parallel()
 	b := &body{}
 	w := newWorld(t, 10*minute, b, 0, 1)
-	if late := w.r.Offer(str("a"), ev(0, minute, 1)); late {
+	if late := w.r.Offer(partition.Single(str("a")), ev(0, minute, 1)); late {
 		t.Fatal("construct-late at clock −∞")
 	}
 	if w.r.Apply(clock.WMAdvance{StreamID: 0, Contribution: 2 * minute, Moved: true}) {
@@ -181,8 +181,8 @@ func TestKeys_NegativeAndPositiveZeroAreOneKey(t *testing.T) {
 		t.Fatalf("Len %d, want 1: -0.0 and +0.0 are one key", w.r.Len())
 	}
 	wantLog(t, b, N("0", 0), Ev("0", 0, 0), Ev("0", 0, second))
-	if in := instances(w.r)[0]; math.Signbit(in.Key.F) {
-		t.Errorf("Instance.Key %v: want +0.0 (break-it K1)", in.Key.F)
+	if in := instances(w.r)[0]; math.Signbit(in.Key.First.F) {
+		t.Errorf("Instance.Key %v: want +0.0 (break-it K1)", in.Key.First.F)
 	}
 }
 
@@ -192,11 +192,11 @@ func TestKeys_NullWrongTypeAndNaNPanic(t *testing.T) {
 	t.Parallel()
 	w := newWorldKeyed(t, event.TFloat, 5*minute, &body{}, 0)
 	w.arrive(0, event.Value{Kind: event.TFloat, F: 1}, ev(0, 0, 1))
-	mustPanic(t, "Offer of a null key", func() { w.r.Offer(event.Value{Kind: event.TFloat, Null: true}, ev(0, 0, 2)) })
-	mustPanic(t, "Offer of an int key on a float rule", func() { w.r.Offer(event.Value{Kind: event.TInt, I: 1}, ev(0, 0, 3)) })
-	mustPanic(t, "Offer of a string key on a float rule", func() { w.r.Offer(str("1"), ev(0, 0, 4)) })
-	mustPanic(t, "Offer of a NaN key", func() { w.r.Offer(event.Value{Kind: event.TFloat, F: math.NaN()}, ev(0, 0, 5)) })
-	mustPanic(t, "Offer of a second NaN key", func() { w.r.Offer(event.Value{Kind: event.TFloat, F: math.NaN()}, ev(0, 0, 6)) })
+	mustPanic(t, "Offer of a null key", func() { w.r.Offer(partition.Single(event.Value{Kind: event.TFloat, Null: true}), ev(0, 0, 2)) })
+	mustPanic(t, "Offer of an int key on a float rule", func() { w.r.Offer(partition.Single(event.Value{Kind: event.TInt, I: 1}), ev(0, 0, 3)) })
+	mustPanic(t, "Offer of a string key on a float rule", func() { w.r.Offer(partition.Single(str("1")), ev(0, 0, 4)) })
+	mustPanic(t, "Offer of a NaN key", func() { w.r.Offer(partition.Single(event.Value{Kind: event.TFloat, F: math.NaN()}), ev(0, 0, 5)) })
+	mustPanic(t, "Offer of a second NaN key", func() { w.r.Offer(partition.Single(event.Value{Kind: event.TFloat, F: math.NaN()}), ev(0, 0, 6)) })
 	if w.r.Len() != 1 {
 		t.Errorf("Len %d after the refused offers, want 1 (a refused key leaves no instance)", w.r.Len())
 	}
@@ -206,7 +206,7 @@ func TestKeys_NullWrongTypeAndNaNPanic(t *testing.T) {
 // other KeyType and TTL 0 (design v2 §3, QA A8).
 func TestNewRuleRefuses(t *testing.T) {
 	t.Parallel()
-	ok := partition.Config{Inputs: []int{0}, KeyType: event.TString, TTL: minute, Body: &body{t: t}}
+	ok := partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: minute, Body: &body{t: t}}
 	if r, err := partition.NewRule(ok); err != nil || r == nil {
 		t.Fatalf("NewRule of a valid config: %v", err)
 	}
@@ -216,8 +216,8 @@ func TestNewRuleRefuses(t *testing.T) {
 	}{
 		{"nil inputs", func(c *partition.Config) { c.Inputs = nil }},
 		{"empty inputs", func(c *partition.Config) { c.Inputs = []int{} }},
-		{"KeyType invalid", func(c *partition.Config) { c.KeyType = event.TInvalid }},
-		{"KeyType object", func(c *partition.Config) { c.KeyType = event.TObject }},
+		{"KeyType invalid", func(c *partition.Config) { c.KeyTypes = []event.Type{event.TInvalid} }},
+		{"KeyType object", func(c *partition.Config) { c.KeyTypes = []event.Type{event.TObject} }},
 		{"negative TTL", func(c *partition.Config) { c.TTL = -1 }},
 		{"nil Body", func(c *partition.Config) { c.Body = nil }},
 	} {
@@ -230,7 +230,7 @@ func TestNewRuleRefuses(t *testing.T) {
 	for _, kt := range []event.Type{event.TString, event.TInt, event.TFloat, event.TBool, event.TTimestamp, event.TDuration} {
 		for _, ttlMs := range []int64{0, minute} {
 			cfg := ok
-			cfg.KeyType, cfg.TTL = kt, ttlMs
+			cfg.KeyTypes, cfg.TTL = []event.Type{kt}, ttlMs
 			if _, err := partition.NewRule(cfg); err != nil {
 				t.Errorf("NewRule(KeyType %v, TTL %d): %v", kt, ttlMs, err)
 			}
@@ -267,7 +267,7 @@ func TestCheckTimers_PlantedFaults(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			b := &body{}
 			b.schedule = func(in *partition.Instance, e event.Event) []clock.Timer {
-				if keyName(in.Key) != "d" || c.schedule == nil {
+				if keyName(in.Key.First) != "d" || c.schedule == nil {
 					return nil
 				}
 				return c.schedule(in, e)
@@ -337,9 +337,9 @@ func TestInstancesInOrdinalOrder(t *testing.T) {
 			t.Fatalf("%d instances, want 300", len(ins))
 		}
 		for i, in := range ins {
-			if in.Clock.Ordinal() != uint64(i) || in.Key.I != val(int64(i)) {
+			if in.Clock.Ordinal() != uint64(i) || in.Key.First.I != val(int64(i)) {
 				t.Fatalf("run %d: position %d is ordinal %d key %d; want ordinal %d key %d", run, i,
-					in.Clock.Ordinal(), in.Key.I, i, val(int64(i)))
+					in.Clock.Ordinal(), in.Key.First.I, i, val(int64(i)))
 			}
 		}
 		var keys []string
@@ -405,7 +405,7 @@ func TestWalkYieldsClockThenInstanceStateThenParts(t *testing.T) {
 	if !ok {
 		t.Fatalf("instance 0's state is %T, want partition.InstanceState (a value, QA A3)", got[1].State)
 	}
-	if keyName(a.Key) != "a" || a.LastActivity != 0 || !a.Born || a.Birth != 0 {
+	if keyName(a.Key.First) != "a" || a.LastActivity != 0 || !a.Born || a.Birth != 0 {
 		t.Errorf("a: Key %v LastActivity %d Born %v Birth %d; want a, 0, true, 0", a.Key, a.LastActivity, a.Born, a.Birth)
 	}
 	if len(a.Events) != 1 || a.Events[0].Ts != 20*second || a.Events[0].Seq != 3 {
@@ -418,7 +418,7 @@ func TestWalkYieldsClockThenInstanceStateThenParts(t *testing.T) {
 	if !ok {
 		t.Fatalf("instance 1's state is %T, want partition.InstanceState", got[3].State)
 	}
-	if keyName(bs.Key) != "b" || bs.LastActivity != negInf || bs.Born || len(bs.Timers) != 0 {
+	if keyName(bs.Key.First) != "b" || bs.LastActivity != negInf || bs.Born || len(bs.Timers) != 0 {
 		t.Errorf("b: %+v, want key b, LastActivity −∞, not born, no timers", bs)
 	}
 	if len(bs.Events) != 1 || bs.Events[0].Ts != 10*second || bs.Events[0].Seq != 2 {

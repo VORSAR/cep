@@ -147,7 +147,7 @@ func pqStart(t testing.TB, rule plan.Rule) *pqRun {
 	if _, ok := x.body.(plan.Counted); !ok {
 		t.Fatalf("rule %s: the body %T does not implement plan.Counted (design §1: every body NewBody returns does)", rule.Name, x.body)
 	}
-	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: x.body, OnArrival: rule.OnArrival})
+	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: x.body, OnArrival: rule.OnArrival})
 	if err != nil {
 		t.Fatalf("rule %s: partition.NewRule: %v", rule.Name, err)
 	}
@@ -155,18 +155,18 @@ func pqStart(t testing.TB, rule plan.Rule) *pqRun {
 	return x
 }
 
-// offer hands e to the rule under its key (the rule's KeyAttr on e's stream, or the pseudo-key ""), the router's job.
+// offer hands e to the rule under its key (the rule's KeyAttrs on e's stream, or the pseudo-key ""), the router's job.
 func (x *pqRun) offer(e event.Event) {
 	x.t.Helper()
 	key := pqKeyless()
-	if x.rule.KeyAttr != nil {
+	if x.rule.KeyAttrs != nil {
 		for i, sid := range x.rule.Inputs {
 			if sid == e.StreamID {
-				key = e.Values[x.rule.KeyAttr[i]]
+				key = e.Values[x.rule.KeyAttrs[i][0]] // the single-part keys of this package's programs
 			}
 		}
 	}
-	if late := x.pr.Offer(key, e); late {
+	if late := x.pr.Offer(partition.Single(key), e); late {
 		x.t.Errorf("Offer(ts %d) was construct-late on an on-arrival rule (design §7.2)", e.Ts)
 	}
 }

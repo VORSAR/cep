@@ -224,8 +224,8 @@ func (b *ldBody) NewState(*partition.Instance) partition.OpState { return &ldSta
 
 func (b *ldBody) OnEvent(in *partition.Instance, e event.Event) {
 	w := b.w
-	w.tr.Released(w.at, b.spec.Name, in.Key, e)
-	w.log = append(w.log, ldEntry{At: w.at, K: "event", Rule: b.spec.Name, Key: in.Key.Str, Stream: e.StreamID, Seq: e.Seq, Ts: e.Ts})
+	w.tr.Released(w.at, b.spec.Name, in.Key.First, e)
+	w.log = append(w.log, ldEntry{At: w.at, K: "event", Rule: b.spec.Name, Key: in.Key.First.Str, Stream: e.StreamID, Seq: e.Seq, Ts: e.Ts})
 	st := in.Op.(*ldState)
 	st.n++
 	if b.spec.Sched != nil {
@@ -244,8 +244,8 @@ func (b *ldBody) OnTimers(in *partition.Instance, fires []clock.Timer, tables an
 	w := b.w
 	st := in.Op.(*ldState)
 	for _, tm := range fires {
-		w.tr.Fired(w.at, b.spec.Name, in.Key, tm)
-		w.log = append(w.log, ldEntry{At: w.at, K: "timer", Rule: b.spec.Name, Key: in.Key.Str, Kind: tm.Kind, Due: tm.Due, Ref: tm.Ref})
+		w.tr.Fired(w.at, b.spec.Name, in.Key.First, tm)
+		w.log = append(w.log, ldEntry{At: w.at, K: "timer", Rule: b.spec.Name, Key: in.Key.First.Str, Kind: tm.Kind, Due: tm.Due, Ref: tm.Ref})
 		st.drop(tm.Kind, tm.Ref)
 	}
 	if b.spec.OnTimers != nil {
@@ -257,8 +257,8 @@ func (b *ldBody) OnDiscard(in *partition.Instance, refs []uint64) {
 	w := b.w
 	st := in.Op.(*ldState)
 	for _, ref := range refs {
-		w.tr.Discarded(w.at, b.spec.Name, in.Key, ref)
-		w.log = append(w.log, ldEntry{At: w.at, K: "discard", Rule: b.spec.Name, Key: in.Key.Str, Ref: ref})
+		w.tr.Discarded(w.at, b.spec.Name, in.Key.First, ref)
+		w.log = append(w.log, ldEntry{At: w.at, K: "discard", Rule: b.spec.Name, Key: in.Key.First.Str, Ref: ref})
 		st.drop(clock.Discard, ref)
 	}
 }
@@ -269,8 +269,8 @@ func (b *ldBody) OnPurge(in *partition.Instance) {
 	if in.LastActivity > ldPosInf-b.spec.TTL {
 		due = ldPosInf
 	}
-	w.tr.Purged(w.at, b.spec.Name, in.Key, due)
-	w.log = append(w.log, ldEntry{At: w.at, K: "purge", Rule: b.spec.Name, Key: in.Key.Str, Due: due})
+	w.tr.Purged(w.at, b.spec.Name, in.Key.First, due)
+	w.log = append(w.log, ldEntry{At: w.at, K: "purge", Rule: b.spec.Name, Key: in.Key.First.Str, Due: due})
 }
 
 // ldRule is one rule in the world.
@@ -301,7 +301,7 @@ func ldNewWorld(t *testing.T, app *playback.App, specs ...ldRuleSpec) *ldWorld {
 	w := &ldWorld{t: t, app: app, d: d, tr: playback.NewTrace(app)}
 	for i := range specs {
 		spec := &specs[i]
-		r, err := partition.NewRule(partition.Config{Inputs: spec.Inputs, KeyType: event.TString, TTL: spec.TTL, Body: &ldBody{w: w, spec: spec}})
+		r, err := partition.NewRule(partition.Config{Inputs: spec.Inputs, KeyTypes: []event.Type{event.TString}, TTL: spec.TTL, Body: &ldBody{w: w, spec: spec}})
 		if err != nil {
 			t.Fatalf("NewRule(%s): %v", spec.Name, err)
 		}
@@ -351,7 +351,7 @@ func (w *ldWorld) step(s *playback.Step) error {
 				continue
 			}
 			key := s.Event.Values[ka]
-			if r.r.Offer(key, s.Event) {
+			if r.r.Offer(partition.Single(key), s.Event) {
 				w.tr.ConstructLate(s.Line, r.spec.Name, key, s.Event)
 				w.log = append(w.log, ldEntry{At: s.Line, K: "construct_late", Rule: r.spec.Name, Key: key.Str,
 					Stream: s.Event.StreamID, Seq: s.Event.Seq, Ts: s.Event.Ts})
@@ -390,8 +390,8 @@ func ldRun(t *testing.T, app *playback.App, log string, specs ...ldRuleSpec) *ld
 
 // note records a body observation into the trace and the log.
 func (w *ldWorld) note(rule string, in *partition.Instance, name string, v event.Value) {
-	w.tr.Note(w.at, rule, in.Key, name, v)
-	w.log = append(w.log, ldEntry{At: w.at, K: "note", Rule: rule, Key: in.Key.Str, Name: name, Val: ldVal(v)})
+	w.tr.Note(w.at, rule, in.Key.First, name, v)
+	w.log = append(w.log, ldEntry{At: w.at, K: "note", Rule: rule, Key: in.Key.First.Str, Name: name, Val: ldVal(v)})
 }
 
 // ldVal renders a value for the plain log.

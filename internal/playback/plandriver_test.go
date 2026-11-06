@@ -293,20 +293,20 @@ func TestRatePurgeStartsFreshAnchor(t *testing.T) {
 	rule := p.Rules[0]
 	var out []event.Event
 	body := rule.NewBody(func(e event.Event) { out = append(out, e) })
-	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyType: rule.KeyType, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
+	pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ev := func(at int64) event.Event {
 		return event.Event{StreamID: 0, Ts: ldT0 + at, Values: []event.Value{ldStr("a"), {Kind: event.TTimestamp, T: ldT0 + at}}}
 	}
-	pr.Offer(ldStr("a"), ev(0))
+	pr.Offer(partition.Single(ldStr("a")), ev(0))
 	pr.Apply(clock.WMAdvance{StreamID: 0, Contribution: ldT0 + 10*ldMin + 1, Moved: true})
 	pr.Advance(nil)
 	if pr.Stats().Purged != 1 {
 		t.Fatalf("Purged %d, want 1", pr.Stats().Purged)
 	}
-	pr.Offer(ldStr("a"), ev(5*ldMin))
+	pr.Offer(partition.Single(ldStr("a")), ev(5*ldMin))
 	if len(out) != 2 || out[1].Ts != ldT0+5*ldMin {
 		t.Errorf("outputs %v, want a@0 and a@5 min (a purge clears the anchor)", out)
 	}

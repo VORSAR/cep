@@ -44,7 +44,7 @@ func TestTableWriteInIntakeOrder(t *testing.T) {
 		Streams: []clock.StreamSpec{rtSrc("in", 0)},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
 		Tables:  table.NewSet([]*table.Table{tb}),
-		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtHasBody(log)}},
+		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtHasBody(log)}},
 	}
 	r := rtStart(t, runtime.Config{Shards: 2}, app)
 	rtSend(t, ctx, r, 0, rtEv(0, rtAt(1), rtStr("a")))
@@ -82,7 +82,7 @@ func TestSendValidation(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString), rtA("n", event.TInt)), rtSchema(t, "out", rtA("k", event.TString))},
-		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R", log: log})}},
+		Rules:   []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "R", log: log})}},
 	}
 	r := rtStart(t, runtime.Config{Shards: 2}, app)
 	for _, c := range []struct {
@@ -117,7 +117,7 @@ func TestSinkPanicCounted(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("n", event.TInt))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
 				b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{rtInt(int64(e.Seq))}})
 			}})}},
@@ -159,7 +159,7 @@ func TestCloseStopsEverything(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("what", event.TString))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 7200 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 7200 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R",
 				sched: func(e event.Event, n uint64) []clock.Timer {
 					return []clock.Timer{{Due: e.Ts + 3600*rtSec, Kind: clock.Completion, Ref: n}}
@@ -217,7 +217,7 @@ func TestStartValidation(t *testing.T) {
 		return runtime.App{
 			Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 			Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString), rtA("n", event.TInt)), rtSchema(t, "out", rtA("k", event.TString))},
-			Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+			Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 				NewBody: rtBodies(rtBody{rule: "R"})}},
 			Sinks: []runtime.SinkBinding{{Stream: 1, Sink: func(event.Event) error { return nil }}},
 		}
@@ -226,13 +226,13 @@ func TestStartValidation(t *testing.T) {
 		name string
 		bad  func(a *runtime.App)
 	}{
-		{"an input out of range", func(a *runtime.App) { a.Rules[0].Inputs = []int{2}; a.Rules[0].KeyAttr = []int{0} }},
+		{"an input out of range", func(a *runtime.App) { a.Rules[0].Inputs = []int{2}; a.Rules[0].KeyAttrs = [][]int{{0}} }},
 		{"a derived input", func(a *runtime.App) { a.Rules[0].Inputs = []int{1} }},
-		{"KeyAttr out of range", func(a *runtime.App) { a.Rules[0].KeyAttr = []int{2} }},
-		{"KeyAttr's length is not Inputs'", func(a *runtime.App) { a.Rules[0].KeyAttr = []int{0, 0} }},
-		{"KeyAttr's type is not KeyType", func(a *runtime.App) { a.Rules[0].KeyAttr = []int{1} }},
+		{"KeyAttr out of range", func(a *runtime.App) { a.Rules[0].KeyAttrs = [][]int{{2}} }},
+		{"KeyAttr's length is not Inputs'", func(a *runtime.App) { a.Rules[0].KeyAttrs = [][]int{{0}, {0}} }},
+		{"KeyAttr's type is not KeyType", func(a *runtime.App) { a.Rules[0].KeyAttrs = [][]int{{1}} }},
 		{"a keyed rule with TTL 0", func(a *runtime.App) { a.Rules[0].TTL = 0 }},
-		{"a key-less rule with a TTL", func(a *runtime.App) { a.Rules[0].KeyAttr = nil }},
+		{"a key-less rule with a TTL", func(a *runtime.App) { a.Rules[0].KeyAttrs = nil }},
 		{"a sink on a source stream", func(a *runtime.App) { a.Sinks[0].Stream = 0 }},
 		{"a sink out of range", func(a *runtime.App) { a.Sinks[0].Stream = 9 }},
 		{"a nil NewBody", func(a *runtime.App) { a.Rules[0].NewBody = nil }},

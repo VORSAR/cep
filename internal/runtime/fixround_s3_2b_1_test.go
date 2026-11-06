@@ -22,7 +22,7 @@ func TestAdmissionOnlyMessageReachesEveryShard(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{{Name: "S", IdleAfter: 60 * rtSec}, rtDerived("OA")},
 		Schemas: []event.Schema{rtSchema(t, "S", k), rtSchema(t, "OA", k)},
-		Rules: []runtime.Rule{{Name: "A", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 60 * rtSec,
+		Rules: []runtime.Rule{{Name: "A", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 60 * rtSec,
 			OnArrival: true, NewBody: rtBodies(rtBody{rule: "A", log: newRTLog(), births: newRTLog()})}},
 	}
 	var now atomic.Int64

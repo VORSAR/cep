@@ -6,6 +6,7 @@ package partition
 
 import (
 	"cmp"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -63,9 +64,32 @@ type Body interface {
 	OnPurge(in *Instance)
 }
 
+// Key is a partition key (SPEC §4.4, rev 5): one value per part, in the clause's order. First holds part 1 inline, so
+// a single-part key is a plain value and costs no allocation; Rest holds parts 2..n, nil for a single-part key. Rest
+// is read-only here: one event's Rest may be shared by several rules' offers, and normalising a float zero part is
+// the router's alone (design s3-2b-2 §2.6, MUST 16).
+type Key struct {
+	First event.Value
+	Rest  []event.Value
+}
+
+// Single is the single-part key v.
+func Single(v event.Value) Key { return Key{First: v} }
+
+// Parts is the key's number of parts.
+func (k Key) Parts() int { return 1 + len(k.Rest) }
+
+// Part is part i of the key, from 0.
+func (k Key) Part(i int) event.Value {
+	if i == 0 {
+		return k.First
+	}
+	return k.Rest[i-1]
+}
+
 // Instance is one key of one rule on one shard.
 type Instance struct {
-	Key          event.Value     // the first event's key value; a float zero is stored as +0.0 (break-it K1)
+	Key          Key             // the first event's key; a float zero part is stored as +0.0 (break-it K1)
 	Clock        *clock.Instance // the key's release buffer and timers
 	Op           OpState         // nil until birth, and from a purge until rebirth
 	LastActivity int64           // the event time of the key's last released event (on arrival: the largest seen); math.MinInt64 before any
@@ -75,10 +99,10 @@ type Instance struct {
 
 // Config describes one rule to its partitions.
 type Config struct {
-	Inputs  []int      // the stream ids the rule reads
-	KeyType event.Type // the keys' one type (E-PART-003); TString for a key-less rule's pseudo-key ""
-	TTL     int64      // ms, > 0; 0 only for a key-less rule, which is never purged
-	Body    Body
+	Inputs   []int        // the stream ids the rule reads
+	KeyTypes []event.Type // per part, the one type of that position (E-PART-003); a key-less rule: {TString}, the pseudo-key ""
+	TTL      int64        // ms, > 0; 0 only for a key-less rule, which is never purged
+	Body     Body
 	// OnArrival: the body sees each event at Offer, never buffered and never construct-late; exactly one input
 	// (owner Q1 of S3.2b; design s3-2b-1 v2 §3). Its clock is fed its stream's admission watermark (D1): the runtime's.
 	OnArrival bool
@@ -95,7 +119,7 @@ type Stats struct {
 // decimal), before the instance's OpState parts. Rule.Walk yields the rule clock first (component "clock", key "",
 // a clock.RuleState).
 type InstanceState struct {
-	Key          event.Value
+	Key          Key
 	LastActivity int64
 	Birth        uint64        // the key's place in the walk's order across keys at one instant (clock.Instance.Birth)
 	Born         bool          // false before its first released event or timer, and again after a purge
@@ -105,29 +129,68 @@ type InstanceState struct {
 
 // Rule is one rule's instances on one shard, under one construct clock.
 type Rule struct {
-	clock   *clock.RuleClock
-	keyType event.Type
-	ttl     int64
-	body    Body
-	byKey   map[keyT]*Instance
-	byClock map[*clock.Instance]*Instance
-	pending []*Instance // purged in a walk; freed after it once they hold nothing
-	stats   Stats
-	tables  any // the snapshot of the walk in progress (owner D5): what its timers read
-	cb      clock.Callbacks
-	arrival bool // Config.OnArrival
+	clock    *clock.RuleClock
+	keyTypes []event.Type
+	ttl      int64
+	body     Body
+	byKey    map[keyT]*Instance
+	byClock  map[*clock.Instance]*Instance
+	pending  []*Instance // purged in a walk; freed after it once they hold nothing
+	stats    Stats
+	tables   any // the snapshot of the walk in progress (owner D5): what its timers read
+	cb       clock.Callbacks
+	arrival  bool // Config.OnArrival
 }
 
-// keyT is a key value as a map key: the type's own field only, so a lookup allocates nothing, and float keys compare
-// with ==, the expression engine's equality: -0.0 and +0.0 are one key.
+// keyT is a key as a map key: part 1 in the type's own field, so a single-part lookup allocates nothing, and float
+// keys compare with ==, the expression engine's equality: -0.0 and +0.0 are one key. m encodes parts 2..n (design
+// s3-2b-2 §2.6): per part its kind byte, then a string's uvarint length and bytes, an int, timestamp or duration's 8
+// bytes little-endian, a float's 8 bits after -0.0 → +0.0, a bool's byte. Injective per rule: each position has one
+// type and strings are length-prefixed. A multi-part key allocates its m (owner, S3.2b-1's break-it).
 type keyT struct {
 	s string
 	n int64
 	f float64
 	b bool
+	m string
 }
 
-func keyOf(v event.Value) keyT {
+func keyOf(k Key) keyT {
+	t := valueKey(k.First)
+	if len(k.Rest) > 0 {
+		var buf []byte
+		for _, v := range k.Rest {
+			buf = append(buf, byte(v.Kind))
+			switch v.Kind {
+			case event.TString:
+				buf = binary.AppendUvarint(buf, uint64(len(v.Str)))
+				buf = append(buf, v.Str...)
+			case event.TInt:
+				buf = binary.LittleEndian.AppendUint64(buf, uint64(v.I))
+			case event.TTimestamp:
+				buf = binary.LittleEndian.AppendUint64(buf, uint64(v.T))
+			case event.TDuration:
+				buf = binary.LittleEndian.AppendUint64(buf, uint64(v.D))
+			case event.TFloat:
+				f := v.F
+				if f == 0 {
+					f = 0 // -0.0 is +0.0
+				}
+				buf = binary.LittleEndian.AppendUint64(buf, math.Float64bits(f))
+			case event.TBool:
+				if v.B {
+					buf = append(buf, 1)
+				} else {
+					buf = append(buf, 0)
+				}
+			}
+		}
+		t.m = string(buf)
+	}
+	return t
+}
+
+func valueKey(v event.Value) keyT {
 	switch v.Kind {
 	case event.TString:
 		return keyT{s: v.Str}
@@ -154,19 +217,22 @@ func addSat(a, b int64) int64 {
 }
 
 var (
-	errNoInputs = errors.New("partition: a rule reads at least one stream")
-	errNilBody  = errors.New("partition: a rule needs a body")
-	errNegTTL   = errors.New("partition: negative TTL")
+	errNoInputs   = errors.New("partition: a rule reads at least one stream")
+	errNoKeyTypes = errors.New("partition: a rule's key has at least one part (a key-less rule: one TString part)")
+	errNilBody    = errors.New("partition: a rule needs a body")
+	errNegTTL     = errors.New("partition: negative TTL")
 )
 
-// NewRule rejects an empty Inputs, a KeyType of TInvalid or TObject, a negative TTL and a nil Body. A TTL of 0 is
+// NewRule rejects an empty Inputs, an empty KeyTypes or a part type of TInvalid or TObject, a negative TTL and a nil Body. A TTL of 0 is
 // accepted: the validator guarantees a keyed rule carries one (E-TTL-001), and a key-less rule is never purged.
 func NewRule(cfg Config) (*Rule, error) {
 	switch {
 	case len(cfg.Inputs) == 0:
 		return nil, errNoInputs
-	case cfg.KeyType < event.TString || cfg.KeyType >= event.TObject:
-		return nil, fmt.Errorf("partition: key type %v cannot key a partition (owner D7 of S3.2a-1: object keys are a deploy error from S3.3)", cfg.KeyType)
+	case len(cfg.KeyTypes) == 0:
+		return nil, errNoKeyTypes
+	case slices.ContainsFunc(cfg.KeyTypes, func(t event.Type) bool { return t < event.TString || t >= event.TObject }):
+		return nil, fmt.Errorf("partition: key types %v: a part of these types cannot key a partition (owner D7 of S3.2a-1: object keys are a deploy error from S3.3)", cfg.KeyTypes)
 	case cfg.TTL < 0:
 		return nil, errNegTTL
 	case cfg.Body == nil:
@@ -175,7 +241,7 @@ func NewRule(cfg Config) (*Rule, error) {
 		return nil, fmt.Errorf("partition: an on-arrival rule reads exactly one stream, not %d (design s3-2b-1 v2 §3)", len(cfg.Inputs))
 	}
 	r := &Rule{
-		clock: clock.NewRuleClock(cfg.Inputs), keyType: cfg.KeyType, ttl: cfg.TTL, body: cfg.Body,
+		clock: clock.NewRuleClock(cfg.Inputs), keyTypes: slices.Clone(cfg.KeyTypes), ttl: cfg.TTL, body: cfg.Body,
 		byKey: map[keyT]*Instance{}, byClock: map[*clock.Instance]*Instance{}, arrival: cfg.OnArrival,
 	}
 	r.cb = clock.Callbacks{OnEvent: r.onEvent, OnTimers: r.onTimers, OnDiscard: r.onDiscard}
@@ -190,21 +256,26 @@ func (r *Rule) Apply(a clock.WMAdvance) (advanced bool) {
 }
 
 // Offer buffers e under key (design note §1, step 2), creating the key's instance when it has none. It panics on a
-// null key, a key of another type or a NaN key: the router checks first.
-func (r *Rule) Offer(key event.Value, e event.Event) (constructLate bool) {
-	switch {
-	case key.Null:
-		panic("partition: Offer: a null key (the router makes it a per-rule event error)")
-	case key.Kind != r.keyType:
-		panic(fmt.Sprintf("partition: Offer: a %v key for a rule keyed by %v", key.Kind, r.keyType))
-	case key.Kind == event.TFloat && key.F != key.F:
-		panic("partition: Offer: a NaN key")
+// part count other than the rule's, a null part, a part of another type or a NaN part: the router checks first.
+func (r *Rule) Offer(key Key, e event.Event) (constructLate bool) {
+	if key.Parts() != len(r.keyTypes) {
+		panic(fmt.Sprintf("partition: Offer: a key of %d parts for a rule keyed by %d", key.Parts(), len(r.keyTypes)))
+	}
+	for i, t := range r.keyTypes {
+		switch p := key.Part(i); {
+		case p.Null:
+			panic("partition: Offer: a null key part (the router makes it a per-rule event error)")
+		case p.Kind != t:
+			panic(fmt.Sprintf("partition: Offer: a %v key part %d for a rule keyed by %v", p.Kind, i+1, r.keyTypes))
+		case p.Kind == event.TFloat && p.F != p.F:
+			panic("partition: Offer: a NaN key part")
+		}
 	}
 	k := keyOf(key)
 	in, resident := r.byKey[k]
 	if !resident {
-		if key.Kind == event.TFloat && key.F == 0 {
-			key.F = 0 // -0.0 and +0.0 are one key, stored as +0.0, whichever arrives first (break-it K1)
+		if key.First.Kind == event.TFloat && key.First.F == 0 {
+			key.First.F = 0 // -0.0 and +0.0 are one key, stored as +0.0, whichever arrives first (break-it K1); Rest is the router's
 		}
 		in = &Instance{Key: key, Clock: r.clock.NewInstance(), LastActivity: math.MinInt64}
 	}

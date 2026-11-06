@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/expr"
@@ -40,11 +41,11 @@ type Table struct {
 // Rule is one rule: its routing (the runtime's routing table) and its body.
 type Rule struct {
 	Name      string
-	Inputs    []int      // the stream ids it reads; exactly one when OnArrival
-	KeyAttr   []int      // per input, the key attribute's index; nil: key-less (the pseudo-key "")
-	KeyType   event.Type // TString for a key-less rule
-	TTL       int64      // ms; 0 for a key-less rule
-	OnArrival bool       // a plain body: sees each event as its stream accepts it (owner Q1 of S3.2b)
+	Inputs    []int        // the stream ids it reads; exactly one when OnArrival
+	KeyAttrs  [][]int      // per input, the key attributes' indexes in part order; nil: key-less (the pseudo-key "")
+	KeyTypes  []event.Type // per part, the one type of that position; a key-less rule: {TString}
+	TTL       int64        // ms; 0 for a key-less rule
+	OnArrival bool         // a plain body: sees each event as its stream accepts it (owner Q1 of S3.2b)
 	NewBody   func(emit func(event.Event)) partition.Body
 }
 
@@ -153,19 +154,27 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 	if _, err := spec.compile(); err != nil { // fail at deploy, not per event (review F1)
 		return Rule{}, err
 	}
-	pr := Rule{Name: r.Name, Inputs: []int{src}, KeyType: event.TString, OnArrival: true}
+	pr := Rule{Name: r.Name, Inputs: []int{src}, KeyTypes: []event.Type{event.TString}, OnArrival: true}
 	for _, k := range r.Partition.Keys {
 		if k.Stream != r.Body.Source.Stream {
 			continue
 		}
-		if pr.KeyAttr != nil { // a second key of one stream is E-PART-004: never drop a declared key (break-it B1)
+		if pr.KeyAttrs != nil { // a second key of one stream is E-PART-004: never drop a declared key (break-it B1)
 			return Rule{}, fmt.Errorf("stream %s is keyed twice (E-PART-004; Build is given only a checked model)", k.Stream)
 		}
-		for i := range sc.schema.NumAttrs() {
-			if a := sc.schema.Attr(i); a.Name == k.Attrs[0].Name { // S3.2b-2 stub: one part; multi-part keys after G1
-				pr.KeyAttr, pr.KeyType, pr.TTL = []int{i}, a.Type, r.Partition.TTL.Ms
+		attrs, types := make([]int, len(k.Attrs)), make([]event.Type, len(k.Attrs))
+		for p, ka := range k.Attrs {
+			attrs[p] = -1
+			for i := range sc.schema.NumAttrs() {
+				if a := sc.schema.Attr(i); a.Name == ka.Name {
+					attrs[p], types[p] = i, a.Type
+				}
+			}
+			if attrs[p] < 0 || slices.Index(attrs[:p], attrs[p]) >= 0 { // E-NAME-001, E-PART-006: Build is given only a checked model
+				return Rule{}, fmt.Errorf("stream %s: key attribute %s is unknown or named twice (a checked model has neither)", k.Stream, ka.Name)
 			}
 		}
+		pr.KeyAttrs, pr.KeyTypes, pr.TTL = [][]int{attrs}, types, r.Partition.TTL.Ms
 	}
 	pr.NewBody = func(emit func(event.Event)) partition.Body {
 		b, err := spec.compile() // each body owns its trees: nothing is shared across shards

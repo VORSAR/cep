@@ -101,7 +101,7 @@ func TestBreakitPartitionKeyNotDropped(t *testing.T) {
 	outs, _ := pbReplay(t, p, ldLog(line(0, "a", "x"), line(ldMin, "b", "x")))
 	if len(outs) != 2 {
 		t.Errorf("rule keys %v of S (k dropped): %d alerts %v, want 2 — (a,x) and (b,x) are different partition values; or refuse the program at deploy",
-			p.Rules[0].KeyAttr, len(outs), outs)
+			p.Rules[0].KeyAttrs, len(outs), outs)
 	}
 }
 

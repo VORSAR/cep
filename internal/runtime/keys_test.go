@@ -28,10 +28,10 @@ func TestKeyErrorsAndZeroKeys(t *testing.T) {
 	var rules []runtime.Rule
 	for i := 0; i < 4; i++ {
 		name := fmt.Sprintf("f%d", i)
-		rules = append(rules, runtime.Rule{Name: name, Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TFloat,
+		rules = append(rules, runtime.Rule{Name: name, Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TFloat},
 			TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: name, log: log, births: births})})
 	}
-	rules = append(rules, runtime.Rule{Name: "s", Inputs: []int{0}, KeyAttr: []int{1}, KeyType: event.TString,
+	rules = append(rules, runtime.Rule{Name: "s", Inputs: []int{0}, KeyAttrs: [][]int{{1}}, KeyTypes: []event.Type{event.TString},
 		TTL: 3600 * rtSec, NewBody: rtBodies(rtBody{rule: "s", log: log, births: births})})
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0)},
@@ -95,7 +95,7 @@ func TestKeylessRuleOneInstance(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0)},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("v", event.TInt))},
-		Rules: []runtime.Rule{{Name: "K", Inputs: []int{0}, KeyType: event.TString,
+		Rules: []runtime.Rule{{Name: "K", Inputs: []int{0}, KeyTypes: []event.Type{event.TString},
 			NewBody: rtBodies(rtBody{rule: "K", log: log, births: births})}},
 	}
 	r := rtStart(t, runtime.Config{Shards: 4}, app)
@@ -131,7 +131,7 @@ func TestPanicResetsTheKey(t *testing.T) {
 	ctx := rtCeiling(t)
 	log, births := newRTLog(), newRTLog()
 	panicky := rtBody{rule: "p", log: log, births: births, onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
-		if in.Key.Str == "boom" {
+		if in.Key.First.Str == "boom" {
 			panic("a body's panic on key boom")
 		}
 	}}
@@ -139,8 +139,8 @@ func TestPanicResetsTheKey(t *testing.T) {
 		Streams: []clock.StreamSpec{rtSrc("in", 10*rtSec)},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
 		Rules: []runtime.Rule{
-			{Name: "p", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec, NewBody: rtBodies(panicky)},
-			{Name: "q", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+			{Name: "p", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec, NewBody: rtBodies(panicky)},
+			{Name: "q", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 				NewBody: rtBodies(rtBody{rule: "q", log: log})},
 		},
 	}

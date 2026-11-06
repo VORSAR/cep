@@ -25,7 +25,7 @@ func fxApp(t *testing.T, sink runtime.Sink) runtime.App {
 	return runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString)), rtSchema(t, "out", rtA("what", event.TString))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R", onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
 				b.emit(event.Event{StreamID: 1, Ts: e.Ts, Values: []event.Value{rtStr(fmt.Sprintf("ev@%d", (e.Ts-rtT0)/rtSec))}})
 			}})}},
@@ -112,7 +112,7 @@ func TestSendRefusesNonFiniteFloat(t *testing.T) {
 	app := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("in", 0), rtDerived("out")},
 		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString), rtA("f", event.TFloat)), rtSchema(t, "out", rtA("what", event.TString))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttr: []int{0}, KeyType: event.TString, TTL: 3600 * rtSec,
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyAttrs: [][]int{{0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
 			NewBody: rtBodies(rtBody{rule: "R"})}},
 		Sinks: []runtime.SinkBinding{{Stream: 1, Sink: func(event.Event) error { return nil }}},
 	}

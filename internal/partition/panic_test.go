@@ -46,7 +46,7 @@ type pnBody struct {
 func (b *pnBody) NewState(*partition.Instance) partition.OpState { return &pnState{} }
 
 func (b *pnBody) OnEvent(in *partition.Instance, e event.Event) {
-	b.log = append(b.log, fmt.Sprintf("ev %s @%d", in.Key.Str, e.Ts))
+	b.log = append(b.log, fmt.Sprintf("ev %s @%d", in.Key.First.Str, e.Ts))
 	st := in.Op.(*pnState)
 	if b.sched != nil {
 		for _, tm := range b.sched(e) {
@@ -54,7 +54,7 @@ func (b *pnBody) OnEvent(in *partition.Instance, e event.Event) {
 			st.timers = append(st.timers, tm)
 		}
 	}
-	if in.Key.Str == b.panicOn {
+	if in.Key.First.Str == b.panicOn {
 		panic("pn: a body's panic in OnEvent")
 	}
 }
@@ -62,7 +62,7 @@ func (b *pnBody) OnEvent(in *partition.Instance, e event.Event) {
 func (b *pnBody) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) {
 	st := in.Op.(*pnState)
 	for _, tm := range fires {
-		b.log = append(b.log, fmt.Sprintf("tm %s @%d", in.Key.Str, tm.Due))
+		b.log = append(b.log, fmt.Sprintf("tm %s @%d", in.Key.First.Str, tm.Due))
 		st.timers = slices.DeleteFunc(st.timers, func(x clock.Timer) bool { return x.Kind == tm.Kind && x.Ref == tm.Ref })
 	}
 }
@@ -70,15 +70,15 @@ func (b *pnBody) OnTimers(in *partition.Instance, fires []clock.Timer, _ any) {
 func (b *pnBody) OnDiscard(*partition.Instance, []uint64) {}
 
 func (b *pnBody) OnPurge(in *partition.Instance) {
-	b.log = append(b.log, "purge "+in.Key.Str)
-	if in.Key.Str == b.purgePanicOn {
+	b.log = append(b.log, "purge "+in.Key.First.Str)
+	if in.Key.First.Str == b.purgePanicOn {
 		panic("pn: a body's panic in OnPurge")
 	}
 }
 
 func pnRule(t *testing.T, ttl int64, b *pnBody) *partition.Rule {
 	t.Helper()
-	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyType: event.TString, TTL: ttl, Body: b})
+	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: ttl, Body: b})
 	if err != nil {
 		t.Fatalf("NewRule: %v", err)
 	}
@@ -103,7 +103,7 @@ func pnAdvance(t *testing.T, r *partition.Rule, c int64) {
 func pnInstance(r *partition.Rule, key string) *partition.Instance {
 	var found *partition.Instance
 	r.Instances(func(in *partition.Instance) {
-		if in.Key.Str == key {
+		if in.Key.First.Str == key {
 			found = in
 		}
 	})
@@ -129,7 +129,7 @@ func TestBodyPanicResetsTheKey(t *testing.T) {
 		k  string
 		ts int64
 	}{{"ok1", 1 * pnSec}, {"boom", 2 * pnSec}, {"ok2", 3 * pnSec}, {"boom", 4 * pnSec}} {
-		if r.Offer(pnKey(x.k), pnEv(x.ts, uint64(i+1))) {
+		if r.Offer(partition.Single(pnKey(x.k)), pnEv(x.ts, uint64(i+1))) {
 			t.Fatalf("offer %s@%d: construct-late, want buffered", x.k, x.ts)
 		}
 	}
@@ -173,7 +173,7 @@ func TestBodyPanicResetsTheKey(t *testing.T) {
 func TestPanicInOnPurgeStillPurges(t *testing.T) {
 	b := &pnBody{purgePanicOn: "a"}
 	r := pnRule(t, 5*pnSec, b)
-	r.Offer(pnKey("a"), pnEv(0, 1))
+	r.Offer(partition.Single(pnKey("a")), pnEv(0, 1))
 	pnAdvance(t, r, 500)
 	pnAdvance(t, r, 6*pnSec)
 	if want := []string{"ev a @0", "purge a"}; !slices.Equal(b.log, want) {
@@ -188,7 +188,7 @@ func TestPanicInOnPurgeStillPurges(t *testing.T) {
 	if err := r.CheckTimers(); err != nil {
 		t.Errorf("CheckTimers: %v", err)
 	}
-	r.Offer(pnKey("b"), pnEv(7*pnSec, 2))
+	r.Offer(partition.Single(pnKey("b")), pnEv(7*pnSec, 2))
 	pnAdvance(t, r, 8*pnSec)
 	if want := []string{"ev a @0", "purge a", "ev b @7000"}; !slices.Equal(b.log, want) {
 		t.Errorf("log %v, want %v", b.log, want)
@@ -206,8 +206,8 @@ func TestPendingExcludesTTL(t *testing.T) {
 		return []clock.Timer{{Due: e.Ts + 2*pnSec, Kind: clock.Completion, Ref: 1}, {Due: e.Ts + 100*pnSec, Kind: clock.DelayDue, Ref: 2}}
 	}}
 	r := pnRule(t, 5*pnSec, b)
-	r.Offer(pnKey("a"), pnEv(0, 1))
-	r.Offer(pnKey("b"), pnEv(1*pnSec, 2))
+	r.Offer(partition.Single(pnKey("a")), pnEv(0, 1))
+	r.Offer(partition.Single(pnKey("b")), pnEv(1*pnSec, 2))
 	pending := func(want int, when string) {
 		t.Helper()
 		var got int
