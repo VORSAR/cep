@@ -601,6 +601,30 @@ def _():
     assert len(ok) == 1 and ok[0]["key"] == "a1", ok  # compliant TTL: alert fires
 
 
+@check("9", "multi-part keys (SPEC rev 5, S3.2b-2 design 1.1): a key is the tuple of its parts — "
+       "(t1, alice), (t1, bob), (t1, alice) give 2 alerts, (t2, alice) a third; a null part is "
+       "a key error for the rule (no output, no instance)")
+def _():
+    # partition by (tenantId, userId) of Grants ttl 10 min, output first every 5 min (worked examples 1 and 2).
+    key = lambda o: (o["tenantId"], o["userId"])        # part i of the tuple = the i-th key attribute
+    outs = [dict(tenantId="t1", userId="alice", ts=0),
+            dict(tenantId="t1", userId="bob", ts=1 * MIN),
+            dict(tenantId="t1", userId="alice", ts=2 * MIN),
+            dict(tenantId="t2", userId="alice", ts=3 * MIN),
+            dict(tenantId="t1", userId=None, ts=4 * MIN)]
+    routed = [o for o in outs if None not in key(o)]    # a null in any part: the rule's key error (10)
+    key_errors = len(outs) - len(routed)
+    emitted, suppressed = rate_limit_first_every(routed, 5 * MIN, key=key)
+    assert [(o["tenantId"], o["userId"], o["ts"]) for o in emitted] == [
+        ("t1", "alice", 0), ("t1", "bob", 1 * MIN), ("t2", "alice", 3 * MIN)], emitted
+    assert [o["ts"] for o in suppressed] == [2 * MIN], suppressed   # (t1, alice) inside its own 5 min
+    assert key_errors == 1, key_errors
+    # no cross-part interaction: ("a", "bc") and ("ab", "c") are different keys
+    em2, _ = rate_limit_first_every([dict(tenantId="a", userId="bc", ts=0),
+                                     dict(tenantId="ab", userId="c", ts=1)], 5 * MIN, key=key)
+    assert len(em2) == 2, em2
+
+
 # ------------------------------------------------------------------- 5 text
 
 @check("5", 'term vs substring: "KustoExplorerQueryRun completed" and the curl/libcurl trap')
