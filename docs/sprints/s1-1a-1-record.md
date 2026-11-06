@@ -1,7 +1,7 @@
 # S1.1a-1 — sprint record
 
 **Sprint:** S1.1a-1 — The local gate, coverage and the event kernel · **Routine:** the full loop, no design panel · **Size:** 13 SP (items 11.5) against the 2-week cap · **Branch:** `s1-1a-1/integration`
-**What to build and how each item is proven:** [sprint plan — S1.1a-1](sprint-plan.md#s11a-1--the-local-gate-coverage-and-the-event-kernel) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S1.1a-1](history.md#s11a-1--the-local-gate-coverage-and-the-event-kernel) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git. S1.1a-2 (hooks and CI) gets its own record at its G0.*
 
@@ -24,7 +24,7 @@ The answers below settle the owner-facing questions; the rest are design inputs 
 
 ## Decisions at the gates
 
-**Plan check: the owner, 2026-11-02** (asked in plain language with pros and cons, recommendation first; "≠ R" where the answer differs from the recommendation; also recorded in [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-02--s11a-plan-check-g0)):
+**Plan check: the owner, 2026-11-02** (asked in plain language with pros and cons, recommendation first; "≠ R" where the answer differs from the recommendation; also recorded in [decisions](decisions.md#owner-decisions-2026-11-02--s11a-plan-check-g0)):
 
 1. **The gate's tooling is stdlib Python, not shell and not Go (≠ R).** "Runner language: this can be python"; "I prefer python for any utility scripts than shell scripts". The recommendation was a Go runner with a POSIX bootstrap.
 2. **CPython 3.15.2** ("go with latest and greatest for the python"); the alternative offered was 3.14.10.
@@ -46,11 +46,11 @@ The answers below settle the owner-facing questions; the rest are design inputs 
 13. **Commit the planning work as four commits on `s1-1a-1/integration`; nothing pushed** (as recommended).
 
 **During the design step: the owner, 2026-11-02:**
-- **Module path `github.com/vorsar/cep`; the repository is renamed `VORSAR/cep` with the `gh` CLI; local names `~/.cache/vorsar/cep/tools` and the `VORSAR_CEP_` prefix** (prompted by the owner: "package names should reflect vorsar"). The owner chose the shorter branded path over the recommended "import path + everything outside Go". This reverses brainstorm decision 5 for these names. [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-02--the-vorsar-name-during-s11a-1s-design-step).
+- **Module path `github.com/vorsar/cep`; the repository is renamed `VORSAR/cep` with the `gh` CLI; local names `~/.cache/vorsar/cep/tools` and the `VORSAR_CEP_` prefix** (prompted by the owner: "package names should reflect vorsar"). The owner chose the shorter branded path over the recommended "import path + everything outside Go". This reverses brainstorm decision 5 for these names. [decisions](decisions.md#owner-decisions-2026-11-02--the-vorsar-name-during-s11a-1s-design-step).
 
 - **The repository is renamed `VORSAR/cep`** by the coordinator with `gh` (owner's choice), and verified: public, `protect-main` active, remote updated.
 
-**The design review: the owner, 2026-11-02** (after the architect + the-fool review: 24 issues, 4 blockers, all re-verified by the coordinator; every answer as recommended; [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1)):
+**The design review: the owner, 2026-11-02** (after the architect + the-fool review: 24 issues, 4 blockers, all re-verified by the coordinator; every answer as recommended; [decisions](decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1)):
 
 1. **(b+):** `TInvalid` is the zero `Type`, and `Schema`'s fields are private behind `NewSchema`.
 2. **The time-attribute-type rule goes to S1.2's spec rev 3** as a coded error.
@@ -207,7 +207,7 @@ None after G0. *(The split into S1.1a-1 / S1.1a-2 was decided at the plan check,
 
 ## Findings
 
-*Plan-check findings: see the plan check's §10.* The step-7 reports, written blind of each other on `a1e4646`: [architecture + the-fool](../reviews/s1-1a-1-build-architecture.md) (0 blocker, 4 should-fix, 10 later) and [QA break-it](../reviews/s1-1a-1-breakit-qa.md) (2 blocker, 2 should-fix, 6 later; red tests for 6). The owner set the fix round's scope on 2026-11-03 ([sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-03--s11a-1-review-and-break-it-step-7)). Nothing was rejected.
+*Plan-check findings: see the plan check's §10.* The step-7 reports, written blind of each other on `a1e4646`: [architecture + the-fool](../reviews/s1-1a-1-build-architecture.md) (0 blocker, 4 should-fix, 10 later) and [QA break-it](../reviews/s1-1a-1-breakit-qa.md) (2 blocker, 2 should-fix, 6 later; red tests for 6). The owner set the fix round's scope on 2026-11-03 ([decisions](decisions.md#owner-decisions-2026-11-03--s11a-1-review-and-break-it-step-7)). Nothing was rejected.
 
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|

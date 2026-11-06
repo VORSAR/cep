@@ -1,7 +1,7 @@
 # S1.1a-2 — sprint record
 
 **Sprint:** S1.1a-2 — Hooks and CI · **Routine:** the full loop, no design panel · **Size:** about 8 SP (items 4.5), from G0 on 2026-11-03 to the build on 2026-11-04 against the 2-week cap · **Branch:** `s1-1a-2/integration`
-**What to build and how each item is proven:** [sprint plan — S1.1a-2](sprint-plan.md#s11a-2--hooks-and-ci) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S1.1a-2](history.md#s11a-2--hooks-and-ci) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -13,7 +13,7 @@ The full plan check is [s1-1a-2-plan-check.md](s1-1a-2-plan-check.md) (v2), draf
 
 ## Decisions at the gates
 
-**Plan check — the owner, 2026-11-03** (asked in plain language with options; every answer as recommended; also in [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0)):
+**Plan check — the owner, 2026-11-03** (asked in plain language with options; every answer as recommended; also in [decisions](decisions.md#owner-decisions-2026-11-03--s11a-2-plan-check-g0)):
 
 1. **The card is re-sized to about 10 SP** (items 3.5 → 5.5), still one sprint.
 2. **The coordinator builds in the main session;** fresh, time-boxed agents write QA's red tests and do the step-7 review.

@@ -1,6 +1,6 @@
 # S2.2b — design note: the validator (v2, after review)
 
-The plan for the validator, as it stands after the architecture review ([s2-2b-design-architecture.md](../reviews/s2-2b-design-architecture.md)), QA's independent test programs (`internal/validate/testdata/`) and the owner's answers ([sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-04--s22bs-design)). Every review finding is placed in §10.
+The plan for the validator, as it stands after the architecture review ([s2-2b-design-architecture.md](../reviews/s2-2b-design-architecture.md)), QA's independent test programs (`internal/validate/testdata/`) and the owner's answers ([decisions](decisions.md#owner-decisions-2026-11-04--s22bs-design)). Every review finding is placed in §10.
 
 ## 1. The shape
 

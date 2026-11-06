@@ -1,12 +1,12 @@
 # S3.2a-2 — design note: the runtime core (v2)
 
 **What it covers:**
-- S3.2a's item 3 ([card](sprint-plan.md#s32a--the-replay-format-and-the-runtime-core)) and exit line 3 (saturation).
+- S3.2a's item 3 ([card](history.md#s32a--the-replay-format-and-the-runtime-core)) and exit line 3 (saturation).
 - The forwards from S3.2a-1 (under the S3.2a card).
 
 **The owner's answers:**
-- at the plan check ([sprint-plan §5, "S3.2a-2's plan check"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-plan-check)): the drain mechanism is built here, with one shared ingest step;
-- after the architecture review ([§5, "S3.2a-2's design"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-design-after-the-architecture-review)):
+- at the plan check ([sprint-plan §5, "S3.2a-2's plan check"](decisions.md#owner-decisions-2026-11-05--s32a-2s-plan-check)): the drain mechanism is built here, with one shared ingest step;
+- after the architecture review ([§5, "S3.2a-2's design"](decisions.md#owner-decisions-2026-11-05--s32a-2s-design-after-the-architecture-review)):
   - **F14:** table writes join the intake;
   - **F5:** a drain ends the app's input;
   - **F10:** a body's panic resets that key.

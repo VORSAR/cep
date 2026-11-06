@@ -1,13 +1,13 @@
 # S3.2a-1 — design note: the replay format layer and partitions (v2)
 
-S3.2a's items 1–2 ([card](sprint-plan.md#s32a--the-replay-format-and-the-runtime-core)), exit lines 1, 2 and 4, and the forwards from S3.1-2:
+S3.2a's items 1–2 ([card](history.md#s32a--the-replay-format-and-the-runtime-core)), exit lines 1, 2 and 4, and the forwards from S3.1-2:
 - the table-snapshot carrier (owner D1);
 - the timer snapshot (review F15);
 - the encoder's malformed UTF-8 (review F11).
 
 **The owner's answers:**
-- at the plan check: [sprint-plan §5, "S3.2a's plan check"](sprint-plan.md#owner-decisions-2026-11-05--s32as-plan-check);
-- after the architecture review: **D1–D7**, [sprint-plan §5, "S3.2a-1's design"](sprint-plan.md#owner-decisions-2026-11-05--s32a-1s-design-after-the-architecture-review).
+- at the plan check: [sprint-plan §5, "S3.2a's plan check"](decisions.md#owner-decisions-2026-11-05--s32as-plan-check);
+- after the architecture review: **D1–D7**, [sprint-plan §5, "S3.2a-1's design"](decisions.md#owner-decisions-2026-11-05--s32a-1s-design-after-the-architecture-review).
 
 **Routine (owner):** QA's tests first and independent; an architecture review of this note; the build in the main session; a QA break-it.
 
@@ -407,7 +407,7 @@ As stubbed: `NewTrace`, `Step`, `Released`, `ConstructLate`, `Fired`, `Discarded
 
 ## 7. Decisions
 
-D1–D7 are the owner's, as recorded in [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-05--s32a-1s-design-after-the-architecture-review). D6 differs from the recommendation (≠ R).
+D1–D7 are the owner's, as recorded in [decisions](decisions.md#owner-decisions-2026-11-05--s32a-1s-design-after-the-architecture-review). D6 differs from the recommendation (≠ R).
 
 ## 8. Size
 

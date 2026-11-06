@@ -4,7 +4,7 @@
 
 ## Plan and decisions
 
-The owner cut S1.2 to `internal/model` plus spec rev 3, and moved its gate extras to S1.1c ([sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-04--s12-cut-to-the-model-kernel-and-spec-rev-3)). The plan:
+The owner cut S1.2 to `internal/model` plus spec rev 3, and moved its gate extras to S1.1c ([decisions](decisions.md#owner-decisions-2026-11-04--s12-cut-to-the-model-kernel-and-spec-rev-3)). The plan:
 - **The IR** (ADR-0003): plain data mirroring the grammar clause by clause. It has no positions and no behaviour. Durations and timestamps are int64 milliseconds; a `${param}` stays a Literal of kind `param` in its slot.
 - **`MarshalCanonical`**: one reflection walk. Every field is always written, keys are lowerCamelCase and sorted bytewise, floats use strconv's shortest `'g'` form (NaN and ±Inf are refused, naming the slot), and a timestamp literal is RFC 3339 UTC with milliseconds. The rules are stated exactly on the method.
 - **QA wrote the golden first:** a fresh, time-boxed agent hand-derived the expected bytes from those rules against a stub that failed.

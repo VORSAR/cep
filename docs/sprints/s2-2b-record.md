@@ -4,8 +4,8 @@
 
 ## Plan and decisions
 
-- The owner's plan-check answers: [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check) — the routine; a stream with no `@source` can mark batches; a `string` param in a keyword-set slot is a comma-separated list.
-- The design: [s2-2b-design.md](s2-2b-design.md) v2, after the architecture review ([s2-2b-design-architecture.md](../reviews/s2-2b-design-architecture.md): 3 blockers, 14 should-fix, 2 later, all placed) and QA's 52 independent test programs. The owner's design answers: [sprint-plan §5](sprint-plan.md#owner-decisions-2026-11-04--s22bs-design).
+- The owner's plan-check answers: [decisions](decisions.md#owner-decisions-2026-11-04--s22a-closed-s22bs-plan-check) — the routine; a stream with no `@source` can mark batches; a `string` param in a keyword-set slot is a comma-separated list.
+- The design: [s2-2b-design.md](s2-2b-design.md) v2, after the architecture review ([s2-2b-design-architecture.md](../reviews/s2-2b-design-architecture.md): 3 blockers, 14 should-fix, 2 later, all placed) and QA's 52 independent test programs. The owner's design answers: [decisions](decisions.md#owner-decisions-2026-11-04--s22bs-design).
 
 ## Done-done
 

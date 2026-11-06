@@ -570,7 +570,7 @@ Not approvable as drafted. The sequencing, gate placement and split discipline a
 
 ## Dispositions (2026-11-02) — every finding per ground rule 16
 
-Verified first-hand by the coordinator (DQ-05's spec/executor contradiction confirmed by reading `executor.py`'s `cron_window` against SPEC §6.1; DQ-06, DQ-07, DQ-15 against the grammar and example 05). Applied in [sprint-plan.md §3, decomposition DRAFT v2](../sprints/sprint-plan.md#phase-1-decomposition--draft-v2-for-owner-approval-2026-11-02); owner decisions in sprint-plan §5 "Owner decisions, 2026-11-02 — decomposition review".
+Verified first-hand by the coordinator (DQ-05's spec/executor contradiction confirmed by reading `executor.py`'s `cron_window` against SPEC §6.1; DQ-06, DQ-07, DQ-15 against the grammar and example 05). Applied in [sprint-plan.md §3, decomposition DRAFT v2](../sprints/sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02); owner decisions in sprint-plan §5 "Owner decisions, 2026-11-02 — decomposition review".
 
 | ID | Disposition | Where |
 |---|---|---|

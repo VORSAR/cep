@@ -1,11 +1,11 @@
 # S3.2a-2 — sprint record (S3.1's routine)
 
 **Sprint:** S3.2a-2 — the runtime core (S3.2a's item 3; the owner split S3.2a at its card's line) · **Routine:** by the owner (2026-11-05, all of S3.2a): QA's tests first and independent; an architecture review of the design note; the build in the main session; a QA break-it · **Size:** about 7.5 SP (6 carded, plus the drain mechanism and one shared ingest step) · **Branch:** `s3-2a-2/integration`
-**What to build and how each item is proven:** [sprint plan — S3.2a](sprint-plan.md#s32a--the-replay-format-and-the-runtime-core), its "how it runs" note and the forwards to S3.2a-2 · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S3.2a](history.md#s32a--the-replay-format-and-the-runtime-core), its "how it runs" note and the forwards to S3.2a-2 · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 ## Plan and decisions
 
-- **The plan check (owner, 2026-11-05):** two answers, both as recommended ([sprint-plan §5, "S3.2a-2's plan check"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-plan-check)):
+- **The plan check (owner, 2026-11-05):** two answers, both as recommended ([sprint-plan §5, "S3.2a-2's plan check"](decisions.md#owner-decisions-2026-11-05--s32a-2s-plan-check)):
   - the drain barrier's mechanism is built here, and S3.3's `Stop` wraps it;
   - one single-threaded ingest step serves the router and the playback driver.
 
@@ -32,7 +32,7 @@
   - **v1's review** ([s3-2a-2-design-architecture.md](../reviews/s3-2a-2-design-architecture.md)) found 2 blockers, 15 should-fix and 5 later. The reviewer confirmed both blockers with scratch programs:
     - F1: a recovered panic cut a rule's walk short;
     - F2: stopping the ticker at drain raced.
-  - **The owner's answers,** all as recommended ([sprint-plan §5, "S3.2a-2's design"](sprint-plan.md#owner-decisions-2026-11-05--s32a-2s-design-after-the-architecture-review)):
+  - **The owner's answers,** all as recommended ([sprint-plan §5, "S3.2a-2's design"](decisions.md#owner-decisions-2026-11-05--s32a-2s-design-after-the-architecture-review)):
     - F14: table writes join the intake;
     - F5: a drain ends the app's input;
     - F10: a body's panic resets its key.
