@@ -681,9 +681,7 @@ func (rt *router) ingest(it item) {
 			if a.drained {
 				continue
 			}
-			if adv := a.ing.Tick(stamp); len(adv) > 0 {
-				rt.broadcast(a, mWalk, adv, a.ing.Snapshot(), 0, false)
-			}
+			rt.tickApp(a, stamp)
 		}
 	case iWrite:
 		a := r.apps[it.app]
@@ -691,14 +689,7 @@ func (rt *router) ingest(it item) {
 			it.reply <- reply{err: ErrDrained}
 			return
 		}
-		tb := a.app.Tables.Table(it.table)
-		var err error
-		if it.op == TablePut {
-			err = tb.Upsert(it.rows)
-		} else {
-			err = tb.Delete(it.rows)
-		}
-		it.reply <- reply{err: err}
+		it.reply <- reply{err: a.write(it.table, it.op, it.rows)}
 	case iDrain:
 		a := r.apps[it.app]
 		if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
@@ -714,7 +705,7 @@ func (rt *router) ingest(it item) {
 		rt.token++
 		a.drainTok = rt.token
 		rt.drains[rt.token] = &drainWait{app: a, replies: []chan reply{it.reply}}
-		rt.broadcast(a, mDrain, a.ing.Drain(), a.ing.Snapshot(), rt.token, true)
+		rt.drainApp(a, rt.token)
 	case iStats:
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
@@ -777,6 +768,38 @@ func (rt *router) event(a *appState, e *event.Event, arrival int64) (late bool, 
 		rt.deliver(sid, m)
 	}
 	return false, adv
+}
+
+// tickApp is one app's idle tick, shared by the router and Sync (combined review C4 of S3.2b-1).
+func (rt *router) tickApp(a *appState, stamp int64) []clock.WMAdvance {
+	adv := a.ing.Tick(stamp)
+	if len(adv) > 0 {
+		rt.broadcast(a, mWalk, adv, a.ing.Snapshot(), 0, false)
+	}
+	return adv
+}
+
+// drainApp ends the app's input and sends every shard the drain barrier's message, shared by the router and Sync.
+func (rt *router) drainApp(a *appState, token uint64) []clock.WMAdvance {
+	a.drained = true
+	adv := a.ing.Drain()
+	rt.broadcast(a, mDrain, adv, a.ing.Snapshot(), token, true)
+	return adv
+}
+
+// write applies one table write in intake order (owner F14), shared by the router and Sync.
+func (a *appState) write(tableID int, op TableOp, rows [][]event.Value) error {
+	if a.app.Tables == nil || tableID < 0 || tableID >= a.app.Tables.Len() {
+		return fmt.Errorf("runtime: app %d: no table %d", a.id, tableID)
+	}
+	tb := a.app.Tables.Table(tableID)
+	switch op {
+	case TablePut:
+		return tb.Upsert(rows)
+	case TableDelete:
+		return tb.Delete(rows)
+	}
+	return fmt.Errorf("runtime: app %d: an unknown table operation %d", a.id, op)
 }
 
 // broadcast delivers one advance-only (or drain) message to every shard, with the app's snapshot (owner D5 of

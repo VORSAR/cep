@@ -75,11 +75,7 @@ func (s *Sync) Tick(now int64) []clock.WMAdvance {
 	if s.a.drained {
 		return nil
 	}
-	adv := s.a.ing.Tick(now)
-	if len(adv) > 0 {
-		s.rt.broadcast(s.a, mWalk, adv, s.a.ing.Snapshot(), 0, false)
-	}
-	return adv
+	return s.rt.tickApp(s.a, now)
 }
 
 // TableWrite applies one table record at its position: the next event reads it, never the one before (F14).
@@ -87,17 +83,7 @@ func (s *Sync) TableWrite(tableID int, op TableOp, rows [][]event.Value) error {
 	if s.a.drained {
 		return ErrDrained
 	}
-	if s.a.app.Tables == nil || tableID < 0 || tableID >= s.a.app.Tables.Len() {
-		return fmt.Errorf("runtime: no table %d", tableID)
-	}
-	tb := s.a.app.Tables.Table(tableID)
-	switch op {
-	case TablePut:
-		return tb.Upsert(rows)
-	case TableDelete:
-		return tb.Delete(rows)
-	}
-	return fmt.Errorf("runtime: an unknown table operation %d", op)
+	return s.a.write(tableID, op, rows)
 }
 
 // Drain is a recording's stop record: the drain barrier, run to its end; the app's input ends (owner F5).
@@ -105,9 +91,7 @@ func (s *Sync) Drain() ([]clock.WMAdvance, DrainResult) {
 	if s.a.drained {
 		return nil, DrainResult{Pending: s.pending}
 	}
-	s.a.drained = true
-	adv := s.a.ing.Drain()
-	s.rt.broadcast(s.a, mDrain, adv, s.a.ing.Snapshot(), 0, true)
+	adv := s.rt.drainApp(s.a, 0)
 	return adv, DrainResult{Pending: s.pending}
 }
 
