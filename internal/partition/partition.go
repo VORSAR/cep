@@ -35,8 +35,11 @@ func (NoTimers) Timers(dst []clock.Timer) []clock.Timer { return dst }
 // nothing, so a package that may not import clock can still implement Body.
 type TimerFree struct{}
 
-// OnTimers does nothing: no timer is ever scheduled for such a body.
-func (TimerFree) OnTimers(*Instance, []clock.Timer, any) {}
+// OnTimers is a fault: no timer is ever scheduled for such a body, so one reaching it panics, which partition counts
+// as the body's panic and resets the key — never dropped in silence (combined review C9 of S3.2b-1).
+func (TimerFree) OnTimers(*Instance, []clock.Timer, any) {
+	panic("partition: a timer reached a body that holds none")
+}
 
 // OnDiscard does nothing.
 func (TimerFree) OnDiscard(*Instance, []uint64) {}
