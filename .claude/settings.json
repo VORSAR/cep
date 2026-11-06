@@ -13,5 +13,30 @@
       "mcp__gitnexus__pdg_query",
       "ReadMcpResourceTool"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I -B \"$CLAUDE_PROJECT_DIR/gate/hooks/gitnexus_reindex.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I -B \"$CLAUDE_PROJECT_DIR/gate/hooks/gitnexus_reindex.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
