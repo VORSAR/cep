@@ -41,6 +41,46 @@
       "license": "BSD-3-Clause",
       "approved": "2026-11-01",
       "why": "internal/text: NFC and the pinned Unicode tables (ADR-0007, ADR-0009 \u00a76); Unicode 17.0.0 under Go 1.27, equal to unicode.Version (owner, 2026-11-04, S3.1-2 P5)"
+    },
+    {
+      "module": "go.uber.org/goleak",
+      "version": "v1.3.0",
+      "scope": "test",
+      "license": "MIT",
+      "approved": "2026-11-01",
+      "why": "the leak check of internal/runtime's and internal/playback's tests and the gate's leak proof (ADR-0015 \u00a74; owner, S3.2b's plan check Q6, 2026-11-06)"
+    },
+    {
+      "module": "github.com/stretchr/testify",
+      "version": "v1.8.0",
+      "scope": "goleak's graph (its tests)",
+      "license": "MIT",
+      "approved": "2026-11-06",
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+    },
+    {
+      "module": "github.com/davecgh/go-spew",
+      "version": "v1.1.1",
+      "scope": "goleak's graph (its tests)",
+      "license": "ISC",
+      "approved": "2026-11-06",
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+    },
+    {
+      "module": "github.com/pmezard/go-difflib",
+      "version": "v1.0.0",
+      "scope": "goleak's graph (its tests)",
+      "license": "BSD-3-Clause",
+      "approved": "2026-11-06",
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+    },
+    {
+      "module": "gopkg.in/yaml.v3",
+      "version": "v3.0.1",
+      "scope": "goleak's graph (its tests)",
+      "license": "MIT AND Apache-2.0",
+      "approved": "2026-11-06",
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
     }
   ]
 }

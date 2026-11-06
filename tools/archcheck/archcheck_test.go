@@ -103,6 +103,15 @@ func TestImports(t *testing.T) {
 		runtime := "import _ \"" + mod + "internal/runtime\"\n"
 		wantOne(t, check(t, "internal/plan/x_test.go", "package plan_test\n"+runtime), "may not import internal/runtime")
 	})
+	t.Run("runtime's and playback's tests may import goleak, their production code may not", func(t *testing.T) {
+		// Owner, 2026-11-06 (S3.2b's plan check Q6): goleak is test-only — test_external, test files only.
+		goleak := "import _ \"go.uber.org/goleak\"\n"
+		wantNone(t, check(t, "internal/runtime/x_test.go", "package runtime_test\n"+goleak))
+		wantNone(t, check(t, "internal/playback/x_test.go", "package playback_test\n"+goleak))
+		wantOne(t, check(t, "internal/runtime/x.go", "package runtime\n"+goleak), "third-party")
+		wantOne(t, check(t, "internal/playback/x.go", "package playback\n"+goleak), "third-party")
+		wantOne(t, check(t, "internal/plan/x_test.go", "package plan_test\n"+goleak), "third-party")
+	})
 	t.Run("expr's tests may also build tables, its production code may not", func(t *testing.T) {
 		// Owner, 2026-11-04 (S3.1-2, ≠ R): test_fences, test files only, these identifiers only.
 		imp := "import \"" + mod + "internal/table\"\n"
