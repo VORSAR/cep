@@ -108,9 +108,12 @@ class RealGo(support.CoverageTest):
 
     def test_the_planted_proofs_packages_measure_as_designed(self):
         # gate/proofs (design note §8): below 8 of 9 statements covered, notests without a test, control fully covered;
-        # racy (the race row's proof, 2026-11-05) 9 of 9: its race shows only under -race, never in coverage.
+        # racy (the race row's proof, 2026-11-05) 9 of 9: its race shows only under -race, never in coverage. leaky
+        # (the leak proof, S3.2b-2) fails the unit row by design, as test_leak_planted.py proves: it is left out here.
         module = os.path.join(self.root, "m")
-        shutil.copytree(os.path.join(PROOFS, "internal"), os.path.join(module, "internal"))
+        shutil.copytree(
+            os.path.join(PROOFS, "internal"), os.path.join(module, "internal"), ignore=shutil.ignore_patterns("leaky")
+        )
         shutil.copy(os.path.join(PROOFS, "go.mod"), module)
         unit_code, code, out = self.unit_then_coverage(module)
         self.assertEqual(unit_code, 0)

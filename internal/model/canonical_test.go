@@ -789,3 +789,14 @@ func assertKeysAscend(t *testing.T, enc []byte) {
 		}
 	}
 }
+
+// TestPartitionKeyHas (SPEC §4.4, rev 5): Has says whether an attribute is one of a key's parts, in any position.
+func TestPartitionKeyHas(t *testing.T) {
+	t.Parallel()
+	k := model.PartitionKey{Attrs: []model.KeyAttr{{Name: "tenantId"}, {Name: "userId"}}, Grouped: true, Stream: "S"}
+	for attr, want := range map[string]bool{"tenantId": true, "userId": true, "scope": false, "": false} {
+		if got := k.Has(attr); got != want {
+			t.Errorf("Has(%q) = %v, want %v", attr, got, want)
+		}
+	}
+}
