@@ -1,0 +1,26 @@
+language cep/0.1;
+
+stream AdminLogins (tenantId string, userId string, ok bool, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream FailedAdminLoginAlerts (tenantId string, userId string, ts timestamp);
+
+rule FailedAdminLogin
+  intent 'Alert on every failed admin login, at most once per tenant-and-user pair every 10 minutes.'
+  partition by (tenantId, userId) of AdminLogins ttl 20 min
+  from AdminLogins[ok == false]
+  expect given AdminLogins [ {tenantId: 't1', userId: 'u1', ok: false, ts: timestamp '2026-01-01T10:00:00Z'},
+                             {tenantId: 't2', userId: 'u1', ok: false, ts: timestamp '2026-01-01T10:01:00Z'},
+                             {tenantId: 't1', userId: 'u1', ok: false, ts: timestamp '2026-01-01T10:05:00Z'},
+                             {tenantId: 't1', userId: 'u2', ok: false, ts: timestamp '2026-01-01T10:06:00Z'},
+                             {tenantId: 't1', userId: 'u1', ok: false, ts: timestamp '2026-01-01T10:10:00Z'},
+                             {tenantId: 't1', userId: 'u1', ok: false, ts: timestamp '2026-01-01T10:10:00.001Z'} ]
+         then FailedAdminLoginAlerts [ {tenantId: 't1', userId: 'u1', ts: timestamp '2026-01-01T10:00:00Z'},
+                                       {tenantId: 't2', userId: 'u1', ts: timestamp '2026-01-01T10:01:00Z'},
+                                       {tenantId: 't1', userId: 'u2', ts: timestamp '2026-01-01T10:06:00Z'},
+                                       {tenantId: 't1', userId: 'u1', ts: timestamp '2026-01-01T10:10:00.001Z'} ]
+  expect given AdminLogins [ {tenantId: 't1', userId: 'u1', ok: true, ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then FailedAdminLoginAlerts [ ]
+  select tenantId, userId
+  output first every 10 min
+  insert into FailedAdminLoginAlerts;

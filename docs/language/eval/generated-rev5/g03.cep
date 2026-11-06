@@ -1,0 +1,29 @@
+language cep/0.1;
+
+stream ToolCalls (agentId string, runNo int, tool string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Violations (agent string, run int, `rule` string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream ToolCallViolationAlerts (agentId string, runNo int, tool string,
+                                violatedRule string, ts timestamp);
+
+rule ToolCallThenViolation
+  intent 'A tool call followed within 2 minutes by a policy violation for the same agent and run.'
+  partition by (agentId, runNo) of ToolCalls, (agent, run) of Violations ttl 10 min
+  from every toolCall = ToolCalls
+    -> violation = Violations
+  within 2 min
+  after match skip past last
+  late events drop
+  expect given ToolCalls [ {agentId: 'a1', runNo: 7, tool: 'shell', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         given Violations [ {agent: 'a1', run: 7, `rule`: 'no-exfil', ts: timestamp '2026-01-01T10:01:00Z'} ]
+         then ToolCallViolationAlerts [ {agentId: 'a1', runNo: 7, tool: 'shell', violatedRule: 'no-exfil', ts: timestamp '2026-01-01T10:01:00Z'} ]
+  expect given ToolCalls [ {agentId: 'a1', runNo: 7, tool: 'shell', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         given Violations [ {agent: 'a1', run: 8, `rule`: 'no-exfil', ts: timestamp '2026-01-01T10:01:00Z'},
+                            {agent: 'a1', run: 7, `rule`: 'no-exfil', ts: timestamp '2026-01-01T10:02:01Z'} ]
+         then ToolCallViolationAlerts [ ]
+  select toolCall.agentId, toolCall.runNo, toolCall.tool,
+         violation.`rule` as violatedRule
+  insert into ToolCallViolationAlerts;

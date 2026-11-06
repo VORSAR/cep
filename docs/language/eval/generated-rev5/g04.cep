@@ -1,0 +1,25 @@
+language cep/0.1;
+
+stream Payments (merchantId string, risk float, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream RiskyPaymentAlerts (merchantId string, risk float, ts timestamp);
+
+rule RiskyPayment
+  intent 'Alert on every payment with risk over 0.9, at most once per merchant every 15 minutes.'
+  partition by merchantId of Payments ttl 30 min
+  from Payments[risk > 0.9]
+  expect given Payments [ {merchantId: 'm1', risk: 0.95, ts: timestamp '2026-01-01T10:00:00Z'},
+                          {merchantId: 'm1', risk: 0.99, ts: timestamp '2026-01-01T10:10:00Z'},
+                          {merchantId: 'm2', risk: 0.97, ts: timestamp '2026-01-01T10:11:00Z'},
+                          {merchantId: 'm1', risk: 0.9, ts: timestamp '2026-01-01T10:14:00Z'},
+                          {merchantId: 'm1', risk: 0.92, ts: timestamp '2026-01-01T10:15:00Z'},
+                          {merchantId: 'm1', risk: 0.93, ts: timestamp '2026-01-01T10:15:00.001Z'} ]
+         then RiskyPaymentAlerts [ {merchantId: 'm1', risk: 0.95, ts: timestamp '2026-01-01T10:00:00Z'},
+                                   {merchantId: 'm2', risk: 0.97, ts: timestamp '2026-01-01T10:11:00Z'},
+                                   {merchantId: 'm1', risk: 0.93, ts: timestamp '2026-01-01T10:15:00.001Z'} ]
+  expect given Payments [ {merchantId: 'm1', risk: 0.5, ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then RiskyPaymentAlerts [ ]
+  select merchantId, risk
+  output first every 15 min
+  insert into RiskyPaymentAlerts;

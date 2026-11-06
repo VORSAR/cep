@@ -1,6 +1,6 @@
 # Rev 5 evaluation — grouped partition keys
 
-**Pre-registered 2026-11-06, before any generation** (S3.2b-2's design note §1.6). The L5 protocol of [EVAL.md](../EVAL.md) at a smaller scale: one fresh generator agent; information diet = [SPEC.md](../SPEC.md) (rev 5 draft), [grammar.ebnf](../grammar.ebnf), [errors.md](../errors.md) and K=3 tagged examples ([01](../examples/01-agent-kill-switch.cep) pattern, [07](../examples/07-consent-gate.cep) partitioned plain rule with a rate limit, [09](../examples/09-params-and-quoting.cep) params). No example in the diet uses a grouped key: the form is learned from the spec. Output: one complete `.cep` file per task in [generated-rev5/](generated-rev5/).
+**Pre-registered 2026-11-06, before any generation** (S3.2b-2's design note §1.6). The L5 protocol of [EVAL.md](../EVAL.md) at a smaller scale: one fresh generator agent; information diet = [SPEC.md](../SPEC.md) (rev 5 draft), [grammar.ebnf](../grammar.ebnf), [errors.md](../errors.md) and K=3 tagged examples ([01](../examples/01-agent-kill-switch.cep) pattern, [07](../examples/07-consent-gate.cep) partitioned plain rule with a rate limit, [09](../examples/09-params-and-quoting.cep) params). No example in the diet uses a grouped key: the form is learned from the spec. Output: one complete `.cep` file per task: [g01](generated-rev5/g01.cep), [g02](generated-rev5/g02.cep), [g03](generated-rev5/g03.cep), [g04](generated-rev5/g04.cep), [g05](generated-rev5/g05.cep).
 
 ## Tasks (given to the generator verbatim)
 
@@ -26,6 +26,17 @@
 
 **Targets (as L5):** parse ≥ 97% (here: 5/5), static ≥ 90% (here: ≥ 5/5 after one repair round), one-round repair ≥ 95% of failures. A failure that points at the spec's text changes the text before G1.
 
-## Results
+## Results (2026-11-06)
 
-*(filled after the run)*
+One generator agent, spec-only diet as above; 127 s, about 90K tokens including reading.
+
+| Measure | N | Result |
+|---|---|---|
+| Parse, first attempt (`grammar_check.py` with lark 1.3.1, `--ambiguity`) | 5 | **5/5**, no ambiguous parse |
+| Static, first attempt (audited by hand against errors.md: E-PART-003/004/005/006/007, E-TTL-002, E-IDLE-001, E-NULL-003, the clause order) | 5 | **5/5** |
+| One-round repair | 0 | no failure to repair |
+| Semantic (rubric) | 5 | **5/5**: G01 `(tenantId, userId)`; G02 `(src, dst) of ConnRequests, (dst, src) of Resets` — crossed as the task needs; G03 `(agentId, runNo)` / `(agent, run)`, string then int on both; G04 `merchantId of Payments`, no brackets; G05 three parts |
+
+With five tasks the targets mean 5 of 5 each (review F20); the counts are the result. Every program also carries correct fire-path and near-miss expect blocks, including the rate limit's inclusive bound (`10:15:00.000` suppressed, `10:15:00.001` emitted).
+
+**What the generator found unclear (verbatim, condensed):** (1) whether a partitioned, rate-limited plain rule "holds timers" for `E-IDLE-001` — it read correctly that it does not; (2) Appendix B names `grammar.lark`'s NAME terminal as the reserved list, which was not in its diet, so it guessed that `rule` is reserved and backtick-quoted it, including after a capture's dot (`` violation.`rule` ``) — correct, and parsed. Both are pre-rev-5 spec text, recorded for the spec-cleanup pass, not changed here. Nothing about grouped keys was unclear: the generator cited §4.4's request/response sentence for G02.
