@@ -83,12 +83,16 @@ class Checker:
             self.cache[path] = anchors(rows.read_text(path))
         return self.cache[path]
 
-    def check(self, rel: str) -> list[str]:
-        """One line per broken link in `rel`."""
+    def check(self, rel: str) -> list[str] | None:
+        """One line per broken link in `rel`; None when `rel` cannot be read."""
         template = rel.startswith(TEMPLATES)
         base = "docs/sprints" if template else os.path.dirname(rel)
+        try:
+            text = rows.read_text(rel)
+        except OSError:
+            return None
         broken = []
-        for number, raw in prose(rows.read_text(rel).splitlines()):
+        for number, raw in prose(text.splitlines()):
             line = CODE_SPAN.sub("", raw)  # a link written inside code is an example, not a link
             targets = [m.group(1) for m in INLINE.finditer(line)]
             ref = REFERENCE.match(line)
@@ -107,8 +111,8 @@ class Checker:
         part, _, fragment = target.partition("#")
         part, fragment = urllib.parse.unquote(part), urllib.parse.unquote(fragment)
         path = os.path.normpath(os.path.join(base, part)) if part else rel
-        if path.startswith("..") or (path not in self.files and path not in self.dirs):
-            return "missing file"
+        if path.startswith("..") or (path not in self.files and path not in self.dirs) or not os.path.exists(path):
+            return "missing file"  # tracked, and in the work tree: a deleted file is missing however it is linked
         if fragment and path.endswith(".md") and path in self.files and fragment not in self.anchors_of(path):
             return "missing anchor"
         return ""
@@ -124,9 +128,15 @@ def main(argv: list[str]) -> int:
         return rows.finish([f"git ls-files: exit {code}: {rows.read_text(err).strip()}"])
     checker = Checker([p for p in rows.read_text(out).split("\0") if p])
     failures: list[str] = []
+    read = 0
     for rel in files:
-        failures += checker.check(rel)
-    rows.covered(len(files))
+        broken = checker.check(rel)
+        if broken is None:
+            failures.append(f"{rel}: listed but not in the work tree")
+            continue
+        read += 1
+        failures += broken
+    rows.covered(read)
     return rows.finish(failures)
 
 
