@@ -98,11 +98,13 @@ rule Name
 ```
 rule UnknownAppConsent
   intent 'A consent grant to an app identity not in the registered-apps table.'
+  partition by tenantId of ConsentGrants ttl 10 min
   from ConsentGrants[coalesce(appId, 'missing') not in RegisteredApps]
   select tenantId, coalesce(appId, 'missing') as appId
   output first every 5 min
   insert into ConsentAlerts;
 ```
+*(Annotated owner, 2026-11-06, S3.2b-1 D2: the example is limited per tenant, so one tenant's alert never silences another's; examples 05 and 09 keep the unpartitioned form.)*
 
 **5.2 Pattern body** — mandatory elements in order: restart marker (`every` | `once`, `E-PAT-003`), named steps, `within` (`E-PAT-001`), `after match skip past last` (`E-PAT-002`), `late events` (`E-LATE-001`):
 
