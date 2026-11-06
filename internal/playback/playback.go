@@ -35,6 +35,9 @@ const (
 	RecHeader // a recording's first record: {"recording":{"start":…}}
 	RecTick   // a recording's idle tick
 	RecStop   // a recording's last record: the session ended by Stop
+	// RecRejected is a recording's rejected live event (owner Q1 of S3.2b-2; design s3-2b-2 §7):
+	// {"arrival":…,"rejected":{"reason":…,"attr":…},"stream":…}. Stub: the reader does not produce it yet.
+	RecRejected
 )
 
 // TableOp is a table record's operation.
@@ -59,6 +62,12 @@ type Record struct {
 	Stream  int           // RecBatchEnd
 	Batch   string
 	Time    int64 // RecHeader: the deployment's start; RecTick: the tick's wall time
+	// Info is RecEvent's decode report: unknown payload keys and a payload's own text_invisibles, counted per stream
+	// (design s3-2b-2 §6). Stub: not filled yet.
+	Info event.Decoded
+	// Reason and Attr are RecRejected's fault (Stream and Arrival hold its stream and stamp).
+	Reason event.DecodeReason
+	Attr   string
 }
 
 // LoadError is the first fault in a log (owner D6 of S3.2a-1): the reader stops at its line; steps already delivered

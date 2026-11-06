@@ -48,7 +48,24 @@ type App struct {
 	Tables  *table.Set         // nil: no tables; the router is their only live writer (owner F14)
 	Rules   []Rule
 	Sinks   []SinkBinding
+	// Recorder writes the app's recording (S3.2a-1's D3; S3.2b-2's Q1, Q2); nil: none. Stub: not built yet.
+	Recorder Recorder
 }
+
+// Recorder writes one app's recording (design s3-2b-2 §7). The router calls it on its own goroutine, in intake order,
+// before the step it records. A non-nil error ends the recording for good (owner Q2 of S3.2b-2): the router never calls
+// it again, records the failure in Stats and goes on running the app.
+type Recorder interface {
+	Header(start int64) error                                           // once, before any other call
+	Event(e *event.Event, arrival int64, payload []byte) error          // payload: SendPayload's bytes; nil for Send
+	Rejected(stream int, arrival int64, fault *event.DecodeError) error // owner Q1 of S3.2b-2
+	Tick(now int64) error
+	Table(table int, op TableOp, rows [][]event.Value) error // only a write that succeeded
+	Stop() error                                             // at the drain, once
+}
+
+// errNotBuilt marks an S3.2b-2 path whose behaviour is built after G1: the stub QA's tests are written against.
+var errNotBuilt = errors.New("runtime: S3.2b-2: not built yet")
 
 // Config is the runtime's configuration; zero values take the defaults.
 type Config struct {
@@ -86,15 +103,34 @@ type RuleStats struct {
 	Suppressed, Errored                      int64 // from each body's plan.Counted (design s3-2b-1 §4)
 }
 
+// StreamStats are one source stream's counters (design s3-2b-2 §6).
+type StreamStats struct {
+	Late          int64 // stream-late events
+	AfterDrain    int64 // refused after the app's drain
+	Rejected      int64 // payloads that failed the schema: errored_events (SEMANTICS §10)
+	Unknown       int64 // payload keys the schema does not declare, each occurrence
+	FlagOverrides int64 // payloads carrying text_invisibles
+}
+
+// RecordingStats is one app's recording (owner Q2 of S3.2b-2): the records written before a failure, and its message.
+type RecordingStats struct {
+	Records int64
+	Failed  bool
+	Err     string
+}
+
 // Stats is a consistent cut of the runtime's counters at one intake position.
 type Stats struct {
-	StreamLate     [][]int64     // [app][stream]
-	AfterDrain     [][]int64     // [app][stream]: refused after the app's drain, by intake order
-	Rules          [][]RuleStats // [app][rule]
-	SinkErrors     [][]int64     // [app][binding]; read atomically, outside the cut
-	PendingHigh    int           // the router's pending FIFO, its longest
-	MailboxHigh    []int         // per shard, the longest mailbox seen after a send
-	SaturatedParks []int64       // per shard: parks with a non-empty outbox while the mailbox was full
+	Streams        [][]StreamStats  // [app][stream] (design s3-2b-2 §6); stub: Late and AfterDrain only
+	Recording      []RecordingStats // per app; stub: zero
+	OutboxHigh     []int            // per shard: the most items one message's processing appended to the outbox; stub: zero
+	StreamLate     [][]int64        // [app][stream]
+	AfterDrain     [][]int64        // [app][stream]: refused after the app's drain, by intake order
+	Rules          [][]RuleStats    // [app][rule]
+	SinkErrors     [][]int64        // [app][binding]; read atomically, outside the cut
+	PendingHigh    int              // the router's pending FIFO, its longest
+	MailboxHigh    []int            // per shard, the longest mailbox seen after a send
+	SaturatedParks []int64          // per shard: parks with a non-empty outbox while the mailbox was full
 }
 
 // Runtime is a running engine core (design §2–§6).
@@ -273,6 +309,9 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 		if err := validateApp(i, &apps[i]); err != nil {
 			return nil, err
 		}
+		if apps[i].Recorder != nil {
+			return nil, errNotBuilt
+		}
 	}
 	r := &Runtime{
 		cfg: cfg, intake: make(chan item, cfg.Intake), handoff: make(chan handoff, cfg.Shards),
@@ -419,6 +458,24 @@ func (r *Runtime) await(ctx context.Context, ch chan reply) (reply, error) {
 	case <-ctx.Done():
 		return reply{}, ctx.Err()
 	}
+}
+
+// SendPayload hands one source event of app, as a JSON payload, to the intake (design s3-2b-2 §6). The payload is
+// decoded on the caller's goroutine with the stream's decoder; a payload that fails its stream's schema is not an
+// error to the caller: it enters the intake as a rejected item, counted and recorded (SEMANTICS §10; owner Q1 of
+// S3.2b-2). It blocks for backpressure and respects ctx; the caller may reuse payload after it returns. Stub: not
+// built yet.
+func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payload []byte) error {
+	return errNotBuilt
+}
+
+// streamStats is a's per-stream counters; the stub fills Late and AfterDrain only.
+func streamStats(a *appState) []StreamStats {
+	out := make([]StreamStats, len(a.app.Streams))
+	for i := range out {
+		out[i].Late, out[i].AfterDrain = a.late[i], a.after[i]
+	}
+	return out
 }
 
 // Send hands one source event of app to the intake; it blocks for backpressure and respects ctx. It checks the event
@@ -709,7 +766,10 @@ func (rt *router) ingest(it item) {
 	case iStats:
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
+		st.OutboxHigh = make([]int, len(r.shards))
+		st.Recording = make([]RecordingStats, len(r.apps))
 		for _, a := range r.apps {
+			st.Streams = append(st.Streams, streamStats(a))
 			st.StreamLate = append(st.StreamLate, append([]int64(nil), a.late...))
 			st.AfterDrain = append(st.AfterDrain, append([]int64(nil), a.after...))
 			rules := make([]RuleStats, len(a.app.Rules))

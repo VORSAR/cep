@@ -330,7 +330,7 @@ func (c *checker) perEvent(r *model.Rule, item *model.Expr) string {
 			return
 		}
 		for _, k := range r.Partition.Keys {
-			if k.Stream == r.Body.Window.Source.Stream && k.Attr == n.Name {
+			if k.Stream == r.Body.Window.Source.Stream && k.Has(n.Name) {
 				return
 			}
 		}
@@ -358,7 +358,7 @@ func (c *checker) mayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
 		}
 		// A rule's own partition key is never null where the rule runs: a null key never reaches it (SEMANTICS §1.1,
 		// §9; break-it L1 of S3.2b-1).
-		return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool { return k.Stream == st.Name && k.Attr == n.Name })
+		return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool { return k.Stream == st.Name && k.Has(n.Name) })
 	case model.ExprNeg, model.ExprArith:
 		return slices.ContainsFunc(n.Args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
 	case model.ExprNot, model.ExprAnd, model.ExprOr, model.ExprCompare, model.ExprIsNull, model.ExprIn, model.ExprText:

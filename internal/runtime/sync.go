@@ -70,6 +70,10 @@ func (s *Sync) Event(e *event.Event, arrival int64) (late bool, adv []clock.WMAd
 	return s.rt.event(s.a, e, arrival)
 }
 
+// Reject is a recording's rejected record (owner Q1 of S3.2b-2; design §6): it raises the stamp and counts the
+// rejection, nothing else. Stub: not built yet (a no-op).
+func (s *Sync) Reject(stream int, arrival int64, reason event.DecodeReason) {}
+
 // Tick is a recording's idle tick.
 func (s *Sync) Tick(now int64) []clock.WMAdvance {
 	if s.a.drained {
@@ -126,6 +130,7 @@ func (s *Sync) Stats() Stats {
 		}
 	}
 	return Stats{
+		Streams: [][]StreamStats{streamStats(a)}, Recording: []RecordingStats{{}}, OutboxHigh: []int{0},
 		StreamLate: [][]int64{append([]int64(nil), a.late...)}, AfterDrain: [][]int64{append([]int64(nil), a.after...)},
 		Rules: [][]RuleStats{rules}, SinkErrors: [][]int64{make([]int64, len(a.all))},
 		PendingHigh: 0, MailboxHigh: []int{0}, SaturatedParks: []int64{sh.parks},

@@ -162,7 +162,7 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 			return Rule{}, fmt.Errorf("stream %s is keyed twice (E-PART-004; Build is given only a checked model)", k.Stream)
 		}
 		for i := range sc.schema.NumAttrs() {
-			if a := sc.schema.Attr(i); a.Name == k.Attr {
+			if a := sc.schema.Attr(i); a.Name == k.Attrs[0].Name { // S3.2b-2 stub: one part; multi-part keys after G1
 				pr.KeyAttr, pr.KeyType, pr.TTL = []int{i}, a.Type, r.Partition.TTL.Ms
 			}
 		}
