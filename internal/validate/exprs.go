@@ -283,7 +283,7 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 			c.report("E-SEL-001", item.Pos, "%s.%s is bound twice", target.Name, name)
 		case !assignable(typ, a.Type):
 			c.report("E-TYPE-001", item.Pos, "select item %s is %s; %s.%s is %s", name, typ, target.Name, name, a.Type)
-		case !a.Optional && c.mayBeNull(&item.Expr, sc):
+		case !a.Optional && c.mayBeNull(&item.Expr, sc, r):
 			c.report("E-NULL-003", item.Pos, "%s can be null and %s.%s is not optional: wrap it in coalesce(...) or declare %s.%s optional",
 				exprText(item.Expr), target.Name, name, target.Name, name)
 		case window && aggregating(r.Body.Window.Kind):
@@ -299,7 +299,7 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 		return
 	}
 	if ts := attrOf(target, "ts"); ts != nil && target.Time.Kind == model.TimeNone && ts.Type != event.TTimestamp && !c.badTs[target] {
-		c.badTs[target] = true // once per stream, at its declaration (owner D3 of S3.2b-1)
+		c.badTs[target] = true // once per stream; at its declaration until model attributes carry a position (owner D3 as annotated: S3.2b-2)
 		c.report("E-TYPE-001", target.Pos, "%s.ts is filled with the output timestamp: declare it timestamp, not %s", target.Name, ts.Type)
 	}
 	for _, a := range target.Attrs {
@@ -343,15 +343,24 @@ func (c *checker) perEvent(r *model.Rule, item *model.Expr) string {
 // attribute (a capture's too) can; arithmetic, negation and a function call follow the function's own null rule in
 // expr's registry (null in, null out by default); a literal, a param, a comparison, membership, a text operator, the
 // boolean operators and `is [not] null` never can, being two-valued.
-func (c *checker) mayBeNull(n *model.Expr, sc *scope) bool {
+func (c *checker) mayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
 	switch n.Kind {
 	case model.ExprLiteral:
 		return n.Lit.Kind == model.LitNull
 	case model.ExprAttr, model.ExprRaw:
-		a := sc.attr(n)
-		return a == nil || a.Optional
+		slot, i, _, ok := sc.Attr(n.Qualifier, n.Name)
+		if !ok {
+			return true
+		}
+		st := sc.slots[slot]
+		if !st.Attrs[i].Optional {
+			return false
+		}
+		// A rule's own partition key is never null where the rule runs: a null key never reaches it (SEMANTICS §1.1,
+		// §9; break-it L1 of S3.2b-1).
+		return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool { return k.Stream == st.Name && k.Attr == n.Name })
 	case model.ExprNeg, model.ExprArith:
-		return slices.ContainsFunc(n.Args, func(x model.Expr) bool { return c.mayBeNull(&x, sc) })
+		return slices.ContainsFunc(n.Args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
 	case model.ExprNot, model.ExprAnd, model.ExprOr, model.ExprCompare, model.ExprIsNull, model.ExprIn, model.ExprText:
 		return false
 	case model.ExprCall:
@@ -365,11 +374,11 @@ func (c *checker) mayBeNull(n *model.Expr, sc *scope) bool {
 		case expr.NullNever:
 			return false
 		case expr.NullIfAll:
-			return !slices.ContainsFunc(args, func(x model.Expr) bool { return !c.mayBeNull(&x, sc) })
+			return !slices.ContainsFunc(args, func(x model.Expr) bool { return !c.mayBeNull(&x, sc, r) })
 		case expr.NullIfBranch:
 			args = args[1:]
 		}
-		return slices.ContainsFunc(args, func(x model.Expr) bool { return c.mayBeNull(&x, sc) })
+		return slices.ContainsFunc(args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
 	}
 	return true
 }
