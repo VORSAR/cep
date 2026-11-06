@@ -222,7 +222,7 @@ rule FlagDeclared
 
 // zwsp is U+200B ZERO WIDTH SPACE, a format character (SEMANTICS §5.1 stage 1's class): its payload form is the
 // JSON escape, so the source holds no invisible byte.
-const qeZWSP = `​`
+const qeZWSP = `\u200b`
 
 // qeFlagCase is one event and the flag its rule must read.
 type qeFlagCase struct {
