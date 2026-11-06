@@ -248,3 +248,13 @@ None for the owner. Forwarded: whether a nullable value into a non-optional *tab
 | G5 | QA | Partition's purge test drives `Apply` by hand; D1 changes what the shard applies, not partition's API. |
 | G6 | QA | The body's `Walk` yields `("anchor", "", At)` (§2). |
 | G7 | QA | A driver starts virtual and calls `Begin` at the header (§4). |
+
+## 13. As built (annotated 2026-11-06, after the review and break-it)
+
+- **E-PART-004** (break-it B1; owner): a stream named twice in a partition clause is refused at deploy, and `Build` refuses it too rather than keep the last key. Multi-part keys, `(k, j) of S` with no limit on the parts, are S3.2b-2's (owner).
+- **D3's position:** the error names `ts` at the output stream's declaration; model attributes have no position. It moves to the attribute in S3.2b-2 (owner, ≠ R).
+- **E-NULL-003 refinement** (break-it L1): a rule's own partition-key attribute is never null where the rule runs, so selecting it is no finding. Flow-sensitive cases (`ifThenElse(x is null, 0, x)`) stay refused: conservative by design, `coalesce` is the fix.
+- **`Sync.Walk`** yields only the ingest step's Seq counters (combined review C5, later): the rules' state is walked through `partition.Rule`, the snapshot seam's concern in Phase 2.
+- **The emission stage's reach** (C9): `pattern` and `window` cannot import `plan`; `plan` wraps their bodies (forwarded to S4.1). `partition.TimerFree.OnTimers` panics, so a stray timer is counted, never dropped.
+- **Shared glue** (C4): the router and `Sync` share one tick, table-write and drain step.
+- **Tests that guard without a red-first defect** (C1): the drain's and end's advances reaching on-arrival keys, and the admission-only message, each proven red by removing its line. The one-input check (C6) was written before its test; a mutation shows the test catches its removal.

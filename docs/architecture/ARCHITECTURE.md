@@ -144,7 +144,7 @@ api/exports.golden                        the hand-written public-export law fil
 1. `internal/event` imports nothing from this module. Everything else may import it.
 2. `internal/model` imports only `internal/event`.
 3. `internal/parser` and package `rule` import `internal/model` (both are front-ends; neither imports the other).
-4. `internal/plan` imports `model`, `expr`, `partition` (instance/OpState construction) and the operator packages (`pattern`, `window`, `text`, `table`); plan's emission stage owns rate limiting (anchors live in `partition.Instance` — the former one-if `ratelimit` package is folded here per the round-2 elegance note). `internal/validate` imports `model`, `expr` (typing tables), and `window` (the `windowspec` extent helper) — all downward.
+4. `internal/plan` imports `model`, `expr`, `partition` (instance/OpState construction) and the operator packages (`pattern`, `window`, `text`, `table`); plan's emission stage owns rate limiting (anchors live in `partition.Instance` — the former one-if `ratelimit` package is folded here per the round-2 elegance note). `internal/validate` imports `model`, `expr` (typing tables), and `window` (the `windowspec` extent helper) — all downward. *(Annotated 2026-11-06, S3.2b-1 (combined review C3): the anchors live in the body's per-key `OpState`, as ADR-0006 §2 records, not in `partition.Instance`; `plan` does not import `clock`, and implements a timer-free state and body through `partition.NoTimers` and `partition.TimerFree`.)*
 5. Operator packages (`pattern`, `window`, `expr`, `text`, `table`, `partition`) import `event` and `clock` only — never `runtime`, never `io`, never each other — except the **exception table** (exhaustive; the gate enforces it verbatim):
 
    | Edge | Why |
