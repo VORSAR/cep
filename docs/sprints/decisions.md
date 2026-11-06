@@ -45,6 +45,7 @@
 | 2026-11-06 | [S3.2b's plan check](#owner-decisions-2026-11-06--s32bs-plan-check) |
 | 2026-11-06 | [S3.2b-1's design (after the architecture review)](#owner-decisions-2026-11-06--s32b-1s-design-after-the-architecture-review) |
 | 2026-11-06 | [S3.2b-1's review and break-it](#owner-decisions-2026-11-06--s32b-1s-review-and-break-it) |
+| 2026-11-06 | [the docs restructure](#owner-decisions-2026-11-06--the-docs-restructure) |
 
 ## The decisions
 
@@ -393,3 +394,17 @@ The combined-build review ([s3-2b-1-combined-architecture.md](../reviews/s3-2b-1
 3. **The sprint's work is split into parts of about 10 points each** (the owner, answering where multi-part keys land). S3.2b-1 = what is built plus this fix round, about 10.5. S3.2b-2 = its own items (about 6) plus multi-part keys (about 2.5) plus D3's position (about 1), about 9.5.
 
 *Id mapping for the records above (annotation, 2026-11-02):* v2's S1.1 → v3's S1.1a (runner, CI, coverage, event kernel) + S1.1b (analyzers, LAW Δ) — so "S1.1" in the coverage and parallel-run decisions above means S1.1a, and their exit lines are S1.1a's exits 3, 4 and 6; v2's S2.1 differential → S2.2a; v2's S2.2 → S2.2a (expressions) + S2.2b (validator); v2's S3.1 playback format → S3.2a; v2's S3.2 → S3.2a (runtime core) + S3.2b (replay loop, errors, arrival, flags); v2's rate limiting → S3.2b; v2's S4.1 and-groups, live quiet key and drain → S4.2.
+
+### Owner decisions, 2026-11-06 — the docs restructure
+
+Asked to bring the docs up to date so that old information is read only when it is needed, with links backward and forward. As recommended unless marked.
+
+1. **The sprint plan holds only the live plan.** Closed cards and the old status lines move word for word to [history.md](history.md), the owner's decisions to this file. At close-out the closed card moves there and the status line is replaced, the old one appended to history's log.
+2. **Every point-in-time document opens with a "Historical" line** naming what supersedes it and linking its siblings and the sprints before and after.
+3. **Stale status is rewritten; a changed decision is annotated** (ground rule 4).
+4. **The changes land as their own PR now** (≠ R: the recommendation was to ride S3.2b-2's PR), together with S3.2b-1's close-out commit; S3.2b-2 starts from `main` after it merges.
+5. **Known issue S2.2a-1 is closed:** the fuzz rows are blocking since PR #13, and fuzzing nightly is the chosen schedule, not a defect.
+6. **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1) **joins S1.1c's list.**
+7. **SPEC §0 names its current revision**, rev 4; the language is unchanged.
+8. **Three lasting rules from retros join the sprint model** ([§10](00-sprint-model.md#10-the-quality-bar)): a design claim about a library's behaviour is proven by a scratch program before review (S3.1-2); a sprint that adds a CI workflow runs it once by hand and reads its summary (S3.2a-2); a guard test counts only once it is shown red with the line it guards removed (S3.2b-1).
+9. **The docs link checker becomes a gate row in this PR** (≠ R: the recommendation was S1.1c): `doclinks`, at T1–T4, fails on any relative link or `#anchor` in a tracked Markdown file that does not resolve.

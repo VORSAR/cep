@@ -232,6 +232,12 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 - *Approval of the v3 recalibration — **done** (2026-11-02); the sprint references in ADR-0005 §1, ADR-0012 §1, ADR-0015 and qa-strategy §4 are updated to v3's ids.*
 - *Owner action — **done** (2026-11-02, verified via the GitHub API): ruleset `protect-main` is active on the default branch with deletion and force-push (non-fast-forward) blocked and no bypass actors. S1.1a adds the summary job as a required status check to the same ruleset once its CI has run.* *(Annotated 2026-11-05: the required status check is dropped by the owner — §5, "branch protection".)*
 
+*Resolved 2026-11-06 ([owner](decisions.md#owner-decisions-2026-11-06--the-docs-restructure)): the three lasting rules joined the sprint model; the one-module check joined S1.1c; S2.2a-1 was closed.*
+
+- **Three lasting-rule proposals from retros:** (1) a design claim about a library's behaviour is checked with a scratch program before review ([S3.1-2 retro](s3-1-2-record.md#retro)); (2) a new CI workflow is run once by hand in the sprint that adds it ([S3.2a-2 retro](s3-2a-2-record.md#retro)); (3) a guard test that pins wiring is proven red by a mutation before it counts ([S3.2b-1 retro](s3-2b-1-record.md#retro)).
+- **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1: the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`) has no sprint: S1.1b's slim scope did not build it and S1.1c's list does not name it.
+- **Known issue S2.2a-1** looks resolved by PR #13 (the fuzz rows are blocking): close it, or keep it for the nightly-only cadence ([known issues](../product/known-issues.md)).
+
 ## The status log
 
 *The plan's one status line as it grew, 2026-11-01 to 2026-11-06, split at each annotation; the newest is last. The current line is [sprint-plan §Status](sprint-plan.md#status).*

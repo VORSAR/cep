@@ -56,7 +56,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
 | S3.2b ([S3.2b-1](s3-2b-1-record.md) ✓; S3.2b-2 next) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
 | S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b |
-| S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* | sized at its G0 | at its G0 | S3.3 |
+| S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* *(and the one-module check of ADR-0001 §1: [owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure))* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
 | S4.2 | The pattern engine completed and independently proven | 13 (13) | full | S4.1 |
 | S5.1 | HTTP in, webhook out — the kill switch fires live | 13 (11.5) | full | S4.2 |
@@ -406,9 +406,6 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Still open for the owner
 
-- **Three lasting-rule proposals from retros:** (1) a design claim about a library's behaviour is checked with a scratch program before review ([S3.1-2 retro](s3-1-2-record.md#retro)); (2) a new CI workflow is run once by hand in the sprint that adds it ([S3.2a-2 retro](s3-2a-2-record.md#retro)); (3) a guard test that pins wiring is proven red by a mutation before it counts ([S3.2b-1 retro](s3-2b-1-record.md#retro)).
-- **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1: the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`) has no sprint: S1.1b's slim scope did not build it and S1.1c's list does not name it.
-- **Known issue S2.2a-1** looks resolved by PR #13 (the fuzz rows are blocking): close it, or keep it for the nightly-only cadence ([known issues](../product/known-issues.md)).
 - **Language questions for a spec-cleanup pass:** the five contradictions in the language documents ([known issue S2.2b-1](../product/known-issues.md)) and integer overflow ([known issue S3.2b-1-1](../product/known-issues.md)).
 
 *Resolved items move to [history.md](history.md#resolved-owner-items).*
