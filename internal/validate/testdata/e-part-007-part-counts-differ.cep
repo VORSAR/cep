@@ -1,0 +1,20 @@
+-- expect: E-PART-007 (Resets is keyed by 1 part, Logins by 2) @ 14:42
+language cep/0.1;
+
+stream Logins (user string, device string, ok bool, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Resets (user string, device string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (user string, ts timestamp);
+
+rule R
+  intent 'A failed login, then a password reset for the same user and device.'
+  partition by (user, device) of Logins, user of Resets ttl 1 hour
+  from every f = Logins[ok == false] -> r = Resets
+  within 5 min
+  after match skip past last
+  late events drop
+  select f.user
+  insert into Out;

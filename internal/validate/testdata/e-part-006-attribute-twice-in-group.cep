@@ -1,0 +1,15 @@
+-- expect: E-PART-006 (an attribute named twice in one key group) @ 11:23
+language cep/0.1;
+
+stream S (k string, j string, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Alert per key at most once per 5 min.'
+  partition by (k, j, k) of S ttl 10 min
+  from S
+  select k
+  output first every 5 min
+  insert into Out;
