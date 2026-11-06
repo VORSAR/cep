@@ -95,7 +95,8 @@ Design (G1)  ☑ architecture review resolved (design v2 §15) ☑ QA testabilit
 Build (G2)   ☐ T2 (make check exit 0) ☐ T3 (exit 0) ☐ conformance cases for every construct changed ☐ tests on the real code
 Review (G3)  ☑ architecture review of the combined diff (1 blocker, 3 should-fix, 3 later) ☑ QA break-it (4 blockers, 3 should-fix, 1 later)
              ☑ every finding fixed, or settled by the owner (C4, S3); every breaker's red test committed
-Verify (G4)  ☐ T4 exit 0, run complete ☐ owner's check passed ☐ exits 2–4 and 6–11 met by their proofs
+Verify (G4)  ☑ T4 exit 0, run complete (19 rows, 162 s; the first run red: a skipped helper test and a data race the fix round's B1
+               made — both fixed) ☐ owner's check passed ☑ exits 2–4 and 6–11 met by their proofs (Measured results)
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ record + retro ☐ known issues ☐ status line ☐ documents reconciled ☐ memory updated
              ☐ worktrees removed ☐ points and duration
@@ -103,7 +104,13 @@ Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green 
 
 ## For the owner (the owner's check)
 
-*(written from the sprint's diff before the PR)*
+- **By reading:**
+  - grouped keys: [SPEC §4.4 and Appendix E, rev 5](../language/SPEC.md), [example 10](../language/examples/10-grouped-keys.cep), the errors with their messages — `go test ./internal/validate -run 'TestGroupedKeyFindings|TestStatic/e-part' -v`; the [evaluation](../language/eval/rev5-grouped-keys.md);
+  - the error-semantics table ([design §6](s3-2b-2-design.md#6-the-payload-intake-and-per-stream-counts-item-5-exit-2)) and its test, `go test ./internal/playback -run TestErrorSemanticsTable -v`;
+  - the recorder: a live run recorded and replayed with equal outputs and counters, a recording that falls behind, a drain past its deadline — `go test ./internal/playback -run 'TestRecorderReplayGivesTheLiveRun|TestARecordingThatFallsBehindStops|TestARecordingThatOverflowsStaysReadable' -v` and `go test ./internal/runtime -run TestDrainWaitsForTheRecordingOnlyUntilItsDeadline -v`.
+- **By running:** `make strict-gate` (T4: 19 rows, exit 0 on macOS); the first CI run on the pushed branch, Linux and the new `determinism-macos` job, read before the PR (lasting rule: a new CI workflow job runs once by hand).
+- **Rule-file changes, by hand** (the LAW Δ block's instrument is S1.1c's): `tools/importcheck/rules.json` (`test_external`: goleak in runtime's and playback's tests only); `tools/deps-allowlist.json` (goleak v1.3.0 and its test graph); `gate/registry.json` (rows `tripwire`, `determinism`, `determinism-macos`; the proofs row's minimum 18); `gate/tripwire.json` (new: the ceilings); `.github/workflows/gate.yml` (generated: the macOS job); SPEC rev 5, `grammar.lark`, `grammar.ebnf`, `errors.md`, SEMANTICS §9 and §10, SYNTAX, DESIGN; example 10 and the rev 5 evaluation programs with their goldens; the harness check in `docs/language/checks/test_semantics.py`.
+- **One new dependency, approved:** `go.uber.org/goleak` v1.3.0, test-only (S3.2b's Q6).
 
 ## Retro
 
