@@ -45,7 +45,7 @@ func check(app *model.App, opts Options, conn connectors) (*model.App, []Diagnos
 		app: cp, opts: opts, conn: conn, reg: expr.Builtins(),
 		streams: map[string]*model.Stream{}, tables: map[string]*model.Table{}, params: map[string]*model.Param{},
 		effective: map[string]model.Literal{}, badParam: map[string]bool{},
-		poisoned: map[*model.Rule]bool{}, noTarget: map[*model.Rule]bool{}, badKey: map[*model.PartitionKey]bool{},
+		poisoned: map[*model.Rule]bool{}, noTarget: map[*model.Rule]bool{}, badTs: map[*model.Stream]bool{}, badKey: map[*model.PartitionKey]bool{},
 		skipExpr: map[*model.Expr]bool{}, skipDur: map[*model.DurationOrParam]bool{},
 	}
 	c.run()
@@ -76,6 +76,7 @@ type checker struct {
 
 	poisoned map[*model.Rule]bool            // its from, a step or an absence names an unknown stream
 	noTarget map[*model.Rule]bool            // its insert-into stream is unknown
+	badTs    map[*model.Stream]bool          // a derived stream whose ts was reported (owner D3 of S3.2b-1)
 	badKey   map[*model.PartitionKey]bool    // already reported: an unknown stream or attribute
 	skipExpr map[*model.Expr]bool            // a filter or select item a finding already explains
 	skipDur  map[*model.DurationOrParam]bool // a duration slot whose param did not resolve

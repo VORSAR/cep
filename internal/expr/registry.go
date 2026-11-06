@@ -18,12 +18,25 @@ const (
 	PatternOnly Kind = "pattern-only" // chain
 )
 
+// NullRule says when a call can give null (SEMANTICS §1.1: functions propagate null unless defined on it). The
+// validator reads it for E-NULL-003 (owner D4 of S3.2b-1), so the rule lives with the function, never in a second list.
+type NullRule uint8
+
+// The null rules; the zero value is the default, NullIfAny.
+const (
+	NullIfAny    NullRule = iota // null when any argument can be null: null in, null out
+	NullIfAll                    // null only when every argument can be (coalesce)
+	NullIfBranch                 // null when either value branch can be (ifThenElse's 2nd and 3rd arguments)
+	NullNever                    // never null (count, chain)
+)
+
 // Descriptor is one callable: its name, kind, arity, and how a call to it is typed and built.
 type Descriptor struct {
 	Name    string // "coalesce" or "math:round"
 	Kind    Kind
 	MinArgs int
 	MaxArgs int
+	Null    NullRule
 	// Factory types the built arguments and gives the node; it reports E-TYPE-001 or E-FN-001 (nil for the
 	// kinds that are typed here and built in a later sprint).
 	Factory func(args []Expr, call model.Expr) (Expr, error)
@@ -91,15 +104,15 @@ func Builtins() *Registry {
 }
 
 var builtins = []Descriptor{
-	{Name: "coalesce", Kind: Scalar, MinArgs: 2, MaxArgs: 2, Factory: buildCoalesce},
+	{Name: "coalesce", Kind: Scalar, MinArgs: 2, MaxArgs: 2, Null: NullIfAll, Factory: buildCoalesce},
 	{Name: "minimum", Kind: Scalar, MinArgs: 2, MaxArgs: 2, Factory: buildExtreme(false)},
 	{Name: "maximum", Kind: Scalar, MinArgs: 2, MaxArgs: 2, Factory: buildExtreme(true)},
 	{Name: "abs", Kind: Scalar, MinArgs: 1, MaxArgs: 1, Factory: buildAbs},
 	{Name: "math:round", Kind: Scalar, MinArgs: 1, MaxArgs: 1, Factory: buildRound},
 	{Name: "cast", Kind: Scalar, MinArgs: 2, MaxArgs: 2, Factory: buildCast},
-	{Name: "ifThenElse", Kind: Scalar, MinArgs: 3, MaxArgs: 3, Factory: buildIfThenElse},
-	{Name: "count", Kind: Aggregate, MinArgs: 0, MaxArgs: 0, Factory: buildCount},
-	{Name: "chain", Kind: PatternOnly, MinArgs: 1, MaxArgs: maxArgs},
+	{Name: "ifThenElse", Kind: Scalar, MinArgs: 3, MaxArgs: 3, Null: NullIfBranch, Factory: buildIfThenElse},
+	{Name: "count", Kind: Aggregate, MinArgs: 0, MaxArgs: 0, Null: NullNever, Factory: buildCount},
+	{Name: "chain", Kind: PatternOnly, MinArgs: 1, MaxArgs: maxArgs, Null: NullNever},
 }
 
 func buildCoalesce(args []Expr, _ model.Expr) (Expr, error) {
