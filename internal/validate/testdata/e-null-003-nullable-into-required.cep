@@ -1,0 +1,13 @@
+-- expect: E-NULL-003 (a value that can be null bound to a non-optional output attribute) @ 12:13
+language cep/0.1;
+
+stream S (k string, note string optional, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+stream Out (k string, note string, ts timestamp);
+
+rule R
+  intent 'Forward every event with its note.'
+  from S
+  select k, note
+  insert into Out;
