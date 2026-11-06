@@ -28,6 +28,9 @@ venv/
 # --- Claude Code: machine-local settings only (project skills/agents ARE committed) ---
 .claude/settings.local.json
 
+# --- GitNexus: the code graph lives outside the tree (DEVELOPMENT.md, "The code graph"); never an in-repo index ---
+.gitnexus/
+
 # --- OS ---
 .DS_Store
 Thumbs.db

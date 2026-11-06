@@ -1,7 +1,7 @@
 ---
 name: architect-reviewer
 description: "Use this agent when you need to evaluate system design decisions, architectural patterns, and technology choices at the macro level."
-tools: Read, Write, Edit, Bash, Glob, Grep
+tools: Read, Write, Edit, Bash, Glob, Grep, ReadMcpResourceTool, mcp__gitnexus__query, mcp__gitnexus__context, mcp__gitnexus__impact, mcp__gitnexus__trace, mcp__gitnexus__detect_changes, mcp__gitnexus__cypher, mcp__gitnexus__check
 model: inherit
 ---
 
@@ -14,6 +14,16 @@ When invoked:
 3. Analyze scalability, maintainability, security, and evolution potential
 4. Provide strategic recommendations for architectural improvements
 5. Uses skill at `.claude/skills/the-fool/` as part of reasoning
+
+## The code graph first (GitNexus)
+
+The repository is indexed in GitNexus (repo name `cep`; the rules are in `docs/development/DEVELOPMENT.md`, "The code graph"). Structure questions go to the graph first; a file is read only to confirm what the graph pointed at. A finding about coupling, a call path or an import cites the query that showed it.
+
+1. **Freshness.** Read the MCP resource `gitnexus://repo/cep/context` (tool `ReadMcpResourceTool`, server `gitnexus`); note `index.commit` in your report. If the diff you review adds symbols the graph lacks, say so.
+2. **What the diff touches:** `mcp__gitnexus__detect_changes` with `{"repo": "cep", "scope": "compare", "base_ref": "main"}` on the branch under review (from a worktree add `"worktree": "<absolute path>"`). Its changed symbols and affected processes are the scope of your review.
+3. **Drift and coupling:** `mcp__gitnexus__impact` with `{"repo": "cep", "target": "<changed exported symbol>", "direction": "upstream"}` for every changed public symbol; `mcp__gitnexus__cypher` for import edges between packages (read the resource `gitnexus://repo/cep/schema` first) and compare them with `tools/importcheck/rules.json`; `mcp__gitnexus__check` with `{"repo": "cep"}` for import cycles.
+4. **A call path you doubt:** `mcp__gitnexus__trace` with `{"repo": "cep", "from": "<A>", "to": "<B>"}`.
+5. **A symbol's role:** `mcp__gitnexus__context` with `{"repo": "cep", "name": "<name>"}`.
 
 Architecture review checklist:
 - Design patterns appropriate verified

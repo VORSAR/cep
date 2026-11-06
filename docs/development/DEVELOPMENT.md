@@ -82,6 +82,29 @@ A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// T
 
 ---
 
+## The code graph (GitNexus)
+
+The repository is indexed as a GitNexus knowledge graph: every symbol with its callers, callees, imports and the execution flows it is part of. The graph answers "who calls, imports or depends on X" in one call and a few hundred tokens; the same answer from reading files costs thousands and misses callers. **A claim about callers, imports or blast radius cites a graph query, not a file read.**
+
+- **Where the index is.** Outside the tree, in the slot the GitNexus registry names for this path (`~/.gitnexus/storage/cep-*`). The `gitnexus` CLI and the MCP server resolve it from the registry, so no environment variable is needed; `.gitnexus/` is ignored as a guard against an in-repo index.
+- **Freshness.** The MCP resource `gitnexus://repo/cep/context` states the indexed commit. When it is not `HEAD`, re-index from the repository root with `gitnexus analyze --index-only` (about 15 s; `--index-only` keeps it from rewriting `CLAUDE.md` or the skills). The hook after `git commit` / `git merge` says when this is due; nothing re-indexes on its own.
+- **Which tool for which question.** All are read-only except `rename`, which edits files.
+
+| Question | Tool |
+|---|---|
+| Is the index current? | the `context` resource |
+| Where does this behaviour live? | `query` (before any `grep`) |
+| Who calls, imports or is called by X? | `context` |
+| What breaks if X changes? | `impact` (`direction: upstream`; no callers reads as *unproven*, not safe) |
+| How does A reach B? | `trace` |
+| What does this branch's diff touch? | `detect_changes` (`scope: compare`, `base_ref: main`; from an agent's worktree pass its absolute path as `worktree`, or the server diffs the indexed checkout instead) |
+| Import edges, package lists, anything else | `cypher`, after reading the `schema` resource |
+
+- **What it does not know.** Markdown is a bare file node (no doc-to-code edges); a symbol added on a branch is absent until the next re-index; `.cep` example files are files, not rules. Those questions still need the file.
+- **Agents** have the graph tools in their `tools:` list and a "code graph first" section in their definition; a brief names the symbols to `impact` before editing. The coordinator verifies a lane with `detect_changes` on the combined branch before reading its diff.
+
+---
+
 ## Code review checklist (before commit)
 
 - [ ] **Gate tier green** for the work's size (T2 for a lane), read from the `exit:` line
@@ -96,4 +119,4 @@ A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// T
 
 ---
 
-**Last updated:** 2026-11-06 (what exists; the checks moved to S1.1c; no required status check)
+**Last updated:** 2026-11-06 (what exists; the checks moved to S1.1c; no required status check; the code graph)
