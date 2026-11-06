@@ -795,8 +795,11 @@ func (rt *router) ingest(it item) {
 		if a.app.Schemas[it.ev.StreamID].TimeAttr() == event.ArrivalTime {
 			it.ev.Ts = stamp // live stamping at ingest (item 3; design s3-2b-2 §4, MUST 6)
 		}
-		a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
 		rt.event(a, &it.ev, stamp, it.info)
+		// queued after the ingest step, still in intake order: the step writes the flag into a declared text_invisibles
+		// slot, and the channel hand-off orders that write before the recorder goroutine reads the event (a race the
+		// race row caught at T4)
+		a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
 	case iReject:
 		a := r.apps[it.app]
 		if a.drained {
