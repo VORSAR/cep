@@ -139,6 +139,15 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 6. **`allocgate` stays `testing.AllocsPerRun` tests run by the `unit` row** (S2.2a's decision). The decode and encode gates are S5.2's item 8; S3.1-2's decode budget (F12) and ADR-0010 §1's annotation land in S3.2b-2 with the hand-off budget (owner Q4).
 7. **A derived stream's `ts` is the output timestamp,** and a `select` may widen `int` to `float` (`internal/validate`): the filter rule's projection follows both.
 
+*S3.2b-2's plan check (coordinator, against `main` @ f32fd41; answered by the owner 2026-11-06, [decisions](decisions.md#owner-decisions-2026-11-06--s32b-2s-plan-check)):* S3.1's routine as for S3.2b-1 — QA's tests first and independent; an architecture review of the design note, in which multi-part keys get the language-design skill's full pass (semantics, syntax, evaluation); the build in the main session; a QA break-it. One sprint, one PR; about 11 points by item count (item 3 with the recorder 2, item 4 with Q3's validator rule 1, item 5 1.5, item 7 1.5, item 8 1, multi-part keys 2.5, D3's position 1, the rejected-line record kind 0.5), under the cap. Order: the model changes first (keys and the attribute position together, so the parser's goldens regenerate once), then ingest (arrival, the flag, the payload intake, the recorder), then the gate rows. The readings:
+1. **No live event gets a `time arrival` stamp:** the router passes its wall stamp to the stream registry only, and the event keeps the `ts` its caller gave (`runtime.Ingest.Event`). The replay side reads recordings already (S3.2a-1's D3: start, arrival, tick, stop), but nothing writes one: `playback` encodes events only. The recorder sits on the router goroutine, the one place that sees the whole intake in order; the line encoding is `playback`'s.
+2. **The invisible-character flag is computed nowhere:** `text.IngestFlags` has no caller and no expression node reads `Row.Invisibles()`; the decoder already reports a payload's own `text_invisibles`. The flag is computed once in the shared ingest step, so live and replay cannot differ.
+3. **Per-rule expression errors and null keys are counted since S3.2b-1; nothing is counted per stream, and no live path takes a raw payload:** `runtime.Send` takes a typed event and refuses a malformed one (S3.1-2's D2, which stands). Item 5 adds an internal payload intake that decodes by schema and counts rejected payloads, unknown attributes and overridden flags per stream; the recorder writes a rejected payload as a "rejected" line (owner Q1).
+4. **A partition key is one value end to end:** the grammar (`part_key: cname "of" cname`), the parser, `model.PartitionKey`, `plan.Rule` (one key attribute per input, one key type), the router's shard hash and `partition`'s map key and `Instance.Key`. Multi-part keys change each; the Python reference executor takes any key function, so a tuple serves and a new harness check pins "each combination is its own key". SPEC goes to rev 5.
+5. **`model.Attr` has no source position;** adding one regenerates the parser's 39 stored model goldens (`internal/parser/testdata/golden`).
+6. **goleak is not in `go.mod`, and nothing counts one step's emissions,** so the outbox ceiling needs a runtime high-water mark as well as the T4 tripwire step, its ceilings (S3.2b's Q7) and a planted proof. The race proof landed in PR #12.
+7. **Every CI job runs on `ubuntu-latest`, and the workflow generator has no per-row runner,** so the macOS job (S3.2b's Q5) needs one, with a committed replay output both systems must match byte for byte and the planted map-order proof.
+
 #### S3.3 — The Deploy pipeline and the conformance runner — clock freeze
 
 | | |
@@ -412,7 +421,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2b-1 merged (PRs #1–#14, the last on 2026-11-06). Next: S3.2b-2's plan check — its card's items 3–5, 7, 8 and the recorder, plus multi-part partition keys `(k, j) of S` with their language-design step first, and D3's error at the `ts` attribute (owner, 2026-11-06); about 9.5 points.**
+**Phase 1 in progress: S1.1a-1 to S3.2b-1 merged (PRs #1–#14, the last on 2026-11-06). S3.2b-2 passed G0 (2026-11-06): its card's items 3–5, 7, 8 and the recorder, multi-part partition keys `(k, j) of S` with one spelling, and D3's error at the `ts` attribute; about 11 points → next: its design note with the language-design pass for grouped keys, QA's tests first, the architecture review, then G1.**
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
 
