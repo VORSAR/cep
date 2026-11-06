@@ -1,4 +1,4 @@
--- expect: E-PART-007 (Resets is keyed by 1 part, Logins by 2) @ 14:42
+-- expect: E-PART-007 (the keys have different numbers of parts: Logins 2, Resets 1; at `partition`, design v2 §1.3) @ 14:3
 language cep/0.1;
 
 stream Logins (user string, device string, ok bool, ts timestamp)
