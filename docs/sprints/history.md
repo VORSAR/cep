@@ -285,6 +285,11 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 - **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1: the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`) has no sprint: S1.1b's slim scope did not build it and S1.1c's list does not name it.
 - **Known issue S2.2a-1** looks resolved by PR #13 (the fuzz rows are blocking): close it, or keep it for the nightly-only cadence ([known issues](../product/known-issues.md)).
 
+*Resolved 2026-11-06 ([owner](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2)): the two lasting-rule proposals from S3.2b-2's retro joined the sprint model; the spec-cleanup pass was placed before S3.3 as S3.2c, with integer overflow decided as an expression error.*
+
+- **Two lasting-rule proposals from S3.2b-2's retro:** a fix round's changes run under the race detector before T4; a sprint that adds a CI job opens its PR as a draft to get that job's first run.
+- **Language questions for a spec-cleanup pass:** the five contradictions (known issue S2.2b-1) and integer overflow (S3.2b-1-1).
+
 ## The status log
 
 *The plan's one status line as it grew, 2026-11-01 to 2026-11-06, split at each annotation; the newest is last. The current line is [sprint-plan §Status](sprint-plan.md#status).*
@@ -317,3 +322,4 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 - *(Annotated 2026-11-06: S3.2b-1 built — the planner, replay through the runtime (Sync), rate limits, plain rules on arrival with keys expiring on their stream's admission (D1), two new deploy errors (D3, D4), 07 per tenant with its expect blocks; T2 and T3 green; exits 1 and 5 met. The combined review (0 blockers) and the break-it (1 blocker: two keys of one stream merged, alerts lost) were answered in one fix round, with E-PART-004 refusing a stream keyed twice. The owner chose multi-part keys `(k, j) of S` with no part limit, and D3's error at the field, both for S3.2b-2, and a split into parts of about 10 points each → next: T4, then the owner's check.)*
 - *(Annotated 2026-11-06: S3.2b-1 merged and closed (PR #14, 40 commits) → next: S3.2b-2's plan check — its card's items 3–5, 7, 8 and the recorder, plus multi-part partition keys `(k, j) of S` with their language-design step and D3's error at the `ts` attribute (owner), about 9.5 points.)*
 - *(Annotated 2026-11-06: S3.2b-2 merged and closed (PR #19, 35 commits) — multi-part partition keys `(k, j) of S` (SPEC rev 5), D3's error at `ts`, arrival stamping, the recorder, the ingest flag, per-stream error counts, the Go boundary's refusals, goleak, the metric tripwire and the two-OS determinism proof; S3.2b is complete → next: S3.3's plan check.)*
+- *(Annotated 2026-11-06: the owner placed the spec cleanup before S3.3 as S3.2c, decided integer overflow as an expression error and adopted the two retro rules → next: S3.2c's plan check.)*
