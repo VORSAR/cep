@@ -52,6 +52,9 @@ type App struct {
 	// Recorder writes the app's recording (S3.2a-1's D3; S3.2b-2's Q1, Q2) on its own goroutine; nil: none, the
 	// default (owner D4 of S3.2b-2's design: recording is off unless the deployment turns it on).
 	Recorder Recorder
+	// OnRemoved, if set, is called once, on the caller's goroutine of Remove or Close, after the app's goroutines
+	// were asked to stop: the facade cancels its sinks' context here (design s3-3-1 §2.1, §3.6). Never called twice.
+	OnRemoved func()
 }
 
 // Recorder writes one app's recording (design s3-2b-2 §7). The runtime calls it from the app's recorder goroutine —
@@ -64,6 +67,7 @@ type Recorder interface {
 	Tick(now int64) error
 	Table(table int, op TableOp, rows [][]event.Value) error // only a write that succeeded
 	Stop() error                                             // at the drain, once
+	BatchEnd(stream int, batch string) error                 // a source's batch-close signal, in intake order (design s3-3-1 §2.1)
 }
 
 // Config is the runtime's configuration; zero values take the defaults.
@@ -81,8 +85,11 @@ type Config struct {
 
 // The errors a caller sees.
 var (
-	ErrClosed  = errors.New("runtime: closed")
-	ErrDrained = errors.New("runtime: the app is drained: its input has ended (owner F5)")
+	ErrClosed   = errors.New("runtime: closed")
+	ErrDrained  = errors.New("runtime: the app is drained: its input has ended (owner F5)")
+	ErrInactive = errors.New("runtime: the app is not activated")     // design s3-3-1 §2.1
+	ErrStarted  = errors.New("runtime: the app is already activated") // design s3-3-1 §2.1
+	ErrRemoved  = errors.New("runtime: the app is removed")           // design s3-3-1 §2.1
 )
 
 // TableOp is a table write's operation.
@@ -96,7 +103,8 @@ const (
 
 // DrainResult is what a drain barrier reports.
 type DrainResult struct {
-	Pending int64 // body timers left unfired after the barrier, TTL timers excepted (drained_pending)
+	Pending int64   // body timers left unfired after the barrier, TTL timers excepted (drained_pending)
+	Runs    []error // per Run goroutine, in Run order: its return, with context.Canceled read as nil (design s3-3-1 §2.1)
 }
 
 // RuleStats are one rule's counters, summed over the shards.
@@ -115,6 +123,7 @@ type StreamStats struct {
 	Rejected      int64 // payloads that failed the schema: errored_events (SEMANTICS §10)
 	Unknown       int64 // payload keys the schema does not declare, each occurrence
 	FlagOverrides int64 // payloads carrying text_invisibles
+	Batches       int64 // batch-close signals accepted (owner, 2026-11-07, S3.3-1 design 6)
 }
 
 // RecordingStats is one app's recording (owner Q2 of S3.2b-2): the records written before a failure, and its message.

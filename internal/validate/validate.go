@@ -32,6 +32,15 @@ type Options struct {
 	Overrides map[string]model.Literal // param overrides, already parsed by the caller
 }
 
+// Override records a deployment override for name (design s3-3-1 §3.3): the facade calls it with
+// parser.ParseLiteral's result without naming model.Literal, so it never imports the model.
+func (o *Options) Override(name string, lit model.Literal) {
+	if o.Overrides == nil {
+		o.Overrides = map[string]model.Literal{}
+	}
+	o.Overrides[name] = lit
+}
+
 // Check validates app and resolves its params. It reports one finding per defect, ordered by line, column, code
 // and message. The returned App is a deep copy of app with every ${param} slot holding its effective value; it is
 // nil when any finding is not a lint.

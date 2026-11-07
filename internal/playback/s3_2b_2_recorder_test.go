@@ -348,6 +348,9 @@ func (d *rcDouble) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 	return d.add(rcCall{kind: "table", stream: table})
 }
 func (d *rcDouble) Stop() error { return d.add(rcCall{kind: "stop"}) }
+func (d *rcDouble) BatchEnd(stream int, batch string) error {
+	return d.add(rcCall{kind: "batch_end", stream: stream})
+}
 
 // TestRecorderCallOrder: design §7's order and MUST 8, 9, through a recorder double — the header first; one call per
 // intake item, in intake order, each with the arrival stamp Config.Now handed out (a rejected payload raises the

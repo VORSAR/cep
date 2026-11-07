@@ -187,6 +187,9 @@ func (r *Recorder) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 }
 
 // Stop writes {"stop":true} and flushes.
+// BatchEnd writes the batch_end record (design s3-3-1 §2.9). Not built yet.
+func (r *Recorder) BatchEnd(stream int, batch string) error { return nil }
+
 func (r *Recorder) Stop() error {
 	if err := r.line(append(r.buf[:0], `{"stop":true}`...)); err != nil {
 		return err
