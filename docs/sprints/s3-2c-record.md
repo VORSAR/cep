@@ -1,7 +1,9 @@
 # S3.2c — sprint record (tests first, one review, a break-it)
 
+> **Historical — S3.2c, the spec cleanup: the language documents agree, and overflow is an error; merged in PR #21.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-06--s32cs-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-2c-design.md) · **record** · reviews: [combined build: architecture](../reviews/s3-2c-combined-architecture.md), [break-it: QA](../reviews/s3-2c-breakit-qa.md). **← [S3.2b-2](s3-2b-2-record.md) · [S3.3 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S3.2c — the spec cleanup: the language documents agree, and overflow is an error · **Routine:** by the owner (2026-11-06): QA's tests first; a one-page design note and the build in the main session; one architecture review of the design and the code together; a short QA break-it on overflow; one fix round, under the race detector before T4 · **Size:** 3 SP (items 2.5); 4 SP (items 3.5) after the owner's fix-round additions · **Branch:** `s3-2c/integration`
-**What to build and how each item is proven:** [sprint plan — S3.2c](sprint-plan.md#s32c--the-spec-cleanup-the-language-documents-agree-and-overflow-is-an-error), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.2b-2](s3-2b-2-record.md)
+**What to build and how each item is proven:** [the S3.2c card](history.md#s32c--the-spec-cleanup-the-language-documents-agree-and-overflow-is-an-error), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.2b-2](s3-2b-2-record.md)
 
 ## Plan and decisions
 
@@ -47,9 +49,9 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-06) ☑ dependencies
 Design (G1)  ☑ the design note (33d450a; v2 5c52a20) ☑ owner decisions recorded
 Build (G2)   ☑ T2 ☑ T3 ☑ tests on the real code
 Review (G3)  ☑ one architecture review (design and code; 0 blockers) ☑ QA break-it on overflow (0 blockers) ☑ every finding fixed, forwarded or rejected (table above)
-Verify (G4)  ☑ the fix round under the race detector ☑ T4 exit 0 ☐ owner's check ☐ exits 1–6 met by their proofs
-Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green ☐ record + retro ☐ known issues S2.2b-1, S3.2b-1-1 closed
-             ☐ status line ☐ documents reconciled ☐ memory updated ☐ worktrees removed ☐ points and duration
+Verify (G4)  ☑ the fix round under the race detector ☑ T4 exit 0 ☑ owner's check (merged) ☑ exits 1–6 met by their proofs
+Exit (G5)    ☑ one PR (#21, 20 commits), merged by the owner ☐ main CI green on the merge commit (f31f0a2: the owner reports) ☑ record + retro
+             ☑ known issues S2.2b-1, S3.2b-1-1 closed (none new) ☑ status line ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
 
 ## For the owner (the owner's check)
@@ -67,4 +69,10 @@ Every test passes. To see one fail, change `return r, (x^r)&(y^r) >= 0` in `addI
 
 ## Retro
 
-*(at close-out)*
+- **Worked:** QA's tests, written first and red against the wrapping arithmetic, specified the build; the review's scratch programs (6.3 million evaluations against `math/big`, 866,112 Go-against-Python cases) showed the code correct, so every finding was in the documents; the owner's two additions went into the one fix round test-first; the race detector on the fixed packages before T4, the new rule, and T4 passed on its first run.
+- **Hurt:** my correction of SEMANTICS §6.4 brought in a new wrong form (`->` before `and not`) and cited the wrong SPEC section twice — a contradiction fix written from memory, not checked against the grammar; the design note's "no other model changes" was wrong by one golden (an int default's unused float field, −0 before); T2 and T3 took 30–60 min of wall clock under the machine's load for about 98 s of gate time.
+- **Keep:** re-running each agent's red test and scratch proof before acting; one red run and one verification for the whole fix round; a mutation of the build to show the owner's check can fail.
+- **Change next sprint:** parse every syntax form a language document quotes before writing it in; regenerate the goldens on a scratch run before claiming a change leaves them alone.
+- **Lasting-rule proposal for the owner:** a test parses each pattern and clause form that SEMANTICS and SPEC quote in backticks (the review's optional doc test, R1), so a document cannot show a form the grammar refuses.
+
+**Closed (G5), 2026-11-07.** PR #21 merged by the owner (20 commits, rebased onto main as f31f0a2); its CI run passed all seven jobs (lint, test, race, proofs, determinism on Linux and macOS, strict-gate). Points: about 4 (3 carded, 1 added by the owner in the fix round); duration: about half a day (plan check 2026-11-06 evening, G0 to merge 2026-11-07 10:49–14:33, with T2 and T3 slowed by the machine's load).

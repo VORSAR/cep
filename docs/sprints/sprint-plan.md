@@ -55,7 +55,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | S3.1 ✓ ([S3.1-1](s3-1-1-record.md), [S3.1-2](s3-1-2-record.md)) | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
 | S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
 | S3.2b ✓ ([S3.2b-1](s3-2b-1-record.md), [S3.2b-2](s3-2b-2-record.md)) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
-| S3.2c | The spec cleanup: the five contradictions in the language documents (known issue S2.2b-1), the grouped-key evaluation's two notes, integer overflow as an expression error (S3.2b-1-1) *(placed here by the owner, 2026-11-06: [decisions](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2))* | 3 (2.5) *(4 (3.5), owner, 2026-11-07)* | tests first, one review, a break-it *(owner, 2026-11-06)* | S3.2b |
+| S3.2c ✓ ([record](s3-2c-record.md)) | The spec cleanup: the five contradictions in the language documents (known issue S2.2b-1), the grouped-key evaluation's two notes, integer overflow as an expression error (S3.2b-1-1) *(placed here by the owner, 2026-11-06: [decisions](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2))* | 3 (2.5) *(4 (3.5), owner, 2026-11-07)* | tests first, one review, a break-it *(owner, 2026-11-06)* | S3.2b |
 | S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b, S3.2c *(owner, 2026-11-06: the cleanup first)* |
 | S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* *(and the one-module check of ADR-0001 §1: [owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure))* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
@@ -101,34 +101,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ---
 
-*Closed cards (S1.1a to S3.2b) are in [history.md](history.md#closed-sprint-cards), word for word. Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates. At close-out the card moves to history.md.*
-
-#### S3.2c — The spec cleanup: the language documents agree, and overflow is an error
-
-| | |
-|---|---|
-| **Goal** | The language documents agree with each other and with the code, a spec-only reader finds every reserved word, and integer overflow never yields a wrong value: it is an expression error for that rule. |
-| **Routine · size** | QA's tests first, one review, a break-it (owner, 2026-11-06) · 3 SP (items 2.5) *(4 SP, items 3.5, with items 4 and 5 — owner, 2026-11-07)* |
-| **Depends on** | S3.2b |
-| **In scope** | 1. **The five contradictions** of known issue S2.2b-1, fixed in SEMANTICS and errors.md to match SPEC and the code: §2's time-clause syntax; §2.1's and §11.10's `idle after` scope; E-SEL-001's "after the auto-filled `ts`"; §6.5's unmarked pattern; §6.4's `→ not B for D` form [0.5]. · 2. **The grouped-key evaluation's two notes:** E-IDLE-001's text says a plain rule — partitioned and rate-limited or not — needs no `idle after`; SPEC Appendix B lists every reserved word, pinned to `grammar.lark` by the keyword test [0.5]. · 3. **Integer overflow is an expression error for that rule** (owner, 2026-11-06) over every 64-bit operation — ints, durations, timestamps: checked arithmetic in `internal/expr`; a Python harness check, red first; SPEC rev 6 and SEMANTICS §10; known issues S2.2b-1 and S3.2b-1-1 closed [1.5]. *(Added 2026-11-07, owner ([decisions](decisions.md#owner-decisions-2026-11-07--s32cs-review-and-break-it)), in the fix round:)* 4. **`timestamp − timestamp` → duration**, checked for overflow; SPEC §5.10 lists every arithmetic form the engine accepts [0.5]. · 5. **The smallest int, `-9223372036854775808`, is a writable literal** [0.5]. |
-| **Not in scope** | Overflow in the aggregates → S8 (they do not exist yet). A timestamp past year 9999 in an output → S5.1 (the sink's encoding). *(Annotated 2026-11-07, owner ([decisions](decisions.md#owner-decisions-2026-11-07--s32cs-review-and-break-it), 2): outside years 0000–9999.)* |
-| **Entry criteria** | The standard ones. |
-| **Exit criteria** | The done-done block, plus: |
-| | 1. Each of the five contradictions resolved in the text, and no validator verdict changed — **proof:** the owner's reading; the corpus and static-error tests unchanged and green. |
-| | 2. SPEC Appendix B lists exactly `grammar.lark`'s reserved words — **proof:** the keyword test, red on a planted drift. |
-| | 3. Every 64-bit operation that overflows is an expression error: the rule drops the event and counts it, and another rule on the same stream still fires — **proof:** an `expr` table test per operation at its exact boundary, a live test, the Python harness check. |
-| | 4. No result that fits changes — **proof:** the same table test's in-range rows (`MaxInt64 − 1 + 1`, `MinInt64 / 1`, …). |
-| | *(Added 2026-11-07, owner ([decisions](decisions.md#owner-decisions-2026-11-07--s32cs-review-and-break-it), 1 and 3), in the fix round:)* 5. `timestamp − timestamp` is a duration, exact where it fits and an expression error past either bound — **proof:** the `expr` test `TestTimestampMinusTimestampIsADuration`. · 6. `-9223372036854775808` is a writable literal in a param default and an expression, and nothing else out of range becomes writable — **proof:** QA's break-it test and the parser guards. |
-| **Owner's check** | *By reading:* the SEMANTICS, SPEC and errors.md changes. *By running:* the overflow tests. |
-
-*How it runs (owner, 2026-11-06, [decisions](decisions.md#owner-decisions-2026-11-06--s32cs-plan-check)):* QA writes the overflow tests first, red against today's wrapping arithmetic; the coordinator writes a one-page design note and builds in the main session; one architecture review of the design and the code together; a short QA break-it on overflow; one fix round, under the race detector before T4; T4; the PR.
-
-*The plan check's readings (coordinator, against `main` @ 53facc5):*
-1. **All five contradictions stand as known issue S2.2b-1 lists them;** SPEC, errors.md and the validator agree with one another, so each fix is SEMANTICS's (and E-SEL-001's wording) catching up.
-2. **E-IDLE-001's list** names a pattern with an absence, a window rule and a multi-stream rule; a plain rule is not on it, and the validator raises nothing for one — the text only has to say so.
-3. **SPEC Appendix B points at `grammar.lark`'s NAME terminal** for the reserved words; `internal/parser/keywords_test.go` already pins the parser's keyword table to that terminal, so the same test can pin a list in SPEC.
-4. **Every 64-bit arithmetic path wraps today:** `internal/expr`'s int `+ - * /` (the smallest int / −1 too) and unary `-`, `abs`, and the duration and timestamp kinds; only `cast` from float to int is range-checked already (S3.1-2's break-it B4).
-5. **The Python reference executor has no general arithmetic;** the harness check needs a checked 64-bit helper in `docs/language/checks/executor.py`, written red first.
+*Closed cards (S1.1a to S3.2c) are in [history.md](history.md#closed-sprint-cards), word for word. Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates. At close-out the card moves to history.md.*
 
 #### S3.3 — The Deploy pipeline and the conformance runner — clock freeze
 
@@ -406,7 +379,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2b-2 merged (PRs #1–#20, the last on 2026-11-06). S3.2c (the spec cleanup and overflow as an expression error) in its fix round (2026-11-07): the review and the break-it found no blocker; the owner added `timestamp − timestamp` and the smallest int's literal (about 4 points) → next: the fix round's verification, T4, the PR; then S3.3.**
+**Phase 1 in progress: S1.1a-1 to S3.2c merged (PRs #1–#21, the last on 2026-11-07). S3.2c closed: SPEC rev 6 — an overflow of any 64-bit arithmetic is an expression error for its rule, `timestamp − timestamp`, the smallest int's literal, every reserved word in Appendix B, the language documents agreeing → next: S3.3's plan check (the Deploy pipeline and the conformance runner — clock freeze).**
 
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*

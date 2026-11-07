@@ -1,6 +1,8 @@
 # S3.2c — design note: an overflow is an expression error (v2)
 
-**What it covers:** item 3 of the [S3.2c card](sprint-plan.md#s32c--the-spec-cleanup-the-language-documents-agree-and-overflow-is-an-error) and its exits 3 and 4; items 1 and 2 are documentation and a test, done ([record](s3-2c-record.md)).
+> **Historical — S3.2c, the spec cleanup: the language documents agree, and overflow is an error; merged in PR #21.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-06--s32cs-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** **design** · [record](s3-2c-record.md) · reviews: [combined build: architecture](../reviews/s3-2c-combined-architecture.md), [break-it: QA](../reviews/s3-2c-breakit-qa.md). **← [S3.2b-2](s3-2b-2-record.md) · [S3.3 (next)](sprint-plan.md#status) →**
+
+**What it covers:** item 3 of the [S3.2c card](history.md#s32c--the-spec-cleanup-the-language-documents-agree-and-overflow-is-an-error) and its exits 3 and 4; items 1 and 2 are documentation and a test, done ([record](s3-2c-record.md)).
 
 **The owner's decisions** ([2026-11-06](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2), decision 3; [S3.2c's plan check](decisions.md#owner-decisions-2026-11-06--s32cs-plan-check), decision 3): "Integer overflow is an expression error for that rule … the event is dropped for that rule only and counted; other rules see it. No rule acts on a wrong number." It covers "every 64-bit operation: ints, durations and timestamps alike".
 
