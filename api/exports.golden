@@ -1,0 +1,205 @@
+cep AppHandle type type AppHandle struct {
+}
+cep AttrIndex func func (r *reader) AttrIndex(name string) int
+cep AttrIndex func func (w *row) AttrIndex(name string) int
+cep AttrType func func (r *reader) AttrType(attr int) cepio.Type
+cep AttrType func func (w *row) AttrType(attr int) cepio.Type
+cep Bool func func (r *reader) Bool(attr int) (bool, bool)
+cep BuildInfo func func BuildInfo() Info
+cep Close func func (r *Runtime) Close(ctx context.Context) error
+cep Config type type Config struct {
+	Shards      int
+	Mailbox     int
+	Intake      int
+	SinkQueue   int
+	RecordQueue int
+	TickEvery   time.Duration
+	Now         func() time.Time
+}
+cep ConnectorFactory type type ConnectorFactory interface {
+	Source(typ string, keys map[string]string) (cepio.Source, error)
+	Sink(typ string, keys map[string]string) (cepio.Sink, error)
+}
+cep Delete func func (t *Table) Delete(ctx context.Context, keys ...func(cepio.RowWriter) error) error
+cep Deploy func func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOption) (*AppHandle, error)
+cep DeployError type type DeployError struct {
+	Name        string
+	Diagnostics []Diagnostic
+}
+cep DeployOption type type DeployOption func(*deployOptions) error
+cep Diagnostic type type Diagnostic struct {
+	Code      string
+	Line, Col int
+	Message   string
+	Fix       string
+	Lint      bool
+}
+cep Duration func func (r *reader) Duration(attr int) (int64, bool)
+cep Emit func func (e *emitter) Emit(ctx context.Context, batchID string, fill func(cepio.RowWriter) error) error
+cep EndBatch func func (e *emitter) EndBatch(ctx context.Context, batchID string) error
+cep EndBatch func func (h *InputHandler) EndBatch(ctx context.Context, batchID string) error
+cep ErrClosed var var ErrClosed = errors.New("cep: the runtime is closed")
+cep ErrConnectorNotBuilt var var ErrConnectorNotBuilt = errors.New("cep: the connector named in the program is not built yet")
+cep ErrInactive var var ErrInactive = errors.New("cep: the app is deployed but not started")
+cep ErrNotADerivedStream var var ErrNotADerivedStream = errors.New("cep: not a derived stream")
+cep ErrNotAKeyColumn var var ErrNotAKeyColumn = errors.New("cep: a delete key may set primary-key columns only")
+cep ErrNotASourceStream var var ErrNotASourceStream = errors.New("cep: not a source stream")
+cep ErrRepeatedOption var var ErrRepeatedOption = errors.New("cep: a deploy option was given twice")
+cep ErrRowUsedAfterFill var var ErrRowUsedAfterFill = errors.New("cep: the RowWriter was used after its fill returned")
+cep ErrSinkMode var var ErrSinkMode = errors.New("cep: the sink does not accept the stream's output mode")
+cep ErrStarted var var ErrStarted = errors.New("cep: the app is already started")
+cep ErrStopped var var ErrStopped = errors.New("cep: the app is stopped")
+cep ErrUndeployed var var ErrUndeployed = errors.New("cep: the app is undeployed")
+cep ErrUnknownStream var var ErrUnknownStream = errors.New("cep: no such stream")
+cep ErrUnknownTable var var ErrUnknownTable = errors.New("cep: no such table")
+cep Error func func (e *DeployError) Error() string
+cep Float func func (r *reader) Float(attr int) (float64, bool)
+cep Info type type Info struct {
+	Module, Version, GoVersion string
+}
+cep Input func func (a *AppHandle) Input(stream string) (*InputHandler, error)
+cep InputHandler type type InputHandler struct {
+}
+cep Int func func (r *reader) Int(attr int) (int64, bool)
+cep IsNull func func (r *reader) IsNull(attr int) bool
+cep Len func func (r *reader) Len() int
+cep Lints func func (a *AppHandle) Lints() []Diagnostic
+cep Load func func (t *Table) Load(ctx context.Context, fills []func(cepio.RowWriter) error) error
+cep Name func func (a *AppHandle) Name() string
+cep New func func New(cfg Config) (*Runtime, error)
+cep Object func func (r *reader) Object(attr int) (string, bool)
+cep RecordingStats type type RecordingStats struct {
+	Records int64
+	Failed  bool
+	Err     string
+}
+cep RuleStats type type RuleStats struct {
+	ConstructLate, Purged, KeyErrors, Panics, Suppressed, Errored, OutboxHigh int64
+}
+cep Runtime type type Runtime struct {
+}
+cep SendRow func func (h *InputHandler) SendRow(ctx context.Context, batchID string, fill func(cepio.RowWriter) error) error
+cep SetBool func func (w *row) SetBool(attr int, v bool)
+cep SetDuration func func (w *row) SetDuration(attr int, ms int64)
+cep SetFloat func func (w *row) SetFloat(attr int, v float64)
+cep SetInt func func (w *row) SetInt(attr int, v int64)
+cep SetNull func func (w *row) SetNull(attr int)
+cep SetObject func func (w *row) SetObject(attr int, jsonText string)
+cep SetString func func (w *row) SetString(attr int, v string)
+cep SetTimestamp func func (w *row) SetTimestamp(attr int, ms int64)
+cep Sink func func (defaultFactory) Sink(typ string, keys map[string]string) (cepio.Sink, error)
+cep SinkStats type type SinkStats struct {
+	Errors    int64
+	QueueHigh int
+}
+cep Source func func (defaultFactory) Source(typ string, keys map[string]string) (cepio.Source, error)
+cep Start func func (a *AppHandle) Start(ctx context.Context) error
+cep Stats func func (a *AppHandle) Stats(ctx context.Context) (Stats, error)
+cep Stats type type Stats struct {
+	Streams   map[string]StreamStats
+	Rules     map[string]RuleStats
+	Sinks     map[string][]SinkStats
+	Recording RecordingStats
+}
+cep Stop func func (a *AppHandle) Stop(ctx context.Context) (StopReport, error)
+cep StopReport type type StopReport struct {
+	DrainedPending int64
+	SourceErrors   map[string]error
+}
+cep StreamStats type type StreamStats struct {
+	Late, AfterDrain, Rejected, Unknown, FlagOverrides, Batches int64
+}
+cep String func func (r *reader) String(attr int) (string, bool)
+cep Table func func (a *AppHandle) Table(name string) (*Table, error)
+cep Table type type Table struct {
+}
+cep Timestamp func func (r *reader) Timestamp(attr int) (int64, bool)
+cep Undeploy func func (a *AppHandle) Undeploy(ctx context.Context) error
+cep Upsert func func (t *Table) Upsert(ctx context.Context, fills ...func(cepio.RowWriter) error) error
+cep WithConnectors func func WithConnectors(f ConnectorFactory) DeployOption
+cep WithParam func func WithParam(name, literal string) DeployOption
+cep WithRecording func func WithRecording(w cepio.Writer) DeployOption
+cep WithSink func func WithSink(stream string, s cepio.Sink) DeployOption
+cep WithSource func func WithSource(stream string, s cepio.Source) DeployOption
+cep WithTableRows func func WithTableRows(table string, rows ...func(cepio.RowWriter) error) DeployOption
+cepio Append const const Append Mode = iota + 1
+cepio Bool const const Bool
+cepio Changelog const const Changelog
+cepio Duration const const Duration
+cepio Emitter type type Emitter interface {
+	Emit(ctx context.Context, batchID string, fill func(RowWriter) error) error
+	EndBatch(ctx context.Context, batchID string) error
+}
+cepio Float const const Float
+cepio Int const const Int
+cepio Invalid const const Invalid Type = iota
+cepio Mapper type type Mapper interface {
+	Decode(b []byte, w RowWriter) error
+}
+cepio Mode type type Mode uint8
+cepio Object const const Object
+cepio OutEvent type type OutEvent struct {
+	Stream    string
+	Timestamp int64
+	Row       RowReader
+	Canonical []byte
+}
+cepio RowReader type type RowReader interface {
+	String(attr int) (string, bool)
+	Int(attr int) (int64, bool)
+	Float(attr int) (float64, bool)
+	Bool(attr int) (bool, bool)
+	Timestamp(attr int) (int64, bool)
+	Duration(attr int) (int64, bool)
+	Object(attr int) (string, bool)
+	IsNull(attr int) bool
+	AttrIndex(name string) int
+	AttrType(attr int) Type
+	Len() int
+}
+cepio RowWriter type type RowWriter interface {
+	SetString(attr int, v string)
+	SetInt(attr int, v int64)
+	SetFloat(attr int, v float64)
+	SetBool(attr int, v bool)
+	SetTimestamp(attr int, unixMs int64)
+	SetDuration(attr int, ms int64)
+	SetObject(attr int, jsonText string)
+	SetNull(attr int)
+	AttrIndex(name string) int
+	AttrType(attr int) Type
+}
+cepio Sink type type Sink interface {
+	Accepts() Mode
+	Write(ctx context.Context, e OutEvent) error
+}
+cepio Source type type Source interface {
+	Open(ctx context.Context, emit Emitter) error
+}
+cepio String const const String
+cepio Timestamp const const Timestamp
+cepio Type type type Type uint8
+cepio Writer type type Writer interface {
+	Write(p []byte) (int, error)
+}
+inmemory Accepts func func (s *Sink) Accepts() cepio.Mode
+inmemory Close func func (s *Source) Close()
+inmemory Drain func func (s *Sink) Drain() []Record
+inmemory Dropped func func (s *Source) Dropped() int64
+inmemory EndBatch func func (s *Source) EndBatch(ctx context.Context, batchID string) error
+inmemory ErrClosed var var ErrClosed = errors.New("inmemory: the source is closed")
+inmemory NewSource func func NewSource(buffer int) *Source
+inmemory Open func func (s *Source) Open(ctx context.Context, emit cepio.Emitter) error
+inmemory Push func func (s *Source) Push(ctx context.Context, batchID string, fill func(cepio.RowWriter) error) error
+inmemory Record type type Record struct {
+	Stream    string
+	Timestamp int64
+	Canonical []byte
+	Values    []any
+}
+inmemory Reset func func (s *Sink) Reset()
+inmemory Sink type type Sink struct {
+}
+inmemory Source type type Source struct {
+}
+inmemory Write func func (s *Sink) Write(ctx context.Context, e cepio.OutEvent) error
