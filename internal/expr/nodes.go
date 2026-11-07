@@ -239,6 +239,7 @@ const (
 	arithInt arithKind = iota
 	arithFloat
 	arithTsDur     // timestamp ± duration
+	arithTsTs      // timestamp − timestamp (rev 6)
 	arithDurDur    // duration ± duration
 	arithDurInt    // duration × int
 	arithIntDur    // int × duration
@@ -269,6 +270,8 @@ func arithNode(op string, l, r Expr) (Expr, error) {
 		kind, typ = arithFloat, event.TFloat
 	case lt == event.TTimestamp && rt == event.TDuration && (o == '+' || o == '-'):
 		kind, typ = arithTsDur, event.TTimestamp
+	case lt == event.TTimestamp && rt == event.TTimestamp && o == '-':
+		kind, typ = arithTsTs, event.TDuration
 	case lt == event.TDuration && rt == event.TDuration && (o == '+' || o == '-'):
 		kind, typ = arithDurDur, event.TDuration
 	case lt == event.TDuration && rt == event.TInt && o == '*':
@@ -327,6 +330,12 @@ func (a *arith) Eval(row Row) (event.Value, error) {
 			return a.overflow(l.T, r.D)
 		}
 		return event.Value{Kind: event.TTimestamp, T: t}, nil
+	case arithTsTs:
+		d, ok := subInt(l.T, r.T)
+		if !ok {
+			return a.overflow(l.T, r.T)
+		}
+		return event.Value{Kind: event.TDuration, D: d}, nil
 	case arithDurDur:
 		d, ok := addInt(l.D, r.D)
 		if a.op == '-' {
@@ -446,16 +455,16 @@ func (n *neg) Eval(row Row) (event.Value, error) {
 	var ok bool
 	switch v.Kind {
 	case event.TInt:
-		v.I, ok = negInt(v.I)
-		if !ok {
-			return event.Value{Kind: n.typ, Null: true}, runtimeErr("integer overflow: -(%d) is outside the 64-bit range", v.I)
+		x := v.I
+		if v.I, ok = negInt(x); !ok {
+			return event.Value{Kind: n.typ, Null: true}, runtimeErr("integer overflow: -(%d) is outside the 64-bit range", x)
 		}
 	case event.TFloat:
 		v.F = -v.F
 	default:
-		v.D, ok = negInt(v.D)
-		if !ok {
-			return event.Value{Kind: n.typ, Null: true}, runtimeErr("integer overflow: -(%d ms) is outside the 64-bit range", v.D)
+		x := v.D
+		if v.D, ok = negInt(x); !ok {
+			return event.Value{Kind: n.typ, Null: true}, runtimeErr("integer overflow: -(%d ms) is outside the 64-bit range", x)
 		}
 	}
 	return v, nil
