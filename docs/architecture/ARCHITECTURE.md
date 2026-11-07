@@ -106,7 +106,7 @@ Module path: `github.com/vorsar/complex-events-engine` *(amended 2026-11-02, own
 ```
 cep.go, runtime.go, event.go, errors.go   package cep        — public embeddable API
 rule/                                     package rule       — public generics rule-builder API
-io/                                       package io (cepio) — the public connector contracts ONLY: Source/Sink/Mapper/RowWriter/EmitFunc/OutEvent/Mode + the batch-close signal (a leaf: imports no module package)
+io/                                       package io (cepio) — the public connector contracts ONLY: Source/Sink/Mapper/RowWriter/RowReader/Emitter (EmitFunc as built, S3.3-1)/OutEvent/Mode/Type/Writer + the batch-close signal `Emitter.EndBatch` (a leaf: imports no module package)
 io/http, io/stdin, io/inmemory, io/smtp, io/log, io/jsonmap, io/textmap   one package per built-in connector; each imports cep + io only (owner decision 2026-11-02 — breaks the cep↔io cycle)
 cmd/cepd/                                 the binary runner (rule files + config per ADR-0008 §5); serves /metrics (Prometheus text) + /healthz (round-2 F16)
 cmd/cep/                                  the CLI: validate / test / fmt

@@ -20,7 +20,7 @@ The engine is embeddable-first (O3): users import a Go library whose public surf
 
 ## Consequences
 - Positive: agent lanes map to packages; import-DAG check makes architecture drift a red gate instead of a review argument; public API reviewable in one sitting.
-- Negative: facade indirection (public `cep.Event` wraps `internal/event.Event`) costs some boilerplate; accepted for surface control.
+- Negative: facade indirection (public `cep.Event` wraps `internal/event.Event`) costs some boilerplate; accepted for surface control. *(Annotated 2026-11-07, S3.3-1 ([design](../../sprints/s3-3-1-design.md) §3.8): as built, `cep` exports no `Event`; the public event view is `cepio.OutEvent` with its `RowReader`, so a connector and an embedder read outputs through one type. The public surface is listed in `api/exports.golden` and guarded by the `apipartition` and `apidiff` rows.)*
 
 ## Implementation notes for coding agents
 - Create `go.mod` with `module github.com/vorsar/complex-events-engine` *(amended 2026-11-02: `github.com/vorsar/cep`)*, pinned `go` and `toolchain` lines (exact version chosen at S1 plan check per DEVELOPMENT.md).
