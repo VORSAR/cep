@@ -47,6 +47,7 @@ func (d *rrDouble) Rejected(int, int64, *event.DecodeError) error     { return d
 func (d *rrDouble) Tick(int64) error                                  { return d.add("tick") }
 func (d *rrDouble) Table(int, runtime.TableOp, [][]event.Value) error { return d.add("table") }
 func (d *rrDouble) Stop() error                                       { return d.add("stop") }
+func (d *rrDouble) BatchEnd(int, string) error                        { return d.add("batch_end") }
 func (d *rrDouble) Flush() error                                      { d.mu.Lock(); d.flushed++; d.mu.Unlock(); return nil }
 
 // rrApp is one event-time source S (k string, ts timestamp), a key-less rule emitting each event on O, a table T

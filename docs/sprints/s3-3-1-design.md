@@ -235,13 +235,15 @@ type Info struct{ Module, Version, GoVersion string }
 // BuildInfo reads runtime/debug.ReadBuildInfo; Version is "(devel)" outside a module build.
 func BuildInfo() Info
 
-// The errors a caller sees. Those the engine raises are the engine's values, so errors.Is works across the facade.
+// The errors a caller sees: the facade's own sentinels (archcheck's globals rule allows errors.New sentinels only, so
+// the engine's values cannot be aliased); mapErr(err) wraps the engine's ErrClosed, ErrInactive, ErrStarted,
+// ErrDrained and ErrRemoved onto them at every call, so errors.Is works against these.
 var (
-	ErrClosed            = runtime.ErrClosed   // the runtime is closed
-	ErrInactive          = runtime.ErrInactive // deployed, not started
-	ErrStarted           = runtime.ErrStarted  // Start on a started app
-	ErrStopped           = runtime.ErrDrained  // after Stop (owner, design 1: a stopped app stays stopped)
-	ErrUndeployed        = runtime.ErrRemoved  // after Undeploy
+	ErrClosed            = errors.New("cep: the runtime is closed")
+	ErrInactive          = errors.New("cep: the app is deployed but not started")
+	ErrStarted           = errors.New("cep: the app is already started")
+	ErrStopped           = errors.New("cep: the app is stopped")           // after Stop (owner, design 1)
+	ErrUndeployed        = errors.New("cep: the app is undeployed")
 	ErrUnknownStream     = errors.New("cep: no such stream")
 	ErrUnknownTable      = errors.New("cep: no such table")
 	ErrNotASourceStream  = errors.New("cep: not a source stream")
@@ -296,7 +298,7 @@ func WithParam(name, literal string) DeployOption            // a ${param} overr
 func WithSource(stream string, s cepio.Source) DeployOption   // one per source stream; replaces the program's @source
 func WithSink(stream string, s cepio.Sink) DeployOption       // any number per derived stream, in call order
 func WithTableRows(table string, rows ...func(cepio.RowWriter) error) DeployOption // applied at Start, before any source opens (owner, design 2)
-func WithRecording(w io.Writer) DeployOption                  // the recording, off unless given (owner D4 of S3.2b-2)
+func WithRecording(w cepio.Writer) DeployOption               // the recording, off unless given (owner D4 of S3.2b-2); cepio.Writer: any io.Writer (cep may not import io)
 func WithConnectors(f ConnectorFactory) DeployOption          // binds the program's @source/@sink annotations (§3.4)
 
 // connectors.go
@@ -353,7 +355,7 @@ type RecordingStats struct{ Records int64; Failed bool; Err string }
 
 ### 3.2 `Deploy`, step by step
 
-1. Apply the options into `deployOptions{params map[string]string; sources map[string]cepio.Source; sinks map[string][]cepio.Sink; tableRows map[string][]func(cepio.RowWriter) error; recording io.Writer; connectors ConnectorFactory}`. A second `WithParam` for one name, a second `WithSource` for one stream, a second `WithRecording` or `WithConnectors` returns an error wrapping `ErrRepeatedOption` naming the option and the name (not a `DeployError`: it is the caller's Go code, not the program). `WithSink` and `WithTableRows` may repeat.
+1. Apply the options into `deployOptions{params map[string]string; sources map[string]cepio.Source; sinks map[string][]cepio.Sink; tableRows map[string][]func(cepio.RowWriter) error; recording cepio.Writer; connectors ConnectorFactory}`. A second `WithParam` for one name, a second `WithSource` for one stream, a second `WithRecording` or `WithConnectors` returns an error wrapping `ErrRepeatedOption` naming the option and the name (not a `DeployError`: it is the caller's Go code, not the program). `WithSink` and `WithTableRows` may repeat.
 2. `res, err := parser.Parse(name, src)`: an error is a `*DeployError` with one `Diagnostic` from `parser.Error` (its code, line, column, message, fix; `Lint false`).
 3. `var opts validate.Options`; for each param override: `lit, err := parser.ParseLiteral(literal)`; an error is a `Diagnostic{Code: "E-PARAM-001", Line: 0, Col: 0, Message: "the deployment overrides <name> with <literal>, which is not a literal: <err>", Fix: catalog's}`; else `opts.Override(pname, lit)`. `checked, diags := validate.Check(res.App, opts)`; the non-lint diagnostics → `*DeployError` (every one, validate's order, each converted field by field: `Code`, `Line`, `Col`, `Message`, `Fix`, `Lint`); the lints → the handle's `Lints()`.
 4. `p, err := plan.Build(checked)`: an error is returned as a plain error wrapping the plan's (`fmt.Errorf("cep: deploy %s: %w", name, err)`), never a `DeployError`: `plan.Build` fails only on a model `validate.Check` accepted, which is a bug, not a program defect, and no new code is added for it.
@@ -582,6 +584,11 @@ type Source interface {
 type Sink interface {
 	Accepts() Mode
 	Write(ctx context.Context, e OutEvent) error
+}
+
+// Writer is where a recording goes: any io.Writer satisfies it (the facade may not import io, ADR-0015 §2.2).
+type Writer interface {
+	Write(p []byte) (int, error)
 }
 
 // Mapper decodes one payload into a row (the http and stdin sources' mappers, S5.1).

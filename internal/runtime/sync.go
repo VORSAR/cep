@@ -81,6 +81,9 @@ func (s *Sync) Reject(stream int, arrival int64) {
 	s.a.ing.Reject(stream, arrival)
 }
 
+// BatchEnd is a recording's batch-close record (design s3-3-1 §2.8). Not built yet.
+func (s *Sync) BatchEnd(stream int, batch string) {}
+
 // Tick is a recording's idle tick.
 func (s *Sync) Tick(now int64) []clock.WMAdvance {
 	if s.a.drained {

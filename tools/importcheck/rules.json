@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "module": "github.com/vorsar/cep",
-  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red. 'fences' lists, per package and imported package, the only identifier prefixes it may use from it (Expr covers ExprKind and the ExprX constants; Lit covers Literal and the LitX constants) (owner 2026-11-04: expr reads the model's expression node only; S3.1-2: expr reads table snapshots, never writes a table). 'test_imports' lists, per package, the extra module packages its _test.go files only may import (owner 2026-11-04, S2.2b: validate's tests read .cep programs through the parser; owner 2026-11-06, S3.2b-1: plan's tests through the parser and the validator, playback's through the parser). 'test_fences' lists, per package and fenced import, the extra identifier prefixes its _test.go files only may use (owner 2026-11-04, S3.1-2: expr's tests build tables). 'test_external' lists, per package, the third-party packages its _test.go files only may import (owner 2026-11-06, S3.2b's plan check Q6: goleak is test-only).",
+  "note": "ARCHITECTURE §3's import rules, exhaustive (owner 2026-11-02): each package lists every module package it may import ('' is the root package cep). A package not listed here is red. 'fences' lists, per package and imported package, the only identifier prefixes it may use from it (Expr covers ExprKind and the ExprX constants; Lit covers Literal and the LitX constants) (owner 2026-11-04: expr reads the model's expression node only; S3.1-2: expr reads table snapshots, never writes a table). 'test_imports' lists, per package, the extra module packages its _test.go files only may import (owner 2026-11-04, S2.2b: validate's tests read .cep programs through the parser; owner 2026-11-06, S3.2b-1: plan's tests through the parser and the validator, playback's through the parser). 'test_fences' lists, per package and fenced import, the extra identifier prefixes its _test.go files only may use (owner 2026-11-04, S3.1-2: expr's tests build tables). 'test_external' lists, per package, the third-party packages its _test.go files only may import (owner 2026-11-06, S3.2b's plan check Q6: goleak is test-only; S3.3-1: the facade's and io/*'s tests too). S3.3-1 (design §3.2 MUST 12, owner L2): the root package cep never imports internal/model; its external tests (package cep_test) may use io/*.",
   "imports": {
     "internal/event": [],
     "internal/model": ["internal/event"],
@@ -18,7 +18,7 @@
     "internal/runtime": ["internal/event", "internal/clock", "internal/partition", "internal/plan", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/metrics"],
     "internal/parser": ["internal/event", "internal/model", "internal/metrics"],
     "internal/playback": ["internal/event", "internal/model", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate"],
-    "": ["internal/event", "internal/model", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate", "internal/parser", "internal/playback", "io"],
+    "": ["internal/event", "internal/metrics", "internal/clock", "internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition", "internal/runtime", "internal/plan", "internal/validate", "internal/parser", "internal/playback", "io"],
     "rule": ["internal/event", "internal/model"],
     "io": [],
     "io/*": ["", "io"],
@@ -36,13 +36,16 @@
   "test_imports": {
     "internal/validate": ["internal/parser"],
     "internal/plan": ["internal/parser", "internal/validate"],
-    "internal/playback": ["internal/parser"]
+    "internal/playback": ["internal/parser"],
+    "": ["io/*"]
   },
   "test_fences": {
     "internal/expr": {"internal/table": ["New", "Table"]}
   },
   "test_external": {
     "internal/runtime": ["go.uber.org/goleak"],
-    "internal/playback": ["go.uber.org/goleak"]
+    "internal/playback": ["go.uber.org/goleak"],
+    "": ["go.uber.org/goleak"],
+    "io/*": ["go.uber.org/goleak"]
   }
 }
