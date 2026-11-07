@@ -49,7 +49,7 @@ func (a *AppHandle) Start(ctx context.Context) error {
 	}
 	runs := make([]func(context.Context) error, len(a.sources))
 	for i, bs := range a.sources {
-		h := &InputHandler{rt: a.rt, app: a.id, stream: bs.id, sch: a.plan.Streams[bs.id].Schema, names: names(a.plan.Streams[bs.id].Schema)}
+		h := newInputHandler(a.rt, a.id, bs.id, a.plan.Streams[bs.id].Schema)
 		src := bs.src
 		runs[i] = func(ctx context.Context) error { return src.Open(ctx, &emitter{h: h}) }
 	}
@@ -94,8 +94,7 @@ func (a *AppHandle) Input(stream string) (*InputHandler, error) {
 	if a.plan.Streams[sid].Derived {
 		return nil, fmt.Errorf("%w: %q", ErrNotASourceStream, stream)
 	}
-	sch := a.plan.Streams[sid].Schema
-	return &InputHandler{rt: a.rt, app: a.id, stream: sid, sch: sch, names: names(sch)}, nil
+	return newInputHandler(a.rt, a.id, sid, a.plan.Streams[sid].Schema), nil
 }
 
 // Table is the write API for a declared table.

@@ -526,7 +526,7 @@ func (r *Runtime) appOf(app AppID) (*appState, error) {
 	if app < 0 || int(app) >= len(apps) {
 		return nil, fmt.Errorf("runtime: no app %d", app)
 	}
-	if apps[app] == nil {
+	if apps[app] == nil || appPhase(apps[app].phase.Load()) == phaseRemoved {
 		return nil, ErrRemoved
 	}
 	return apps[app], nil
@@ -541,6 +541,8 @@ func (r *Runtime) gate(app AppID) (*appState, error) {
 	switch appPhase(a.phase.Load()) {
 	case phaseInactive:
 		return nil, ErrInactive
+	case phaseDraining:
+		return nil, ErrDrained // the phase changes before the sources are cancelled (design s3-3-1 §2.4, MUST 3)
 	case phaseRemoved:
 		return nil, ErrRemoved
 	}
@@ -586,6 +588,9 @@ func (r *Runtime) await(ctx context.Context, ch chan reply) (reply, error) {
 // streamStats is a's per-stream counters: the router's (late, after the drain) and the ingest step's.
 func streamStats(a *appState) []StreamStats {
 	out := make([]StreamStats, len(a.app.Streams))
+	if a.ing == nil { // removed: zero rows of the app's length (design s3-3-1 MUST 2)
+		return out
+	}
 	for i := range out {
 		c := a.ing.counts[i]
 		out[i] = StreamStats{Late: a.late[i], AfterDrain: a.after[i], Rejected: c.rejected, Unknown: c.unknown, FlagOverrides: c.overrides, Batches: a.batches[i]}
@@ -835,7 +840,7 @@ func (rt *router) ingest(it item) {
 		}
 	case iBatchEnd:
 		a := rt.app(it.app)
-		if a == nil {
+		if a == nil || a.ing == nil {
 			return
 		}
 		if a.drained {
@@ -846,6 +851,9 @@ func (rt *router) ingest(it item) {
 		a.rec.put(recItem{kind: rBatchEnd, stream: it.stream, batch: it.batch})
 	case iEvent:
 		a := rt.app(it.app)
+		if a == nil || a.ing == nil {
+			return
+		}
 		if a.drained {
 			a.after[it.ev.StreamID]++
 			return
@@ -861,6 +869,9 @@ func (rt *router) ingest(it item) {
 		a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
 	case iReject:
 		a := rt.app(it.app)
+		if a == nil || a.ing == nil {
+			return
+		}
 		if a.drained {
 			a.after[it.stream]++
 			return
@@ -871,7 +882,7 @@ func (rt *router) ingest(it item) {
 	case iTick:
 		stamp := rt.now(it.now)
 		for _, a := range r.appList() {
-			if a == nil || a.drained || a.quiet {
+			if a == nil || a.ing == nil || a.drained || a.quiet {
 				continue
 			}
 			a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
@@ -879,6 +890,10 @@ func (rt *router) ingest(it item) {
 		}
 	case iWrite:
 		a := rt.app(it.app)
+		if a == nil || a.ing == nil {
+			it.reply <- reply{err: ErrRemoved}
+			return
+		}
 		if a.drained {
 			it.reply <- reply{err: ErrDrained}
 			return
@@ -892,6 +907,10 @@ func (rt *router) ingest(it item) {
 		it.reply <- reply{err: err}
 	case iDrain:
 		a := rt.app(it.app)
+		if a == nil || a.ing == nil {
+			it.reply <- reply{err: ErrRemoved}
+			return
+		}
 		if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
 			if a.drainRes != nil {
 				it.reply <- *a.drainRes
@@ -924,11 +943,11 @@ func (rt *router) ingest(it item) {
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
 		for _, a := range r.appList() {
-			if a == nil { // removed: zero rows keep [app] indexes stable (design s3-3-1 MUST 2)
+			if a == nil { // never installed here
 				st.Streams, st.Recording, st.Rules = append(st.Streams, nil), append(st.Recording, RecordingStats{}), append(st.Rules, nil)
 				continue
 			}
-			st.Streams = append(st.Streams, streamStats(a))
+			st.Streams = append(st.Streams, streamStats(a)) // a removed app: zero rows of its length (MUST 2)
 			st.Recording = append(st.Recording, a.rec.stats())
 			rules := make([]RuleStats, len(a.app.Rules))
 			for i := range rules {
@@ -1102,7 +1121,7 @@ func (rt *router) take(h handoff) {
 	for _, it := range h.items {
 		switch it.kind {
 		case oEvent:
-			if a := rt.app(it.app); a != nil {
+			if a := rt.app(it.app); a != nil && a.ing != nil {
 				for _, q := range a.sinks[it.ev.StreamID] {
 					rt.push(send{shard: -1, sink: q, si: sinkItem{ev: it.ev}})
 				}
@@ -1150,7 +1169,7 @@ func (rt *router) take(h handoff) {
 			}
 			delete(rt.stats, it.token)
 			for _, a := range r.appList() {
-				if a == nil {
+				if a == nil || a.ing == nil {
 					w.stats.SinkErrors, w.stats.SinkHigh = append(w.stats.SinkErrors, nil), append(w.stats.SinkHigh, nil)
 					continue
 				}

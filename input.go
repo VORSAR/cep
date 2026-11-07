@@ -10,24 +10,33 @@ import (
 
 // InputHandler feeds one source stream. It holds only ids and the schema, so it is safe for concurrent use.
 type InputHandler struct {
-	rt     *runtime.Runtime
-	app    runtime.AppID
-	stream int
-	sch    event.Schema
-	names  []string
+	rt       *runtime.Runtime
+	app      runtime.AppID
+	stream   int
+	attrs    []event.Attr
+	names    []string
+	timeAttr int
+}
+
+func newInputHandler(rt *runtime.Runtime, app runtime.AppID, stream int, sch event.Schema) *InputHandler {
+	attrs := make([]event.Attr, sch.NumAttrs())
+	for i := range attrs {
+		attrs[i] = sch.Attr(i)
+	}
+	return &InputHandler{rt: rt, app: app, stream: stream, attrs: attrs, names: names(sch), timeAttr: sch.TimeAttr()}
 }
 
 // SendRow allocates the row, calls fill, checks it (design s3-3-1 §4.3) and hands it to the engine, which keeps it
 // (MUST 14). It blocks for backpressure and respects ctx. batchID names the source batch the row belongs to; "" for
 // none.
 func (h *InputHandler) SendRow(ctx context.Context, batchID string, fill func(cepio.RowWriter) error) error {
-	w := newStreamRow(h.sch, h.names)
+	w := newStreamRow(h.attrs, h.names, h.timeAttr)
 	if err := w.run(fill); err != nil {
 		return err
 	}
 	e := event.Event{StreamID: h.stream, Values: w.values, BatchID: batchID}
-	if ta := h.sch.TimeAttr(); ta != event.ArrivalTime {
-		e.Ts = w.values[ta].T
+	if h.timeAttr != event.ArrivalTime {
+		e.Ts = w.values[h.timeAttr].T
 	}
 	return mapErr(h.rt.Send(ctx, h.app, e))
 }

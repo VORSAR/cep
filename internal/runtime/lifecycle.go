@@ -116,6 +116,12 @@ func (r *Runtime) BatchEnd(ctx context.Context, app AppID, stream int, batch str
 		return fmt.Errorf("runtime: app %d: an empty batch id cannot end a batch", app)
 	}
 	a, err := r.gate(app)
+	if errors.Is(err, ErrDrained) { // refused, and counted in AfterDrain by the router, as a late event is
+		if a, err2 := r.appOf(app); err2 == nil && stream >= 0 && stream < len(a.app.Streams) {
+			_ = r.enqueue(ctx, item{kind: iBatchEnd, app: app, stream: stream, batch: batch})
+		}
+		return err
+	}
 	if err != nil {
 		return err
 	}
@@ -265,7 +271,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 		apps := r.appList()
 		for id := len(apps) - 1; id >= 0 && first == nil; id-- {
 			a := apps[id]
-			if a == nil {
+			if a == nil || appPhase(a.phase.Load()) == phaseRemoved {
 				continue
 			}
 			if appPhase(a.phase.Load()) == phaseActive {
@@ -335,7 +341,7 @@ func (rt *router) add(it item) {
 func (rt *router) remove(it item) {
 	r := rt.r
 	a := rt.app(it.app)
-	if a == nil {
+	if a == nil || a.ing == nil {
 		it.reply <- reply{err: ErrRemoved}
 		return
 	}
@@ -379,9 +385,10 @@ func (rt *router) installAck(w *installWait, it outItem) {
 				res.recMarker = a.rec.returned
 			}
 		}
-		next := append([]*appState(nil), r.appList()...)
-		next[a.id] = nil
-		r.apps.Store(&next)
+		// The slot keeps a tombstone: the phase removed, the state dropped, so Stats keeps zero rows of the app's
+		// length and the id is never reused (design s3-3-1 MUST 2).
+		a.phase.Store(int32(phaseRemoved))
+		a.ing, a.dec, a.rec, a.sinks, a.quiet = nil, nil, nil, nil, true
 		if w.rollback {
 			res.err = w.err
 		}
