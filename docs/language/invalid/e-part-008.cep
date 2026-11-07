@@ -1,0 +1,13 @@
+-- expect: E-PART-008 (a partition key part is a scalar attribute) @ 7:16
+language cep/0.1;
+stream S (k string, o object, ts timestamp) time ts watermark bounded 1 min idle after 1 min;
+stream Out (k string, ts timestamp);
+rule R
+  intent 'Two events under one object key.'
+  partition by o of S ttl 1 hour
+  from every a = S -> b = S
+  within 5 min
+  after match skip past last
+  late events drop
+  select a.k
+  insert into Out;
