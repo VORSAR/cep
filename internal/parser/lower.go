@@ -400,6 +400,9 @@ func (l *lowerer) atom(a *Atom) model.Expr {
 	case a.Attr != nil:
 		return model.Expr{Kind: model.ExprAttr, Qualifier: name(a.Attr.Qualifier), Name: name(a.Attr.Name), Args: []model.Expr{}, Pos: at}
 	case a.Neg != nil:
+		if n := a.Neg.Literal; n != nil && minIntDigits(n.Number) {
+			return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitInt, Int: math.MinInt64}, Args: []model.Expr{}, Pos: at}
+		}
 		return model.Expr{Kind: model.ExprNeg, Args: []model.Expr{l.atom(a.Neg)}, Pos: at}
 	default:
 		return l.expr(a.Paren)
@@ -408,13 +411,23 @@ func (l *lowerer) atom(a *Atom) model.Expr {
 
 // ---- literals ----
 
+// signedLiteral: a param default's minus sign is part of its number, so the smallest int is writable (SPEC rev 6 §2.4).
 func (l *lowerer) signedLiteral(s *SignedLiteral) model.Literal {
 	if s.Neg != "" {
-		lit := l.number(s.Neg, s.Pos)
-		lit.Int, lit.Float = -lit.Int, -lit.Float
-		return lit
+		return l.number("-"+s.Neg, s.Pos)
 	}
 	return l.literal(s.Literal)
+}
+
+// minIntDigits says text is an integer literal that fits int64 only with a minus sign before it: the smallest int's
+// digits (SPEC rev 6 §2.4; owner, 2026-11-07). Unary minus over any other number keeps its form.
+func minIntDigits(text string) bool {
+	if text == "" || strings.ContainsAny(text, ".eE") {
+		return false
+	}
+	_, err := strconv.ParseInt(text, 10, 64)
+	n, errNeg := strconv.ParseInt("-"+text, 10, 64)
+	return err != nil && errNeg == nil && n == math.MinInt64
 }
 
 func (l *lowerer) literal(lit *Literal) model.Literal {
