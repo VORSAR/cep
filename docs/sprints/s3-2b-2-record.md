@@ -99,7 +99,7 @@ Review (G3)  ☑ architecture review of the combined diff (1 blocker, 3 should-f
              ☑ every finding fixed, or settled by the owner (C4, S3); every breaker's red test committed
 Verify (G4)  ☑ T4 exit 0, run complete (19 rows, 162 s; the first run red: a skipped helper test and a data race the fix round's B1
                made — both fixed) ☑ owner's check passed (merged) ☑ exits 2–4 and 6–11 met by their proofs (Measured results)
-Exit (G5)    ☑ one PR (#19, 35 commits), merged by the owner ☐ main CI green on the merge commit (the owner reports it)
+Exit (G5)    ☑ one PR (#19, 35 commits), merged by the owner ☑ main CI green on the merge commit (b0797fa: the gate workflow passed)
              ☑ record + retro ☑ known issues (none new) ☑ status line ☑ documents reconciled ☑ memory updated
              ☑ worktrees removed ☑ points and duration
 ```

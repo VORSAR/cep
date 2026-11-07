@@ -51,6 +51,7 @@
 | 2026-11-06 | [S3.2b-2's design (after the architecture review)](#owner-decisions-2026-11-06--s32b-2s-design-after-the-architecture-review) |
 | 2026-11-06 | [S3.2b-2's review and break-it](#owner-decisions-2026-11-06--s32b-2s-review-and-break-it) |
 | 2026-11-06 | [the open items after S3.2b-2](#owner-decisions-2026-11-06--the-open-items-after-s32b-2) |
+| 2026-11-06 | [S3.2c's plan check](#owner-decisions-2026-11-06--s32cs-plan-check) |
 
 ## The decisions
 
@@ -461,3 +462,11 @@ Asked for the decisions open for the owner; four questions in plain language, al
 2. **The spec-cleanup pass runs now, before S3.3**, as sprint S3.2c: the five contradictions of known issue S2.2b-1, the two notes of the grouped-key evaluation, and integer overflow (S3.2b-1-1). Why: the spec rule writers and generators read is made consistent before more is built on it, and overflow is a correctness bug, which ground rule 10 keeps open no longer than 30 days. Rejected: inside S3.3 (at its cap); before the release (overflow open for weeks).
 3. **Integer overflow is an expression error for that rule** (known issue S3.2b-1-1): as division by zero is, the event is dropped for that rule only and counted; other rules see it. No rule acts on a wrong number. Rejected: clamping to the largest value (a selected value is wrong); wrapping, documented (a huge product turns negative and the alert is missed). A language change: SPEC's change log and a test, in S3.2c.
 4. **S3.2b-2's close-out goes out as a small docs PR now**, so main's status line is current, and the merged branch `s3-2b-2/integration` is deleted from GitHub.
+
+### Owner decisions, 2026-11-06 — S3.2c's plan check
+
+Three questions, asked in plain language; all three as recommended. The readings are under the S3.2c card.
+
+1. **S3.2c's card is approved as written:** the language documents agree with each other and with the code, every reserved word is listed in the spec, and integer overflow never yields a wrong value. About 3 points. Out of scope: overflow in the aggregates (S8, when they exist) and timestamps past year 9999 in outputs (S5.1's sink encoding).
+2. **The routine: QA's tests first, one review, a break-it.** A one-page design note and the build; one architecture review of the design and the code together; a short QA break-it on overflow; one fix round (run under the race detector before T4); the full gate. Rejected: the full loop (a design review before the build, for one rule applied to nine operations); the lighter routine (nobody trying the overflow boundaries).
+3. **The overflow rule covers every 64-bit operation:** ints, durations and timestamps alike — `+`, `-`, `*`, `/` (the smallest int divided by −1) and unary `-` on ints, `abs`, duration ± duration, duration × int, int × duration, duration / int, unary `-` on a duration, timestamp ± duration. An overflow is an expression error for that rule, counted. Rejected: ints only (a wrapped duration or timestamp can flip a comparison).
