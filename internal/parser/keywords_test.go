@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -146,6 +147,9 @@ func TestSpecAppendixBListsEveryReservedWord(t *testing.T) {
 	}
 	if d := reservedDrift(words, keywordList); d != "" {
 		t.Fatal(d)
+	}
+	if !slices.IsSorted(words) {
+		t.Fatal("SPEC Appendix B's reserved words are not in alphabetical order, as its text says (S3.2c review R5)")
 	}
 }
 

@@ -197,8 +197,8 @@ Fix: use `language cep/0.1;`, or deploy on an engine supporting the named versio
 Rule: SPEC §2.4 — duration counts are integers; units strictly descending and distinct (`1 hour 30 min`, never `1.5 min`, `30 sec 5 min`, or `5 min 5 min`).
 Fix: rewrite with integer counts in descending units.
 
-### E-DUR-003 Zero duration in a bound slot **[static]**
-Rule: SPEC §2.4 — `within`, `for`, `ttl`, `idle after`, `delay`, `allow` and `output first every` require a duration > 0.
+### E-DUR-003 Zero or negative duration in a bound slot **[static]**
+Rule: SPEC §2.4 — `within`, `for`, `ttl`, `idle after`, `delay`, `allow` and `output first every` require a duration > 0. Source cannot write a negative duration; a deployment override or a model built in Go can, and it is this error as zero is. *(Corrected 2026-11-07, S3.2c break-it K1: the title said zero only, and the validator refused zero only.)*
 Fix: use a positive duration.
 
 ### E-PAT-005 Pattern without a positive step **[parse]**
@@ -222,7 +222,7 @@ Rule: SEMANTICS §8 — legal pairs: cron→close, sort→change, delay→due, b
 Fix: the message names the kind's mode.
 
 ### E-TYPE-001 Ill-typed expression **[static]**
-Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, any operator on `object` except `is [not] null`; and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
+Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, arithmetic outside §5.10's list (`timestamp + timestamp`, `duration × float`), any operator on `object` except `is [not] null`; an integer literal outside 64 bits (SPEC §2.4); and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
 Message names the operand and expected type. Fix: cast explicitly, or restructure.
 
 ### E-FN-001 Unknown function arity or argument kind **[static]**
