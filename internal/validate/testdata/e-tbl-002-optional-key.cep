@@ -1,0 +1,15 @@
+-- expect: E-TBL-002 (T's primary-key column k is optional) @ 7:10
+language cep/0.1;
+
+stream S (k string, ts timestamp)
+  time ts watermark bounded 1 min idle after 1 min;
+
+table T (k string optional) primary key (k);
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward every event.'
+  from S
+  select k
+  insert into Out;
