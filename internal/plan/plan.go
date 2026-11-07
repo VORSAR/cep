@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/expr"
@@ -29,6 +30,17 @@ type Stream struct {
 	Delay     int64        // d, ms: the bound; 0 for ascending and arrival
 	IdleAfter int64        // ms; 0: none
 	Derived   bool         // no time clause, produced by a rule
+	Source    *Connector   // the stream's @source annotation, if any (design s3-3-1 §3.4; the facade never reads the model)
+	Sink      *Connector   // its @sink annotation, if any
+}
+
+// Connector is a stream's connector annotation as the facade binds it: the type, every other key with its value as
+// the rule language writes it (a string without its quotes; an int, float or bool as written; a duration as "<ms> ms";
+// a timestamp as its unix milliseconds), and the nested @map's type, if any.
+type Connector struct {
+	Type string
+	Keys map[string]string
+	Map  string
 }
 
 // Table is one declared table.
@@ -95,6 +107,49 @@ func attrs(as []model.Attr) []event.Attr {
 	return out
 }
 
+// connector projects one @source or @sink annotation (a checked model: its type is a string, its params resolved).
+func connector(an *model.Annotation) *Connector {
+	c := &Connector{Keys: map[string]string{}}
+	for _, it := range an.Items {
+		switch {
+		case len(it.Nested) > 0:
+			for _, n := range it.Nested {
+				if n.Name == "map" {
+					for _, m := range n.Items {
+						if m.Key == "type" {
+							c.Map = litText(m.Value)
+						}
+					}
+				}
+			}
+		case it.Key == "type":
+			c.Type = litText(it.Value)
+		default:
+			c.Keys[it.Key] = litText(it.Value)
+		}
+	}
+	return c
+}
+
+// litText is a literal as the rule language writes it, for a connector's keys.
+func litText(l model.Literal) string {
+	switch l.Kind {
+	case model.LitString:
+		return l.Str
+	case model.LitInt:
+		return strconv.FormatInt(l.Int, 10)
+	case model.LitFloat:
+		return strconv.FormatFloat(l.Float, 'g', -1, 64)
+	case model.LitBool:
+		return strconv.FormatBool(l.Bool)
+	case model.LitDuration:
+		return strconv.FormatInt(l.Ms, 10) + " ms"
+	case model.LitTimestamp:
+		return strconv.FormatInt(l.Ms, 10)
+	}
+	return ""
+}
+
 // stream is a stream's schema and clock facts; a derived stream's schema has no time attribute (its log line
 // carries a top-level ts, D2 of S3.2a-1).
 func stream(s model.Stream) (Stream, error) {
@@ -109,6 +164,14 @@ func stream(s model.Stream) (Stream, error) {
 		}
 		if s.Time.Kind == model.TimeBounded {
 			st.Delay = s.Time.Bound
+		}
+	}
+	for i := range s.Annotations {
+		switch an := &s.Annotations[i]; an.Name {
+		case "source":
+			st.Source = connector(an)
+		case "sink":
+			st.Sink = connector(an)
 		}
 	}
 	sch, err := event.NewSchema(s.Name, attrs(s.Attrs), timeAttr)
