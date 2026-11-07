@@ -84,7 +84,7 @@ Rule: SPEC §4.2 (rev 3) — `time <attr>` names the stream's event-time attribu
 Message names the attribute and its declared type. Fix: declare the attribute `timestamp`, or name the stream's timestamp attribute.
 
 ### E-IDLE-001 Missing `idle after` on a timer-feeding stream **[static]**
-Rule: SEMANTICS §2.1 / SPEC §4.2 — every stream consumed by a rule that holds timers (any pattern with an absence, any window rule, any multi-stream rule) declares idleness, or a quiet stream stalls that rule's clock.
+Rule: SEMANTICS §2.1 / SPEC §4.2 — every stream consumed by a rule that holds timers (any pattern with an absence, any window rule, any multi-stream rule) declares idleness, or a quiet stream stalls that rule's clock. A plain rule — partitioned and rate-limited or not — holds no such timer: its keys expire on its own stream's admission watermark (SEMANTICS §9), so it needs no `idle after`.
 Fix: append `idle after <duration>` to the stream's time clause.
 
 ### E-PART-001 Stateful rule outside a partition **[static]**
@@ -164,7 +164,7 @@ Rule: SPEC §2.4 — the escape set is exhaustive: `\\ \' \" \n \t \r \uXXXX`.
 Fix: use a listed escape, or a triple-quoted raw string.
 
 ### E-SEL-001 Unbound or ill-bound target attribute **[static]**
-Rule: SPEC §5.8 — every target attribute after the auto-filled `ts` is bound by exactly one select item; selecting `ts` explicitly is this error too.
+Rule: SPEC §5.8 — every target attribute other than the auto-filled `ts` is bound by exactly one select item, wherever `ts` stands in the declaration; selecting `ts` explicitly is this error too. *(Corrected 2026-11-07, S3.2c: "after the auto-filled `ts`" read as order-based — known issue S2.2b-1.)*
 Fix: add/alias a select item per missing attribute; remove the explicit `ts`.
 
 ### E-SEL-002 Per-event attribute in a window select **[static]**
