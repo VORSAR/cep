@@ -56,7 +56,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
 | S3.2b ✓ ([S3.2b-1](s3-2b-1-record.md), [S3.2b-2](s3-2b-2-record.md)) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
 | S3.2c ✓ ([record](s3-2c-record.md)) | The spec cleanup: the five contradictions in the language documents (known issue S2.2b-1), the grouped-key evaluation's two notes, integer overflow as an expression error (S3.2b-1-1) *(placed here by the owner, 2026-11-06: [decisions](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2))* | 3 (2.5) *(4 (3.5), owner, 2026-11-07)* | tests first, one review, a break-it *(owner, 2026-11-06)* | S3.2b |
-| S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b, S3.2c *(owner, 2026-11-06: the cleanup first)* |
+| S3.3 | The Deploy pipeline and the conformance runner — clock freeze *(split at its plan check, 2026-11-07 (owner, [decisions](decisions.md#owner-decisions-2026-11-07--s33s-plan-check)): S3.3-1 = items 1, 2, 5 and the forwards on the facade, the public API; S3.3-2 = items 3, 4, 6, 7, the expect sandbox, the runner, the baselines and the clock freeze)* | 13 (13) *(about 15 after the plan check: 8 + 7)* | full *(S3.3-1 with the design panel, owner 2026-11-07)* | S3.2b, S3.2c *(owner, 2026-11-06: the cleanup first)* |
 | S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* *(and the one-module check of ADR-0001 §1: [owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure))* *(and a test that parses every rule fragment SEMANTICS and SPEC quote, about 0.5: [owner, 2026-11-07](decisions.md#owner-decisions-2026-11-07--s32cs-close-out))* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
 | S4.2 | The pattern engine completed and independently proven | 13 (13) | full | S4.1 |
@@ -124,6 +124,18 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | | 7. A planted change to an exported `internal/clock` signature appears in the LAW Δ block — **proof:** the clock-golden proof. |
 | **Owner's check** | *By running:* a 20-line Go program that embeds the engine, deploys 09 and feeds events through `SendRow`. *By reading:* `api/exports.golden` — the first public surface. |
 | **Split line** | **S3.3-1** = items 1, 2, 5 (facade, contracts, API gate); **S3.3-2** = items 3, 4, 6, 7. |
+
+*How it runs (owner, 2026-11-07, [decisions](decisions.md#owner-decisions-2026-11-07--s33s-plan-check)):* **S3.3-1** (about 8 points; record [s3-3-1-record.md](s3-3-1-record.md)): the full loop with the design panel. QA's tests first and independent, in a worktree; a design note by the coordinator; the blind three-reviewer panel (a breaker re-implementing from the sources, a challenger measuring the alternatives, the architect with the-fool), in two waves of at most two agents, then QA for testability; the owner's decisions; the build in the main session, test-first; T2, T3; the architecture review of the combined build and a QA break-it; one fix round under the race detector; T4; one PR. **S3.3-2** (about 7 points): its own plan check after S3.3-1 merges. **Binding from the plan check:** the export check and a clock-golden row are gate rows of their own now (decision 2); `apidiff` runs at T4 against the merge base, `golang.org/x/exp` a new build-time dependency (decision 3); an expect block's lists interleave by time, each list in its written order, ties to the list written first (decision 4; built in S3.3-2).
+
+*The plan check's readings (coordinator, against `main` @ a8a63ad):*
+1. **The runtime has no per-app lifecycle:** `runtime.Start(cfg, apps)` takes every app up front and `Runtime.Close` stops the whole runtime (closes `stopped`, waits on the group); `Drain(app)` is per app. Item 1's `Deploy` into a running runtime, `AppHandle.Start`/`Stop`/`Undeploy` and `Close` in reverse deploy order need the runtime to register and unregister apps while it runs — the part of item 1 S3.2a-2's plan check did not foresee (about +1.5 points, hence the split).
+2. **Nothing of the public surface exists:** no `cep`, `io`, `conformance` or `api/`; `tools/` holds `archcheck`, `importcheck` and `shape`, no `apipartition`; `golang.org/x/exp` is not in `go.mod`. `E-EXP-001` is in the validator's catalog marked for S3.3.
+3. **The Go boundary is built:** `runtime.Send` refuses NaN and infinities (S3.1-2's D2), `recordable` refuses a value a recording cannot copy (S3.2b-2's D1), an object enters as its JSON text (B5). The facade's `SendRow` and the `Table` API land on these; the `cepio.RowWriter` boundary converts once, on the cold path.
+4. **D3 and D7 are enforced below the validator only:** `partition.NewRule` refuses an object key part, and `table.New` carries no primary-key type rule; both become deploy errors with codes in the validator (SPEC change log, invalid examples), as forwarded.
+5. **Playback has the pieces of the sandbox but no sandbox:** `NewPlanDriver`, `Replay`, `Reader`, `Recorder`, `Trace`; no code runs an `expect` block, interleaves `given` lists (M1) or compares outputs to a then-list in number (M2). S3.3-2's.
+6. **The recording setting:** `runtime.App.Recorder` is nil unless set, so "off unless turned on" (S3.2b-2's D4) is `Deploy`'s option naming an `io.Writer`; `playback.NewRecorder` is the writer.
+7. **`Deploy` must not mutate the checked model** (S3.2b-1's L2): `plan.Build` consumes the `*model.App` `validate.Check` returns; the facade keeps neither, and a built plan compiles its bodies at `Start`.
+
 
 #### S4.1 — The pattern engine: the kill switch fires in playback
 
@@ -379,7 +391,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2c merged (PRs #1–#21, the last on 2026-11-07). S3.2c closed: SPEC rev 6 — an overflow of any 64-bit arithmetic is an expression error for its rule, `timestamp − timestamp`, the smallest int's literal, every reserved word in Appendix B, the language documents agreeing → next: S3.3's plan check (the Deploy pipeline and the conformance runner — clock freeze).**
+**Phase 1 in progress: S1.1a-1 to S3.2c merged (PRs #1–#22, the last on 2026-11-07). S3.3 split at its plan check (2026-11-07): S3.3-1, the public Go API, about 8 points, passed G0 → next: QA's tests first and the design note, then the design panel; S3.3-2 (the expect sandbox, the runner, the baselines, the clock freeze) after it.**
 
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
