@@ -319,45 +319,108 @@ func (a *arith) Eval(row Row) (event.Value, error) {
 		}
 		return event.Value{Kind: event.TFloat, F: f}, nil
 	case arithTsDur:
-		if a.op == '+' {
-			return event.Value{Kind: event.TTimestamp, T: l.T + r.D}, nil
+		t, ok := addInt(l.T, r.D)
+		if a.op == '-' {
+			t, ok = subInt(l.T, r.D)
 		}
-		return event.Value{Kind: event.TTimestamp, T: l.T - r.D}, nil
+		if !ok {
+			return a.overflow(l.T, r.D)
+		}
+		return event.Value{Kind: event.TTimestamp, T: t}, nil
 	case arithDurDur:
-		if a.op == '+' {
-			return event.Value{Kind: event.TDuration, D: l.D + r.D}, nil
+		d, ok := addInt(l.D, r.D)
+		if a.op == '-' {
+			d, ok = subInt(l.D, r.D)
 		}
-		return event.Value{Kind: event.TDuration, D: l.D - r.D}, nil
+		if !ok {
+			return a.overflow(l.D, r.D)
+		}
+		return event.Value{Kind: event.TDuration, D: d}, nil
 	case arithDurInt:
-		return event.Value{Kind: event.TDuration, D: l.D * r.I}, nil
+		d, ok := mulInt(l.D, r.I)
+		if !ok {
+			return a.overflow(l.D, r.I)
+		}
+		return event.Value{Kind: event.TDuration, D: d}, nil
 	case arithIntDur:
-		return event.Value{Kind: event.TDuration, D: l.I * r.D}, nil
+		d, ok := mulInt(l.I, r.D)
+		if !ok {
+			return a.overflow(l.I, r.D)
+		}
+		return event.Value{Kind: event.TDuration, D: d}, nil
 	case arithDurDivInt:
 		if r.I == 0 {
 			return event.Value{Kind: a.typ, Null: true}, runtimeErr("division by zero")
 		}
-		return event.Value{Kind: event.TDuration, D: l.D / r.I}, nil
+		d, ok := divInt(l.D, r.I)
+		if !ok {
+			return a.overflow(l.D, r.I)
+		}
+		return event.Value{Kind: event.TDuration, D: d}, nil
 	}
 	x, y := l.I, r.I
 	var i int64
+	ok := true
 	switch a.op {
 	case '+':
-		i = x + y
+		i, ok = addInt(x, y)
 	case '-':
-		i = x - y
+		i, ok = subInt(x, y)
 	case '*':
-		i = x * y
+		i, ok = mulInt(x, y)
 	case '/', '%':
 		if y == 0 {
 			return event.Value{Kind: a.typ, Null: true}, runtimeErr("division by zero")
 		}
 		if a.op == '/' {
-			i = x / y // integer division truncates toward zero, as Go does
+			i, ok = divInt(x, y) // integer division truncates toward zero, as Go does
 		} else {
-			i = x % y
+			i = x % y // the smallest int % −1 is 0 in Go: never an overflow
 		}
 	}
+	if !ok {
+		return a.overflow(x, y)
+	}
 	return event.Value{Kind: event.TInt, I: i}, nil
+}
+
+// overflow is the expression error of a 64-bit result outside int64 (owner, 2026-11-06; SPEC rev 6 §5.6): the event
+// is dropped for this rule only and counted; no rule acts on a wrapped value. The message is built only here, off the
+// path that fits.
+func (a *arith) overflow(x, y int64) (event.Value, error) {
+	return event.Value{Kind: a.typ, Null: true}, runtimeErr("integer overflow: %d %c %d is outside the 64-bit range", x, a.op, y)
+}
+
+// addInt, subInt, mulInt, divInt and negInt are int64 arithmetic that reports overflow (ok false) instead of wrapping
+// (design s3-2c §2): ints, durations and timestamps share them, so the rule is written once.
+func addInt(x, y int64) (int64, bool) {
+	r := x + y
+	return r, (x^r)&(y^r) >= 0
+}
+
+func subInt(x, y int64) (int64, bool) {
+	r := x - y
+	return r, (x^y)&(x^r) >= 0
+}
+
+func mulInt(x, y int64) (int64, bool) {
+	r := x * y
+	if x == 0 {
+		return 0, true
+	}
+	return r, r/x == y && !(x == -1 && y == math.MinInt64)
+}
+
+// divInt is x / y for y ≠ 0 (the caller checks division by zero first): only the smallest int divided by −1 overflows.
+func divInt(x, y int64) (int64, bool) {
+	if x == math.MinInt64 && y == -1 {
+		return 0, false
+	}
+	return x / y, true
+}
+
+func negInt(x int64) (int64, bool) {
+	return -x, x != math.MinInt64
 }
 
 type neg struct {
@@ -380,13 +443,20 @@ func (n *neg) Eval(row Row) (event.Value, error) {
 	if err != nil || v.Null {
 		return v, err
 	}
+	var ok bool
 	switch v.Kind {
 	case event.TInt:
-		v.I = -v.I
+		v.I, ok = negInt(v.I)
+		if !ok {
+			return event.Value{Kind: n.typ, Null: true}, runtimeErr("integer overflow: -(%d) is outside the 64-bit range", v.I)
+		}
 	case event.TFloat:
 		v.F = -v.F
 	default:
-		v.D = -v.D
+		v.D, ok = negInt(v.D)
+		if !ok {
+			return event.Value{Kind: n.typ, Null: true}, runtimeErr("integer overflow: -(%d ms) is outside the 64-bit range", v.D)
+		}
 	}
 	return v, nil
 }
@@ -477,7 +547,11 @@ func (a *abs) Eval(row Row) (event.Value, error) {
 	}
 	if v.Kind == event.TInt {
 		if v.I < 0 {
-			v.I = -v.I
+			i, ok := negInt(v.I)
+			if !ok {
+				return event.Value{Kind: a.typ, Null: true}, runtimeErr("integer overflow: abs(%d) is outside the 64-bit range", v.I)
+			}
+			v.I = i
 		}
 		return v, nil
 	}

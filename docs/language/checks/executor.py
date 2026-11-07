@@ -73,6 +73,41 @@ _CMP: Dict[str, Callable] = {
 }
 
 
+class ExpressionError(Exception):
+    """10: a runtime error in one rule's expressions (a failed cast, division by zero, an overflow): the event is
+    dropped for that rule only and counted. Not a DeployError: it happens per event, never at deploy."""
+
+
+INT64_MIN, INT64_MAX = -(2**63), 2**63 - 1
+
+
+def checked_int64(op: str, x: int, y=None) -> int:
+    """5.6 / 10 (SPEC rev 6, owner 2026-11-06): 64-bit arithmetic as the engine does it, for ints, durations (ms)
+    and timestamps (ms) alike. A result outside [-2^63, 2^63 - 1] is an ExpressionError, as division by zero is;
+    integer division truncates toward zero and % keeps the dividend's sign (as Go does)."""
+    if op == "neg":
+        r = -x
+    elif op == "abs":
+        r = abs(x)
+    elif op in ("/", "%"):
+        if y == 0:
+            raise ExpressionError("division by zero")
+        q = abs(x) // abs(y)
+        q = q if (x >= 0) == (y >= 0) else -q
+        r = q if op == "/" else x - q * y
+    elif op == "+":
+        r = x + y
+    elif op == "-":
+        r = x - y
+    elif op == "*":
+        r = x * y
+    else:
+        raise ValueError(f"checked_int64: operator {op!r}")
+    if not INT64_MIN <= r <= INT64_MAX:
+        raise ExpressionError(f"integer overflow: {op} over {x}, {y} is outside the 64-bit range")
+    return r
+
+
 def null_strict(a, op: str, b) -> bool:
     """1.1: any comparison/membership with a null operand evaluates false
     (two-valued logic; never null)."""
