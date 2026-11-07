@@ -11,27 +11,23 @@ import (
 // are fresh and handed to the engine, which keeps them (runtime.Send); nothing is pooled (cep may not import sync),
 // and a Set after fill returned panics (MUST 14).
 type row struct {
-	attrs    []event.Attr
-	names    []string
-	timeAttr int // the stream's time attribute; event.ArrivalTime for an arrival stream; -1 for a table
-	values   []event.Value
-	set      []bool
+	attrs    []event.Attr  // the handle's, shared: never written
+	names    []string      // the handle's, shared
+	timeAttr int           // the stream's time attribute; event.ArrivalTime for an arrival stream; -1 for a table
+	values   []event.Value // fresh per row; an unset attribute has Kind TInvalid (the set mask)
 	err      error
 	armed    bool
 	keyOnly  []int // Delete: the key attributes' indexes; nil otherwise
 	what     string
 }
 
-func newStreamRow(sch event.Schema, names []string) *row {
-	attrs := make([]event.Attr, sch.NumAttrs())
-	for i := range attrs {
-		attrs[i] = sch.Attr(i)
-	}
-	return &row{attrs: attrs, names: names, timeAttr: sch.TimeAttr(), values: make([]event.Value, len(attrs)), set: make([]bool, len(attrs)), what: "the stream's"}
+// Two allocations per row: the header and its values (design s3-3-1 MUST 13).
+func newStreamRow(attrs []event.Attr, names []string, timeAttr int) *row {
+	return &row{attrs: attrs, names: names, timeAttr: timeAttr, values: make([]event.Value, len(attrs)), what: "the stream's"}
 }
 
 func newTableRow(attrs []event.Attr, names []string, keyOnly []int) *row {
-	return &row{attrs: attrs, names: names, timeAttr: -1, values: make([]event.Value, len(attrs)), set: make([]bool, len(attrs)), keyOnly: keyOnly, what: "the table's"}
+	return &row{attrs: attrs, names: names, timeAttr: -1, values: make([]event.Value, len(attrs)), keyOnly: keyOnly, what: "the table's"}
 }
 
 // run arms the row, calls fill, disarms it and checks what fill left (design s3-3-1 §4.3, rows 5).
@@ -46,7 +42,7 @@ func (w *row) run(fill func(cepio.RowWriter) error) error {
 		return w.err
 	}
 	for i, a := range w.attrs {
-		if w.set[i] {
+		if w.values[i].Kind != event.TInvalid {
 			continue
 		}
 		if w.keyOnly != nil {
@@ -62,7 +58,7 @@ func (w *row) run(fill func(cepio.RowWriter) error) error {
 	}
 	if w.keyOnly != nil {
 		for _, k := range w.keyOnly {
-			if !w.set[k] {
+			if w.values[k].Kind == event.TInvalid {
 				return fmt.Errorf("cep: delete key column %q was not set", w.attrs[k].Name)
 			}
 		}
@@ -93,7 +89,7 @@ func (w *row) put(attr int, kind event.Type, v event.Value, what string) {
 		return
 	}
 	v.Kind = a.Type
-	w.values[attr], w.set[attr] = v, true
+	w.values[attr] = v
 }
 
 func (w *row) fail(err error) {

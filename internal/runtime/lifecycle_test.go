@@ -375,7 +375,7 @@ func TestAddStartsNoGoroutine(t *testing.T) {
 	ctx := rtCeiling(t)
 	d := &lcRec{}
 	r := lcNew(t, runtime.Config{Shards: 1})
-	base := lcGoroutines(t, ctx, 0)
+	base := goruntime.NumGoroutine() // S3.3-1 build: lcGoroutines(t, ctx, 0) spun to the ceiling (a fixture fix, named in the record)
 	app := lcApp(t, func(event.Event) error { return nil }, func(event.Event) error { return nil })
 	app.Recorder = d
 	id := lcAdd(t, ctx, r, app)
