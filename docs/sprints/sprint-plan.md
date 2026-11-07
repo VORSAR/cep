@@ -55,7 +55,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | S3.1 ✓ ([S3.1-1](s3-1-1-record.md), [S3.1-2](s3-1-2-record.md)) | The clock service, tables and the decoder | 13 (13) | full | S2.2b |
 | S3.2a ✓ ([S3.2a-1](s3-2a-1-record.md), [S3.2a-2](s3-2a-2-record.md)) | The replay format and the runtime core *(split at its plan check, 2026-11-05 (owner, §5): S3.2a-1 = items 1, 2, the format layer and partitions; S3.2a-2 = item 3, the runtime core)* | 13 (11.5) | full *(S3.1's routine, owner 2026-11-05)* | S3.1 |
 | S3.2b ✓ ([S3.2b-1](s3-2b-1-record.md), [S3.2b-2](s3-2b-2-record.md)) | One runtime, live and replay — rate limits, errors, arrival time *(split at its plan check, 2026-11-06 (owner, §5): S3.2b-1 = items 1, 2, 6, 9, the plan, the replay loop, rate limits and the material; S3.2b-2 = items 3–5, 7, 8 and the recorder)* | 13 (12.5) | full *(S3.1's routine, owner 2026-11-06)* | S3.2a |
-| S3.2c | The spec cleanup: the five contradictions in the language documents (known issue S2.2b-1), the grouped-key evaluation's two notes, integer overflow as an expression error (S3.2b-1-1) *(placed here by the owner, 2026-11-06: [decisions](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2))* | sized at its G0 | at its G0 (a language change runs the language-design skill) | S3.2b |
+| S3.2c | The spec cleanup: the five contradictions in the language documents (known issue S2.2b-1), the grouped-key evaluation's two notes, integer overflow as an expression error (S3.2b-1-1) *(placed here by the owner, 2026-11-06: [decisions](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2))* | 3 (2.5) | tests first, one review, a break-it *(owner, 2026-11-06)* | S3.2b |
 | S3.3 | The Deploy pipeline and the conformance runner — clock freeze | 13 (13) | full | S3.2b, S3.2c *(owner, 2026-11-06: the cleanup first)* |
 | S1.1c | The gate extras moved from S1.1b and S1.2 *(placed here by the owner, 2026-11-05, §5: after the clock freeze, before the pattern engine)* *(and the one-module check of ADR-0001 §1: [owner, 2026-11-06](decisions.md#owner-decisions-2026-11-06--the-docs-restructure))* | sized at its G0 | at its G0 | S3.3 |
 | S4.1 | The pattern engine — the kill switch fires in playback | 13 (11) | full | S3.3 |
@@ -102,6 +102,32 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 ---
 
 *Closed cards (S1.1a to S3.2b) are in [history.md](history.md#closed-sprint-cards), word for word. Each sprint gets a card in this section ([template](templates/sprint-card.md)). Once its plan check is answered, a short "how it runs" note follows the card: lanes, waves, gates. At close-out the card moves to history.md.*
+
+#### S3.2c — The spec cleanup: the language documents agree, and overflow is an error
+
+| | |
+|---|---|
+| **Goal** | The language documents agree with each other and with the code, a spec-only reader finds every reserved word, and integer overflow never yields a wrong value: it is an expression error for that rule. |
+| **Routine · size** | QA's tests first, one review, a break-it (owner, 2026-11-06) · 3 SP (items 2.5) |
+| **Depends on** | S3.2b |
+| **In scope** | 1. **The five contradictions** of known issue S2.2b-1, fixed in SEMANTICS and errors.md to match SPEC and the code: §2's time-clause syntax; §2.1's and §11.10's `idle after` scope; E-SEL-001's "after the auto-filled `ts`"; §6.5's unmarked pattern; §6.4's `→ not B for D` form [0.5]. · 2. **The grouped-key evaluation's two notes:** E-IDLE-001's text says a plain rule — partitioned and rate-limited or not — needs no `idle after`; SPEC Appendix B lists every reserved word, pinned to `grammar.lark` by the keyword test [0.5]. · 3. **Integer overflow is an expression error for that rule** (owner, 2026-11-06) over every 64-bit operation — ints, durations, timestamps: checked arithmetic in `internal/expr`; a Python harness check, red first; SPEC rev 6 and SEMANTICS §10; known issues S2.2b-1 and S3.2b-1-1 closed [1.5]. |
+| **Not in scope** | Overflow in the aggregates → S8 (they do not exist yet). A timestamp past year 9999 in an output → S5.1 (the sink's encoding). |
+| **Entry criteria** | The standard ones. |
+| **Exit criteria** | The done-done block, plus: |
+| | 1. Each of the five contradictions resolved in the text, and no validator verdict changed — **proof:** the owner's reading; the corpus and static-error tests unchanged and green. |
+| | 2. SPEC Appendix B lists exactly `grammar.lark`'s reserved words — **proof:** the keyword test, red on a planted drift. |
+| | 3. Every 64-bit operation that overflows is an expression error: the rule drops the event and counts it, and another rule on the same stream still fires — **proof:** an `expr` table test per operation at its exact boundary, a live test, the Python harness check. |
+| | 4. No result that fits changes — **proof:** the same table test's in-range rows (`MaxInt64 − 1 + 1`, `MinInt64 / 1`, …). |
+| **Owner's check** | *By reading:* the SEMANTICS, SPEC and errors.md changes. *By running:* the overflow tests. |
+
+*How it runs (owner, 2026-11-06, [decisions](decisions.md#owner-decisions-2026-11-06--s32cs-plan-check)):* QA writes the overflow tests first, red against today's wrapping arithmetic; the coordinator writes a one-page design note and builds in the main session; one architecture review of the design and the code together; a short QA break-it on overflow; one fix round, under the race detector before T4; T4; the PR.
+
+*The plan check's readings (coordinator, against `main` @ 53facc5):*
+1. **All five contradictions stand as known issue S2.2b-1 lists them;** SPEC, errors.md and the validator agree with one another, so each fix is SEMANTICS's (and E-SEL-001's wording) catching up.
+2. **E-IDLE-001's list** names a pattern with an absence, a window rule and a multi-stream rule; a plain rule is not on it, and the validator raises nothing for one — the text only has to say so.
+3. **SPEC Appendix B points at `grammar.lark`'s NAME terminal** for the reserved words; `internal/parser/keywords_test.go` already pins the parser's keyword table to that terminal, so the same test can pin a list in SPEC.
+4. **Every 64-bit arithmetic path wraps today:** `internal/expr`'s int `+ - * /` (the smallest int / −1 too) and unary `-`, `abs`, and the duration and timestamp kinds; only `cast` from float to int is range-checked already (S3.1-2's break-it B4).
+5. **The Python reference executor has no general arithmetic;** the harness check needs a checked 64-bit helper in `docs/language/checks/executor.py`, written red first.
 
 #### S3.3 — The Deploy pipeline and the conformance runner — clock freeze
 
@@ -172,6 +198,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | **Depends on** | S4.2 |
 | **In scope** | 1. `io/http` source (JSON per event; an NDJSON body = one source batch, closed with the batch-close signal when the body ends) and sink (JSON, `{{attr}}` templates, coalesced batches, exponential backoff with a cap, `sink_failures`) [4]. · 2. `io/jsonmap` via a **facade decode entry** (a named API Δ; built-ins never import `internal/*`) [1.5]. · 3. `io/render.go`, the shared renderer, and its injection-safety table [1.5]. · 4. `cmd/cepd` (minimal): rule files + `cepd.json` (param overrides type-checked, E-PARAM-001; connector settings; secrets via params or environment), `import _ "time/tzdata"` [2]. · 5. The live end-to-end tests, driving idleness through the idle-tick source, incl. S4.2's quiet-key case over HTTP [1.5]. · 6. The sink-failure test and the saturation test over HTTP [1]. |
 | **Not in scope** | stdin, SMTP, log, text mapper, `@OnError`, `/metrics`, `/healthz`, latency hooks → S5.2. |
+| *Forwarded* | *(Annotated 2026-11-06, from S3.2c: a timestamp past year 9999 reaching an output cannot be written in RFC 3339; the sink's encoding decides what that is — an error counted for its rule, as S3.2c makes overflow.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 01's fire scenario POSTed to the packaged `cepd` produces one POST at the stub IAM listener whose body equals S4.1's expected evidence; the defeat scenario produces none, asserted only after a witness that the key's construct clock passed 10:05 — **proof:** the `cepd` end-to-end test. |
@@ -268,6 +295,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 | **In scope** | 1. `internal/window`'s `Kind` interface and `Out` (ADR-0014 §1) [1]. · 2. Sort: the tie rule, changelog output, `OnPurge` retractions in total order [2.5]. · 3. Batch: grouping by `BatchID` within the key; firing on the batch-close signal delivered by the router as a control timer; one group event at the group's max event time; the fired-id dedup set per instance, TTL-purged with it [2.5]. · 4. **`count`** (registry `Aggregate` kind) over a closed group, respecting E-SEL-002 [1]. · 5. **Test material (QA, before the engine runs):** fire-path and near-miss cases for 03 (its `+`/`−` rows in a conformance log if an expect cannot express them) and for 04's batch rule [1]. · 6. Builder sort and batch surface + the twin of 03 [1.5]. · 7. The five harness ports [1]. · 8. The live batch test (NDJSON over HTTP and the same records over stdin) [1]. · 9. The walked-state invariant for window state; `allocgate` [0.5]. |
 | **Not in scope** | Cron → S9.1; delay → S9.2. The time-based window catalog → Phase 2. |
 | *Forwarded* | *(Annotated 2026-11-05, from S3.2a-1: windows keep events past release, so they clear `Tables` on capture (review F3). Under owner D1 a timer fires once the clock is past its due: a close that must run once the clock reaches `e` is scheduled at `e − 1`. The batch-id dedup set lives in the body's `OpState`, so a purge clears it. Batch ends arrive as `StepBatchEnd` in replay.)* *(Annotated 2026-11-06, from S3.2b-1 (combined review C8): every callable added — aggregates included — states its `expr.NullRule`; the default (null in, null out) is wrong for an aggregate over an empty group, and E-NULL-003 reads it.)* |
+| *Forwarded* | *(Annotated 2026-11-06, from S3.2c ([decisions](decisions.md#owner-decisions-2026-11-06--s32cs-plan-check)): an aggregate (`sum`, `count`) that overflows is an expression error for its rule, as every 64-bit operation is from S3.2c; the aggregates use `internal/expr`'s checked arithmetic.)* |
 | **Entry criteria** | The standard ones. |
 | **Exit criteria** | The done-done block, plus: |
 | | 1. 03 and 04's batch rule pass their cases — **proof:** the conformance runner (+ 03's log). |
@@ -376,7 +404,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.2b-2 merged (PRs #1–#19, the last on 2026-11-06); S3.2b is complete. Next: S3.2c's plan check — the spec cleanup (the five contradictions, the evaluation's two notes, integer overflow as an expression error), placed before S3.3 by the owner — then S3.3.**
+**Phase 1 in progress: S1.1a-1 to S3.2b-2 merged (PRs #1–#20, the last on 2026-11-06). S3.2c passed G0 (2026-11-06): the spec cleanup — the five contradictions, the evaluation's two notes, integer overflow as an expression error over every 64-bit operation; about 3 points → next: QA's overflow tests first, the design note and the build; then S3.3.**
 
 *Earlier lines, 2026-11-01 to 2026-11-06: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
 
