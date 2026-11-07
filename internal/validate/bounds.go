@@ -11,8 +11,8 @@ import (
 // the bounds it must cover (SEMANTICS §9, §11.3), and the window and lateness clauses.
 func (c *checker) bounds() {
 	for i := range c.app.Streams {
-		if t := c.app.Streams[i].Time; t.IdleAfter == 0 && t.IdlePos != (model.Pos{}) {
-			c.report("E-DUR-003", t.IdlePos, "`idle after` of %s is zero", c.app.Streams[i].Name)
+		if t := c.app.Streams[i].Time; t.IdleAfter < 0 || t.IdleAfter == 0 && t.IdlePos != (model.Pos{}) {
+			c.report("E-DUR-003", t.IdlePos, "`idle after` of %s is %s", c.app.Streams[i].Name, notPositive(t.IdleAfter))
 		}
 	}
 	for _, r := range c.rules() {
@@ -132,7 +132,8 @@ func attrNamesOf(k *model.PartitionKey) []string {
 }
 
 // zeroDurations: within, for, ttl, delay and output first every take a duration > 0 (`idle after` above; `allow`
-// is E-LATE-002 whatever its value).
+// is E-LATE-002 whatever its value). Source writes no negative duration; an override or a model built in Go can
+// (S3.2c break-it K1).
 func (c *checker) zeroDurations(r *model.Rule) {
 	slots := []*model.DurationOrParam{&r.OutputFirstEvery}
 	if len(r.Partition.Keys) > 0 {
@@ -152,17 +153,17 @@ func (c *checker) zeroDurations(r *model.Rule) {
 		}
 	}
 	for _, d := range slots {
-		if !c.skipDur[d] && d.Ms == 0 && present(*d) {
-			c.report("E-DUR-003", d.Pos, "a zero duration in a bound slot of rule %s", r.Name)
+		if !c.skipDur[d] && (d.Ms < 0 || d.Ms == 0 && present(*d)) {
+			c.report("E-DUR-003", d.Pos, "a bound slot of rule %s is %s", r.Name, notPositive(d.Ms))
 		}
 	}
 }
 
 // ttl: a partition's ttl is at least every pattern bound, window extent and rate-limit interval of its rule. Each
-// bound it is below is one finding at the ttl, naming both numbers. A zero ttl or bound is E-DUR-003's.
+// bound it is below is one finding at the ttl, naming both numbers. A zero or negative ttl or bound is E-DUR-003's.
 func (c *checker) ttl(r *model.Rule) {
 	ttl := &r.Partition.TTL
-	if len(r.Partition.Keys) == 0 || c.skipDur[ttl] || ttl.Ms == 0 {
+	if len(r.Partition.Keys) == 0 || c.skipDur[ttl] || ttl.Ms <= 0 {
 		return
 	}
 	type bound struct {
@@ -247,4 +248,12 @@ func human(ms int64) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// notPositive names a bound's duration that is not > 0, for E-DUR-003.
+func notPositive(ms int64) string {
+	if ms == 0 {
+		return "zero"
+	}
+	return fmt.Sprintf("negative (%d ms)", ms)
 }
