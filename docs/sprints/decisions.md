@@ -52,6 +52,8 @@
 | 2026-11-06 | [S3.2b-2's review and break-it](#owner-decisions-2026-11-06--s32b-2s-review-and-break-it) |
 | 2026-11-06 | [the open items after S3.2b-2](#owner-decisions-2026-11-06--the-open-items-after-s32b-2) |
 | 2026-11-06 | [S3.2c's plan check](#owner-decisions-2026-11-06--s32cs-plan-check) |
+| 2026-11-07 | [S3.2c's review and break-it](#owner-decisions-2026-11-07--s32cs-review-and-break-it) |
+| 2026-11-07 | [S3.2c's close-out](#owner-decisions-2026-11-07--s32cs-close-out) |
 
 ## The decisions
 
@@ -478,3 +480,10 @@ The combined review of the design and the code ([s3-2c-combined-architecture.md]
 1. **The spec lists exactly the arithmetic the engine does, and `timestamp − timestamp → duration` is built now** (review R2; ≠ R: the recommendation struck it from SEMANTICS and left it for later). SPEC §5.10 gains `int × duration`, `duration / int` and unary `-` (int, float, duration), which the engine already accepts, and `timestamp − timestamp → duration`, new in rev 6, checked for overflow like every other 64-bit operation. Rejected: leaving the spec behind the engine as a known issue.
 2. **The S5.1 forward covers both ends: a timestamp outside years 0000–9999 in an output** (review R3; as recommended). `timestamp − duration` can land before year 0000 as easily as `timestamp + duration` past 9999, and neither is RFC 3339. Rejected: past 9999 only.
 3. **The smallest int, −9223372036854775808, is a literal a rule can write** (break-it K2; ≠ R: the recommendation forwarded it to a later language sprint). A minus sign written directly before an integer literal belongs to it where the number fits only with its sign — a param default and an expression alike; the grammar is unchanged. Rejected: a known issue with `-9223372036854775807 - 1` as the expression's workaround and none for a param default.
+
+### Owner decisions, 2026-11-07 — S3.2c's close-out
+
+Two questions, asked in plain language; both as recommended.
+
+1. **The close-out lands as its own small docs PR, and the merged remote branch `s3-2c/integration` is deleted.** Rejected: the close-out riding S3.3's PR (main's status line stale until then).
+2. **A lasting rule: a test parses every rule fragment the language documents quote** (S3.2c's retro, from review R1: a correction wrote `-> and not` into SEMANTICS, which the grammar refuses). The rule joins the sprint model now; the test, about half a point, joins S1.1c, the gate-extras sprint after S3.3. Rejected: building it in S3.3 (a full card); not adopting it (a wrong form reaches main whenever a sprint has no review of its documents).
