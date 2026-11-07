@@ -741,6 +741,60 @@ def _():
     assert check_absence_nullable([], ["sessionId"]) is True
 
 
+# ------------------------------------------------------------------- 10 errors
+
+@check("10 · S3.2c", "integer overflow is an expression error: every 64-bit operation that leaves "
+                     "[-2^63, 2^63 - 1] raises ExpressionError, as division by zero does; a result that fits is exact")
+def _():
+    # Owner, 2026-11-06 (docs/sprints/decisions.md): "Integer overflow is an expression error for that rule (known
+    # issue S3.2b-1-1): as division by zero is, the event is dropped for that rule only and counted; other rules see
+    # it. No rule acts on a wrong number." And: "The overflow rule covers every 64-bit operation: ints, durations and
+    # timestamps alike — `+`, `-`, `*`, `/` (the smallest int divided by −1) and unary `-` on ints, `abs`, duration ±
+    # duration, duration × int, int × duration, duration / int, unary `-` on a duration, timestamp ± duration."
+    # The harness's durations and timestamps are integer milliseconds (SEMANTICS 1), so one helper covers all three:
+    # checked_int64(op, x, y=None) for op in + - * / % (binary) and neg, abs (unary, x only). Integer division
+    # truncates toward zero and % keeps the dividend's sign (SPEC 5.10, as Go does). ExpressionError is a runtime
+    # error (SEMANTICS 10), not a deploy error. Imported here, not at the top, so the other checks run without it.
+    import executor
+    checked, expression_error = executor.checked_int64, executor.ExpressionError
+    assert issubclass(expression_error, Exception) and not issubclass(expression_error, DeployError), expression_error
+    hi, lo = 2**63 - 1, -(2**63)
+    overflows = [
+        ("+", hi, 1), ("+", lo, -1),                     # int +, duration + duration, timestamp + duration
+        ("-", lo, 1), ("-", hi, -1), ("-", 0, lo),       # int -, duration - duration, timestamp - duration
+        ("*", hi, 2), ("*", 2**62, 2), ("*", lo, -1),    # int *, duration × int, int × duration
+        ("*", -1, lo), ("*", 3037000500, 3037000500),
+        ("/", lo, -1),                                   # int /, duration / int: the smallest int over −1
+        ("neg", lo, None),                               # unary - on an int or a duration
+        ("abs", lo, None),
+    ]
+    for op, x, y in overflows:
+        try:
+            got = checked(op, x) if y is None else checked(op, x, y)
+        except expression_error:
+            continue
+        raise AssertionError(f"{x} {op} {y} gave {got}; want ExpressionError (no rule acts on a wrong number)")
+    fits = [
+        ("+", hi - 1, 1, hi), ("+", lo + 1, -1, lo), ("+", hi, lo, -1),
+        ("-", lo + 1, 1, lo), ("-", hi - 1, -1, hi), ("-", -1, hi, lo), ("-", -1, lo, hi),
+        ("*", -(2**62), 2, lo), ("*", hi, -1, lo + 1), ("*", lo, 1, lo), ("*", lo, 0, 0),
+        ("*", 3037000499, 3037000499, 9223372030926249001),
+        ("/", lo, 1, lo), ("/", lo, 2, -(2**62)), ("/", hi, -1, lo + 1), ("/", -7, 2, -3), ("/", 7, -2, -3),
+        ("%", lo, -1, 0), ("%", -7, 2, -1), ("%", 7, -2, 1),
+        ("neg", lo + 1, None, hi), ("neg", hi, None, lo + 1),
+        ("abs", lo + 1, None, hi), ("abs", hi, None, hi),
+    ]
+    for op, x, y, want in fits:
+        got = checked(op, x) if y is None else checked(op, x, y)
+        assert got == want, f"{x} {op} {y} gave {got}; want {want} (a result that fits is exact)"
+    for op in ("/", "%"):                                # division by zero: the expression error that exists today
+        try:
+            got = checked(op, 1, 0)
+        except expression_error:
+            continue
+        raise AssertionError(f"1 {op} 0 gave {got}; want ExpressionError (SEMANTICS 10)")
+
+
 # ---------------------------------------------------------------------- runner
 
 def main():
