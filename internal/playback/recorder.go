@@ -187,8 +187,21 @@ func (r *Recorder) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 }
 
 // Stop writes {"stop":true} and flushes.
-// BatchEnd writes the batch_end record (design s3-3-1 §2.9). Not built yet.
-func (r *Recorder) BatchEnd(stream int, batch string) error { return nil }
+// BatchEnd writes {"batch_end":…,"stream":…} — a source's batch-close signal at its intake position (owner,
+// 2026-11-07, S3.3-1 design 6); the reader has read the record since S3.2a-1 (reader.go's batchEndRecord).
+func (r *Recorder) BatchEnd(stream int, batch string) error {
+	if stream < 0 || stream >= len(r.app.Streams) {
+		return fmt.Errorf("playback: recorder: stream %d of %d", stream, len(r.app.Streams))
+	}
+	if batch == "" {
+		return errors.New("playback: recorder: an empty batch id cannot end a batch (the reader refuses one)")
+	}
+	b := append(r.buf[:0], `{"batch_end":`...)
+	b = appendString(b, batch)
+	b = append(b, `,"stream":`...)
+	b = appendString(b, r.app.Streams[stream].Schema.Stream())
+	return r.line(append(b, '}'))
+}
 
 func (r *Recorder) Stop() error {
 	if err := r.line(append(r.buf[:0], `{"stop":true}`...)); err != nil {

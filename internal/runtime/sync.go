@@ -31,7 +31,7 @@ func NewSync(app App, start int64, virtual bool, out func(e event.Event)) (*Sync
 	if err != nil {
 		return nil, err
 	}
-	s := &Sync{r: r, a: r.apps[0], sh: r.shards[0], out: out}
+	s := &Sync{r: r, a: r.appList()[0], sh: r.shards[0], out: out}
 	s.a.ing = NewIngest(app.Streams, start, app.Tables, virtual).withFlagSlots(app.Schemas)
 	s.rt = newRouter(r)
 	s.rt.deliver = func(_ int, m message) {
@@ -81,8 +81,14 @@ func (s *Sync) Reject(stream int, arrival int64) {
 	s.a.ing.Reject(stream, arrival)
 }
 
-// BatchEnd is a recording's batch-close record (design s3-3-1 §2.8). Not built yet.
-func (s *Sync) BatchEnd(stream int, batch string) {}
+// BatchEnd is a recording's batch-close record (design s3-3-1 §2.8): counted as live ingest counts it.
+func (s *Sync) BatchEnd(stream int, batch string) {
+	if s.a.drained {
+		s.a.after[stream]++
+		return
+	}
+	s.a.batches[stream]++
+}
 
 // Tick is a recording's idle tick.
 func (s *Sync) Tick(now int64) []clock.WMAdvance {

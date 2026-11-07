@@ -149,7 +149,7 @@ type Stats struct {
 type Runtime struct {
 	start     int64 // the deployment's start: the stamps' floor (review F5)
 	cfg       Config
-	apps      []*appState
+	apps      atomic.Pointer[[]*appState] // copy-on-write by the router (iAdd, iRemove); callers Load a snapshot (design s3-3-1 §2.5 MUST 1)
 	shards    []*shard
 	intake    chan item
 	handoff   chan handoff
@@ -174,6 +174,26 @@ type appState struct {
 	keyErr   []int64          // per rule: key_errors (the router's)
 	dec      []*event.Decoder // per stream: SendPayload's decoder (safe for concurrent use)
 	rec      *recQ            // nil: no recording (owner D4 of S3.2b-2's design: off unless turned on)
+
+	// The per-app lifecycle (design s3-3-1 §2.2).
+	phase     atomic.Int32       // appPhase: the caller-side fast path, read before every entry point
+	started   atomic.Bool        // set by Activate; the router reads it (a drain of a never-activated app)
+	start     int64              // the router's stamp when it installed the app: the Ingest's and the header's
+	srcCtx    context.Context    // the source context, made at Add; Drain cancels it
+	cancelSrc context.CancelFunc //
+	runMu     sync.Mutex         // guards runs and waited
+	runs      []*runState        // Run's goroutines
+	waited    bool               // Drain's caller side: the runs were awaited once
+	quiet     bool               // the router's: ticks skip the app (S3.1-1's D3)
+	batches   []int64            // per stream: StreamStats.Batches (the router's)
+	onRemoved func()             // App.OnRemoved
+	removed   sync.Once          // onRemoved runs once
+}
+
+// runState is one Run goroutine: err is written before done is closed.
+type runState struct {
+	done chan struct{}
+	err  error
 }
 
 type route struct {
@@ -182,15 +202,17 @@ type route struct {
 }
 
 type sinkQ struct {
-	q      chan sinkItem
-	sink   Sink
-	errors atomic.Int64
-	high   int // the router's: the longest q has been after a send
+	q        chan sinkItem
+	sink     Sink
+	errors   atomic.Int64
+	high     int           // the router's: the longest q has been after a send
+	returned chan struct{} // closed by the flusher when it returns (design s3-3-1 §2.4)
 }
 
 type sinkItem struct {
 	ev     event.Event
 	marker chan struct{} // non-nil: a drain's flush marker, closed on reaching it
+	last   bool          // with marker: the flusher returns after closing it (Remove; design s3-3-1 §2.4)
 }
 
 type itemKind uint8
@@ -202,6 +224,10 @@ const (
 	iWrite
 	iDrain
 	iStats
+	iAdd      // design s3-3-1 §2.3: register an app, inactive
+	iRemove   // unregister a drained or inactive app
+	iQuiet    // the ticks stop for the app (S3.1-1's D3)
+	iBatchEnd // a source's batch-close signal
 )
 
 type item struct {
@@ -217,10 +243,13 @@ type item struct {
 	op      TableOp
 	rows    [][]event.Value
 	reply   chan reply // buffered 1: the router never blocks on it
+	add     *App       // iAdd
+	batch   string     // iBatchEnd
 }
 
 type reply struct {
 	err       error
+	id        AppID // iAdd's
 	pending   int64
 	markers   []chan struct{}
 	recMarker chan struct{} // a drain's recording stop, waited for only until the drain's deadline (owner, 2026-11-06)
@@ -233,6 +262,8 @@ const (
 	mWalk msgKind = iota + 1 // advances, and an event's offers
 	mDrain
 	mStats
+	mAdd    // design s3-3-1 §2.3: build the app's slot on this shard; acked
+	mRemove // free it; acked
 )
 
 type message struct {
@@ -246,6 +277,7 @@ type message struct {
 	admStream int   // an event message: its stream, whose admission watermark is adm (owner D1 of S3.2b-1); -1: none
 	adm       int64 // what an on-arrival rule's clock takes, in place of the stream's advances
 	final     bool  // a drain or the end: on-arrival rules take the advances too, as nothing arrives after them
+	add       *App  // mAdd
 }
 
 type offer struct {
@@ -268,6 +300,7 @@ type outItem struct {
 	token   uint64
 	pending int64
 	stats   *shardStats
+	err     error // oAck of an mAdd: the shard's build error
 }
 
 type shardStats struct {
@@ -283,33 +316,23 @@ type handoff struct {
 	items []outItem
 }
 
-// Start validates the apps, builds every shard's rules, and starts the router, the shards and the sink flushers.
+// Start is New, then Add and Activate for each app in order (design s3-3-1 §2.7): the apps validated, every shard's
+// rules built, the router, the shards and the sink flushers started. Unchanged behaviour since S3.2a-2.
 func Start(cfg Config, apps []App) (*Runtime, error) {
-	r, err := build(cfg, apps)
+	r, err := New(cfg)
 	if err != nil {
 		return nil, err
 	}
-	rt := newRouter(r)
-	rt.deliver = rt.send // a message crosses goroutines: its views are copied
-	r.wg.Add(1)
-	go r.route(rt)
-	for _, sh := range r.shards {
-		r.wg.Add(1)
-		go sh.run(r)
-	}
-	for _, a := range r.apps {
-		for _, q := range a.all {
-			r.wg.Add(1)
-			go q.run(r)
+	for i := range apps {
+		id, err := r.Add(context.Background(), apps[i])
+		if err != nil {
+			_ = r.Close(context.Background())
+			return nil, err
 		}
-		if a.rec != nil {
-			r.wg.Add(1)
-			go a.rec.run(r)
+		if err := r.Activate(context.Background(), id); err != nil {
+			_ = r.Close(context.Background())
+			return nil, err
 		}
-	}
-	if r.cfg.TickEvery > 0 {
-		r.wg.Add(1)
-		go r.tick()
 	}
 	return r, nil
 }
@@ -337,55 +360,90 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 			return nil, err
 		}
 	}
+	if cfg.RecordQueue <= 0 {
+		cfg.RecordQueue = 65536
+	}
 	r := &Runtime{
 		cfg: cfg, intake: make(chan item, cfg.Intake), handoff: make(chan handoff, cfg.Shards),
 		stopped: make(chan struct{}),
 	}
-	if cfg.RecordQueue <= 0 {
-		cfg.RecordQueue = 65536
+	// Config.Now is read once per app at its install (design s3-3-1 §2.4, MUST 10; S3.2a-2's §7.8: once at Start),
+	// never for the empty runtime: the stamps' floor starts unset and the first install raises it.
+	start := int64(math.MinInt64)
+	if len(apps) > 0 {
+		start = cfg.Now()
 	}
-	start := cfg.Now()
 	r.start = start
+	var list []*appState
 	for i := range apps {
-		app := apps[i]
-		a := &appState{
-			id: AppID(i), app: app, ing: NewIngest(app.Streams, start, app.Tables, false).withFlagSlots(app.Schemas),
-			byStream: make([][]route, len(app.Streams)), sinks: make([][]*sinkQ, len(app.Streams)),
-			late: make([]int64, len(app.Streams)), after: make([]int64, len(app.Streams)),
-			keyErr: make([]int64, len(app.Rules)),
-			dec:    make([]*event.Decoder, len(app.Streams)),
-		}
-		for sid, sch := range app.Schemas {
-			a.dec[sid] = event.NewDecoder(sch)
-		}
-		if app.Recorder != nil {
-			a.rec = newRecQ(app.Recorder, cfg.RecordQueue)
-			a.rec.put(recItem{kind: rHeader, arrival: start}) // the header first (design s3-2b-2 §7)
-		}
-		for ri, rule := range app.Rules {
-			for k, sid := range rule.Inputs {
-				var attrs []int
-				if rule.KeyAttrs != nil {
-					attrs = rule.KeyAttrs[k]
-				}
-				a.byStream[sid] = append(a.byStream[sid], route{rule: ri, attrs: attrs})
-			}
-		}
-		for _, b := range app.Sinks {
-			q := &sinkQ{q: make(chan sinkItem, cfg.SinkQueue), sink: b.Sink}
-			a.sinks[b.Stream] = append(a.sinks[b.Stream], q)
-			a.all = append(a.all, q)
-		}
-		r.apps = append(r.apps, a)
+		a := r.newAppState(AppID(i), apps[i], start)
+		a.installRoutes()
+		a.started.Store(true) // a built app is live from the start (NewSync)
+		a.phase.Store(int32(phaseActive))
+		list = append(list, a)
 	}
+	r.apps.Store(&list)
 	for sid := range cfg.Shards {
-		sh, err := r.newShard(sid)
-		if err != nil {
-			return nil, err
+		sh := newShard(sid, cfg.Mailbox)
+		for _, a := range list {
+			if err := sh.install(a.id, &a.app); err != nil {
+				return nil, err
+			}
 		}
 		r.shards = append(r.shards, sh)
 	}
 	return r, nil
+}
+
+// newAppState builds one app's router-side state (design s3-3-1 §2.4): its ingest from start, its decoders, its
+// routes, its sink queues and, with a Recorder, its recording queue with the header queued (written by the recorder
+// goroutine, which Activate starts).
+func (r *Runtime) newAppState(id AppID, app App, start int64) *appState {
+	a := &appState{
+		id: id, app: app, ing: NewIngest(app.Streams, start, app.Tables, false).withFlagSlots(app.Schemas),
+		byStream: make([][]route, len(app.Streams)), sinks: make([][]*sinkQ, len(app.Streams)),
+		late: make([]int64, len(app.Streams)), after: make([]int64, len(app.Streams)),
+		batches: make([]int64, len(app.Streams)),
+		keyErr:  make([]int64, len(app.Rules)),
+		dec:     make([]*event.Decoder, len(app.Streams)),
+		start:   start, onRemoved: app.OnRemoved,
+	}
+	a.srcCtx, a.cancelSrc = context.WithCancel(context.Background())
+	for sid, sch := range app.Schemas {
+		a.dec[sid] = event.NewDecoder(sch)
+	}
+	if app.Recorder != nil {
+		a.rec = newRecQ(app.Recorder, r.cfg.RecordQueue)
+		a.rec.put(recItem{kind: rHeader, arrival: start}) // the header first (design s3-2b-2 §7)
+	}
+	for _, b := range app.Sinks {
+		q := &sinkQ{q: make(chan sinkItem, r.cfg.SinkQueue), sink: b.Sink, returned: make(chan struct{})}
+		a.sinks[b.Stream] = append(a.sinks[b.Stream], q)
+		a.all = append(a.all, q)
+	}
+	return a
+}
+
+// installRoutes makes the app reachable: per stream, the rules reading it (the router's, once: build for a built
+// app, installAck for an added one).
+func (a *appState) installRoutes() {
+	for ri, rule := range a.app.Rules {
+		for k, sid := range rule.Inputs {
+			var attrs []int
+			if rule.KeyAttrs != nil {
+				attrs = rule.KeyAttrs[k]
+			}
+			a.byStream[sid] = append(a.byStream[sid], route{rule: ri, attrs: attrs})
+		}
+	}
+}
+
+// appList is the app list's current snapshot: nil slots are removed apps (design s3-3-1 §2.5 MUST 2).
+func (r *Runtime) appList() []*appState {
+	if p := r.apps.Load(); p != nil {
+		return *p
+	}
+	return nil
 }
 
 // validateApp checks an app against design §2 (review F9, F21; QA Q4).
@@ -464,10 +522,32 @@ func (r *Runtime) appOf(app AppID) (*appState, error) {
 	if r.isClosed() {
 		return nil, ErrClosed
 	}
-	if app < 0 || int(app) >= len(r.apps) {
+	apps := r.appList()
+	if app < 0 || int(app) >= len(apps) {
 		return nil, fmt.Errorf("runtime: no app %d", app)
 	}
-	return r.apps[app], nil
+	if apps[app] == nil {
+		return nil, ErrRemoved
+	}
+	return apps[app], nil
+}
+
+// gate is every entry point's caller-side check (design s3-3-1 §2.5 MUST 3): the app's phase, then the drain flag.
+func (r *Runtime) gate(app AppID) (*appState, error) {
+	a, err := r.appOf(app)
+	if err != nil {
+		return nil, err
+	}
+	switch appPhase(a.phase.Load()) {
+	case phaseInactive:
+		return nil, ErrInactive
+	case phaseRemoved:
+		return nil, ErrRemoved
+	}
+	if a.draining.Load() {
+		return nil, ErrDrained
+	}
+	return a, nil
 }
 
 func (r *Runtime) enqueue(ctx context.Context, it item) error {
@@ -508,7 +588,7 @@ func streamStats(a *appState) []StreamStats {
 	out := make([]StreamStats, len(a.app.Streams))
 	for i := range out {
 		c := a.ing.counts[i]
-		out[i] = StreamStats{Late: a.late[i], AfterDrain: a.after[i], Rejected: c.rejected, Unknown: c.unknown, FlagOverrides: c.overrides}
+		out[i] = StreamStats{Late: a.late[i], AfterDrain: a.after[i], Rejected: c.rejected, Unknown: c.unknown, FlagOverrides: c.overrides, Batches: a.batches[i]}
 	}
 	return out
 }
@@ -516,12 +596,9 @@ func streamStats(a *appState) []StreamStats {
 // Send hands one source event of app to the intake; it blocks for backpressure and respects ctx. It checks the event
 // first (review F9) and takes e.Values: the caller MUST NOT change them afterwards (review F4).
 func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
-	a, err := r.appOf(app)
+	a, err := r.gate(app)
 	if err != nil {
 		return err
-	}
-	if a.draining.Load() {
-		return ErrDrained
 	}
 	if e.StreamID < 0 || e.StreamID >= len(a.app.Streams) || a.app.Streams[e.StreamID].Derived {
 		return fmt.Errorf("runtime: app %d: stream %d is not a source stream", app, e.StreamID)
@@ -568,12 +645,9 @@ func (r *Runtime) Tick(ctx context.Context, now int64) error {
 // TableWrite applies rows to one of app's tables in intake order (owner F14) and returns once the router has applied
 // them: put rows are whole rows; delete rows are key values, in key order.
 func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op TableOp, rows [][]event.Value) error {
-	a, err := r.appOf(app)
+	a, err := r.gate(app)
 	if err != nil {
 		return err
-	}
-	if a.draining.Load() {
-		return ErrDrained
 	}
 	if a.app.Tables == nil || tableID < 0 || tableID >= a.app.Tables.Len() || (op != TablePut && op != TableDelete) {
 		return fmt.Errorf("runtime: app %d: no table %d, or an unknown operation", app, tableID)
@@ -593,46 +667,6 @@ func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op Tab
 	return err
 }
 
-// Drain runs the drain barrier for app (design §5): the app's input ends (owner F5); every output produced before the
-// barrier has been through its sink when it returns. A second Drain of the app waits for the same flush and returns
-// the same result (owner, 2026-11-05).
-func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
-	a, err := r.appOf(app)
-	if err != nil {
-		return DrainResult{}, err
-	}
-	set := !a.draining.Swap(true)
-	it := item{kind: iDrain, app: app, reply: make(chan reply, 1)}
-	if err := r.enqueue(ctx, it); err != nil {
-		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
-			a.draining.Store(false)
-		}
-		return DrainResult{}, err
-	}
-	rep, err := r.await(ctx, it.reply)
-	if err != nil {
-		return DrainResult{}, err
-	}
-	for _, m := range rep.markers {
-		select {
-		case <-m:
-		case <-r.stopped:
-			return DrainResult{}, ErrClosed
-		case <-ctx.Done():
-			return DrainResult{}, ctx.Err()
-		}
-	}
-	if rep.recMarker != nil { // every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
-		select {
-		case <-rep.recMarker:
-		case <-r.stopped:
-		case <-ctx.Done():
-			a.rec.fail("runtime: the recording's stop was not written before the drain's deadline: the recording is incomplete")
-		}
-	}
-	return DrainResult{Pending: rep.pending}, nil
-}
-
 // Stats is a consistent cut of the counters, taken through the intake (design §6).
 func (r *Runtime) Stats(ctx context.Context) (Stats, error) {
 	if r.isClosed() {
@@ -640,20 +674,6 @@ func (r *Runtime) Stats(ctx context.Context) (Stats, error) {
 	}
 	rep, err := r.request(ctx, item{kind: iStats})
 	return rep.stats, err
-}
-
-// Close stops every goroutine and drops what is left; it fires no pending timer. A second Close returns nil once
-// everything has stopped. A Sink that never returns keeps its flusher: Close then returns ctx's error.
-func (r *Runtime) Close(ctx context.Context) error {
-	r.closeOnce.Do(func() { close(r.stopped) })
-	done := make(chan struct{})
-	go func() { r.wg.Wait(); close(done) }()
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
 }
 
 // tick is the internal ticker (Config.TickEvery): a wall tick into the intake, behind the events before it.
@@ -698,6 +718,16 @@ type statsWait struct {
 	reply chan reply
 }
 
+// installWait is a pending mAdd or mRemove (design s3-3-1 §2.3): acked by every shard, then completed in take.
+type installWait struct {
+	app      *appState
+	acks     int
+	err      error      // the first shard error of an add
+	reply    chan reply // the caller's
+	remove   bool       // an mRemove (or an add's rollback)
+	rollback bool       // the remove undoes a failed add: reply err, not nil
+}
+
 type router struct {
 	r           *Runtime
 	pending     []send
@@ -706,6 +736,7 @@ type router struct {
 	stamp       int64
 	token       uint64
 	drains      map[uint64]*drainWait
+	installs    map[uint64]*installWait
 	stats       map[uint64]*statsWait
 	offers      [][]offer // per shard, reused: a message's offers are a view into it until delivered (review F4)
 	// deliver hands one shard its message; the message's adv and offers are views valid only during the call. Live:
@@ -716,7 +747,7 @@ type router struct {
 func newRouter(r *Runtime) *router {
 	return &router{
 		r: r, mailboxHigh: make([]int, len(r.shards)), stamp: r.start, drains: map[uint64]*drainWait{},
-		stats: map[uint64]*statsWait{}, offers: make([][]offer, len(r.shards)),
+		installs: map[uint64]*installWait{}, stats: map[uint64]*statsWait{}, offers: make([][]offer, len(r.shards)),
 	}
 }
 
@@ -794,8 +825,27 @@ func (rt *router) now(t int64) int64 {
 func (rt *router) ingest(it item) {
 	r := rt.r
 	switch it.kind {
+	case iAdd:
+		rt.add(it)
+	case iRemove:
+		rt.remove(it)
+	case iQuiet:
+		if a := rt.app(it.app); a != nil {
+			a.quiet = true // the ticks stop before the sources (S3.1-1's D3; design s3-3-1 §2.6)
+		}
+	case iBatchEnd:
+		a := rt.app(it.app)
+		if a == nil {
+			return
+		}
+		if a.drained {
+			a.after[it.stream]++
+			return
+		}
+		a.batches[it.stream]++
+		a.rec.put(recItem{kind: rBatchEnd, stream: it.stream, batch: it.batch})
 	case iEvent:
-		a := r.apps[it.app]
+		a := rt.app(it.app)
 		if a.drained {
 			a.after[it.ev.StreamID]++
 			return
@@ -810,7 +860,7 @@ func (rt *router) ingest(it item) {
 		// race row caught at T4)
 		a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
 	case iReject:
-		a := r.apps[it.app]
+		a := rt.app(it.app)
 		if a.drained {
 			a.after[it.stream]++
 			return
@@ -820,15 +870,15 @@ func (rt *router) ingest(it item) {
 		a.ing.Reject(it.stream, stamp)
 	case iTick:
 		stamp := rt.now(it.now)
-		for _, a := range r.apps {
-			if a.drained {
+		for _, a := range r.appList() {
+			if a == nil || a.drained || a.quiet {
 				continue
 			}
 			a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
 			rt.tickApp(a, stamp)
 		}
 	case iWrite:
-		a := r.apps[it.app]
+		a := rt.app(it.app)
 		if a.drained {
 			it.reply <- reply{err: ErrDrained}
 			return
@@ -841,7 +891,7 @@ func (rt *router) ingest(it item) {
 		}
 		it.reply <- reply{err: err}
 	case iDrain:
-		a := r.apps[it.app]
+		a := rt.app(it.app)
 		if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
 			if a.drainRes != nil {
 				it.reply <- *a.drainRes
@@ -849,6 +899,14 @@ func (rt *router) ingest(it item) {
 				d := rt.drains[a.drainTok]
 				d.replies = append(d.replies, it.reply)
 			}
+			return
+		}
+		if !a.started.Load() { // never activated: nothing was delivered, nothing recorded (design s3-3-1 §2.4, MUST 8)
+			a.drained = true
+			a.rec = nil
+			res := reply{}
+			a.drainRes = &res
+			it.reply <- res
 			return
 		}
 		a.drained = true
@@ -865,7 +923,11 @@ func (rt *router) ingest(it item) {
 	case iStats:
 		rt.token++
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
-		for _, a := range r.apps {
+		for _, a := range r.appList() {
+			if a == nil { // removed: zero rows keep [app] indexes stable (design s3-3-1 MUST 2)
+				st.Streams, st.Recording, st.Rules = append(st.Streams, nil), append(st.Recording, RecordingStats{}), append(st.Rules, nil)
+				continue
+			}
 			st.Streams = append(st.Streams, streamStats(a))
 			st.Recording = append(st.Recording, a.rec.stats())
 			rules := make([]RuleStats, len(a.app.Rules))
@@ -1040,10 +1102,16 @@ func (rt *router) take(h handoff) {
 	for _, it := range h.items {
 		switch it.kind {
 		case oEvent:
-			for _, q := range r.apps[it.app].sinks[it.ev.StreamID] {
-				rt.push(send{shard: -1, sink: q, si: sinkItem{ev: it.ev}})
+			if a := rt.app(it.app); a != nil {
+				for _, q := range a.sinks[it.ev.StreamID] {
+					rt.push(send{shard: -1, sink: q, si: sinkItem{ev: it.ev}})
+				}
 			}
 		case oAck:
+			if w := rt.installs[it.token]; w != nil {
+				rt.installAck(w, it)
+				continue
+			}
 			d := rt.drains[it.token]
 			d.acks++
 			d.pending += it.pending
@@ -1081,7 +1149,11 @@ func (rt *router) take(h handoff) {
 				continue
 			}
 			delete(rt.stats, it.token)
-			for _, a := range r.apps {
+			for _, a := range r.appList() {
+				if a == nil {
+					w.stats.SinkErrors, w.stats.SinkHigh = append(w.stats.SinkErrors, nil), append(w.stats.SinkHigh, nil)
+					continue
+				}
 				errs := make([]int64, len(a.all))
 				for i, q := range a.all {
 					errs[i] = q.errors.Load()
@@ -1115,48 +1187,69 @@ type shard struct {
 	touched [][2]int  // the (app, rule) pairs that emitted during the message: reset after it
 }
 
-func (r *Runtime) newShard(id int) (*shard, error) {
-	sh := &shard{id: id, mailbox: make(chan message, r.cfg.Mailbox)}
-	for _, a := range r.apps {
-		rules := make([]*partition.Rule, len(a.app.Rules))
-		bodies := make([]partition.Body, len(a.app.Rules))
-		arrival := make([]bool, len(a.app.Rules))
-		reads := make([][]int, len(a.app.Streams))
-		sh.burst = append(sh.burst, make([]int64, len(a.app.Rules)))
-		sh.outHigh = append(sh.outHigh, make([]int64, len(a.app.Rules)))
-		for ri, rule := range a.app.Rules {
-			app, streams, name, ai := a.id, a.app.Streams, rule.Name, len(sh.burst)-1
-			emit := func(e event.Event) {
-				if e.StreamID < 0 || e.StreamID >= len(streams) || !streams[e.StreamID].Derived {
-					// a body's fault: partition recovers it and resets the key (owner F10); the router never sees it
-					// (break-it B1)
-					panic(fmt.Sprintf("runtime: rule %q emitted on stream %d, which is not a derived stream of app %d", name, e.StreamID, app))
-				}
-				sh.outbox = append(sh.outbox, outItem{kind: oEvent, app: app, ev: e})
-				if sh.burst[ai][ri]++; sh.burst[ai][ri] == 1 {
-					sh.touched = append(sh.touched, [2]int{ai, ri})
-				}
+func newShard(id, mailbox int) *shard { return &shard{id: id, mailbox: make(chan message, mailbox)} }
+
+// grow makes the shard's per-app slices hold slot app (nil slots for ids never installed here).
+func (sh *shard) grow(app AppID) {
+	for int(app) >= len(sh.rules) {
+		sh.rules, sh.bodies, sh.arrival = append(sh.rules, nil), append(sh.bodies, nil), append(sh.arrival, nil)
+		sh.reads, sh.panics = append(sh.reads, nil), append(sh.panics, nil)
+		sh.burst, sh.outHigh = append(sh.burst, nil), append(sh.outHigh, nil)
+	}
+}
+
+// install builds the shard's slot for app (design s3-3-1 §2.4: each shard builds its own state on mAdd); an error
+// leaves the slot freed.
+func (sh *shard) install(app AppID, a *App) (err error) {
+	sh.grow(app)
+	defer func() {
+		if err != nil {
+			sh.uninstall(app)
+		}
+	}()
+	ai := int(app)
+	rules := make([]*partition.Rule, len(a.Rules))
+	bodies := make([]partition.Body, len(a.Rules))
+	arrival := make([]bool, len(a.Rules))
+	reads := make([][]int, len(a.Streams))
+	sh.burst[ai], sh.outHigh[ai] = make([]int64, len(a.Rules)), make([]int64, len(a.Rules))
+	for ri, rule := range a.Rules {
+		streams, name := a.Streams, rule.Name
+		emit := func(e event.Event) {
+			if e.StreamID < 0 || e.StreamID >= len(streams) || !streams[e.StreamID].Derived {
+				// a body's fault: partition recovers it and resets the key (owner F10); the router never sees it
+				// (break-it B1)
+				panic(fmt.Sprintf("runtime: rule %q emitted on stream %d, which is not a derived stream of app %d", name, e.StreamID, app))
 			}
-			body, err := newBody(rule, emit)
-			if err != nil {
-				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
-			}
-			pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
-			if err != nil {
-				return nil, fmt.Errorf("runtime: app %d rule %d (%q): %w", a.id, ri, rule.Name, err)
-			}
-			rules[ri], bodies[ri], arrival[ri] = pr, body, rule.OnArrival
-			for _, sid := range rule.Inputs {
-				reads[sid] = append(reads[sid], ri)
+			sh.outbox = append(sh.outbox, outItem{kind: oEvent, app: app, ev: e})
+			if sh.burst[ai][ri]++; sh.burst[ai][ri] == 1 {
+				sh.touched = append(sh.touched, [2]int{ai, ri})
 			}
 		}
-		sh.rules = append(sh.rules, rules)
-		sh.bodies = append(sh.bodies, bodies)
-		sh.arrival = append(sh.arrival, arrival)
-		sh.reads = append(sh.reads, reads)
-		sh.panics = append(sh.panics, make([]int64, len(rules)))
+		body, err := newBody(rule, emit)
+		if err != nil {
+			return fmt.Errorf("runtime: app %d rule %d (%q): %w", app, ri, rule.Name, err)
+		}
+		pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
+		if err != nil {
+			return fmt.Errorf("runtime: app %d rule %d (%q): %w", app, ri, rule.Name, err)
+		}
+		rules[ri], bodies[ri], arrival[ri] = pr, body, rule.OnArrival
+		for _, sid := range rule.Inputs {
+			reads[sid] = append(reads[sid], ri)
+		}
 	}
-	return sh, nil
+	sh.rules[ai], sh.bodies[ai], sh.arrival[ai], sh.reads[ai] = rules, bodies, arrival, reads
+	sh.panics[ai] = make([]int64, len(rules))
+	return nil
+}
+
+// uninstall frees the slot; indexes never shift (design s3-3-1 §2.4).
+func (sh *shard) uninstall(app AppID) {
+	sh.grow(app)
+	ai := int(app)
+	sh.rules[ai], sh.bodies[ai], sh.arrival[ai], sh.reads[ai] = nil, nil, nil, nil
+	sh.panics[ai], sh.burst[ai], sh.outHigh[ai] = nil, nil, nil
 }
 
 // newBody calls a rule's NewBody; its panic is Start's error, never its caller's panic.
@@ -1202,11 +1295,26 @@ func (sh *shard) run(r *Runtime) {
 // watermark, and a drain's or the end's advances (owner D1 of S3.2b-1).
 func (sh *shard) process(m message) {
 	defer sh.foldBursts()
-	if m.kind == mStats {
+	switch m.kind {
+	case mStats:
 		sh.outbox = append(sh.outbox, outItem{kind: oStats, token: m.token, stats: sh.stats()})
+		return
+	case mAdd:
+		err := sh.install(m.app, m.add)
+		sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token, err: err})
+		return
+	case mRemove:
+		sh.uninstall(m.app)
+		sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token})
 		return
 	}
 	rules, arrival := sh.rules[m.app], sh.arrival[m.app]
+	if rules == nil { // a message for a slot this shard freed (a remove raced a drain's last advances): nothing to walk
+		if m.kind == mDrain {
+			sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token})
+		}
+		return
+	}
 	for _, a := range m.adv {
 		for _, ri := range sh.reads[m.app][a.StreamID] {
 			if !arrival[ri] || m.final {
@@ -1263,6 +1371,10 @@ func (sh *shard) stats() *shardStats {
 				es[ri] = c.Stats()
 			}
 		}
+		if rules == nil { // a removed app: zero rows keep [app] indexes stable
+			st.rules, st.emits, st.panics, st.outHigh = append(st.rules, nil), append(st.emits, nil), append(st.panics, nil), append(st.outHigh, nil)
+			continue
+		}
 		st.rules = append(st.rules, ps)
 		st.emits = append(st.emits, es)
 		st.panics = append(st.panics, append([]int64(nil), sh.panics[ai]...))
@@ -1305,6 +1417,7 @@ func (sh *shard) tryAdvance(app AppID, ri int, tables *table.Snapshot) (done boo
 // run is a flusher's loop: it waits only on its queue and its own sink (design §3); a marker is a close.
 func (q *sinkQ) run(r *Runtime) {
 	defer r.wg.Done()
+	defer close(q.returned)
 	for {
 		if r.stopping() {
 			return
@@ -1316,6 +1429,9 @@ func (q *sinkQ) run(r *Runtime) {
 			}
 			if it.marker != nil {
 				close(it.marker)
+				if it.last { // Remove's last marker: nothing follows (design s3-3-1 §2.4; the queue is never closed)
+					return
+				}
 				continue
 			}
 			q.call(it.ev)
