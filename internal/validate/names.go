@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"github.com/vorsar/cep/internal/event"
 	"slices"
 
 	"github.com/vorsar/cep/internal/model"
@@ -54,6 +55,20 @@ func (c *checker) names() {
 		for _, k := range t.PrimaryKey {
 			if !slices.Contains(attrNames(t.Attrs), k) {
 				c.unknown(t.Pos, "primary key column of "+t.Name, k, attrNames(t.Attrs))
+				continue
+			}
+			// E-TBL-002 (S3.1-2's D3; SPEC rev 7 §4.3): a key column is neither optional nor an object.
+			for ai := range t.Attrs {
+				a := &t.Attrs[ai]
+				if a.Name != k {
+					continue
+				}
+				switch {
+				case a.Optional:
+					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is optional: a null cannot key a row", a.Name, t.Name)
+				case a.Type == event.TObject:
+					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is an object: an object cannot key a row", a.Name, t.Name)
+				}
 			}
 		}
 	}

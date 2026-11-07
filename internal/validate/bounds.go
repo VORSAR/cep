@@ -2,6 +2,7 @@ package validate
 
 import (
 	"fmt"
+	"github.com/vorsar/cep/internal/event"
 	"strings"
 
 	"github.com/vorsar/cep/internal/model"
@@ -118,6 +119,20 @@ func (c *checker) partition(r *model.Rule) {
 				c.report("E-PART-003", a.Pos, "part %d of the partition key: %s of %s is %s, but %s of %s is %s", i+1, a.Name, k.Stream, kt, ra.Name, ref.Stream, ft)
 			}
 			break // one finding per key: its first differing part
+		}
+	}
+	// E-PART-008 (S3.2a-1's D7; SPEC rev 7 §4.4): a key part is a scalar; an object cannot key a partition.
+	for _, k := range live {
+		for i, a := range k.Attrs {
+			if attrOf(c.streams[k.Stream], a.Name).Type != event.TObject {
+				continue
+			}
+			if len(k.Attrs) == 1 {
+				c.report("E-PART-008", k.Pos, "partition key %s of %s is an object: an object cannot key a partition", a.Name, k.Stream)
+			} else {
+				c.report("E-PART-008", a.Pos, "part %d of the partition key: %s of %s is an object: an object cannot key a partition", i+1, a.Name, k.Stream)
+			}
+			break
 		}
 	}
 }
