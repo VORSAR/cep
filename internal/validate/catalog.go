@@ -13,7 +13,7 @@ type Entry struct {
 // this package's.
 var catalog = map[string]Entry{
 	"E-DUR-002":   {Title: "Malformed duration", Fix: "rewrite with integer counts in descending units."},
-	"E-DUR-003":   {Title: "Zero duration in a bound slot", Fix: "use a positive duration."},
+	"E-DUR-003":   {Title: "Zero or negative duration in a bound slot", Fix: "use a positive duration."},
 	"E-EMIT-002":  {Title: "Emit mode does not match the window kind", Fix: "the message names the kind's mode."},
 	"E-EXP-001":   {Title: "`expect` block failed", Fix: "correct the rule or the example.", Later: "S3.3"},
 	"E-FN-001":    {Title: "Unknown function arity or argument kind", Fix: "the message cites the signature."},
