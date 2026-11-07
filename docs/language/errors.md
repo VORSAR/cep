@@ -115,6 +115,10 @@ Message names the attribute and the stream. Fix: name each attribute once: `(k, 
 Rule: SPEC §4.4 (rev 5), SEMANTICS §9 — key parts correspond by position across streams, so every stream's key has the same number of parts.
 Reported once per rule, at `partition`; the message lists every stream's count (a one-attribute group counts 1), e.g. `the partition keys of rule R have different numbers of parts: S 2, T 1`. Checked before E-PART-005, so the first fix offered is the one that settles the clause. Fix: give every stream's key the same number of parts, matched by position: `(k, j) of S, (k2, j2) of T`.
 
+### E-PART-008 Partition key of type object **[static]**
+Rule: SPEC §4.4 (rev 7), SEMANTICS §9 — a partition key part is a scalar attribute; an `object` attribute cannot key a partition (S3.2a-1's D7, 2026-11-05; the engine's `partition.NewRule` refuses it as its own guard).
+Reported at the key (a single attribute) or the part (a group), once per key. Fix: key the partition by a scalar attribute.
+
 ### E-TTL-002 TTL smaller than a contained bound **[static]**
 Rule: SEMANTICS §9/§11.3 — TTL ≥ every pattern bound, window extent, and rate-limit interval.
 Message carries both numbers. Fix: raise `ttl`, or shorten the bound/interval.
@@ -175,6 +179,10 @@ Fix: aggregate the attribute, or wait for `group by` (reserved).
 Rule: SPEC §5.9 — `in` compares against a single-column primary key in v0.1.
 *(Owner, 2026-11-04, S2.2b: also a keyword-set operator — `has_any_*`, `has_all_*`, `contains_any_*`, `contains_all_*` — whose operand names a table with more than one column; SPEC §5.3 requires a one-column table.)*
 Fix: restructure the table, or wait for composite-key membership (reserved).
+
+### E-TBL-002 Primary-key column optional or object **[static]**
+Rule: SPEC §4.3 (rev 7) — a `primary key (…)` column is neither `optional` nor `object`: a null or an object cannot key a row (S3.1-2's D3, 2026-11-04).
+Reported at the column's declaration, once per column. Fix: declare the key column non-optional with a scalar type, or key the table by another column.
 
 ### E-WIN-002 batch() on a non-punctuating source **[static]**
 Rule: SPEC §6.3 — batch ids and punctuations come from the source connector.
