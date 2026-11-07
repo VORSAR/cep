@@ -194,11 +194,13 @@ func TestBkGuardAfterCloseAndLeaks(t *testing.T) {
 				defer wg.Done()
 				for i := 0; ; i++ {
 					if err := r.Send(ctx, runtime.AppID(a), rtEv(0, rtAt(float64(i)), rtStr(fmt.Sprint(i%7)))); err != nil {
-						if !errors.Is(err, runtime.ErrClosed) && !(a == 1 && errors.Is(err, runtime.ErrDrained)) {
-							t.Errorf("Send during Close: %v, want ErrClosed (or ErrDrained for the drained app 1)", err)
+						// S3.3-1 (design v2 §2.7): Close drains and removes each app before it stops, so a Send during Close
+						// sees ErrDrained, then ErrRemoved, for either app before ErrClosed.
+						if !errors.Is(err, runtime.ErrClosed) && !errors.Is(err, runtime.ErrDrained) && !errors.Is(err, runtime.ErrRemoved) {
+							t.Errorf("Send during Close: %v, want ErrClosed, ErrDrained or ErrRemoved", err)
 						}
-						if errors.Is(err, runtime.ErrDrained) {
-							continue // app 1 is drained: keep calling until Close
+						if errors.Is(err, runtime.ErrDrained) || errors.Is(err, runtime.ErrRemoved) {
+							continue // drained or removed by Close: keep calling until Close
 						}
 						return
 					}

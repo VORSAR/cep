@@ -78,6 +78,7 @@ func (d *Driver) Step(rec Record) Step {
 		st.Kind, st.Table, st.Op = StepTable, rec.Table, rec.Op
 	case RecBatchEnd:
 		st.Kind, st.Stream, st.Batch = StepBatchEnd, rec.Stream, rec.Batch
+		d.sync.BatchEnd(rec.Stream, rec.Batch) // counted as live ingest counts it (design s3-3-1 §2.8)
 	case RecTick:
 		st.Kind, st.Time, st.Advances = StepTick, rec.Time, d.sync.Tick(rec.Time)
 	case RecStop:

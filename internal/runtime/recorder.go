@@ -17,7 +17,8 @@ const (
 	rTick
 	rTable
 	rStop
-	rMarker // a drain's flush marker: closed when every record before it has been handed to the Recorder
+	rMarker   // a drain's flush marker: closed when every record before it has been handed to the Recorder
+	rBatchEnd // a source's batch-close signal (design s3-3-1 §2.4)
 )
 
 // recItem is one record on an app's recording queue (design s3-2b-2 §7). Everything in it is immutable once put: the
@@ -33,6 +34,7 @@ type recItem struct {
 	op      TableOp
 	rows    [][]event.Value
 	marker  chan struct{}
+	batch   string // rBatchEnd
 }
 
 // recQ is one app's recording (owner D2 of S3.2b-2's design; review F2; MUST 13): a bounded queue the router puts
@@ -43,7 +45,9 @@ type recItem struct {
 type recQ struct {
 	q        chan recItem
 	rec      Recorder
-	overflow chan int64 // the router's one signal that the queue filled: the records queued before it
+	overflow chan int64    // the router's one signal that the queue filled: the records queued before it
+	stop     chan struct{} // closed by Remove's router step: write what is queued, flush, return (design s3-3-1 §2.4)
+	returned chan struct{} // closed by the goroutine when it returns
 
 	ended  bool  // the router's: the recording has ended (a full queue, or it saw the goroutine fail); put nothing more
 	queued int64 // the router's: records put
@@ -57,7 +61,7 @@ type recQ struct {
 }
 
 func newRecQ(rec Recorder, capacity int) *recQ {
-	return &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1)}
+	return &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1), stop: make(chan struct{}), returned: make(chan struct{})}
 }
 
 // put is the router's non-blocking hand-over; it reports whether the record was queued. A full queue ends the
@@ -110,10 +114,21 @@ func (q *recQ) stats() RecordingStats {
 // queued, then flushes a Recorder that can.
 func (q *recQ) run(r *Runtime) {
 	defer r.wg.Done()
+	defer close(q.returned)
 	for {
 		select {
 		case it := <-q.q:
 			q.handle(it)
+		case <-q.stop: // Remove: every record queued before it is in q (the router put them first): write, flush, return
+			for {
+				select {
+				case it := <-q.q:
+					q.handle(it)
+				default:
+					q.flush()
+					return
+				}
+			}
 		case <-q.overflow: // every record queued before the overflow is in q: write them, then flush (review C3)
 			for {
 				select {
@@ -189,6 +204,8 @@ func (q *recQ) call(it recItem) (err error) {
 		err = q.rec.Table(it.table, it.op, it.rows)
 	case rStop:
 		err = q.rec.Stop()
+	case rBatchEnd:
+		err = q.rec.BatchEnd(it.stream, it.batch)
 	}
 	return err
 }
