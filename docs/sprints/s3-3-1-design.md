@@ -410,7 +410,7 @@ func (o *Options) Override(name string, lit model.Literal)
 | `Input`, `Table` | the handle | the handle | the handle | the handle | the handle (its use fails) |
 | `SendRow`, `EndBatch`, `Upsert`, `Delete`, `Load` | `ErrInactive` | ok | `ErrStopped` | `ErrUndeployed` | `ErrClosed` |
 | `Stats` | zero rows | ok | ok | zero rows | `ErrClosed` |
-| `Runtime.Close` | remove | stop, remove | remove | skip | nil (a second Close) |
+| `Runtime.Close` | remove | stop, remove | remove | skip | a second Close: nil once every goroutine the first left running has returned, its ctx's error otherwise (as built, break-it S2) |
 | `Deploy` | — | — | — | — | `ErrClosed` |
 | `Deploy` twice with one `name` | allowed: `name` labels diagnostics and recordings, it is not a key | | | | |
 
@@ -726,7 +726,7 @@ The `proofs` row's `min_wants` becomes 19. The `expected_scope` kind `go` and th
 6. Red when any package is incompatible and `!golden_changed`, with the reason `incompatible API change in <import path> without api/exports.golden changing: <the report on one line, its lines joined by "; ">` (the runner keeps a reason's first line only); red too when `apidiff` itself fails at the merge base or at HEAD (a package that does not build: its empty report must not read as no change); otherwise pass, with every report printed in the row's output (the reviewer reads it in the PR). `GATE_COVERED <packages compared>`. *(As built after QA's second lane, F2–F4.)*
 7. **Tests** (`gate/runner/tests/test_apidiff.py`, pytest in the `pytests` row): `test_no_merge_base`, `test_incompatible_without_golden_is_red`, `test_incompatible_with_golden_passes`, `test_compatible_passes`, each on a fixture repo built in the test's temp dir with one commit on `main` and one change.
 
-`tools/deps-allowlist.json` gains the four `go.mod` requires at scope `build-time (apidiff, T4 only)`, approved 2026-11-07 (the owner's plan-check decision 3), each with its pinned version from the `go get`, and one entry listing the ten graph-only modules (`golang.org/x/net`, `x/sys`, `x/telemetry`, `github.com/google/go-cmp`, `github.com/yuin/goldmark`, `golang.org/x/tools/go/expect`, `golang.org/x/tools/go/packages/packagestest`, and the three the `go mod graph` names beside them) with scope `module graph only, never built`. The `deps` row is S1.1c's; the file is law now (ADR-0015 §3).
+`tools/deps-allowlist.json` gains the four `go.mod` requires at scope `build-time (apidiff, T4 only)`, approved 2026-11-07 (the owner's plan-check decision 3), each with its pinned version from the `go get`, and one entry listing the seven graph-only modules `go mod graph` names (`golang.org/x/net`, `x/sys`, `x/telemetry`, `github.com/google/go-cmp`, `github.com/yuin/goldmark`, `golang.org/x/tools/go/expect`, `golang.org/x/tools/go/packages/packagestest`; as built — the review's count) with scope `module graph only, never built`. The `deps` row is S1.1c's; the file is law now (ADR-0015 §3).
 
 ### 6.5 The proofs (`gate/proofs/drivers/test_api_planted.py`; the `support.DriverTest` shape of `test_tripwire_planted.py`)
 
@@ -845,3 +845,20 @@ About 9.5 points: the runtime 3; the facade 2.5; the contracts and `inmemory` 1.
 | QA F12 (the rows' fields and reason texts) | §6.1, §6.3, §6.4 |
 | QA F13 (`Load`) | §3.1 |
 | QA F14, F15 (`tools/**`; "sinks connected") | §8; §3.5 |
+
+## 13. The fix round, as built (after the combined review and the break-it; the owner's decisions of 2026-11-08)
+
+The reports: [combined review](../reviews/s3-3-1-combined-architecture.md), [break-it](../reviews/s3-3-1-breakit-qa.md); the decisions: [2026-11-08](decisions.md#owner-decisions-2026-11-08--s33-1s-review-and-break-it). Every change below has a test that failed first ([the record](s3-3-1-record.md) lists them).
+
+- **The router decides activation** (review B1; break-it B2): `Activate` sends an `iActivate` item; the router, in intake order, refuses it after a drain (`ErrDrained`), a removal (`ErrRemoved`) or a first activation (`ErrStarted`), else sets its own `activated` flag and `started`, and only then does the caller start the flushers and the recorder. The router never writes a field a caller reads: a never-activated drain no longer clears `a.rec`; the removal tombstone keeps `a.dec` and `a.rec` and drops only the router's own fields (`ing`, `sinks`). `Drain` takes the phase it reverts to from the CAS that succeeded.
+- **A removal is the router's once** (break-it B1): the router's `removing` flag, set when it accepts a removal, refuses a second `Remove` and a later `Activate` with `ErrRemoved`; two `Undeploy`s at once, or `Close` racing one, no longer wait on markers no flusher will close.
+- **An app's clock starts at `Start`** (owner, decision 1; review S1): the router's ticks skip an app until it is activated.
+- **`Add`, `Remove` and `Activate` wait for the router's answer once queued** (review S2): their context bounds the wait for the intake only, so an app is never installed, or removed, behind a caller that gave up.
+- **A panicking source is not recovered** (owner, decision 2): its two crashes are fixed at their roots — `Deploy` refuses a `ConnectorFactory` that returns no connector and no error (break-it B3), and `inmemory.Source` takes one `Open` (a second returns `ErrReopened`, break-it B4).
+- **Starting rows** get the engine's own checks at `Deploy` (`runtime.CheckRows`, shared with `TableWrite`: a non-finite float, a value a recording cannot copy, a row over a recording line; break-it B5), and are written at `Start` in table order; the bound sources run in stream order; unknown names and malformed params are reported in sorted order (break-it B6, L2; review S5).
+- **A null time attribute is refused at the Go boundary** (`runtime.Send` and the facade's `SetNull`), as the decoder refuses it (break-it S1); a malformed override's message names the literal forms, not the version pragma (S5); a writer from a fill that panicked is disarmed (L1); `Deploy` on a closed runtime is `ErrClosed` before the program is read (review, later).
+- **`inmemory.Source.Close`** never waits behind a parked `Push`: the channel is never closed, a quit signal ends both (break-it S6).
+- **`apipartition`** prints an implicitly repeated const with its inherited type, value and `// iota N`, and an exported alias of an unexported type with that type's exported fields (break-it S3); both goldens regenerated (law, reviewed in the PR).
+- **The `apidiff` row** reports a package removed at HEAD as a removal (red unless the golden changed; not counted as covered, since the row's scope is the packages at HEAD) and a renamed module as a stated incompatible change (break-it S4, L3).
+- **A second `Close`** waits, until its own deadline, for the goroutines the first left running: nil once they have returned, ctx's error otherwise (break-it S2; the doc and §3.7 corrected, the behaviour kept).
+- **Forwarded to S3.3-2** (known issues): `apipartition`'s method entries name the method without its receiver type (review, later); `Close` racing a `Deploy` or a `Start` in flight (review, later).
