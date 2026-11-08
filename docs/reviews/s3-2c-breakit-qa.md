@@ -1,6 +1,6 @@
 # S3.2c break-it: overflow (QA, short)
 
-> **Historical — S3.2c, the spec cleanup: the language documents agree, and overflow is an error; merged in PR #21.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32cs-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2c-design.md) · [record](../sprints/s3-2c-record.md) · reviews: [combined build: architecture](s3-2c-combined-architecture.md), **break-it: QA**. **← [S3.2b-2](../sprints/s3-2b-2-record.md) · [S3.3 (next)](../sprints/sprint-plan.md#status) →**
+> **Historical — S3.2c, the spec cleanup: the language documents agree, and overflow is an error; merged in PR #21.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-06--s32cs-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-2c-design.md) · [record](../sprints/s3-2c-record.md) · reviews: [combined build: architecture](s3-2c-combined-architecture.md), **break-it: QA**. **← [S3.2b-2](../sprints/s3-2b-2-record.md) · [S3.3-1](../sprints/s3-3-1-record.md) →**
 
 Branch `s3-2c/breakit`, worktree `/Users/ramith/code/cep-wt/s3-2c-breakit`, commits 5796397..7fc4189 on top of 9b1b336.
 GitNexus index reported 46 commits behind HEAD, so I confirmed every claim against the source with grep/read. No Hindsight page was used.

@@ -1,5 +1,7 @@
 # S3.3-1 — sprint record (the full loop, with the design panel)
 
+> **Historical — S3.3-1, the public Go API: `cep`, the connector contracts and the API gate; merged in PR #23.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-07--s33s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-3-1-design.md) · **record** · reviews: [design: breaker](../reviews/s3-3-1-design-breaker.md), [design: challenger](../reviews/s3-3-1-design-challenger.md), [design: architecture](../reviews/s3-3-1-design-architecture.md), [design: QA](../reviews/s3-3-1-design-qa.md), [combined build: architecture](../reviews/s3-3-1-combined-architecture.md), [break-it: QA](../reviews/s3-3-1-breakit-qa.md). **← [S3.2c](s3-2c-record.md) · [S3.3-2 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S3.3-1 — the public Go API: `cep` (`Runtime`, `Deploy`, `AppHandle`), the connector contracts `io`, the `Table` API, the API gate · **Routine:** the full loop with the design panel (owner, 2026-11-07) · **Size:** about 8 SP, re-sized to about 9.5 after the panel · **Branch:** `s3-3-1/integration`
 **What to build and how each item is proven:** [sprint plan — S3.3](sprint-plan.md#s33--the-deploy-pipeline-and-the-conformance-runner--clock-freeze) (items 1, 2, 5 and the forwards on the facade), its "how it runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.2c](s3-2c-record.md)
 
@@ -69,9 +71,9 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-07) ☑ dependencies
 Design (G1)  ☑ the design note (v1 ce272a4; v2 build-ready) ☑ the panel's three reports ☑ QA's testability review ☑ owner decisions recorded
 Build (G2)   ☑ T2 ☑ T3 ☑ tests on the real code (go test -race ./... green, 17 packages)
 Review (G3)  ☑ architecture review of the combined build (1 blocker) ☑ QA break-it (6 blockers) ☑ every finding fixed or forwarded (table above; two later items forwarded to S3.3-2)
-Verify (G4)  ☑ the fix round under the race detector ☑ T4 exit 0 ☐ owner's check ☑ exits 3, 4, 5 met by their proofs
-Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green ☐ record + retro ☐ known issues updated
-             ☐ status line ☐ documents reconciled ☐ memory updated ☐ worktrees removed ☐ points and duration
+Verify (G4)  ☑ the fix round under the race detector ☑ T4 exit 0 ☑ owner's check (merged) ☑ exits 3, 4, 5 met by their proofs
+Exit (G5)    ☑ one PR (#23, 45 commits), merged by the owner ☐ main CI green on the merge commit (330eb20: the owner reports) ☑ record + retro
+             ☑ known issues updated (S3.3-1-1, S3.3-1-2 to S3.3-2) ☑ status line ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
 
 ## For the owner (the owner's check)
@@ -91,4 +93,10 @@ Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green ☐ record + retr
 
 ## Retro
 
-*(at close-out)*
+- **Worked:** the blind panel found six blockers in the design before any code (the values slice the engine keeps, every reviewer's), and v2, written as a build-ready spec, was built file by file from it; QA's tests, written first against stubs, found 13 and then 12 defects on the first two runs; the review's race and the break-it's six blockers, each with a red test, went into one fix round run under the race detector, and T4 passed on its first run.
+- **Hurt:** long single turns stalled twice until the owner asked for small chunks; QA's tests needed twelve named fixture edits, mostly where the design was silent (rules on arrival, example 01 not deployable before S4.1, interleaved times from concurrent emitters); T2 failed twice on the new packages' coverage floors; the `apidiff` row passed with nothing compared in CI's one-commit checkout, a gap the design's "no merge base is a pass that says so" hid until after T4.
+- **Keep:** the blind panel for a public surface; the design note as a build-ready spec; one red run and one verification per fix round; re-running every agent's red test and scratch program before acting on it.
+- **Change next sprint:** work in chunks of a few steps with a one-line status between them; write a new package's coverage test with its build, not after T2; when a gate row can pass without its input, check that the CI job gives it that input before T4.
+- **Lasting-rule proposal for the owner:** a gate row that passes when its input is missing (a merge base, a scope) gets a test, red first, that the CI job supplies that input — `ci-fresh` proves the workflow is regenerated, not that each row has what it needs.
+
+**Closed (G5), 2026-11-08.** PR #23 merged by the owner (45 commits, rebased onto main as 330eb20); its CI run passed all seven jobs (lint, with `apidiff` comparing the 3 packages against `main`; test, race, proofs, determinism on Linux and macOS, strict-gate). Points: about 9.5 (8 carded, 1.5 added after the panel); duration: about one working day (G0 2026-11-07 16:00, merged 2026-11-08 10:00, with a night's pause).
