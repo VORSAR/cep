@@ -1,7 +1,7 @@
 clock Admission func func (r *StreamRegistry) Admission(sid int) int64
 clock Advance func func (rc *RuleClock) Advance(cb Callbacks)
 clock ApplyAdvance func func (rc *RuleClock) ApplyAdvance(a WMAdvance) (clock int64, advanced bool)
-clock BatchClose const const BatchClose
+clock BatchClose const const BatchClose TimerKind = iota + 1 // iota 3
 clock Birth func func (in *Instance) Birth() (birth uint64, born bool)
 clock Buffer func func (in *Instance) Buffer(e event.Event) (constructLate bool)
 clock Callbacks type type Callbacks struct {
@@ -12,11 +12,11 @@ clock Callbacks type type Callbacks struct {
 clock Cancel func func (in *Instance) Cancel(k TimerKind, ref uint64) bool
 clock CancelAll func func (in *Instance) CancelAll()
 clock Clock func func (rc *RuleClock) Clock() int64
-clock Completion const const Completion TimerKind = iota + 1
+clock Completion const const Completion TimerKind = iota + 1 // iota 0
 clock Contribution func func (r *StreamRegistry) Contribution(sid int) int64
-clock CronClose const const CronClose
-clock DelayDue const const DelayDue
-clock Discard const const Discard
+clock CronClose const const CronClose TimerKind = iota + 1 // iota 1
+clock DelayDue const const DelayDue TimerKind = iota + 1 // iota 2
+clock Discard const const Discard TimerKind = iota + 1 // iota 5
 clock Drain func func (r *StreamRegistry) Drain(buf []WMAdvance) []WMAdvance
 clock Empty func func (in *Instance) Empty() bool
 clock EndOfInput func func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance
@@ -61,7 +61,7 @@ clock StreamState type type StreamState struct {
 	Contribution int64
 	Ended        bool
 }
-clock TTLPurge const const TTLPurge
+clock TTLPurge const const TTLPurge TimerKind = iota + 1 // iota 4
 clock Timer type type Timer struct {
 	Due  int64
 	Kind TimerKind

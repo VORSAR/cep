@@ -154,8 +154,20 @@ func surface(dir string) ([]entry, error) {
 			files = append(files, name)
 		}
 		sort.Strings(files)
+		hidden := map[string]*ast.TypeSpec{} // the package's unexported types: an exported alias of one shows its fields
+		for _, f := range pkg.Files {
+			for _, d := range f.Decls {
+				if gd, ok := d.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+					for _, spec := range gd.Specs {
+						if ts := spec.(*ast.TypeSpec); !ast.IsExported(ts.Name.Name) {
+							hidden[ts.Name.Name] = ts
+						}
+					}
+				}
+			}
+		}
 		for _, name := range files {
-			es, err := fileSurface(fset, pkg.Name, pkg.Files[name], filepath.Base(name))
+			es, err := fileSurface(fset, pkg.Name, pkg.Files[name], filepath.Base(name), hidden)
 			if err != nil {
 				return nil, err
 			}
@@ -165,7 +177,7 @@ func surface(dir string) ([]entry, error) {
 	return out, nil
 }
 
-func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string) ([]entry, error) {
+func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string, hidden map[string]*ast.TypeSpec) ([]entry, error) {
 	var out []entry
 	for _, d := range f.Decls {
 		switch d := d.(type) {
@@ -178,6 +190,9 @@ func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string) ([]
 			canon(&fd)
 			out = append(out, entry{pkg: pkg, ident: d.Name.Name, kind: "func", sig: print(fset, &fd)})
 		case *ast.GenDecl:
+			var lastType ast.Expr
+			var lastValues []ast.Expr
+			specIndex := 0
 			for _, spec := range d.Specs {
 				switch s := spec.(type) {
 				case *ast.TypeSpec:
@@ -186,6 +201,11 @@ func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string) ([]
 					}
 					ts := *s
 					ts.Doc, ts.Comment = nil, nil
+					// an exported alias of an unexported type of this package: print the type it stands for, so its
+					// exported fields are part of the surface (S3.3-1's break-it S3)
+					if id, ok := ts.Type.(*ast.Ident); ok && ts.Assign.IsValid() && hidden[id.Name] != nil {
+						ts.Type = hidden[id.Name].Type
+					}
 					if err := exportedOnly(&ts, pkg, fname); err != nil {
 						return nil, err
 					}
@@ -193,23 +213,52 @@ func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string) ([]
 					canon(gd)
 					out = append(out, entry{pkg: pkg, ident: s.Name.Name, kind: "type", sig: print(fset, gd)})
 				case *ast.ValueSpec:
+					typ, values := s.Type, s.Values
+					if d.Tok == token.CONST {
+						// a const spec with no type and no value repeats the last explicit one (the Go spec's implicit
+						// repetition); its iota is its index in the block (S3.3-1's break-it S3)
+						if typ == nil && len(values) == 0 {
+							typ, values = lastType, lastValues
+						} else {
+							lastType, lastValues = typ, values
+						}
+					}
 					for i, n := range s.Names {
 						if !ast.IsExported(n.Name) {
 							continue
 						}
-						vs := &ast.ValueSpec{Names: []*ast.Ident{n}, Type: s.Type}
-						if i < len(s.Values) {
-							vs.Values = []ast.Expr{s.Values[i]}
+						vs := &ast.ValueSpec{Names: []*ast.Ident{n}, Type: typ}
+						if i < len(values) {
+							vs.Values = []ast.Expr{values[i]}
 						}
 						gd := &ast.GenDecl{Tok: d.Tok, Specs: []ast.Spec{vs}}
 						canon(gd)
-						out = append(out, entry{pkg: pkg, ident: n.Name, kind: d.Tok.String(), sig: print(fset, gd)})
+						sig := print(fset, gd)
+						if d.Tok == token.CONST && usesIota(vs.Values) {
+							sig += fmt.Sprintf(" // iota %d", specIndex)
+						}
+						out = append(out, entry{pkg: pkg, ident: n.Name, kind: d.Tok.String(), sig: sig})
 					}
 				}
+				specIndex++
 			}
 		}
 	}
 	return out, nil
+}
+
+// usesIota says an expression list refers to iota.
+func usesIota(values []ast.Expr) bool {
+	found := false
+	for _, v := range values {
+		ast.Inspect(v, func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok && id.Name == "iota" {
+				found = true
+			}
+			return !found
+		})
+	}
+	return found
 }
 
 // exportedOnly keeps a struct's exported fields and refuses an embedded field in a struct or an interface.
