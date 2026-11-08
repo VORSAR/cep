@@ -42,6 +42,11 @@ def module_path() -> str:
     return ""
 
 
+def one_line(text: str) -> str:
+    """A multi-line report on one line, its lines joined by "; ", for a failure reason."""
+    return "; ".join(line.strip() for line in text.splitlines() if line.strip())
+
+
 def has_package(path: str) -> bool:
     """A directory with at least one non-test Go file: a package the merge base had."""
     try:
@@ -102,12 +107,17 @@ def main(argv: list[str]) -> int:
                 )
                 continue
             out = os.path.join(row_dir, f"{name}.out")
-            code = rows.run_tool([apidiff, export, ip], out, os.path.join(row_dir, f"{name}.err"))
+            err = os.path.join(row_dir, f"{name}.err")
+            code = rows.run_tool([apidiff, export, ip], out, err)
+            if code != 0:  # a package that does not build at HEAD: an empty report would read as "(no change)"
+                failures.append(f"{ip}: apidiff at HEAD failed with exit {code}: {one_line(rows.read_text(err))}")
+                continue
             report = rows.read_text(out)
             compared += 1
             print(f"apidiff: {ip}:\n{report.strip() or '(no change)'}", flush=True)
             if INCOMPATIBLE in report and not golden_changed:
-                failures.append(f"incompatible API change in {ip} without {GOLDEN} changing: {report.strip()}")
+                # the runner keeps a reason's first line only: the whole report goes on it (QA's second lane, F2)
+                failures.append(f"incompatible API change in {ip} without {GOLDEN} changing: {one_line(report)}")
         rows.covered(compared)
         return rows.finish(sorted(failures))
     finally:
