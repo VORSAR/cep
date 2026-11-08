@@ -1,5 +1,7 @@
 # S3.3-1 break-it (step 7): QA on the combined build
 
+> **Historical — S3.3-1, the public Go API: `cep`, the connector contracts and the API gate; merged in PR #23.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-3-1-design.md) · [record](../sprints/s3-3-1-record.md) · reviews: [design: breaker](s3-3-1-design-breaker.md), [design: challenger](s3-3-1-design-challenger.md), [design: architecture](s3-3-1-design-architecture.md), [design: QA](s3-3-1-design-qa.md), [combined build: architecture](s3-3-1-combined-architecture.md), **break-it: QA**. **← [S3.2c](../sprints/s3-2c-record.md) · [S3.3-2 (next)](../sprints/sprint-plan.md#status) →**
+
 - Worktree: `/Users/ramith/code/cep-wt/s3-3-1-breakit`, branch `s3-3-1/breakit`, based on `1da314c` (integration head). Nothing pushed. No non-test file edited.
 - Toolchain: Go 1.27.3 (pinned, `GOTOOLCHAIN=local`), Python 3.15.2 (pinned). Every exit code below was read from a completed run.
 - Time used: about 25 minutes of the 45.
