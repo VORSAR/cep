@@ -39,6 +39,14 @@ class Render(unittest.TestCase):
         for ref in uses:
             self.assertRegex(ref, r"^actions/(checkout|cache|upload-artifact|download-artifact)@[0-9a-f]{40}$")
 
+    def test_the_job_running_apidiff_checks_out_mains_history(self):
+        # S3.3-1: the apidiff row compares against the merge base with main; a shallow checkout has no main, so the
+        # row would pass on every CI run with nothing compared. Only that job pays for the full history.
+        text = generate.render([*ROWS, row("apidiff", "lint", ("T4",))])
+        lint = text[text.index("  lint:") : text.index("  test:")]
+        self.assertIn("          fetch-depth: 0", lint)
+        self.assertNotIn("fetch-depth", text[text.index("  test:") :])
+
     def test_the_tool_cache_is_where_a_developer_has_it(self):
         # First CI run (2026-11-04): a cache inside the checkout put the project's go.mod above every tool, so go
         # followed its toolchain line and a parity witness passed differently on CI than on a developer's machine.
