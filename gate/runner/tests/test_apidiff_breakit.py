@@ -55,7 +55,9 @@ class ApidiffBreakit(support.GateTest):
         self.write(GOLDEN, "p F func func F()\n")
         self.commit("remove q")
         reason = self.apidiff_of("./p", "./q")
-        self.assertEqual(reason, "covered 2", f"{reason}\n--- stdout:\n{self.stdout()}")
+        # S3.3-1 fix round (a fixture fix, named in the record): the runner requires covered to equal the row's live
+        # scope, which counts the packages present at HEAD — one, the removed package being gone
+        self.assertEqual(reason, "covered 1", f"{reason}\n--- stdout:\n{self.stdout()}")
 
     def test_removed_package_without_golden_names_the_removal(self):
         # The same removal with the golden unchanged is red, and its reason says the package was removed, not that a
