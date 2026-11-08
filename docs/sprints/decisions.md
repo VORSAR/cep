@@ -58,6 +58,7 @@
 | 2026-11-07 | [S3.3-1's design (after the panel)](#owner-decisions-2026-11-07--s33-1s-design-after-the-panel) |
 | 2026-11-08 | [S3.3-1's review and break-it](#owner-decisions-2026-11-08--s33-1s-review-and-break-it) |
 | 2026-11-08 | [S3.3-1's close-out](#owner-decisions-2026-11-08--s33-1s-close-out) |
+| 2026-11-08 | [S3.3-2's plan check](#owner-decisions-2026-11-08--s33-2s-plan-check) |
 | 2026-11-09 | [cep-vscode's findings VSC-F1 to VSC-F4](#owner-decisions-2026-11-09--cep-vscodes-findings-vsc-f1-to-vsc-f4) |
 | 2026-11-09 | [after PR #25's merge](#owner-decisions-2026-11-09--after-pr-25s-merge) |
 | 2026-11-09 | [after PR #26's merge](#owner-decisions-2026-11-09--after-pr-26s-merge) |
@@ -533,6 +534,14 @@ Three questions, asked in plain language; all as recommended.
 1. **The close-out lands as its own small docs PR.** Rejected: riding S3.3-2's PR (main's status line stale until then).
 2. **The sprint's branches are deleted, local and remote** (`s3-3-1/integration`, `s3-3-1/qa`, `s3-3-1/qa2`, `s3-3-1/breakit`; every commit on them is on `main` by patch, checked with `git cherry`). Rejected: deleting the local ones only; keeping all.
 3. **A lasting rule: a gate row that passes when its input is missing gets a test, red first, that the CI job supplies that input** (S3.3-1's retro: the `apidiff` row passed with nothing compared in CI's one-commit checkout, found only after T4; `ci-fresh` proves the workflow is regenerated, not that each row has what it needs). The rule joins the sprint model now. Rejected: leaving it a retro note.
+
+### Owner decisions, 2026-11-08 — S3.3-2's plan check
+
+Three questions, asked in plain language and asked twice (the first wording was too abstract; the second, with a worked example each, gave the same three answers); one as recommended. The readings are under the S3.3 card.
+
+1. **An expect block runs with the deployment's param values, and a different result refuses the deploy** (≠ R: the recommendation ran the blocks with the file's defaults and warned when the deployment's values changed a block's result). The sandbox runs the plan that will be deployed; an override that changes what a block asserts (example 09's `${lookback}` at 2 h instead of 1 h: one alert where the block expects two) cannot be deployed without editing the block. No warning code. Rejected: the defaults plus a warning (+0.25 point); the defaults only (an override never compared with the blocks).
+2. **A mistake inside an expect block is its own deploy error, found before any block runs** (as recommended): a `given` or `then` naming an unknown stream or table, a field its stream or table does not have, or a value of the wrong type → a new static code beside E-EXP-001 (named in the design), at the mistake's position: one new entry in `errors.md` and a line in SPEC's change log, no grammar change (the owner asked why the language changes; it does not: its error list gains a code). Confirmed when asked again. It closes S3.2a-1's break-it forward (an unknown attribute in a hand-written block read as null). Rejected: reporting it as E-EXP-001 (a wrong rule and a wrong example would read alike).
+3. **S3.3-2 runs the full loop with the design panel** (≠ R: the recommendation was one architecture review of the design). As S3.3-1: QA's tests first and independent; a design note; the blind panel (breaker, challenger, the architect with the-fool) in two waves of at most two agents, then QA for testability; the owner's decisions; the build in the main session, test-first; T2, T3; the architecture review of the combined build and a QA break-it; one fix round under the race detector; T4; one PR. Rejected: one architecture review of the design (S3.2b-2's routine); the lighter routine (S3.2c's).
 
 ### Owner decisions, 2026-11-09 — cep-vscode's findings VSC-F1 to VSC-F4
 
