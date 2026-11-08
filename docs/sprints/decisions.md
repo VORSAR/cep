@@ -57,6 +57,7 @@
 | 2026-11-07 | [S3.3's plan check](#owner-decisions-2026-11-07--s33s-plan-check) |
 | 2026-11-07 | [S3.3-1's design (after the panel)](#owner-decisions-2026-11-07--s33-1s-design-after-the-panel) |
 | 2026-11-08 | [S3.3-1's review and break-it](#owner-decisions-2026-11-08--s33-1s-review-and-break-it) |
+| 2026-11-08 | [S3.3-1's close-out](#owner-decisions-2026-11-08--s33-1s-close-out) |
 
 ## The decisions
 
@@ -521,3 +522,11 @@ The architecture review of the combined build ([s3-3-1-combined-architecture.md]
 
 1. **An app's clock starts at `Start`** (review S1; as recommended). No idle tick reaches a deployed app until it is started, so its time cannot move before its starting table rows are loaded, and a slow `Start` can never produce a false "nothing happened" alert once S4.1's absences arrive. Rejected: the clock running from `Deploy` (ticks recorded before the tables exist).
 2. **A source that panics is not recovered: it ends the process** (break-it, blocker 4's question; ≠ R: the recommendation caught it as a sink's panic is caught and reported it in the stop report). A source's programming error stays impossible to miss. The two crashes the break-it found are fixed at their roots instead: `inmemory.Source` survives a second `Open` (a redeploy reusing it), and `Deploy` refuses a `ConnectorFactory` that returns no connector without an error. Rejected: recovering a panicking source and reporting it.
+
+### Owner decisions, 2026-11-08 — S3.3-1's close-out
+
+Three questions, asked in plain language; all as recommended.
+
+1. **The close-out lands as its own small docs PR.** Rejected: riding S3.3-2's PR (main's status line stale until then).
+2. **The sprint's branches are deleted, local and remote** (`s3-3-1/integration`, `s3-3-1/qa`, `s3-3-1/qa2`, `s3-3-1/breakit`; every commit on them is on `main` by patch, checked with `git cherry`). Rejected: deleting the local ones only; keeping all.
+3. **A lasting rule: a gate row that passes when its input is missing gets a test, red first, that the CI job supplies that input** (S3.3-1's retro: the `apidiff` row passed with nothing compared in CI's one-commit checkout, found only after T4; `ci-fresh` proves the workflow is regenerated, not that each row has what it needs). The rule joins the sprint model now. Rejected: leaving it a retro note.
