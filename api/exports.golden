@@ -122,22 +122,22 @@ cep WithRecording func func WithRecording(w cepio.Writer) DeployOption
 cep WithSink func func WithSink(stream string, s cepio.Sink) DeployOption
 cep WithSource func func WithSource(stream string, s cepio.Source) DeployOption
 cep WithTableRows func func WithTableRows(table string, rows ...func(cepio.RowWriter) error) DeployOption
-cepio Append const const Append Mode = iota + 1
-cepio Bool const const Bool
-cepio Changelog const const Changelog
-cepio Duration const const Duration
+cepio Append const const Append Mode = iota + 1 // iota 0
+cepio Bool const const Bool Type = iota // iota 4
+cepio Changelog const const Changelog Mode = iota + 1 // iota 1
+cepio Duration const const Duration Type = iota // iota 6
 cepio Emitter type type Emitter interface {
 	Emit(ctx context.Context, batchID string, fill func(RowWriter) error) error
 	EndBatch(ctx context.Context, batchID string) error
 }
-cepio Float const const Float
-cepio Int const const Int
-cepio Invalid const const Invalid Type = iota
+cepio Float const const Float Type = iota // iota 3
+cepio Int const const Int Type = iota // iota 2
+cepio Invalid const const Invalid Type = iota // iota 0
 cepio Mapper type type Mapper interface {
 	Decode(b []byte, w RowWriter) error
 }
 cepio Mode type type Mode uint8
-cepio Object const const Object
+cepio Object const const Object Type = iota // iota 7
 cepio OutEvent type type OutEvent struct {
 	Stream    string
 	Timestamp int64
@@ -176,8 +176,8 @@ cepio Sink type type Sink interface {
 cepio Source type type Source interface {
 	Open(ctx context.Context, emit Emitter) error
 }
-cepio String const const String
-cepio Timestamp const const Timestamp
+cepio String const const String Type = iota // iota 1
+cepio Timestamp const const Timestamp Type = iota // iota 5
 cepio Type type type Type uint8
 cepio Writer type type Writer interface {
 	Write(p []byte) (int, error)
@@ -188,6 +188,7 @@ inmemory Drain func func (s *Sink) Drain() []Record
 inmemory Dropped func func (s *Source) Dropped() int64
 inmemory EndBatch func func (s *Source) EndBatch(ctx context.Context, batchID string) error
 inmemory ErrClosed var var ErrClosed = errors.New("inmemory: the source is closed")
+inmemory ErrReopened var var ErrReopened = errors.New("inmemory: the source was already opened: make a new Source for a new Deploy")
 inmemory NewSource func func NewSource(buffer int) *Source
 inmemory Open func func (s *Source) Open(ctx context.Context, emit cepio.Emitter) error
 inmemory Push func func (s *Source) Push(ctx context.Context, batchID string, fill func(cepio.RowWriter) error) error
