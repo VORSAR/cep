@@ -56,7 +56,7 @@ func TestOneSnapshotPerEventUnderAConcurrentWrite(t *testing.T) {
 		Streams: []clock.StreamSpec{rtSrc("S", 0), rtDerived("O")},
 		Schemas: []event.Schema{rtSchema(t, "S", rtA("k", event.TString)), rtSchema(t, "O", rtA("k", event.TString))},
 		Tables:  table.NewSet([]*table.Table{tb}),
-		Rules: []runtime.Rule{{Name: "Snap", Inputs: []int{0}, KeyTypes: []event.Type{event.TString},
+		Rules: []runtime.Rule{{Name: "Snap", Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, OnArrival: true, // S3.3-1 build: as plan's plain rules are, so the event is walked on arrival (a fixture fix, named in the record)
 			NewBody: func(runtime.Emit) partition.Body { return body }}},
 		Sinks: []runtime.SinkBinding{{Stream: 1, Sink: func(event.Event) error { return nil }}},
 	}

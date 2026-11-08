@@ -235,13 +235,19 @@ func TestUnbuiltConnectorAnnotation(t *testing.T) {
 	t.Parallel()
 	ctx := fcCeiling(t)
 	r := fcNew(t, cep.Config{})
-	src := fcExample(t, "01-agent-kill-switch.cep")
-	_, err := r.Deploy(ctx, "01", src)
+	// S3.3-1 build: example 01's pattern body is not built before S4.1 (plan refuses it), so the annotation is carried
+	// by a plain-rule program here (a fixture fix, named in the record; the design note's §3.4 corrected).
+	src := "language cep/0.1;\n" +
+		"stream S (k string, ts timestamp) time ts watermark bounded 1 min;\n" +
+		"@sink(type = 'http', url = 'http://iam.example/hook')\n" +
+		"stream O (k string, ts timestamp);\n" +
+		"rule F intent 'Forward.' from S select k insert into O;\n"
+	_, err := r.Deploy(ctx, "ann", src)
 	if !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), "http") || !strings.Contains(err.Error(), "S5.1") {
-		t.Errorf("example 01 without a Go sink: %v; want ErrConnectorNotBuilt naming http and S5.1", err)
+		t.Errorf("an @sink(type = 'http') program without a Go sink: %v; want ErrConnectorNotBuilt naming http and S5.1", err)
 	}
-	if _, err := r.Deploy(ctx, "01", src, cep.WithSink("AgentKillSwitch", &inmemory.Sink{})); err != nil {
-		t.Errorf("example 01 with WithSink(AgentKillSwitch): %v; want a handle (owner, design 5)", err)
+	if _, err := r.Deploy(ctx, "ann", src, cep.WithSink("O", &inmemory.Sink{})); err != nil {
+		t.Errorf("the same program with WithSink(O): %v; want a handle (owner, design 5)", err)
 	}
 }
 
@@ -276,12 +282,15 @@ func TestWithTableRowsAreVisibleToTheFirstEvent(t *testing.T) {
 	ctx := fcCeiling(t)
 	r := fcNew(t, cep.Config{})
 	sink, bind := fcSink("O")
+	emitted := make(chan struct{}) // S3.3-1 build: Stop refuses rows a source emits after it began (MUST 3), so the
+	// test waits for the emits before stopping (a fixture fix, named in the record)
 	src := fcFuncSource(func(sctx context.Context, emit cepio.Emitter) error {
 		for i, k := range []string{"a", "b"} {
 			if err := emit.Emit(sctx, "", fcKey(k, fcAt(float64(i+1)))); err != nil {
 				return err
 			}
 		}
+		close(emitted)
 		<-sctx.Done()
 		return nil
 	})
@@ -292,6 +301,11 @@ func TestWithTableRowsAreVisibleToTheFirstEvent(t *testing.T) {
 	}
 	h := fcDeploy(t, ctx, r, "tbl", fcTableSrc, bind, cep.WithSource("S", src), cep.WithTableRows("T", row))
 	fcStart(t, ctx, h)
+	select {
+	case <-emitted:
+	case <-ctx.Done():
+		t.Fatalf("ceiling hit waiting for the source's emits: %v", ctx.Err())
+	}
 	fcStop(t, ctx, h)
 	recs := sink.Drain()
 	if len(recs) != 1 || recs[0].Values[0] != "b" {

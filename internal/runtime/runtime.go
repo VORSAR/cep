@@ -87,9 +87,12 @@ type Config struct {
 var (
 	ErrClosed   = errors.New("runtime: closed")
 	ErrDrained  = errors.New("runtime: the app is drained: its input has ended (owner F5)")
-	ErrInactive = errors.New("runtime: the app is not activated")     // design s3-3-1 §2.1
-	ErrStarted  = errors.New("runtime: the app is already activated") // design s3-3-1 §2.1
-	ErrRemoved  = errors.New("runtime: the app is removed")           // design s3-3-1 §2.1
+	ErrInactive = errors.New("runtime: the app is not activated")          // design s3-3-1 §2.1
+	ErrStarted  = errors.New("runtime: the app is already activated")      // design s3-3-1 §2.1
+	ErrRemoved  = errors.New("runtime: the app is removed")                // design s3-3-1 §2.1
+	ErrActive   = errors.New("runtime: the app is active: drain it first") // Remove of an active app
+	// ErrDrainIncomplete is Remove of a draining app whose barrier has not run (a Drain stuck on its sources): drain again.
+	ErrDrainIncomplete = errors.New("runtime: the drain is not complete: drain it again")
 )
 
 // TableOp is a table write's operation.

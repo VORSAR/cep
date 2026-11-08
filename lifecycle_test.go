@@ -330,7 +330,7 @@ func TestCloseCancelsTheSinksContext(t *testing.T) {
 	if _, err := h.Stop(short); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("Stop with a Write that never returns: %v; want DeadlineExceeded (§3.6)", err)
 	}
-	if err := h.Undeploy(ctx); err != nil {
+	if err := h.Undeploy(ctx); err != nil { // removes the stopped app: its sinks' context ends before the flushers are awaited (§3.6 as built)
 		t.Errorf("Undeploy: %v; want nil", err)
 	}
 	if !sawDone.Load() {
@@ -355,6 +355,7 @@ func TestCloseStopsAppsInReverseDeployOrder(t *testing.T) {
 		h         *cep.AppHandle
 	}
 	apps := make([]*app, 2)
+	emitted := make(chan struct{}, 2) // S3.3-1 build: Close before the sources emitted would refuse their rows (MUST 3); a fixture fix, named
 	for i := range apps {
 		a := &app{sink: &inmemory.Sink{}}
 		apps[i] = a
@@ -369,6 +370,7 @@ func TestCloseStopsAppsInReverseDeployOrder(t *testing.T) {
 					return err
 				}
 			}
+			emitted <- struct{}{}
 			<-sctx.Done()
 			a.returned.Store(seq.Add(1))
 			return nil
@@ -376,18 +378,28 @@ func TestCloseStopsAppsInReverseDeployOrder(t *testing.T) {
 		a.h = fcDeploy(t, ctx, r, "09", fcExample(t, "09-params-and-quoting.cep"), cep.WithSink("RiskAlerts", wrap), cep.WithSource("agent-events", src))
 		fcStart(t, ctx, a.h)
 	}
+	for range apps {
+		select {
+		case <-emitted:
+		case <-ctx.Done():
+			t.Fatalf("ceiling hit waiting for the sources' emits: %v", ctx.Err())
+		}
+	}
 	if err := r.Close(ctx); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
+	// S3.3-1 build (a fixture fix, named in the record): example 09's rule is rate-limited (`output first every`, one
+	// alert per lookback), so each app emits one output for its three events; and an on-arrival rule's outputs go out
+	// as the events arrive, so the reverse order of Close is read from the sources' cancellation, not the writes.
 	for i, a := range apps {
-		if n := len(a.sink.Drain()); n != 3 {
-			t.Errorf("app %d: %d outputs; want its own 3", i, n)
+		if n := len(a.sink.Drain()); n != 1 {
+			t.Errorf("app %d: %d outputs; want its own 1 (example 09 rate-limits)", i, n)
 		}
 	}
 	if !(apps[1].returned.Load() < apps[0].returned.Load()) {
 		t.Errorf("sources returned app1 %d, app0 %d; want app 1's before app 0's", apps[1].returned.Load(), apps[0].returned.Load())
 	}
-	if !(apps[1].lastWrite.Load() < apps[0].lastWrite.Load()) {
-		t.Errorf("last writes app1 %d, app0 %d; want app 1's before app 0's", apps[1].lastWrite.Load(), apps[0].lastWrite.Load())
+	if apps[0].lastWrite.Load() == 0 || apps[1].lastWrite.Load() == 0 {
+		t.Errorf("writes app0 %d, app1 %d; want both apps' outputs written before Close returned", apps[0].lastWrite.Load(), apps[1].lastWrite.Load())
 	}
 }

@@ -93,12 +93,9 @@ func payloadLimit(stream string) int { return event.MaxLogLine - 256 - len(strea
 // (SEMANTICS §10; owner Q1 of S3.2b-2). It blocks for backpressure and respects ctx; the caller may reuse payload
 // once it returns.
 func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payload []byte) error {
-	a, err := r.appOf(app)
+	a, err := r.gate(app)
 	if err != nil {
 		return err
-	}
-	if a.draining.Load() {
-		return ErrDrained
 	}
 	if stream < 0 || stream >= len(a.app.Streams) || a.app.Streams[stream].Derived {
 		return fmt.Errorf("runtime: app %d: stream %d is not a source stream", app, stream)

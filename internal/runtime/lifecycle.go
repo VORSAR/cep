@@ -145,12 +145,19 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	if appPhase(a.phase.Load()) == phaseRemoved {
 		return DrainResult{}, ErrRemoved
 	}
+	was := appPhase(a.phase.Load())
 	a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseDraining))
 	a.phase.CompareAndSwap(int32(phaseActive), int32(phaseDraining))
+	revert := func() { // nothing was queued: the app is not drained (QA Q15; break-it R1)
+		a.phase.CompareAndSwap(int32(phaseDraining), int32(was))
+	}
 	var runs []error
 	if a.started.Load() {
 		runs, err = r.awaitRuns(ctx, a)
 		if err != nil {
+			if !a.waited { // the quiet item was never queued: live, as before this Drain
+				revert()
+			}
 			return DrainResult{Runs: runs}, err
 		}
 	}
@@ -159,6 +166,9 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	if err := r.enqueue(ctx, it); err != nil {
 		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
 			a.draining.Store(false)
+			if !a.waited {
+				revert()
+			}
 		}
 		return DrainResult{Runs: runs}, err
 	}
@@ -191,9 +201,10 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 func (r *Runtime) awaitRuns(ctx context.Context, a *appState) ([]error, error) {
 	a.runMu.Lock()
 	defer a.runMu.Unlock()
+	again := a.waited
 	if !a.waited {
 		if err := r.enqueue(ctx, item{kind: iQuiet, app: a.id}); err != nil {
-			return nil, err
+			return nil, err // nothing queued: Drain leaves the app live (break-it R1)
 		}
 		a.waited = true
 		a.cancelSrc()
@@ -201,6 +212,16 @@ func (r *Runtime) awaitRuns(ctx context.Context, a *appState) ([]error, error) {
 	runs := make([]error, len(a.runs))
 	stuck := 0
 	for i, rs := range a.runs {
+		if again { // a repeated Drain runs the barrier without waiting for the runs again (design s3-3-1 §2.4)
+			select {
+			case <-rs.done:
+				if !errors.Is(rs.err, context.Canceled) {
+					runs[i] = rs.err
+				}
+			default:
+			}
+			continue
+		}
 		select {
 		case <-rs.done:
 			if !errors.Is(rs.err, context.Canceled) {
@@ -226,7 +247,7 @@ func (r *Runtime) Remove(ctx context.Context, app AppID) error {
 	}
 	switch appPhase(a.phase.Load()) {
 	case phaseActive:
-		return fmt.Errorf("runtime: app %d is active: drain it first", app)
+		return fmt.Errorf("%w (app %d)", ErrActive, app)
 	case phaseRemoved:
 		return ErrRemoved
 	}
@@ -236,7 +257,9 @@ func (r *Runtime) Remove(ctx context.Context, app AppID) error {
 	}
 	a.phase.Store(int32(phaseRemoved))
 	a.cancelSrc()
-	defer a.removed.Do(func() {
+	// The sinks' context ends here, before the flushers are awaited (design s3-3-1 §3.6 as built): the app is being
+	// discarded, so a Write still blocked on its context returns, the last marker passes, and the flusher returns.
+	a.removed.Do(func() {
 		if a.onRemoved != nil {
 			a.onRemoved()
 		}
@@ -346,7 +369,7 @@ func (rt *router) remove(it item) {
 		return
 	}
 	if a.started.Load() && !(a.drained && a.drainRes != nil) {
-		it.reply <- reply{err: fmt.Errorf("runtime: app %d: the drain is not complete: drain it again", it.app)}
+		it.reply <- reply{err: fmt.Errorf("%w (app %d)", ErrDrainIncomplete, it.app)}
 		return
 	}
 	for sid := range a.byStream {
