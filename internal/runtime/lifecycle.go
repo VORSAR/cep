@@ -50,39 +50,63 @@ func (r *Runtime) Add(ctx context.Context, app App) (AppID, error) {
 	if err := validateApp(len(r.appList()), &app); err != nil {
 		return 0, err
 	}
-	rep, err := r.request(ctx, item{kind: iAdd, add: &app})
+	rep, err := r.requestQueued(ctx, item{kind: iAdd, add: &app})
 	if err != nil {
 		return 0, err
 	}
 	return rep.id, nil
 }
 
+// requestQueued is request for an item whose effect must reach its caller: ctx bounds the wait for the intake only;
+// once the item is queued the router's answer is awaited whatever ctx does (review S2: an Add or Remove whose ctx
+// ended after queuing would otherwise leave an app its caller cannot see). The router always answers; Close
+// unblocks the wait.
+func (r *Runtime) requestQueued(ctx context.Context, it item) (reply, error) {
+	it.reply = make(chan reply, 1)
+	if err := r.enqueue(ctx, it); err != nil {
+		return reply{}, err
+	}
+	select {
+	case rep := <-it.reply:
+		return rep, rep.err
+	case <-r.stopped:
+		return reply{}, ErrClosed
+	}
+}
+
 // Activate starts the app's sink flushers and, with a Recorder, its recorder goroutine (the header, queued at Add,
-// is its first record), then opens its input: Send, SendPayload, TableWrite and BatchEnd accept the app from here.
-// Errors: ErrStarted (already active), ErrDrained (after Drain), ErrRemoved (after Remove).
+// is its first record), then opens its input: Send, SendPayload, TableWrite and BatchEnd accept the app from here,
+// and the engine's ticks reach it (owner, 2026-11-08: an app's clock starts at Start). The router decides, in intake
+// order, whether the app is activated — a drain or a removal queued first wins, and the router never writes a field
+// a caller reads (review B1; break-it B2). Errors: ErrStarted (already active), ErrDrained (after Drain), ErrRemoved
+// (after or during Remove).
 func (r *Runtime) Activate(ctx context.Context, app AppID) error {
 	a, err := r.appOf(app)
 	if err != nil {
 		return err
 	}
-	if !a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive)) {
-		switch appPhase(a.phase.Load()) {
-		case phaseActive:
-			return ErrStarted
-		case phaseDraining:
-			return ErrDrained
-		}
+	switch appPhase(a.phase.Load()) {
+	case phaseActive:
+		return ErrStarted
+	case phaseDraining:
+		return ErrDrained
+	case phaseRemoved:
 		return ErrRemoved
 	}
-	a.started.Store(true)
+	if _, err := r.requestQueued(ctx, item{kind: iActivate, app: app}); err != nil {
+		return err
+	}
+	// The router has activated the app (a.activated, a.started): its flushers and recorder run from here, whatever
+	// a Drain begun meanwhile does to the phase — the router's drain of an activated app pushes markers they consume.
 	for _, q := range a.all {
 		r.wg.Add(1)
 		go q.run(r)
 	}
-	if a.rec != nil {
+	if rec := a.rec; rec != nil {
 		r.wg.Add(1)
-		go a.rec.run(r)
+		go rec.run(r)
 	}
+	a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))
 	return nil
 }
 
@@ -145,11 +169,19 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	if appPhase(a.phase.Load()) == phaseRemoved {
 		return DrainResult{}, ErrRemoved
 	}
-	was := appPhase(a.phase.Load())
-	a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseDraining))
-	a.phase.CompareAndSwap(int32(phaseActive), int32(phaseDraining))
+	// was is the phase this Drain moved from — taken from the CAS that succeeded, so a revert never restores a phase
+	// another call changed meanwhile (review B1); phaseDraining: this Drain moved nothing, so it reverts nothing.
+	was := phaseDraining
+	switch {
+	case a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseDraining)):
+		was = phaseInactive
+	case a.phase.CompareAndSwap(int32(phaseActive), int32(phaseDraining)):
+		was = phaseActive
+	}
 	revert := func() { // nothing was queued: the app is not drained (QA Q15; break-it R1)
-		a.phase.CompareAndSwap(int32(phaseDraining), int32(was))
+		if was != phaseDraining {
+			a.phase.CompareAndSwap(int32(phaseDraining), int32(was))
+		}
 	}
 	var runs []error
 	if a.started.Load() {
@@ -251,7 +283,7 @@ func (r *Runtime) Remove(ctx context.Context, app AppID) error {
 	case phaseRemoved:
 		return ErrRemoved
 	}
-	rep, err := r.request(ctx, item{kind: iRemove, app: app})
+	rep, err := r.requestQueued(ctx, item{kind: iRemove, app: app}) // the router refuses a second removal (break-it B1)
 	if err != nil {
 		return err
 	}
@@ -287,7 +319,8 @@ func (r *Runtime) Remove(ctx context.Context, app AppID) error {
 
 // Close drains every active app and removes every app in reverse id order, then stops the router, the shards and
 // the ticker. Past ctx's deadline it signals every goroutine and returns ctx.Err(); a Write or a run that never
-// returns keeps its goroutine. A second Close returns nil.
+// returns keeps its goroutine. A second Close waits, until its own ctx's deadline, for the goroutines the first left
+// running: nil once they have all returned, ctx's error otherwise (break-it S2: the truthful contract).
 func (r *Runtime) Close(ctx context.Context) error {
 	var first error
 	r.closeOnce.Do(func() {
@@ -364,14 +397,15 @@ func (rt *router) add(it item) {
 func (rt *router) remove(it item) {
 	r := rt.r
 	a := rt.app(it.app)
-	if a == nil || a.ing == nil {
-		it.reply <- reply{err: ErrRemoved}
+	if a == nil || a.ing == nil || a.removing {
+		it.reply <- reply{err: ErrRemoved} // a second removal, or one racing Close (break-it B1)
 		return
 	}
-	if a.started.Load() && !(a.drained && a.drainRes != nil) {
+	if a.activated && !(a.drained && a.drainRes != nil) {
 		it.reply <- reply{err: fmt.Errorf("%w (app %d)", ErrDrainIncomplete, it.app)}
 		return
 	}
+	a.removing = true // the router's: a later Activate or Remove of the app is refused (break-it B1, B2)
 	for sid := range a.byStream {
 		a.byStream[sid] = nil
 	}
@@ -397,7 +431,7 @@ func (rt *router) installAck(w *installWait, it outItem) {
 	switch {
 	case w.remove:
 		res := reply{}
-		if a.started.Load() {
+		if a.activated {
 			for _, q := range a.all {
 				m := make(chan struct{})
 				res.markers = append(res.markers, m)
@@ -410,8 +444,10 @@ func (rt *router) installAck(w *installWait, it outItem) {
 		}
 		// The slot keeps a tombstone: the phase removed, the state dropped, so Stats keeps zero rows of the app's
 		// length and the id is never reused (design s3-3-1 MUST 2).
+		// Only the router's own fields are dropped: a.dec and a.rec stay, because caller goroutines read them past the
+		// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4).
 		a.phase.Store(int32(phaseRemoved))
-		a.ing, a.dec, a.rec, a.sinks, a.quiet = nil, nil, nil, nil, true
+		a.ing, a.sinks, a.quiet = nil, nil, true
 		if w.rollback {
 			res.err = w.err
 		}
