@@ -108,3 +108,18 @@ class Apidiff(support.GateTest):
         self.assertIn("Compatible changes:", self.stdout())
         self.assertIn("G: added", self.stdout())
         self.assertNotIn("Incompatible", self.stdout())
+
+    def test_head_that_does_not_build_is_red(self):
+        # S3.3-1 build (QA's second lane, F3): a package that does not type-check at HEAD gives apidiff an empty report;
+        # the row reads the tool's exit code there too, so it is red, never "(no change)".
+        self.base()
+        self.change("package p\n\nfunc F() { undefinedName() }\n")
+        reason = self.apidiff()
+        self.assertTrue(reason.startswith("exit 1:"), reason)
+        self.assertIn("apidiff at HEAD failed", reason)
+
+    def test_red_reason_names_the_changed_symbol(self):
+        # S3.3-1 build (QA's second lane, F2): the runner keeps a reason's first line only, so the report goes on it.
+        self.base()
+        self.change(INCOMPATIBLE)
+        self.assertIn("F: changed from func() to func(int)", self.apidiff())
