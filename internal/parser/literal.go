@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 
@@ -31,7 +33,8 @@ func ParseLiteral(text string) (model.Literal, error) {
 	}
 	tree, err := literalGrammar.ParseFromLexer(peek)
 	if err != nil {
-		return model.Literal{}, parseError(name, code, err)
+		// a file's error mapping would speak of the version pragma; an override is one literal (break-it S5)
+		return model.Literal{}, mk(name, "E-SYN-001", code[0].Pos, fmt.Sprintf("%q is not a literal: write a signed number, a string in quotes, a duration, a timestamp '…', true or false", text))
 	}
 	l := &lowerer{}
 	lit := l.signedLiteral(tree)

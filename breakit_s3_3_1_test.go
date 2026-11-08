@@ -276,8 +276,11 @@ func TestBreakitSecondCloseAfterAStuckSink(t *testing.T) {
 	if !errors.Is(err1, context.DeadlineExceeded) {
 		t.Errorf("first Close past its deadline: %v; want DeadlineExceeded", err1)
 	}
-	if err2 != nil {
-		t.Errorf("second Close with the sink still stuck: %v; want nil (a second Close returns nil, cep.Runtime.Close's doc and design §3.7)", err2)
+	// S3.3-1 fix round (break-it S2, as it recommended; a fixture edit, named in the record): the doc and design §3.7
+	// now state the truthful contract — a second Close waits for the goroutines the first left running until its own
+	// deadline, nil once they have returned, ctx's error otherwise
+	if !errors.Is(err2, context.DeadlineExceeded) {
+		t.Errorf("second Close with the sink still stuck: %v; want DeadlineExceeded (the stuck flusher still runs)", err2)
 	}
 	if err3 != nil {
 		t.Errorf("third Close after the sink returned: %v; want nil", err3)

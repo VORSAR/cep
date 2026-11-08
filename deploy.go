@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/parser"
@@ -18,6 +20,9 @@ import (
 // §3.2). Every parse or static defect is returned at once as a *DeployError; lints are on the handle. Expect
 // blocks are not run in S3.3-1 (S3.3-2 adds the sandbox stage here). The facade never holds the model: the plan does.
 func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOption) (*AppHandle, error) {
+	if r.rt.Closed() { // §3.7: Deploy after Close is ErrClosed, whatever the program (review, later)
+		return nil, ErrClosed
+	}
 	o := newDeployOptions()
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
@@ -34,7 +39,8 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 	}
 	var vopts validate.Options
 	var bad []Diagnostic
-	for pname, literal := range o.params {
+	for _, pname := range slices.Sorted(maps.Keys(o.params)) { // a stable order of findings (review S5; break-it L2)
+		literal := o.params[pname]
 		lit, err := parser.ParseLiteral(literal)
 		if err != nil {
 			bad = append(bad, Diagnostic{Code: "E-PARAM-001", Message: fmt.Sprintf("the deployment overrides %s with %q, which is not a literal: %v", pname, literal, err), Fix: "declare the param with a default, or correct the value's type."})
@@ -118,6 +124,9 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 				if err != nil {
 					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
 				}
+				if s == nil { // the engine would run Open on nil (break-it B3)
+					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no source and no error", name, stream)
+				}
 				h.sources = append(h.sources, boundSource{stream: stream, id: sid, src: s})
 			}
 		}
@@ -127,13 +136,16 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 				if err != nil {
 					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
 				}
+				if s == nil { // Accepts would run on nil (break-it B3)
+					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no sink and no error", name, stream)
+				}
 				if err := addSink(stream, sid, s); err != nil {
 					return nil, nil, fmt.Errorf("cep: deploy %s: %w", name, err)
 				}
 			}
 		}
 	}
-	for stream, s := range o.sources {
+	for _, stream := range slices.Sorted(maps.Keys(o.sources)) { // checked in a stable order
 		sid, ok := h.streams[stream]
 		if !ok {
 			return nil, nil, fmt.Errorf("%w: WithSource(%q)", ErrUnknownStream, stream)
@@ -141,7 +153,11 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 		if p.Streams[sid].Derived {
 			return nil, nil, fmt.Errorf("%w: WithSource(%q)", ErrNotASourceStream, stream)
 		}
-		h.sources = append(h.sources, boundSource{stream: stream, id: sid, src: s})
+	}
+	for sid, st := range p.Streams { // bound in stream order (design §3.5; break-it B6)
+		if s, ok := o.sources[st.Schema.Stream()]; ok {
+			h.sources = append(h.sources, boundSource{stream: st.Schema.Stream(), id: sid, src: s})
+		}
 	}
 	for _, stream := range o.sinkOrder {
 		sid, ok := h.streams[stream]
@@ -157,15 +173,25 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 			}
 		}
 	}
-	for table, fills := range o.tableRows {
-		tid, ok := h.tables[table]
-		if !ok {
+	for _, table := range slices.Sorted(maps.Keys(o.tableRows)) {
+		if _, ok := h.tables[table]; !ok {
 			return nil, nil, fmt.Errorf("%w: WithTableRows(%q)", ErrUnknownTable, table)
+		}
+	}
+	for tid, pt := range p.Tables { // written at Start in table order (design §3.5; break-it B6)
+		fills, ok := o.tableRows[pt.Name]
+		if !ok {
+			continue
 		}
 		t := tableFor(h, tid)
 		rows, err := t.rows(fills)
 		if err != nil {
-			return nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, table, err)
+			return nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, pt.Name, err)
+		}
+		// the engine's own checks, so a row TableWrite would refuse fails the deploy, not the start (design §3.4;
+		// break-it B5)
+		if err := runtime.CheckRows(pt.Name, pt.Attrs, rows); err != nil {
+			return nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, pt.Name, err)
 		}
 		h.tableRows = append(h.tableRows, tableLoad{id: tid, rows: rows})
 	}
