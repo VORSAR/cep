@@ -191,6 +191,8 @@ type appState struct {
 	batches   []int64            // per stream: StreamStats.Batches (the router's)
 	onRemoved func()             // App.OnRemoved
 	removed   sync.Once          // onRemoved runs once
+	activated bool               // the router's: the app was activated (iActivate); ticks reach it, its drain records
+	removing  bool               // the router's: a removal was accepted; a later Activate or Remove is refused
 }
 
 // runState is one Run goroutine: err is written before done is closed.
@@ -231,6 +233,7 @@ const (
 	iRemove   // unregister a drained or inactive app
 	iQuiet    // the ticks stop for the app (S3.1-1's D3)
 	iBatchEnd // a source's batch-close signal
+	iActivate // design s3-3-1 §2.4 as fixed: the router decides the activation in intake order (review B1)
 )
 
 type item struct {
@@ -381,6 +384,7 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 	for i := range apps {
 		a := r.newAppState(AppID(i), apps[i], start)
 		a.installRoutes()
+		a.activated = true
 		a.started.Store(true) // a built app is live from the start (NewSync)
 		a.phase.Store(int32(phaseActive))
 		list = append(list, a)
@@ -622,6 +626,10 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(), at.Name, v.Kind, at.Type)
 		case v.Null && !at.Optional:
 			return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app, sch.Stream(), at.Name)
+		case v.Null && i == sch.TimeAttr():
+			// the decoder refuses a null time attribute (event.DecodeNull); the Go boundary agrees, so no event enters
+			// at timestamp 0 (S3.3-1's break-it S1)
+			return fmt.Errorf("runtime: app %d stream %q: the time attribute %q is null", app, sch.Stream(), at.Name)
 		case v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
 			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)", app, sch.Stream(), at.Name, v.F)
 		}
@@ -638,6 +646,33 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 	}
 	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
 }
+
+// CheckRows is TableWrite's per-row check, shared with the facade so a deploy's starting rows are refused at Deploy,
+// not at Start (S3.3-1's break-it B5): every value a recording can copy exactly (owner D1 of S3.2b-2's design), every
+// row within one recording line.
+func CheckRows(table string, attrs []event.Attr, rows [][]event.Value) error {
+	for ri, row := range rows {
+		for ci, v := range row {
+			name := fmt.Sprint(ci)
+			if ci < len(attrs) {
+				name = fmt.Sprintf("%d %q", ci, attrs[ci].Name)
+			}
+			if v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)) {
+				return fmt.Errorf("row %d: attribute %s: the float %v is not finite (S3.1-2's D2)", ri, name, v.F)
+			}
+			if err := recordable(v); err != nil {
+				return fmt.Errorf("row %d: attribute %s %v (owner D1 of S3.2b-2's design)", ri, name, err)
+			}
+		}
+		if rowBound(table, attrs, row) > event.MaxLogLine {
+			return fmt.Errorf("row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", ri, event.MaxLogLine)
+		}
+	}
+	return nil
+}
+
+// Closed says Close has begun: the facade checks it before reading a program (§3.7: Deploy after Close is ErrClosed).
+func (r *Runtime) Closed() bool { return r.isClosed() }
 
 // Tick hands a wall tick to the intake, behind every event already there.
 func (r *Runtime) Tick(ctx context.Context, now int64) error {
@@ -661,15 +696,8 @@ func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op Tab
 		return fmt.Errorf("runtime: app %d: no table %d, or an unknown operation", app, tableID)
 	}
 	tb := a.app.Tables.Table(tableID)
-	for ri, row := range rows {
-		for ci, v := range row {
-			if err := recordable(v); err != nil {
-				return fmt.Errorf("runtime: app %d table %d: row %d value %d %v (owner D1 of S3.2b-2's design)", app, tableID, ri, ci, err)
-			}
-		}
-		if rowBound(tb.Name(), tb.Attrs(), row) > event.MaxLogLine {
-			return fmt.Errorf("runtime: app %d table %d: row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", app, tableID, ri, event.MaxLogLine)
-		}
+	if err := CheckRows(tb.Name(), tb.Attrs(), rows); err != nil {
+		return fmt.Errorf("runtime: app %d table %d: %w", app, tableID, err)
 	}
 	_, err = r.request(ctx, item{kind: iWrite, app: app, table: tableID, op: op, rows: rows})
 	return err
@@ -837,6 +865,20 @@ func (rt *router) ingest(it item) {
 		rt.add(it)
 	case iRemove:
 		rt.remove(it)
+	case iActivate:
+		a := rt.app(it.app)
+		switch {
+		case a == nil || a.ing == nil || a.removing:
+			it.reply <- reply{err: ErrRemoved}
+		case a.drained:
+			it.reply <- reply{err: ErrDrained}
+		case a.activated:
+			it.reply <- reply{err: ErrStarted}
+		default:
+			a.activated = true
+			a.started.Store(true)
+			it.reply <- reply{}
+		}
 	case iQuiet:
 		if a := rt.app(it.app); a != nil {
 			a.quiet = true // the ticks stop before the sources (S3.1-1's D3; design s3-3-1 §2.6)
@@ -885,7 +927,7 @@ func (rt *router) ingest(it item) {
 	case iTick:
 		stamp := rt.now(it.now)
 		for _, a := range r.appList() {
-			if a == nil || a.ing == nil || a.drained || a.quiet {
+			if a == nil || a.ing == nil || !a.activated || a.drained || a.quiet { // the clock starts at Start (owner, 2026-11-08)
 				continue
 			}
 			a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
@@ -923,9 +965,8 @@ func (rt *router) ingest(it item) {
 			}
 			return
 		}
-		if !a.started.Load() { // never activated: nothing was delivered, nothing recorded (design s3-3-1 §2.4, MUST 8)
-			a.drained = true
-			a.rec = nil
+		if !a.activated { // never activated: nothing was delivered, nothing recorded (design s3-3-1 §2.4, MUST 8)
+			a.drained = true // the queued header is never written: no recorder goroutine runs (a.rec is a caller's to read)
 			res := reply{}
 			a.drainRes = &res
 			it.reply <- res
