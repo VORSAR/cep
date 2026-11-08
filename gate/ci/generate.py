@@ -43,11 +43,17 @@ def _uses(name: str) -> str:
     return f"uses: {repo}@{sha}  # {version}"
 
 
-def _setup_steps() -> list[str]:
+# Rows that compare against the merge base with main: their job checks out the full history (a shallow checkout has
+# no main, so apidiff would pass with nothing compared; S3.3-1). Every other job keeps the one-commit checkout.
+NEEDS_HISTORY = frozenset({"apidiff"})
+
+
+def _setup_steps(history: bool = False) -> list[str]:
     return [
         f"      - {_uses('checkout')}",
         "        with:",
         "          persist-credentials: false",
+        *(["          fetch-depth: 0"] if history else []),
         f"      - {_uses('cache')}",
         "        with:",
         f"          path: {TOOLS_CACHE}",
@@ -63,14 +69,14 @@ def _setup_steps() -> list[str]:
     ]
 
 
-def _job(job: str, timeout_min: int, tier: str) -> list[str]:
+def _job(job: str, timeout_min: int, tier: str, history: bool = False) -> list[str]:
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
         f"    runs-on: {RUNNERS.get(job, 'ubuntu-latest')}",
         f"    timeout-minutes: {timeout_min}",
         "    steps:",
-        *_setup_steps(),
+        *_setup_steps(history),
         f"      - run: python3 -I -B gate/bootstrap.py exec -- --tier {tier} --job {job} "
         f"--run-id {RUN_ID} --commit ${{{{ github.sha }}}} --run-dir {run_dir}",
         f"      - {_uses('upload')}",
@@ -145,7 +151,8 @@ def render(rows: Sequence[Row], tier: str = TIER) -> str:
     for job in jobs:
         # A job's cap: its rows' watchdogs summed, plus a margin for setup (ADR-0015 §1.2: + 20%, at least 60 s).
         seconds = sum(r.timeout_s for r in chosen if r.job == job)
-        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier)
+        history = any(r.id in NEEDS_HISTORY for r in chosen if r.job == job)
+        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier, history)
     lines += _strict_gate(jobs, tier)
     return "\n".join(lines) + "\n"
 
