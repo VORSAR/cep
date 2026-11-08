@@ -33,12 +33,18 @@ def merge_base() -> str:
     return ""
 
 
-def module_path() -> str:
-    code, out = git("rev-parse", "--show-toplevel")
-    with open(os.path.join(out if code == 0 else ".", "go.mod"), encoding="utf-8") as f:
-        for line in f:
-            if line.startswith("module "):
-                return line.split()[1]
+def module_path(root: str = "") -> str:
+    """The module path in root's go.mod (the repository's top level when root is empty)."""
+    if not root:
+        code, out = git("rev-parse", "--show-toplevel")
+        root = out if code == 0 else "."
+    try:
+        with open(os.path.join(root, "go.mod"), encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("module "):
+                    return line.split()[1]
+    except OSError:
+        pass
     return ""
 
 
@@ -88,6 +94,15 @@ def main(argv: list[str]) -> int:
         compared = 0
         _, changed = git("diff", "--name-only", base, "--", GOLDEN)
         golden_changed = bool(changed)
+        base_module = module_path(worktree)
+        if base_module and base_module != module:
+            # every import path changed: a stated incompatible change the owner passes on purpose, never a tool failure
+            # (S3.3-1's break-it L3); the golden names packages, not paths, so it is no waiver here
+            print(f"apidiff: module renamed from {base_module} to {module}: every import path changed", flush=True)
+            rows.covered(len(pkgs))
+            return rows.finish(
+                [f"module renamed from {base_module} to {module}: every public import path changed (incompatible)"]
+            )
         for pkg in pkgs:
             ip = import_path(module, pkg)
             name = ip.replace("/", "_")
@@ -96,6 +111,16 @@ def main(argv: list[str]) -> int:
             if not has_package(os.path.join(worktree, pkg)):
                 print(f"apidiff: {ip}: new package (absent at the merge base): compatible", flush=True)
                 compared += 1
+                continue
+            if not has_package(
+                pkg
+            ):  # removed at HEAD: an incompatible change, not a tool failure (S3.3-1's break-it S4)
+                print(f"apidiff: {ip}: package removed at HEAD: incompatible", flush=True)
+                # not counted as covered: the row's scope is the packages at HEAD (the runner checks the two agree)
+                if not golden_changed:
+                    failures.append(
+                        f"incompatible API change in {ip}: the package was removed without {GOLDEN} changing"
+                    )
                 continue
             with open(out, "wb") as o, open(err, "wb") as e:
                 code = subprocess.run(
