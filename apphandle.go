@@ -2,6 +2,7 @@ package cep
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/vorsar/cep/internal/plan"
@@ -77,12 +78,18 @@ func (a *AppHandle) Stop(ctx context.Context) (StopReport, error) {
 	return rep, mapErr(err)
 }
 
-// Undeploy stops the app (if not yet stopped) and removes it; its sinks' context ends.
+// Undeploy stops the app if it is started and removes it; its sinks' context ends at the removal, before the
+// flushers are awaited, so a Write still blocked on its context returns (design s3-3-1 §3.6). A stopped app is
+// removed without a second Stop.
 func (a *AppHandle) Undeploy(ctx context.Context) error {
-	if _, err := a.rt.Drain(ctx, a.id); err != nil {
-		return mapErr(err)
+	err := a.rt.Remove(ctx, a.id)
+	if errors.Is(err, runtime.ErrActive) || errors.Is(err, runtime.ErrDrainIncomplete) {
+		if _, derr := a.rt.Drain(ctx, a.id); derr != nil {
+			return mapErr(derr)
+		}
+		err = a.rt.Remove(ctx, a.id)
 	}
-	return mapErr(a.rt.Remove(ctx, a.id))
+	return mapErr(err)
 }
 
 // Input is the programmatic feed for a source stream.

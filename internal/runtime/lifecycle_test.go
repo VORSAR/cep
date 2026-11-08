@@ -42,7 +42,7 @@ func lcApp(t testing.TB, sinks ...runtime.Sink) runtime.App {
 	a := runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("S", 0), rtDerived("O")},
 		Schemas: []event.Schema{rtSchema(t, "S", rtA("k", event.TString)), rtSchema(t, "O", rtA("k", event.TString))},
-		Rules: []runtime.Rule{{Name: "Fwd", Inputs: []int{0}, KeyTypes: []event.Type{event.TString},
+		Rules: []runtime.Rule{{Name: "Fwd", Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, OnArrival: true, // S3.3-1 build: as plan's plain rules are, so one event reaches the sink (a fixture fix, named in the record)
 			NewBody: func(emit runtime.Emit) partition.Body { return &lcFwd{emit: emit} }}},
 	}
 	for _, s := range sinks {
@@ -257,7 +257,7 @@ func TestRemovedAppKeepsItsSlot(t *testing.T) {
 	if len(st.Streams) != 3 || len(st.Rules) != 3 {
 		t.Fatalf("Stats has %d stream rows, %d rule rows; want 3 and 3", len(st.Streams), len(st.Rules))
 	}
-	if len(st.Streams[a]) != 1 || st.Streams[a][0] != (runtime.StreamStats{}) || st.Rules[a][0] != (runtime.RuleStats{}) {
+	if len(st.Streams[a]) != 2 || st.Streams[a][0] != (runtime.StreamStats{}) || st.Rules[a][0] != (runtime.RuleStats{}) { // S3.3-1 build: A declares two streams (a fixture fix, named)
 		t.Errorf("A's rows after Remove: %+v %+v; want zero rows of A's length", st.Streams[a], st.Rules[a])
 	}
 	if err := r.Send(ctx, a, rtEv(0, rtAt(2), rtStr("a"))); !errors.Is(err, runtime.ErrRemoved) {
@@ -426,6 +426,8 @@ func (l *lcSeq) count(app int) int { l.mu.Lock(); defer l.mu.Unlock(); return le
 // TestCloseStopsAppsInReverseAddOrder (T6; MUST 5): Close drains and removes in reverse id order, every queued output
 // reaches its sink before Close returns, and every goroutine has returned (goleak at TestMain).
 func TestCloseStopsAppsInReverseAddOrder(t *testing.T) {
+	// S3.3-1 build: the order is observed through outputs the barrier releases, so these apps' rules are not
+	// on-arrival (lcApp's are); a fixture fix, named in the record.
 	t.Parallel()
 	ctx := rtCeiling(t)
 	l := &lcSeq{last: map[int][]int64{}}
@@ -434,7 +436,9 @@ func TestCloseStopsAppsInReverseAddOrder(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		id := lcStarted(t, ctx, r, lcApp(t, l.sink(i)))
+		app := lcApp(t, l.sink(i))
+		app.Rules[0].OnArrival = false
+		id := lcStarted(t, ctx, r, app)
 		rtSend(t, ctx, r, id, rtEv(0, rtAt(1), rtStr("a")))
 		rtSend(t, ctx, r, id, rtEv(0, rtAt(2), rtStr("b")))
 	}
@@ -643,8 +647,7 @@ func TestDrainCancelsTheSourcesBeforeTheBarrier(t *testing.T) {
 func TestDrainWithARunThatIgnoresCancel(t *testing.T) {
 	t.Parallel()
 	ctx := rtCeiling(t)
-	release := make(chan struct{})
-	t.Cleanup(func() { close(release) })
+	release := make(chan struct{}) // closed once, before Remove (S3.3-1 build: a fixture fix, named in the record)
 	var n atomic.Int64
 	r := lcNew(t, runtime.Config{Shards: 2})
 	id := lcStarted(t, ctx, r, lcApp(t, lcCount(&n)))
@@ -652,7 +655,9 @@ func TestDrainWithARunThatIgnoresCancel(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	rtSend(t, ctx, r, id, rtEv(0, rtAt(1), rtStr("a")))
-	expired, cancel := context.WithDeadline(ctx, time.Unix(0, 0))
+	// S3.3-1 build: a live short deadline, not an expired context — an expired one queues nothing and leaves the app
+	// live by the owner's R1 (a fixture fix, named in the record)
+	expired, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	res, err := r.Drain(expired, id)
 	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "1 source goroutine") {
@@ -671,8 +676,7 @@ func TestDrainWithARunThatIgnoresCancel(t *testing.T) {
 	if n.Load() != 1 {
 		t.Errorf("%d outputs after the barrier; want 1", n.Load())
 	}
-	close(release)
-	t.Cleanup(func() {}) // the deferred close above is now a no-op guard: release is closed once
+	close(release) // the stuck run returns, so Close at cleanup finds every goroutine gone
 	lcRemove(t, ctx, r, id)
 }
 

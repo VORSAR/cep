@@ -25,6 +25,8 @@ func TestEmitIsSafeForConcurrentUse(t *testing.T) {
 	ctx := fcCeiling(t)
 	r := fcNew(t, cep.Config{})
 	sink, bind := fcSink("O")
+	emitted := make(chan struct{}) // S3.3-1 build: the test waits for the emits before stopping (MUST 3: a row emitted
+	// after Stop began is refused); a fixture fix, named in the record
 	src := fcFuncSource(func(sctx context.Context, emit cepio.Emitter) error {
 		var wg sync.WaitGroup
 		var first atomic.Value
@@ -33,7 +35,9 @@ func TestEmitIsSafeForConcurrentUse(t *testing.T) {
 			go func(g int) {
 				defer wg.Done()
 				for i := 0; i < 1000; i++ {
-					if err := emit.Emit(sctx, "", fcRow(fmt.Sprint(g), int64(i), fcAt(float64(g*1000+i)))); err != nil {
+					// S3.3-1 build: one timestamp for every row — interleaved times from 8 goroutines are stream-late on a
+					// bounded watermark (SEMANTICS §2), which is the language's rule, not the Emitter's (a fixture fix, named)
+					if err := emit.Emit(sctx, "", fcRow(fmt.Sprint(g), int64(i), fcAt(1))); err != nil {
 						first.CompareAndSwap(nil, err)
 						return
 					}
@@ -41,6 +45,7 @@ func TestEmitIsSafeForConcurrentUse(t *testing.T) {
 			}(g)
 		}
 		wg.Wait()
+		close(emitted)
 		if err, _ := first.Load().(error); err != nil {
 			return err
 		}
@@ -49,6 +54,11 @@ func TestEmitIsSafeForConcurrentUse(t *testing.T) {
 	})
 	h := fcDeploy(t, ctx, r, "fwd", fcFwdSrc, bind, cep.WithSource("S", src))
 	fcStart(t, ctx, h)
+	select {
+	case <-emitted:
+	case <-ctx.Done():
+		t.Fatalf("ceiling hit waiting for the source's emits: %v", ctx.Err())
+	}
 	rep := fcStop(t, ctx, h)
 	if len(rep.SourceErrors) != 0 {
 		t.Errorf("SourceErrors %v; want none", rep.SourceErrors)
@@ -217,8 +227,9 @@ func TestInmemorySinkCopiesCanonical(t *testing.T) {
 		if err := json.Unmarshal(rec.Canonical, &m); err != nil {
 			t.Fatalf("record %d: Canonical %q does not parse: %v", i, rec.Canonical, err)
 		}
-		if m["s"] != fmt.Sprint(i) || rec.Values[0] != fmt.Sprint(i) {
-			t.Fatalf("record %d: Canonical s %v, Values[0] %v; want %d", i, m["s"], rec.Values[0], i)
+		attrs, _ := m["attrs"].(map[string]any) // S3.3-1 build: Canonical is the whole canonical line (ADR-0003/0005), the attrs inside it (a fixture fix, named)
+		if attrs["s"] != fmt.Sprint(i) || rec.Values[0] != fmt.Sprint(i) {
+			t.Fatalf("record %d: Canonical s %v, Values[0] %v; want %d", i, attrs["s"], rec.Values[0], i)
 		}
 	}
 	_ = inmemory.Record{}

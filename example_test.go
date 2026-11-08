@@ -56,5 +56,5 @@ func Example_embed() {
 		fmt.Println(string(rec.Canonical))
 	}
 	// Output:
-	// {"agentId":"a1","scaled":1,"ts":"2026-01-01T00:00:01.000Z"}
+	// {"attrs":{"agentId":"a1","scaled":1,"ts":"2026-01-01T00:00:01.000Z"},"stream":"RiskAlerts","ts":"2026-01-01T00:00:01.000Z"}
 }
