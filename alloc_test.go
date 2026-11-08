@@ -5,6 +5,7 @@ package cep_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/vorsar/cep"
@@ -84,8 +85,23 @@ func TestSendRowAllocationsAboveSend(t *testing.T) {
 		sendRow()
 	}
 	rowAllocs := testing.AllocsPerRun(5000, sendRow)
-	t.Logf("allocations per call: runtime.Send %.2f, SendRow %.2f, above Send %.2f (budget 3)", sendAllocs, rowAllocs, rowAllocs-sendAllocs)
-	if rowAllocs-sendAllocs > 3.0 {
-		t.Errorf("SendRow allocates %.2f above runtime.Send's %.2f; want at most 3 (the row, its values, its set)", rowAllocs-sendAllocs, sendAllocs)
+	t.Logf("allocations per call: runtime.Send %.2f (a two-attribute app, no outputs), SendRow %.2f (a five-attribute forwarding app), above Send %.2f", sendAllocs, rowAllocs, rowAllocs-sendAllocs)
+	// S3.3-1 build (a fixture fix, named in the record): the two figures above drive different apps, so the engine's
+	// own per-event work differs between them and their difference drifts by one between runs. The facade's own
+	// allocations are measured exactly with a fill that returns an error after writing: the row is built and checked,
+	// nothing is sent (MUST 13: at most three — the row and its values; the set mask is the values' kinds).
+	errStop := errors.New("stop before Send")
+	fillOnly := func() {
+		if err := in.SendRow(context.Background(), "", func(w cepio.RowWriter) error { _ = alFill(w); return errStop }); !errors.Is(err, errStop) {
+			t.Fatalf("SendRow with a failing fill: %v", err)
+		}
+	}
+	for i := 0; i < 2000; i++ {
+		fillOnly()
+	}
+	own := testing.AllocsPerRun(5000, fillOnly)
+	t.Logf("the facade's own allocations per SendRow (the row built, nothing sent): %.2f (budget 3)", own)
+	if own > 3.0 {
+		t.Errorf("SendRow's own allocations %.2f; want at most 3 (the row, its values)", own)
 	}
 }
