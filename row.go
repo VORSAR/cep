@@ -33,8 +33,9 @@ func newTableRow(attrs []event.Attr, names []string, keyOnly []int) *row {
 // run arms the row, calls fill, disarms it and checks what fill left (design s3-3-1 §4.3, rows 5).
 func (w *row) run(fill func(cepio.RowWriter) error) error {
 	w.armed = true
+	defer w.disarm() // a fill that panics leaves no armed writer behind (break-it L1)
 	err := fill(w)
-	w.armed = false
+	w.disarm()
 	if err != nil {
 		return err
 	}
@@ -88,9 +89,15 @@ func (w *row) put(attr int, kind event.Type, v event.Value, what string) {
 		w.fail(fmt.Errorf("cep: attribute %q is not optional; SetNull was called", a.Name))
 		return
 	}
+	if v.Null && attr == w.timeAttr { // a null time attribute is refused, as the decoder refuses it (break-it S1)
+		w.fail(fmt.Errorf("cep: the time attribute %q cannot be null", a.Name))
+		return
+	}
 	v.Kind = a.Type
 	w.values[attr] = v
 }
+
+func (w *row) disarm() { w.armed = false }
 
 func (w *row) fail(err error) {
 	if w.err == nil {
