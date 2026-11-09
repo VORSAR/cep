@@ -736,6 +736,8 @@ func TestBreakitUndeployAfterAStopCancelledBeforeItBegan(t *testing.T) {
 			return c.Err()
 		}
 	}}
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(releaseOnce) // a failure before the release must not hold the sink to Close's deadline
 	a := fcDeploy(t, ctx, r, "A", fcFwdSrc, cep.WithSink("O", hold))
 	fcStart(t, ctx, a)
 	fcSend(t, ctx, fcInput(t, a, "S"), fcRow("a", 1, fcAt(1)))
@@ -757,7 +759,7 @@ func TestBreakitUndeployAfterAStopCancelledBeforeItBegan(t *testing.T) {
 	if _, err := a.Stats(ctx); err != nil {
 		t.Fatalf("A's Stats after the Undeploy that ran out of time: %v; want A still deployed", err)
 	}
-	close(release)
+	releaseOnce()
 	if err := a.Undeploy(ctx); err != nil {
 		t.Fatalf("A's Undeploy once the sink returned: %v; want nil", err)
 	}
