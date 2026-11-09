@@ -121,8 +121,8 @@ func lexAll(name, src string) (code, trivia []Token, err error) {
 // name, a "/" and a number; they are joined only straight after `language`, in any letter case, and only when
 // written with nothing between them. That is grammar.lark's reading: its contextual lexer tries PRAGMA_ID there and
 // nowhere else, so `risk/2.5` in an expression divides (VSC-F1). A number the lexer took past the version, as in
-// `cep/0.1e5`, is cut after the version and its rest lexed again, so the parser refuses at the same token as a
-// pragma rule would have left (`e5`).
+// `cep/0.1e5`, is cut after the version and its rest lexed again, together with a name written straight after it
+// (`cep/0.1e5x`), so the parser refuses at the token a pragma rule would have left (`e5`, `e5x`), as lark does.
 func joinPragma(name string, code []Token) ([]Token, error) {
 	symbols := rules.Symbols()
 	ident, punct, number := symbols["Ident"], symbols["Punct"], symbols["Number"]
@@ -146,20 +146,29 @@ func joinPragma(name string, code []Token) ([]Token, error) {
 			continue
 		}
 		out = append(out, Token{Type: tokPragma, Value: joined, Pos: id.Pos})
+		used := 3
 		if rest := text[len(joined):]; rest != "" {
-			toks, err := relex(name, rest, num.Pos, len(num.Value)-len(rest))
+			skip := len(num.Value) - len(rest)
+			if i+4 < len(code) {
+				if next := code[i+4]; (next.Type == ident || next.Type == tokKeyword || next.Type == tokMixedKeyword) &&
+					next.Pos.Offset == num.Pos.Offset+len(num.Value) {
+					rest += next.Value
+					used = 4
+				}
+			}
+			toks, err := relex(name, rest, num.Pos, skip)
 			if err != nil {
 				return nil, err
 			}
 			out = append(out, toks...)
 		}
-		i += 3
+		i += used
 	}
 	return out, nil
 }
 
 // relex lexes text that starts skip bytes into the one-line token at pos, and places its tokens there. Used only on
-// the ASCII rest of a number, so bytes and columns agree.
+// the ASCII rest of a number and a name written straight after it, so bytes and columns agree.
 func relex(name, text string, pos lexer.Position, skip int) ([]Token, error) {
 	lx, err := rules.LexString(name, text)
 	if err != nil {

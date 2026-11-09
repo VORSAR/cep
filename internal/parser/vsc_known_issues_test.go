@@ -110,6 +110,10 @@ func TestVSCF1PragmaUnchanged(t *testing.T) {
 		{"language CEP/0.1;\n", "E-SYN-001", 1, 10, `"CEP"`},
 		{"language cep/1;\n", "E-SYN-001", 1, 10, `"cep"`},
 		{"language cep/0.1e5;\n", "E-SYN-001", 1, 17, `"e5"`},
+		// a name written straight after the exponent stays one token with the exponent's rest (review, 2026-11-09)
+		{"language cep/0.1e5x;\n", "E-SYN-001", 1, 17, `"e5x"`},
+		{"language cep/0.1e5_;\n", "E-SYN-001", 1, 17, `"e5_"`},
+		{"language cep/0.1E5abc;\n", "E-SYN-001", 1, 17, `"E5abc"`},
 	} {
 		_, err := Parse("vsc-f1-pragma.cep", tc.src)
 		e, ok := err.(*Error)
@@ -124,8 +128,8 @@ func TestVSCF1PragmaUnchanged(t *testing.T) {
 	}
 }
 
-// TestVSCF2BacktickedNameForm: a backticked name starts with a letter or `_`, then letters, digits, `_ - .` and
-// spaces (owner, 2026-11-09: grammar.lark's form). Anything else is E-SYN-001 at the backtick, with a message that
+// TestVSCF2BacktickedNameForm: a backticked name starts with an ASCII letter or `_`, then ASCII letters, digits,
+// `_ - .` and spaces (owner, 2026-11-09: grammar.lark's form). Anything else is E-SYN-001 at the backtick, with a message that
 // names the form.
 func TestVSCF2BacktickedNameForm(t *testing.T) {
 	src := func(name string) string {
@@ -143,9 +147,27 @@ func TestVSCF2BacktickedNameForm(t *testing.T) {
 			t.Errorf("%s: error %v; want E-SYN-001 at 2:8", name, err)
 			continue
 		}
-		if e.Code != "E-SYN-001" || e.Line != 2 || e.Col != 8 || !strings.Contains(e.Msg, "a backticked name starts with a letter or `_`") {
+		if e.Code != "E-SYN-001" || e.Line != 2 || e.Col != 8 || !strings.Contains(e.Msg, "a backticked name starts with an ASCII letter or `_`") {
 			t.Errorf("%s: %s %d:%d %q; want E-SYN-001 at 2:8 naming the form", name, e.Code, e.Line, e.Col, e.Msg)
 		}
+	}
+}
+
+// TestVSCF2MalformedOverrideIsNotALiteral: a deployment override is one literal, so text the lexer refuses there is
+// "not a literal", whatever character stopped it (break-it S5 of S3.3-1). A backtick no longer lexes as a name
+// unless it is one, which must not bring back a file's message (review, 2026-11-09). An unclosed string keeps its
+// own code.
+func TestVSCF2MalformedOverrideIsNotALiteral(t *testing.T) {
+	for _, text := range []string{"`1`", "`abc", "`1` "} {
+		_, err := ParseLiteral(text)
+		e, ok := err.(*Error)
+		if !ok || e.Code != "E-SYN-001" || !strings.Contains(e.Msg, "is not a literal") {
+			t.Errorf("ParseLiteral(%q): %v; want E-SYN-001 saying it is not a literal", text, err)
+		}
+	}
+	_, err := ParseLiteral("'abc")
+	if e, ok := err.(*Error); !ok || e.Code != "E-STR-001" {
+		t.Errorf("ParseLiteral(\"'abc\"): %v; want E-STR-001", err)
 	}
 }
 
