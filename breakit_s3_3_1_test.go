@@ -664,6 +664,10 @@ func TestBreakitRecordingWriterErrors(t *testing.T) {
 
 // TestBreakitAddWhileAnotherAppDrains (guard): app A's Stop parked on a sink that holds its Write until its context
 // ends; app B deploys, starts, delivers and stops meanwhile; then A's Undeploy cancels the sink's context and both end.
+// "Parked" means A's drain has run: the test waits for it before going on (2026-11-09). A Stop cancelled before its
+// drain ran is undone, and the app's Undeploy then waits for the held sink until its deadline, by design: that timing,
+// forced, is TestBreakitUndeployAfterAStopCancelledBeforeItBegan. Left to the scheduler, it hung this test once in
+// about 185 runs, under a loaded gate run.
 func TestBreakitAddWhileAnotherAppDrains(t *testing.T) {
 	t.Parallel()
 	ctx := fcCeiling(t)
@@ -688,6 +692,7 @@ func TestBreakitAddWhileAnotherAppDrains(t *testing.T) {
 	sctx, cancel := context.WithCancel(ctx)
 	stopped := make(chan error, 1)
 	go func() { _, err := a.Stop(sctx); stopped <- err }()
+	fcAwaitDrainRan(t, ctx, a, "S")
 	sink, bind := fcSink("O")
 	b := fcDeploy(t, ctx, r, "B", fcFwdSrc, bind)
 	fcStart(t, ctx, b)
@@ -702,5 +707,63 @@ func TestBreakitAddWhileAnotherAppDrains(t *testing.T) {
 	}
 	if err := a.Undeploy(ctx); err != nil {
 		t.Errorf("A's Undeploy after the cancelled Stop: %v; want nil (the sink's context ends at the removal)", err)
+	}
+}
+
+// TestBreakitUndeployAfterAStopCancelledBeforeItBegan (guard, 2026-11-09): the guard above with its unlucky timing
+// forced. A Stop cancelled before it began is undone, so the app is still running; its Undeploy stops it first, and a
+// sink holding its Write keeps that stop until Undeploy's deadline: the app is not removed and the held output is not
+// dropped (design s3-3-1 §3.5 and §3.6). Once the sink returns, Undeploy completes and the output was delivered.
+func TestBreakitUndeployAfterAStopCancelledBeforeItBegan(t *testing.T) {
+	t.Parallel()
+	ctx := fcCeiling(t)
+	r := fcNew(t, cep.Config{})
+	entered, release := make(chan struct{}, 1), make(chan struct{})
+	var mu sync.Mutex
+	delivered := 0
+	hold := &fcFuncSink{mode: cepio.Append, write: func(c context.Context, _ cepio.OutEvent) error {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+			mu.Lock()
+			delivered++
+			mu.Unlock()
+			return nil
+		case <-c.Done():
+			return c.Err()
+		}
+	}}
+	a := fcDeploy(t, ctx, r, "A", fcFwdSrc, cep.WithSink("O", hold))
+	fcStart(t, ctx, a)
+	fcSend(t, ctx, fcInput(t, a, "S"), fcRow("a", 1, fcAt(1)))
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("A's sink was never called")
+	}
+	gone, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := a.Stop(gone); !errors.Is(err, context.Canceled) {
+		t.Fatalf("A's Stop with its ctx already cancelled: %v; want context.Canceled", err)
+	}
+	short, done := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer done()
+	if err := a.Undeploy(short); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("A's Undeploy while the sink holds its Write: %v; want context.DeadlineExceeded (it stops A first and waits for the sink)", err)
+	}
+	if _, err := a.Stats(ctx); err != nil {
+		t.Fatalf("A's Stats after the Undeploy that ran out of time: %v; want A still deployed", err)
+	}
+	close(release)
+	if err := a.Undeploy(ctx); err != nil {
+		t.Fatalf("A's Undeploy once the sink returned: %v; want nil", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if delivered != 1 {
+		t.Errorf("the sink delivered %d outputs; want 1 (the held output is delivered, never dropped)", delivered)
 	}
 }
