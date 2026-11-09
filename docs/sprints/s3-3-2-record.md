@@ -1,7 +1,7 @@
 # S3.3-2 — sprint record (the full loop, with the design panel)
 
 **Sprint:** S3.3-2 — the expect sandbox, the conformance runner, the Tier-2 baselines and the clock freeze · **Routine:** the full loop with the design panel (owner, 2026-11-08) · **Size:** about 7.5 SP · **Branch:** `s3-3-2/integration`
-**What to build and how each item is proven:** [sprint plan — S3.3](sprint-plan.md#s33--the-deploy-pipeline-and-the-conformance-runner--clock-freeze) (items 3, 4, 6, 7, the forwards, exits 8 and 9), its "how S3.3-2 runs" note and the plan check's readings · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.3-1](s3-3-1-record.md)
+**What to build and how each item is proven:** [sprint plan — S3.3](sprint-plan.md#s33--the-deploy-pipeline-and-the-conformance-runner--clock-freeze) (items 3, 4, 6, 7, the forwards, exits 8 and 9), its "how S3.3-2 runs" note and the plan check's readings · **Design:** [s3-3-2-design.md](s3-3-2-design.md) (v1, for the panel) · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.3-1](s3-3-1-record.md)
 
 ## Plan and decisions
 
