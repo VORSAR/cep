@@ -59,6 +59,7 @@
 | 2026-11-08 | [S3.3-1's review and break-it](#owner-decisions-2026-11-08--s33-1s-review-and-break-it) |
 | 2026-11-08 | [S3.3-1's close-out](#owner-decisions-2026-11-08--s33-1s-close-out) |
 | 2026-11-09 | [cep-vscode's findings VSC-F1 to VSC-F4](#owner-decisions-2026-11-09--cep-vscodes-findings-vsc-f1-to-vsc-f4) |
+| 2026-11-09 | [after PR #25's merge](#owner-decisions-2026-11-09--after-pr-25s-merge) |
 
 ## The decisions
 
@@ -539,3 +540,10 @@ cep-vscode's sprint S1 found four defects in cep and marked them forwarded to ce
 1. **The four are recorded in [known issues](../product/known-issues.md), then fixed at once in their own PR from `main`, outside a sprint** (the owner's direction). The fix ran tests first (one red run), an architecture review and a QA break-it of the diff, one fix round, T4's lint and test jobs locally, and the full T4 in the PR's CI. The review found two older disagreements between `grammar.lark` and the engine (known issues VSC-R1 and VSC-R2), left for the owner to place.
 2. **A backticked name takes `grammar.lark`'s form: an ASCII letter or `_` first, then ASCII letters, digits, `_ - .` and spaces; any other backticked name is `E-SYN-001` at its opening backtick** (VSC-F2; SPEC rev 8). The engine's lexer and `grammar.ebnf` change to match. Rejected: a digit first allowed (a new form in all three places); the engine's loose form everywhere (empty and all-space names).
 3. **E-STR-001's message names the quote the string opened with, and the catalogue's title says "one-line string"** (VSC-F4). Rejected: one neutral message for both quotes.
+
+### Owner decisions, 2026-11-09 — after PR #25's merge
+
+Two recommendations, both accepted ("do 1, 2").
+
+1. **The merged branch `fix/vsc-known-issues` is deleted, local and remote** (every commit on `main` by patch, checked with `git cherry`).
+2. **Known issues VSC-R1 and VSC-R2 are fixed at once, in their own PR from `main`**: `grammar.lark` ignores a BOM only where it opens the file and reads every keyword as a whole word, with a counter-example file each (three in all), as SPEC §2.1 and the engine already had (SPEC rev 9). Rejected: leaving them for a language sprint.
