@@ -59,7 +59,7 @@ Rule: SPEC §4.4 — clause order is fixed; there are no alternative orders.
 Fix: reorder to: intent, partition, from…, within, after match, late events, expect/todo, select, output, insert into.
 
 ### E-SYN-001 Synonym keyword **[parse]**
-Rule: SPEC §4 — one way per construct; e.g. the sequence connector is `->`, never `followed by`/`then`.
+Rule: SPEC §4 — one way per construct; e.g. the sequence connector is `->`, never `followed by`/`then`. Also SPEC §2.3 (rev 8): a malformed or unclosed backticked name, at its opening backtick.
 Fix: the message names the canonical form for the construct it found.
 
 ### E-KW-001 Keyword used as identifier **[parse]**

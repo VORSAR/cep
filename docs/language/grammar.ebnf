@@ -116,7 +116,10 @@ duration-or-param = duration | param-ref ;
 param-ref      = "${", identifier, "}" ;
 name           = identifier | "`", backticked-body, "`" ;
 
-(* pragma-id: lowercase name, "/", digits ".", digits (e.g. cep/0.1).
+(* pragma-id: lowercase name, "/", digits ".", digits (e.g. cep/0.1), read
+   only straight after "language" (as grammar.lark's contextual lexer does);
+   anywhere else the same characters are a name, "/" and a number, so
+   risk/2.5 divides (SPEC 3.1, rev 8).
    identifier: [A-Za-z_][A-Za-z0-9_]*, excluding every reserved word IN ANY
    LETTER CASE (the reserved list is normative in SPEC Appendix B and encoded
    case-insensitively in grammar.lark's NAME terminal). backticked-body: a
