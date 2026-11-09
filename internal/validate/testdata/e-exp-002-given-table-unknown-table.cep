@@ -1,0 +1,18 @@
+-- expect: E-EXP-002 (a given table names no table U) @ 14:22
+language cep/0.1;
+
+stream S (k string, n int, ts timestamp)
+  time ts watermark bounded 1 min;
+
+table T (k string) primary key (k);
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward the keys not in T.'
+  from S[k not in T]
+  expect given table U [ {k: 'b'} ]
+         given S [ {k: 'a', n: 1, ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then Out [ {k: 'a', ts: timestamp '2026-01-01T10:00:00Z'} ]
+  select k
+  insert into Out;
