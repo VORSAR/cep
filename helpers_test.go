@@ -6,6 +6,7 @@ package cep_test
 import (
 	"context"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -50,6 +51,27 @@ func fcNew(t testing.TB, cfg cep.Config) *cep.Runtime {
 		}
 	})
 	return r
+}
+
+// fcAwaitDrainRan waits until the runtime has run h's drain barrier. AfterDrain counts a refused input only once that
+// has happened ("refused after the app's drain"), so the loop sends a batch end until one is counted there. A batch
+// end that arrives before the barrier is taken as h's own: callers must not assert on h's batches. Every pass yields:
+// without it, this goroutine, the router and the shard hand the processor to each other and, on one processor,
+// starve every other goroutine, the Stop that would run the drain included (6.4 million passes in 20 s, seen with
+// GOMAXPROCS=1 on 2026-11-09). No clock is read: the yield is the pause.
+func fcAwaitDrainRan(t testing.TB, ctx context.Context, h *cep.AppHandle, stream string) {
+	t.Helper()
+	in := fcInput(t, h, stream)
+	for {
+		_ = in.EndBatch(ctx, "await-drain") // refused once the drain began; counted in AfterDrain once it ran
+		if fcStats(t, ctx, h).Streams[stream].AfterDrain > 0 {
+			return
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("%s's drain never ran: %v", h.Name(), ctx.Err())
+		}
+		runtime.Gosched()
+	}
 }
 
 // fcExample reads docs/language/examples/<file> (the test runs at the module root).
