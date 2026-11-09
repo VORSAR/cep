@@ -128,6 +128,7 @@ name           = identifier | "`", backticked-body, "`" ;
    double-quoted with the SPEC 2.4 escape set, ONE line; triple-quoted
    strings may span lines and are RAW (no escapes). number: decimal with
    optional fraction/exponent. Comments: "--" to end of line, block
-   comments; a UTF-8 BOM is ignored only where it opens the file. Every
-   keyword is a whole word: streamS is one identifier, never "stream" S
-   (SPEC 2.1, rev 9). *)
+   comments; a UTF-8 BOM is ignored only where it opens the file. A
+   keyword ends where its word ends: a letter, digit or "_" straight after
+   it makes one longer identifier (streamS, never "stream" S; SPEC 2.1,
+   rev 9). *)
