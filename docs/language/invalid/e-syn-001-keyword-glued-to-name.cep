@@ -1,0 +1,3 @@
+-- expect: E-SYN-001 (a keyword is a whole word: `streamS` is one name, not `stream S`) @ 3:1
+language cep/0.1;
+streamS (a string, ts timestamp) time ts watermark bounded 1 min;
