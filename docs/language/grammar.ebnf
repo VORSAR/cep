@@ -114,13 +114,14 @@ duration       = number, dur-unit, { number, dur-unit } ;
 dur-unit       = "ms" | "sec" | "min" | "hour" | "day" | "week" ;
 duration-or-param = duration | param-ref ;
 param-ref      = "${", identifier, "}" ;
-name           = identifier | "`", any-but-backtick, "`" ;
+name           = identifier | "`", backticked-body, "`" ;
 
 (* pragma-id: lowercase name, "/", digits ".", digits (e.g. cep/0.1).
    identifier: [A-Za-z_][A-Za-z0-9_]*, excluding every reserved word IN ANY
    LETTER CASE (the reserved list is normative in SPEC Appendix B and encoded
-   case-insensitively in grammar.lark's NAME terminal); backticked names use
-   letters, digits, "_", "-", ".", spaces only. string: single- or
+   case-insensitively in grammar.lark's NAME terminal). backticked-body: a
+   letter or "_", then letters, digits, "_", "-", ".", spaces only
+   (grammar.lark's BACKTICKED; SPEC 2.3, rev 8). string: single- or
    double-quoted with the SPEC 2.4 escape set, ONE line; triple-quoted
    strings may span lines and are RAW (no escapes). number: decimal with
    optional fraction/exponent. Comments: "--" to end of line, block

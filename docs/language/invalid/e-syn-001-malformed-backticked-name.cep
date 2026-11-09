@@ -1,0 +1,3 @@
+-- expect: E-SYN-001 (a backticked name starts with a letter or `_`) @ 3:8
+language cep/0.1;
+stream `1abc` (a string, ts timestamp) time ts watermark bounded 1 min;
