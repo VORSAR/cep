@@ -95,8 +95,13 @@ func lexError(name, src string, err error) *Error {
 		runes := []rune(lines[pos.Line-1])
 		if pos.Column-1 < len(runes) {
 			switch runes[pos.Column-1] {
-			case '\'', '"':
+			case '\'':
 				return mk(name, "E-STR-001", pos, "a single-quoted string does not end on its line")
+			case '"':
+				return mk(name, "E-STR-001", pos, "a double-quoted string does not end on its line")
+			case '`':
+				return mk(name, "E-SYN-001", pos, "a backticked name starts with a letter or `_`, holds only letters, "+
+					"digits, `_`, `-`, `.` and spaces, and closes on its line")
 			}
 		}
 	}

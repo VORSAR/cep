@@ -1,6 +1,6 @@
 -- constructs: lexical-torture quote-styles every-escape raw-strings numbers-fraction-exponent
 --             compound-durations timestamp-literal booleans backticked-names param-ref-every-slot
---             raw-operand non-ascii-rune signed-param-default delay-window-param
+--             raw-operand non-ascii-rune signed-param-default delay-window-param division-without-spaces
 language cep/0.1;
 
 param hook string = "http://localhost:9000/hook";
@@ -40,7 +40,7 @@ rule LexicalTorture
                                    or raw(text) contains_cs 'café'
                                    or `select` == "double"
                                    or risk * 100 / 100 > ${threshold}
-                                   or risk >= 2.5e-3 and risk < 1e3
+                                   or risk >= 2.5e-3 and risk < 1e3 or risk/2.5 > risk/1.5e3
                                    or score % 2 == 0 and score != ${floor} and -score <= -1
                                    or (flagged == true or flagged == false)
                                    or text is null or text is not null

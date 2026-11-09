@@ -28,7 +28,7 @@ Fix: add `for <duration>` (e.g. `for 5 min`).
 
 ### E-LATE-001 Missing late-events policy **[parse]**
 Rule: SPEC §5.4 — every pattern and window rule states one.
-Fix: add `late events drop` or `late events allow <duration>`.
+Fix: add `late events drop`.
 
 ### E-EMIT-001 Missing emit mode **[parse]**
 Rule: SPEC §5.4 — every window rule states when it emits.
@@ -50,7 +50,7 @@ Fix: `5 min`, `1 hour 30 min`, `250 ms` — never `5`.
 Rule: SPEC §2.5/§5.3 — case mode is part of the operator name; no default exists.
 Fix: `has_ci` (case-folded) or `has_cs` (exact); same for contains/starts_with/ends_with/sets/regex.
 
-### E-STR-001 Literal newline in a single-quoted string **[parse]**
+### E-STR-001 Literal newline in a one-line string **[parse]**
 Rule: SPEC §2.4 — `'…'`/`"…"` strings are one line, so an unterminated quote cannot swallow the file.
 Fix: use a triple-quoted string for multiline text: `'''…'''`.
 

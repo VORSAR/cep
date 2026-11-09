@@ -25,7 +25,7 @@ var fixes = map[string]string{
 	"E-PAT-002":  "add `after match skip past last`.",
 	"E-PAT-003":  "write `from every <step>…` or `from once <step>…`.",
 	"E-PAT-004":  "add `for <duration>` (e.g. `for 5 min`).",
-	"E-LATE-001": "add `late events drop` or `late events allow <duration>`.",
+	"E-LATE-001": "add `late events drop`.",
 	"E-EMIT-001": "add the kind's mode: `emit on close` (cron) | `emit on change` (sort) | `emit on due` (delay) | `emit on batch end` (batch).",
 	"E-WIN-001":  "`window cron('0 0 * * *', 'America/New_York')`.",
 	"E-TTL-001":  "append `ttl <duration>` to the partition clause.",
