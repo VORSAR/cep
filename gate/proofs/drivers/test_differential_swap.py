@@ -50,7 +50,7 @@ class DifferentialSwap(support.DriverTest):
         self.assertEqual(record["verdict"], "fail", run.stdout)
         stderr = run.row_file("test", "differential", "stderr")
         self.assertTrue(record["reason"].startswith("exit 1: docs/language/"), f"{record['reason']}\n{stderr}")
-        self.assertEqual((record["covered"], record["expected"]), (69, 69), record)  # every file was judged
+        self.assertEqual((record["covered"], record["expected"]), (70, 70), record)  # every file was judged
         failed = [line for line in run.row_stdout("test", "differential").split("\n") if line.startswith("failed: ")]
         self.assertIn(f"failed: {T09}: expression 1 differs: lark {LARK} / engine {SWAPPED}", failed)
         self.assertEqual([line for line in failed if "differs" not in line], [], failed)  # verdicts agree
