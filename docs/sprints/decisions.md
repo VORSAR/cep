@@ -60,6 +60,7 @@
 | 2026-11-08 | [S3.3-1's close-out](#owner-decisions-2026-11-08--s33-1s-close-out) |
 | 2026-11-09 | [cep-vscode's findings VSC-F1 to VSC-F4](#owner-decisions-2026-11-09--cep-vscodes-findings-vsc-f1-to-vsc-f4) |
 | 2026-11-09 | [after PR #25's merge](#owner-decisions-2026-11-09--after-pr-25s-merge) |
+| 2026-11-09 | [after PR #26's merge](#owner-decisions-2026-11-09--after-pr-26s-merge) |
 
 ## The decisions
 
@@ -547,3 +548,10 @@ Two recommendations, both accepted ("do 1, 2").
 
 1. **The merged branch `fix/vsc-known-issues` is deleted, local and remote** (every commit on `main` by patch, checked with `git cherry`).
 2. **Known issues VSC-R1 and VSC-R2 are fixed at once, in their own PR from `main`**: `grammar.lark` ignores a BOM only where it opens the file and reads every keyword as a whole word, with a counter-example file each (three in all), as SPEC §2.1 and the engine already had (SPEC rev 9). Rejected: leaving them for a language sprint.
+
+### Owner decisions, 2026-11-09 — after PR #26's merge
+
+Two questions, asked in plain language with a timeline of the failure; both answered as recommended.
+
+1. **The merged branch `fix/lark-bom-keyword-boundary` is deleted, local and remote** (every commit on `main` by patch).
+2. **The flaky `TestBreakitAddWhileAnotherAppDrains` is fixed now, in its own small PR**: first a test that forces the unlucky timing every time, then the fix; how `Undeploy` behaves would come back to the owner if the fault were the program's. It was the test's: a `Stop` cancelled before its drain ran is undone, and `Undeploy` of the still-running app then waits for the held sink until its deadline, as design s3-3-1 §3.5 and §3.6 say. The test now waits for the drain to have run before cancelling, and a new test pins the forced timing. That wait first polled without a pause, and the stress runs then stalled about 1 pair in 10 with `GOMAXPROCS=1`: the polling goroutine, the router and the shard handed the one processor to each other and starved every other goroutine, the Stop included (6.4 million passes in 20 s, the dump's other goroutines runnable). **The owner chose to investigate that stall before shipping** (as recommended; rejected: a test-only hook to signal the stop, and parking it). An exact copy of the two tests with a dump from inside the loop found it; the wait now yields on every pass (no clock read). Rejected for the first question: folding it into S3.3-2 (unrelated, and CI stays flaky meanwhile); a known-issues row for later (ground rule 11).
