@@ -223,3 +223,69 @@ func TestVSCF1PragmaIDIsTheGrammars(t *testing.T) {
 		t.Errorf("pragmaPattern %q; grammar.lark PRAGMA_ID %q", pragmaPattern, want)
 	}
 }
+
+// vscGrammarLines returns grammar.lark's lines with their 1-based numbers, full-line `//` comments left out.
+func vscGrammarLines(t *testing.T) map[int]string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "docs", "language", "grammar.lark"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[int]string{}
+	for i, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "//") {
+			out[i+1] = line
+		}
+	}
+	return out
+}
+
+// TestVSCR2GrammarKeywordsEndAtAWordBoundary: every word grammar.lark matches is a whole word (known issue VSC-R2).
+// A double-quoted word literal matches as a prefix where lark's contextual lexer allows no name, so lark read
+// `streamS (` as `stream S (` and `languagecep/0.1` as `language cep/0.1`, which the engine refuses. So the grammar
+// holds no word literal: each keyword is a `_KW_` terminal for exactly that word, and every word terminal ends at a
+// word boundary, `(?![A-Za-z0-9_])`.
+func TestVSCR2GrammarKeywordsEndAtAWordBoundary(t *testing.T) {
+	const boundary = `(?![A-Za-z0-9_])`
+	literal := regexp.MustCompile(`"([A-Za-z_]+)"`)
+	terminal := regexp.MustCompile(`^(_KW_[A-Z_]+|DUR_UNIT|TEXT_OP|SET_OP|REGEX_OP): /(.*)/$`)
+	kws, ops := 0, 0
+	for n, line := range vscGrammarLines(t) {
+		for _, m := range literal.FindAllStringSubmatch(line, -1) {
+			t.Errorf("grammar.lark:%d: the word literal %q matches as a prefix; write a _KW_ terminal or a word-boundary regex", n, m[0])
+		}
+		m := terminal.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		if !strings.HasSuffix(m[2], boundary) {
+			t.Errorf("grammar.lark:%d: %s does not end at a word boundary: /%s/", n, m[1], m[2])
+		}
+		if word, ok := strings.CutPrefix(m[1], "_KW_"); ok {
+			kws++
+			if want := strings.ToLower(word) + boundary; m[2] != want {
+				t.Errorf("grammar.lark:%d: %s is /%s/; want /%s/", n, m[1], m[2], want)
+			}
+		} else {
+			ops++
+		}
+	}
+	if kws == 0 || ops != 4 {
+		t.Errorf("found %d _KW_ terminals and %d of the four word-operator terminals (DUR_UNIT, TEXT_OP, SET_OP, REGEX_OP) as one-line regexes; want both", kws, ops)
+	}
+}
+
+// TestVSCR1GrammarIgnoresOnlyALeadingBOM: grammar.lark ignores a BOM only where it opens the file (`\A`), as SPEC
+// §2.1 says and the engine does; anywhere else it is an error on both sides (known issue VSC-R1).
+func TestVSCR1GrammarIgnoresOnlyALeadingBOM(t *testing.T) {
+	if got := vscLarkTerminal(t, "BOM"); got != `\A\ufeff` {
+		t.Errorf("grammar.lark BOM /%s/; want /\\A\\ufeff/, a BOM at the start of the file only", got)
+	}
+	found := false
+	for _, line := range vscGrammarLines(t) {
+		found = found || strings.TrimSpace(line) == "%ignore BOM"
+	}
+	if !found {
+		t.Error("grammar.lark: %ignore BOM is missing, so a leading BOM would be an error")
+	}
+}

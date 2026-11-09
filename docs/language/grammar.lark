@@ -10,7 +10,7 @@
 
 start: pragma statement*
 
-pragma: "language" PRAGMA_ID ";"
+pragma: _KW_LANGUAGE PRAGMA_ID ";"
 
 statement: param_decl
          | stream_decl
@@ -19,29 +19,29 @@ statement: param_decl
 
 // ---------------------------------------------------------------- params
 
-param_decl: "param" cname type "=" signed_literal ";"
+param_decl: _KW_PARAM cname type "=" signed_literal ";"
 
 // ---------------------------------------------------------------- declarations
 
-stream_decl: annotation* "stream" cname "(" attr_list ")" time_clause? ";"
-table_decl: "table" cname "(" attr_list ")" "primary" "key" "(" name_list ")" ";"
+stream_decl: annotation* _KW_STREAM cname "(" attr_list ")" time_clause? ";"
+table_decl: _KW_TABLE cname "(" attr_list ")" _KW_PRIMARY _KW_KEY "(" name_list ")" ";"
 
 attr_list: attr ("," attr)*
 attr: cname type opt_marker?
-opt_marker: "optional"
-type: "string" -> t_string
-    | "int" -> t_int
-    | "float" -> t_float
-    | "bool" -> t_bool
-    | "timestamp" -> t_timestamp
-    | "duration" -> t_duration
-    | "object" -> t_object
+opt_marker: _KW_OPTIONAL
+type: _KW_STRING -> t_string
+    | _KW_INT -> t_int
+    | _KW_FLOAT -> t_float
+    | _KW_BOOL -> t_bool
+    | _KW_TIMESTAMP -> t_timestamp
+    | _KW_DURATION -> t_duration
+    | _KW_OBJECT -> t_object
 
-time_clause: "time" cname "watermark" wm_strategy idle_clause?
-           | "time" "arrival" idle_clause?
-wm_strategy: "bounded" duration -> wm_bounded
-           | "ascending" -> wm_ascending
-idle_clause: "idle" "after" duration
+time_clause: _KW_TIME cname _KW_WATERMARK wm_strategy idle_clause?
+           | _KW_TIME _KW_ARRIVAL idle_clause?
+wm_strategy: _KW_BOUNDED duration -> wm_bounded
+           | _KW_ASCENDING -> wm_ascending
+idle_clause: _KW_IDLE _KW_AFTER duration
 
 annotation: "@" cname "(" ann_item ("," ann_item)* ")"
 ann_item: cname "=" ann_value
@@ -53,82 +53,82 @@ ann_value: literal | param_ref
 // Partition is grammatically optional; static rule E-PART-001 requires it on every
 // stateful rule (patterns, windows).
 
-rule_decl: "rule" cname intent_clause partition_clause? body extra* select_clause rate_clause? "insert" "into" cname ";"
+rule_decl: _KW_RULE cname intent_clause partition_clause? body extra* select_clause rate_clause? _KW_INSERT _KW_INTO cname ";"
 
-intent_clause: "intent" STRING
-partition_clause: "partition" "by" part_key ("," part_key)* "ttl" duration_or_param
-part_key: cname "of" cname
-        | "(" cname ("," cname)* ")" "of" cname -> part_group
+intent_clause: _KW_INTENT STRING
+partition_clause: _KW_PARTITION _KW_BY part_key ("," part_key)* _KW_TTL duration_or_param
+part_key: cname _KW_OF cname
+        | "(" cname ("," cname)* ")" _KW_OF cname -> part_group
 
-extra: "expect" expect_block -> expect_clause
-     | "todo" STRING -> todo_clause
+extra: _KW_EXPECT expect_block -> expect_clause
+     | _KW_TODO STRING -> todo_clause
 
-body: "from" restart first_elem chain_elem* "within" duration_or_param after_match late_clause -> pattern_body
-    | "from" source window_clause emit_clause late_clause -> windowed_body
-    | "from" source -> plain_body
+body: _KW_FROM restart first_elem chain_elem* _KW_WITHIN duration_or_param after_match late_clause -> pattern_body
+    | _KW_FROM source window_clause emit_clause late_clause -> windowed_body
+    | _KW_FROM source -> plain_body
 
 // pattern bodies: mandatory restart marker, within, after-match, late events;
 // at least one positive step (a pure-absence pattern is E-PAT-005)
-restart: "every" -> every
-       | "once" -> once
+restart: _KW_EVERY -> every
+       | _KW_ONCE -> once
 first_elem: pos_elem
 chain_elem: "->" pos_elem -> followed_by
-          | "and" "not" source "for" duration_or_param -> absence
+          | _KW_AND _KW_NOT source _KW_FOR duration_or_param -> absence
 pos_elem: step
-        | "(" step "and" step ")" -> and_group
+        | "(" step _KW_AND step ")" -> and_group
 step: cname "=" source
 source: cname filter?
 filter: "[" expr "]"
 
 // windowed bodies: mandatory window, emit, late events (mode×kind legality: E-EMIT-002)
-window_clause: "window" window_kind
-window_kind: "sort" "(" number "," cname "," sort_dir ")" -> w_sort
-           | "cron" "(" STRING "," STRING ")" -> w_cron
-           | "delay" "(" duration_or_param ")" -> w_delay
-           | "batch" "(" ")" -> w_batch
-sort_dir: "asc" -> asc
-        | "desc" -> desc
-emit_clause: "emit" "on" emit_mode
-emit_mode: "close" -> emit_on_close
-         | "change" -> emit_on_change
-         | "due" -> emit_on_due
-         | "batch" "end" -> emit_on_batch_end
+window_clause: _KW_WINDOW window_kind
+window_kind: _KW_SORT "(" number "," cname "," sort_dir ")" -> w_sort
+           | _KW_CRON "(" STRING "," STRING ")" -> w_cron
+           | _KW_DELAY "(" duration_or_param ")" -> w_delay
+           | _KW_BATCH "(" ")" -> w_batch
+sort_dir: _KW_ASC -> asc
+        | _KW_DESC -> desc
+emit_clause: _KW_EMIT _KW_ON emit_mode
+emit_mode: _KW_CLOSE -> emit_on_close
+         | _KW_CHANGE -> emit_on_change
+         | _KW_DUE -> emit_on_due
+         | _KW_BATCH _KW_END -> emit_on_batch_end
 
-after_match: "after" "match" "skip" "past" "last"
-late_clause: "late" "events" late_policy
-late_policy: "drop" -> late_drop
-           | "allow" duration_or_param -> late_allow
+after_match: _KW_AFTER _KW_MATCH _KW_SKIP _KW_PAST _KW_LAST
+late_clause: _KW_LATE _KW_EVENTS late_policy
+late_policy: _KW_DROP -> late_drop
+           | _KW_ALLOW duration_or_param -> late_allow
 
-select_clause: "select" sel_item ("," sel_item)*
-sel_item: expr ("as" cname)?
-rate_clause: "output" "first" "every" duration_or_param
+select_clause: _KW_SELECT sel_item ("," sel_item)*
+sel_item: expr (_KW_AS cname)?
+rate_clause: _KW_OUTPUT _KW_FIRST _KW_EVERY duration_or_param
 
 // expect: one or more given sections (multi-stream injection), a then section
 // that may be empty ("then nothing" = defeat path), null literals allowed.
 expect_block: given_sec+ then_sec
-given_sec: "given" cname "[" [record ("," record)*] "]" -> given_stream
-         | "given" "table" cname "[" [record ("," record)*] "]" -> given_table
-then_sec: "then" cname "[" [record ("," record)*] "]"
+given_sec: _KW_GIVEN cname "[" [record ("," record)*] "]" -> given_stream
+         | _KW_GIVEN _KW_TABLE cname "[" [record ("," record)*] "]" -> given_table
+then_sec: _KW_THEN cname "[" [record ("," record)*] "]"
 record: "{" field ("," field)* "}"
 field: cname ":" field_value
 field_value: signed_literal
-           | "null" -> null_lit
+           | _KW_NULL -> null_lit
 
 // ---------------------------------------------------------------- expressions (SQL-style)
 
 ?expr: or_expr
-?or_expr: or_expr "or" and_expr -> or_op
+?or_expr: or_expr _KW_OR and_expr -> or_op
         | and_expr
-?and_expr: and_expr "and" not_expr -> and_op
+?and_expr: and_expr _KW_AND not_expr -> and_op
          | not_expr
-?not_expr: "not" not_expr -> not_op
+?not_expr: _KW_NOT not_expr -> not_op
          | membership
-?membership: comparison "in" cname -> in_table
-           | comparison "not" "in" cname -> not_in_table
+?membership: comparison _KW_IN cname -> in_table
+           | comparison _KW_NOT _KW_IN cname -> not_in_table
            | comparison
 ?comparison: sum CMP sum -> cmp
-           | sum "is" "null" -> is_null
-           | sum "is" "not" "null" -> is_not_null
+           | sum _KW_IS _KW_NULL -> is_null
+           | sum _KW_IS _KW_NOT _KW_NULL -> is_not_null
            | text_match
            | sum
 text_match: sum TEXT_OP text_operand -> text_op
@@ -146,7 +146,7 @@ set_operand: STRING ("," STRING)* -> set_list
      | param_ref
      | func_call
      | attr_ref
-     | "raw" "(" attr_ref ")" -> raw_wrap
+     | _KW_RAW "(" attr_ref ")" -> raw_wrap
      | "-" atom -> neg
      | "(" expr ")"
 func_call: cname ":" cname "(" arg_list? ")" -> ns_call
@@ -163,9 +163,9 @@ param_ref: PARAM_REF
 ?literal: STRING
         | number
         | duration
-        | "true" -> true_lit
-        | "false" -> false_lit
-        | "timestamp" STRING -> ts_lit
+        | _KW_TRUE -> true_lit
+        | _KW_FALSE -> false_lit
+        | _KW_TIMESTAMP STRING -> ts_lit
 ?signed_literal: literal
                | "-" number -> neg_lit
 number: NUMBER
@@ -181,12 +181,86 @@ name_list: cname ("," cname)*
 // ---------------------------------------------------------------- terminals
 
 PRAGMA_ID: /[a-z][a-z0-9_]*\/[0-9]+\.[0-9]+/
-DUR_UNIT: "ms" | "sec" | "min" | "hour" | "day" | "week"
-TEXT_OP: "has_ci" | "has_cs" | "contains_ci" | "contains_cs"
-       | "starts_with_ci" | "starts_with_cs" | "ends_with_ci" | "ends_with_cs"
-SET_OP: "has_any_ci" | "has_any_cs" | "has_all_ci" | "has_all_cs"
-      | "contains_any_ci" | "contains_any_cs" | "contains_all_ci" | "contains_all_cs"
-REGEX_OP: "matches_ci" | "matches_cs" | "contains_match_ci" | "contains_match_cs"
+
+// Keywords are whole words (SPEC §2.1): each ends at a word boundary, so `streamS` is one name and never
+// `stream S`; a double-quoted literal would match as a prefix wherever lark's contextual lexer allows no name
+// (known issue VSC-R2). The `_` prefix keeps them out of the tree, as a quoted literal was.
+_KW_AFTER: /after(?![A-Za-z0-9_])/
+_KW_ALLOW: /allow(?![A-Za-z0-9_])/
+_KW_AND: /and(?![A-Za-z0-9_])/
+_KW_ARRIVAL: /arrival(?![A-Za-z0-9_])/
+_KW_AS: /as(?![A-Za-z0-9_])/
+_KW_ASC: /asc(?![A-Za-z0-9_])/
+_KW_ASCENDING: /ascending(?![A-Za-z0-9_])/
+_KW_BATCH: /batch(?![A-Za-z0-9_])/
+_KW_BOOL: /bool(?![A-Za-z0-9_])/
+_KW_BOUNDED: /bounded(?![A-Za-z0-9_])/
+_KW_BY: /by(?![A-Za-z0-9_])/
+_KW_CHANGE: /change(?![A-Za-z0-9_])/
+_KW_CLOSE: /close(?![A-Za-z0-9_])/
+_KW_CRON: /cron(?![A-Za-z0-9_])/
+_KW_DELAY: /delay(?![A-Za-z0-9_])/
+_KW_DESC: /desc(?![A-Za-z0-9_])/
+_KW_DROP: /drop(?![A-Za-z0-9_])/
+_KW_DUE: /due(?![A-Za-z0-9_])/
+_KW_DURATION: /duration(?![A-Za-z0-9_])/
+_KW_EMIT: /emit(?![A-Za-z0-9_])/
+_KW_END: /end(?![A-Za-z0-9_])/
+_KW_EVENTS: /events(?![A-Za-z0-9_])/
+_KW_EVERY: /every(?![A-Za-z0-9_])/
+_KW_EXPECT: /expect(?![A-Za-z0-9_])/
+_KW_FALSE: /false(?![A-Za-z0-9_])/
+_KW_FIRST: /first(?![A-Za-z0-9_])/
+_KW_FLOAT: /float(?![A-Za-z0-9_])/
+_KW_FOR: /for(?![A-Za-z0-9_])/
+_KW_FROM: /from(?![A-Za-z0-9_])/
+_KW_GIVEN: /given(?![A-Za-z0-9_])/
+_KW_IDLE: /idle(?![A-Za-z0-9_])/
+_KW_IN: /in(?![A-Za-z0-9_])/
+_KW_INSERT: /insert(?![A-Za-z0-9_])/
+_KW_INT: /int(?![A-Za-z0-9_])/
+_KW_INTENT: /intent(?![A-Za-z0-9_])/
+_KW_INTO: /into(?![A-Za-z0-9_])/
+_KW_IS: /is(?![A-Za-z0-9_])/
+_KW_KEY: /key(?![A-Za-z0-9_])/
+_KW_LANGUAGE: /language(?![A-Za-z0-9_])/
+_KW_LAST: /last(?![A-Za-z0-9_])/
+_KW_LATE: /late(?![A-Za-z0-9_])/
+_KW_MATCH: /match(?![A-Za-z0-9_])/
+_KW_NOT: /not(?![A-Za-z0-9_])/
+_KW_NULL: /null(?![A-Za-z0-9_])/
+_KW_OBJECT: /object(?![A-Za-z0-9_])/
+_KW_OF: /of(?![A-Za-z0-9_])/
+_KW_ON: /on(?![A-Za-z0-9_])/
+_KW_ONCE: /once(?![A-Za-z0-9_])/
+_KW_OPTIONAL: /optional(?![A-Za-z0-9_])/
+_KW_OR: /or(?![A-Za-z0-9_])/
+_KW_OUTPUT: /output(?![A-Za-z0-9_])/
+_KW_PARAM: /param(?![A-Za-z0-9_])/
+_KW_PARTITION: /partition(?![A-Za-z0-9_])/
+_KW_PAST: /past(?![A-Za-z0-9_])/
+_KW_PRIMARY: /primary(?![A-Za-z0-9_])/
+_KW_RAW: /raw(?![A-Za-z0-9_])/
+_KW_RULE: /rule(?![A-Za-z0-9_])/
+_KW_SELECT: /select(?![A-Za-z0-9_])/
+_KW_SKIP: /skip(?![A-Za-z0-9_])/
+_KW_SORT: /sort(?![A-Za-z0-9_])/
+_KW_STREAM: /stream(?![A-Za-z0-9_])/
+_KW_STRING: /string(?![A-Za-z0-9_])/
+_KW_TABLE: /table(?![A-Za-z0-9_])/
+_KW_THEN: /then(?![A-Za-z0-9_])/
+_KW_TIME: /time(?![A-Za-z0-9_])/
+_KW_TIMESTAMP: /timestamp(?![A-Za-z0-9_])/
+_KW_TODO: /todo(?![A-Za-z0-9_])/
+_KW_TRUE: /true(?![A-Za-z0-9_])/
+_KW_TTL: /ttl(?![A-Za-z0-9_])/
+_KW_WATERMARK: /watermark(?![A-Za-z0-9_])/
+_KW_WINDOW: /window(?![A-Za-z0-9_])/
+_KW_WITHIN: /within(?![A-Za-z0-9_])/
+DUR_UNIT: /(?:ms|sec|min|hour|day|week)(?![A-Za-z0-9_])/
+TEXT_OP: /(?:has_ci|has_cs|contains_ci|contains_cs|starts_with_ci|starts_with_cs|ends_with_ci|ends_with_cs)(?![A-Za-z0-9_])/
+SET_OP: /(?:has_any_ci|has_any_cs|has_all_ci|has_all_cs|contains_any_ci|contains_any_cs|contains_all_ci|contains_all_cs)(?![A-Za-z0-9_])/
+REGEX_OP: /(?:matches_ci|matches_cs|contains_match_ci|contains_match_cs)(?![A-Za-z0-9_])/
 CMP: "==" | "!=" | ">=" | "<=" | ">" | "<"
 PLUS_MINUS: "+" | "-"
 MUL_DIV: "*" | "/" | "%"
@@ -206,7 +280,7 @@ STRING: /'''(.|\n)*?'''/ | /"""(.|\n)*?"""/
 
 LINE_COMMENT: /--[^\n]*/
 BLOCK_COMMENT: /\/\*(.|\n)*?\*\//
-BOM: "﻿"
+BOM: /\A\ufeff/
 %ignore BOM
 %ignore LINE_COMMENT
 %ignore BLOCK_COMMENT

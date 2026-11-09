@@ -133,3 +133,5 @@ Every non-SQL construct is priced here before it enters SYNTAX.md.
 *Spec rev 7 (2026-11-07, sprint S3.3-1; the forwards of S3.1-2's D3 and S3.2a-1's D7): two deploy errors, `E-TBL-002` (a primary-key column optional or object) and `E-PART-008` (an object partition key). The grammar is unchanged; 67 codes.*
 
 *Spec rev 8 (2026-11-09, known issues VSC-F1 and VSC-F2, fixed out of sprint): a backticked name starts with an ASCII letter or `_` (`grammar.lark`'s form), otherwise `E-SYN-001` at its opening backtick; §3.1 says the pragma's id is read only after `language`. The grammar is unchanged; 67 codes; invalid/ holds 25 files.*
+
+*Spec rev 9 (2026-11-09, known issues VSC-R1 and VSC-R2): `grammar.lark` ignores a BOM only at the start of the file and reads every keyword as a whole word, as SPEC §2.1 and the engine already did; no valid program changes. 67 codes; invalid/ holds 28 files.*
