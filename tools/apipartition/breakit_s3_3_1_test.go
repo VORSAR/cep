@@ -52,7 +52,7 @@ func TestBreakitAliasOfAnUnexportedTypeShowsItsFields(t *testing.T) {
 func TestBreakitGenericTypeAndTagsArePrinted(t *testing.T) {
 	t.Parallel()
 	got := surfaceOf(t, pkgDir(t, "package p\n\ntype G[T any] struct{ V T }\n\nfunc (g *G[T]) Get() T { return g.V }\n"))
-	for _, want := range []string{"p G type type G[T any] struct {\n\tV T\n}\n", "p Get func func (g *G[T]) Get() T\n"} {
+	for _, want := range []string{"p G type type G[T any] struct {\n\tV T\n}\n", "p G.Get func func (g *G[T]) Get() T\n"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("surface:\n%s\nwant it to contain %q", got, want)
 		}
