@@ -99,6 +99,11 @@ func Build(app *model.App) (*App, error) {
 		}
 		p.Rules = append(p.Rules, r)
 	}
+	x, err := expects(app, p, ids)
+	if err != nil {
+		return nil, err
+	}
+	p.Expects = x
 	return p, nil
 }
 
