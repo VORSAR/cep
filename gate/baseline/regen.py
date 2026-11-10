@@ -9,6 +9,7 @@ Run by path from the repository root with the pinned interpreter:
 (`-I` keeps the working directory off sys.path, so `-m gate.baseline.regen` cannot import `gate`.)
 """
 
+import hashlib
 import json
 import os
 import re
@@ -93,13 +94,19 @@ def parse(text: str) -> Baseline:
     for key, kind in (("file", str), ("format", int), ("source_sha256", str), ("spec_rev", int)):
         if not isinstance(header.get(key), kind):
             raise ValueError(f"the header has no {key}: {lines[0][:80]}")
-    blocks = []
+    blocks, keys = [], set()
     for line in lines[1:]:
         b = _object(line, "a block line")
         for key, kind in (("block", int), ("counts", dict), ("key", str), ("outputs", list), ("rule", str)):
             if not isinstance(b.get(key), kind):
                 raise ValueError(f"a block line has no {key}: {line[:80]}")
-        counts = tuple(sorted((str(k), int(v)) for k, v in b["counts"].items()))
+        for name, value in b["counts"].items():  # an int, never a bool, a string or a fraction (Q-L1)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError(f"a block line's count {name} is not an integer: {line[:80]}")
+        if b["key"] in keys:  # two blocks of one file never share a key: the Go side numbers equal ones (Q-S2)
+            raise ValueError(f"the key {b['key']} is written twice in {header['file']}")
+        keys.add(b["key"])
+        counts = tuple(sorted((str(k), v) for k, v in b["counts"].items()))
         blocks.append(Block(header["file"], b["rule"], b["block"], b["key"], _raw_outputs(line), counts))
     return Baseline(header["file"], header["format"], header["source_sha256"], header["spec_rev"], tuple(blocks))
 
@@ -148,9 +155,15 @@ def _compare(old: Block, new: Block, stored_rev: int, spec_rev: int, accept: fro
 
 
 def classify(
-    old: dict[str, Baseline], new: dict[str, Baseline], spec_rev: int, accept: frozenset[str]
+    old: dict[str, Baseline],
+    new: dict[str, Baseline],
+    spec_rev: int,
+    accept: frozenset[str],
+    sources: dict[str, str] | None = None,
 ) -> list[Verdict]:
-    """Every block of every file in either run, keyed (file, key); verdicts sorted by (file, ordinal, key)."""
+    """Every block of every file in either run, keyed (file, key); verdicts sorted by (file, ordinal, key). sources is
+    each corpus file's SHA-256 as it stands: a file only in the stored run whose corpus file is unchanged is
+    block-vanished, not block-removed (the break-it's Q-S3)."""
     out: list[Verdict] = []
 
     def verdict(b: Block, cls: str, recorded: bool) -> None:
@@ -167,8 +180,9 @@ def classify(
                 verdict(b, "additive-new-block", True)
             continue
         if n is None:
-            for b in o.blocks:
-                verdict(b, "block-removed", True)  # its corpus file is gone
+            vanished = sources is not None and sources.get(name) == o.source_sha256
+            for b in o.blocks:  # its corpus file is gone or changed, unless its bytes still hash as stored
+                verdict(b, "block-vanished" if vanished else "block-removed", not vanished)
             continue
         olds, news = {b.key: b for b in o.blocks}, {b.key: b for b in n.blocks}
         for b in n.blocks:
@@ -193,6 +207,10 @@ def run_tier1(repo: str) -> int:
     with open(os.path.join(repo, "gate", "registry.json"), encoding="utf-8") as f:
         registry = json.load(f)
     registry["rows"] = [r for r in registry["rows"] if r["id"] in TIER1_ROWS]
+    missing = sorted(set(TIER1_ROWS) - {"parity"} - {r["id"] for r in registry["rows"]})
+    if missing:  # a Tier-1 row renamed or dropped is not a green Tier 1 (the break-it's Q-L4)
+        print(f"Tier 1 is incomplete: the registry has no row {', '.join(missing)}")
+        return 1
     with tempfile.TemporaryDirectory(prefix="regen-tier1-") as tmp:
         path = os.path.join(tmp, "registry.json")
         with open(path, "w", encoding="utf-8") as f:
@@ -246,6 +264,21 @@ def _read_dir(path: str) -> tuple[dict[str, Baseline], dict[str, str]]:
     return parsed, texts
 
 
+def _sources(repo: str) -> dict[str, str]:
+    """Each corpus file's SHA-256 by its name, as the baseline headers name it."""
+    out = {}
+    corpus = os.path.join(repo, "docs", "language", "examples")
+    for sub in ("", "torture"):
+        d = os.path.join(corpus, sub)
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if name.endswith(".cep"):
+                with open(os.path.join(d, name), "rb") as f:
+                    out[name] = hashlib.sha256(f.read()).hexdigest()
+    return out
+
+
 def _spec_rev(repo: str) -> int:
     with open(os.path.join(repo, SPEC), encoding="utf-8") as f:
         m = re.search(r"rev (\d+) \(", f.read())
@@ -270,16 +303,21 @@ def main(argv: list[str]) -> int:
         if fresh_run(repo, fresh_dir) != 0:
             print("refused: the fresh run failed")
             return 1
-        old, old_texts = _read_dir(stored_dir)
-        new, new_texts = _read_dir(fresh_dir)
-        verdicts = classify(old, new, _spec_rev(repo), accept)
+        try:
+            old, old_texts = _read_dir(stored_dir)
+            new, new_texts = _read_dir(fresh_dir)
+        except ValueError as e:
+            print(f"refused: a malformed baseline: {e}")
+            return 1
+        spec_rev = _spec_rev(repo)
+        verdicts = classify(old, new, spec_rev, accept, _sources(repo))
         if not verdicts and old_texts == new_texts:
             print("no change")
             return 0
         for v in verdicts:
             verdict = "recorded" if v.recorded else "REFUSED"
             print(f"{v.cls} {v.file} rule {v.rule} block {v.ordinal} key {v.key[:12]}: {verdict}")
-            if v.cls == "value-change":
+            if v.cls == "value-change" and v.file in old and spec_rev > old[v.file].spec_rev:  # it can record (Q-S4)
                 print(f"  to accept it as a SPEC revision's change: ACCEPT {v.file}:{v.rule}:{v.ordinal}")
         refused = [v for v in verdicts if not v.recorded]
         if refused:

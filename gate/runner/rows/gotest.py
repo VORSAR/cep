@@ -13,8 +13,25 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import rows
+import re
+
+from gate.runner import jsonstream, rows
 from gate.runner.rows import unit
+
+# An anchored list of test names: ^Name$ or ^(A|B|…)$.
+_NAMES = re.compile(r"^\^(?:\((\w+(?:\|\w+)*)\)|(\w+))\$$")
+
+
+def missing_names(pattern: str, events: list[dict]) -> list[str]:
+    """For a pattern that names tests, ^A$ or ^(A|B)$, one failure per name that never ran as a top-level test (the
+    package count alone reads green when one of two names is misspelt: the S3.3-2 combined review's R-L1). Any other
+    pattern checks nothing here."""
+    m = _NAMES.match(pattern)
+    if not m:
+        return []
+    names = (m.group(1) or m.group(2)).split("|")
+    ran = {e.get("Test") for e in events if e.get("Action") == "run"}
+    return [f"no test ran: {name}" for name in names if name not in ran]
 
 
 def main(argv: list[str]) -> int:
@@ -26,6 +43,12 @@ def main(argv: list[str]) -> int:
         return 2
     code = rows.run_tool(["go", "test", "-json", "-count=1", "-run", args[1], *args[2:]], out, err)
     failures, packages = unit.judge(out, code)
+    with open(out, "rb") as f:
+        try:
+            events = jsonstream.parse(f.read())
+        except ValueError:
+            events = []  # judge has already reported it
+    failures += missing_names(args[1], events)
     rows.covered(len(packages))
     return rows.finish(sorted(failures))
 
