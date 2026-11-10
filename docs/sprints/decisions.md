@@ -63,6 +63,7 @@
 | 2026-11-09 | [after PR #25's merge](#owner-decisions-2026-11-09--after-pr-25s-merge) |
 | 2026-11-09 | [after PR #26's merge](#owner-decisions-2026-11-09--after-pr-26s-merge) |
 | 2026-11-09 | [after PR #27's merge: merged fix branches](#owner-decisions-2026-11-09--after-pr-27s-merge-merged-fix-branches) |
+| 2026-11-09 | [S3.3-2's design, after the panel](#owner-decisions-2026-11-09--s33-2s-design-after-the-panel) |
 
 ## The decisions
 
@@ -572,3 +573,17 @@ Two questions, asked in plain language with a timeline of the failure; both answ
 One question, asked after the third fix PR of the day; as recommended.
 
 1. **A standing authorisation under ground rule 3: once the owner has merged a fix PR and the coordinator has checked that every commit of its branch is on `main` by patch (`git cherry main <branch>` empty), the coordinator deletes the branch, local and remote, without asking.** Sprint branches stay with the sprint model's close-out. Rejected: asking each time; keeping merged branches.
+
+### Owner decisions, 2026-11-09 — S3.3-2's design, after the panel
+
+Eight questions, asked in plain language with a worked example each, after the blind panel (breaker, challenger, the architect with the-fool) reviewed [design v1](s3-3-2-design.md); seven as recommended. The QA testability agent was stopped by the owner, and the owner directed the coordinator to do that review ("you do it"), a departure from ground rule 14 recorded in [the record](s3-3-2-record.md).
+
+1. **`Deploy` marks "not built yet" with Go's standard `errors.ErrUnsupported`**, wrapped beside the plan's own error; the conformance runner tests `errors.Is(err, errors.ErrUnsupported)`. No new public name. Rejected: a public `cep.ErrNotBuilt` (dead after S12); matching the error's words.
+2. **E-EXP-002 refuses every mistake the panel found, not only unknown names and wrong types:** a missing or `null` value for a required field, the time attribute always (live refuses an event without a time, whatever `optional` says); `null` in a then-record for a required output attribute; a field written twice; a `given` or `then` naming a stream or table its rule does not use; one stream given twice (SPEC §6.8: one list per input stream); a `time arrival` stream given events; a given record setting the engine-owned `text_invisibles`. About +0.25 point. Rejected: only what prevents a false pass or a crash; only decision 2's wording of 2026-11-08.
+3. **E-EXP-001 points at the expected record that did not come out**, or at `then` for an output the then-list does not have; one diagnostic per failing block. Rejected: at the block's `expect`.
+4. **A Tier-2 baseline recognises an example by its content, not its position:** a new example is recorded as an addition; a removed one is recorded only when its corpus file changed; one gone with its file unchanged is refused. Rejected: by position (an insertion refuses every later example).
+5. **After a SPEC revision, a changed value is recorded only for the examples the person names** (`ACCEPT=…`); any other changed value is refused as unexplained. Rejected: every changed value recorded after any revision.
+6. **The rule that a "not built yet" corpus file turns red once its sprint arrives is built in S1.1c**, with the current-sprint marker S1.1c owns; S3.3-2 lists each file under the sprint the plan's corpus map gives it and checks the exact construct it stops on. Rejected: a marker built now (overlapping S1.1c's).
+7. **The language refuses `optional` on a stream's time attribute now** (≠ R): a second reason under E-TIME-003, a SPEC change-log line (rev 10), about +0.25 point. The recommendation left it to a later language cleanup, since live ingest and E-EXP-002 already refuse an event without a time.
+8. **S3.3-2 stays one sprint, re-sized at about 9.75 points** (7.5 + the panel's fixes + 2 + 7). Rejected: splitting the `Close` fix (S3.3-1-2) into its own PR.
+
