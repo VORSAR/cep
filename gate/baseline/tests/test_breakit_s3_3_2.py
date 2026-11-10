@@ -4,8 +4,12 @@ The harness is test_regen.py's: `main` on a temporary repository, the gate and G
 """
 
 import hashlib
+import json
 import os
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
 from gate.baseline import regen
 from gate.baseline.tests import test_regen as tr
@@ -89,6 +93,25 @@ class BreakitMain(unittest.TestCase):
         if token in printed:
             code, again = self.main("--accept", token)
             self.assertEqual(code, 0, f"the tool offered ACCEPT {token}, and following it is refused again:\n{again}")
+
+
+class BreakitTier1(unittest.TestCase):
+    def test_a_tier1_row_missing_from_the_registry_is_refused(self):
+        # run_tier1 keeps the registry's rows whose id is a Tier-1 row and runs the gate on them; a Tier-1 row renamed
+        # or dropped from the registry is silently left out, and the gate runs green on the one row left. Here the
+        # registry holds `conformance` only (no `semantics`) and the gate's run (stubbed) exits 0: Tier 1 is not
+        # green, since one of its rows never ran.
+        with open(os.path.join(tr.REPO, "gate", "registry.json"), encoding="utf-8") as f:
+            registry = json.load(f)
+        registry["rows"] = [r for r in registry["rows"] if r["id"] != "semantics"]
+        with tempfile.TemporaryDirectory(prefix="regen-bk-") as repo:
+            os.makedirs(os.path.join(repo, "gate"))
+            with open(os.path.join(repo, "gate", "registry.json"), "w", encoding="utf-8") as f:
+                json.dump(registry, f)
+            done = subprocess.CompletedProcess(args=[], returncode=0)
+            with mock.patch.object(regen.subprocess, "run", return_value=done):
+                code = regen.run_tier1(repo)
+        self.assertNotEqual(code, 0, "Tier 1 ran without its semantics row and read green")
 
 
 if __name__ == "__main__":
