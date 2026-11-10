@@ -167,17 +167,31 @@ func blRun(t *testing.T, name string) ([]string, int, bool) {
 	return lines, len(results), true
 }
 
-// blKeys is each block's content key, in RunExpects' order (design s3-3-2 §8.1): the SHA-256 of the canonical form of
-// the file's declarations and the owning rule holding only this block; equal keys in one rule take #2, #3, ….
+// blKeys is each block's content key, in RunExpects' order (design s3-3-2 §8.1 as built): the SHA-256 of the canonical
+// form of the file's params, the declarations the owning rule uses — the streams it reads, its target, the tables it
+// reads — and the rule holding only this block; equal keys in one rule take #2, #3, …. A declaration the rule does not
+// use (a new rule's own stream) moves no key, so an engine drift in the other blocks is still judged by the classes.
 func blKeys(t *testing.T, app *model.App) []string {
 	t.Helper()
 	var keys []string
 	for _, r := range app.Rules {
+		streams, tables := blUses(&r)
+		one := model.App{Language: app.Language, Params: app.Params}
+		for _, s := range app.Streams {
+			if streams[s.Name] {
+				one.Streams = append(one.Streams, s)
+			}
+		}
+		for _, tb := range app.Tables {
+			if tables[tb.Name] {
+				one.Tables = append(one.Tables, tb)
+			}
+		}
 		seen := map[string]int{}
 		for _, b := range r.Expects {
 			rule := r
 			rule.Expects = []model.Expect{b}
-			one := model.App{Language: app.Language, Params: app.Params, Streams: app.Streams, Tables: app.Tables, Rules: []model.Rule{rule}}
+			one.Rules = []model.Rule{rule}
 			text, err := one.MarshalCanonical()
 			if err != nil {
 				t.Fatalf("rule %s: %v", r.Name, err)
@@ -192,6 +206,32 @@ func blKeys(t *testing.T, app *model.App) []string {
 		}
 	}
 	return keys
+}
+
+// blUses is the streams a rule reads or writes and the tables its expressions read (an `in` operand, a text
+// operator's table).
+func blUses(r *model.Rule) (map[string]bool, map[string]bool) {
+	streams, tables := map[string]bool{r.InsertInto: true}, map[string]bool{}
+	var walk func(e *model.Expr)
+	walk = func(e *model.Expr) {
+		if e.Kind == model.ExprIn && e.Table != "" {
+			tables[e.Table] = true
+		}
+		if e.Kind == model.ExprText && e.Operand.Table != "" {
+			tables[e.Operand.Table] = true
+		}
+		for i := range e.Args {
+			walk(&e.Args[i])
+		}
+	}
+	if src := &r.Body.Source; src.Stream != "" { // a plain or window body; S4.1 adds a pattern's steps here
+		streams[src.Stream] = true
+		walk(&src.Filter)
+	}
+	for i := range r.Select {
+		walk(&r.Select[i].Expr)
+	}
+	return streams, tables
 }
 
 func blHeaderLine(t *testing.T, name string, specRev int) string {

@@ -6,8 +6,9 @@ compares a fresh run with these files on every gate run; any difference is red. 
 `make regen-baseline`, which re-runs Tier 1 first and classifies each block's difference. This table explains the
 classes; `gate/baseline/regen.py` enforces them.
 
-A block is keyed by its content: the corpus file's declarations and its rule holding only this block. A deliberate
-corpus edit therefore reads as a removed block and a new one; an engine change keeps every key.
+A block is keyed by its content: the file's params, the declarations its rule uses (the streams it reads, its target,
+the tables it reads) and its rule holding only this block. A deliberate edit of a block or its rule therefore reads as
+a removed block and a new one; an engine change, or a declaration the rule does not use, keeps every key.
 
 | Class | When | Verdict |
 |---|---|---|

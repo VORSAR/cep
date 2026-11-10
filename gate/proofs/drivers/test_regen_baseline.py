@@ -45,16 +45,20 @@ WITH_TESTS = ("conformance", "internal/playback")  # the packages whose tests ru
 
 # A second rule for 09, appended after HighRisk: HighRisk's own shape with a staging filter, over the streams 09
 # already declares, so it declares nothing new and HighRisk's four keys stay as they are.
+# The new rule writes its own stream: a derived stream has one producer (E-GRAPH-003; fixture edit at T4, named in
+# the record: the first form inserted into RiskAlerts, which Tier 1 refused).
 STAGING_RULE = """
+
+stream StagingAlerts (agentId string, scaled float, ts timestamp);
 
 rule StagingRisk
   intent 'Alert when a scaled risk score crosses the configured threshold in staging.'
   from `agent-events`[risk * 100 / 100 > ${threshold} and env == 'staging']
   expect given `agent-events` [ {agentId: 'a3', risk: 0.9, env: 'staging', ts: timestamp '2026-01-01T00:00:01Z'} ]
-         then RiskAlerts [ {agentId: 'a3', scaled: 1.0, ts: timestamp '2026-01-01T00:00:01Z'} ]
+         then StagingAlerts [ {agentId: 'a3', scaled: 1.0, ts: timestamp '2026-01-01T00:00:01Z'} ]
   select agentId, math:round(risk) as scaled
   output first every ${lookback}
-  insert into RiskAlerts;"""
+  insert into StagingAlerts;"""
 LAST_LINE_09 = "  insert into RiskAlerts;"
 
 
@@ -203,21 +207,23 @@ class RegenBaseline(support.DriverTest):
         self.assertRefused("timestamp-drift")
 
     def test_additive_new_block_is_recorded(self):
-        # 09 gains a second rule, StagingRisk, with one block: a3's 0.9 in staging passes `risk * 100 / 100 > 0.75
-        # and env == 'staging'`, math:round(0.9) is 1.0, the rate limit has nothing before it: one alert (a3, 1.0,
-        # 00:00:01), as its then-list says, so Tier 1 stays green. HighRisk's four keys hold the file's pragma,
-        # params, streams and tables and HighRisk itself, none of which changed: no verdict. The new block's key is
-        # new: additive-new-block, recorded. TestBaseline counts one block more, so the world's wantBlocks moves
-        # 15 -> 16, as a developer adding a block would move it.
+        # 09 gains a second rule, StagingRisk, writing its own new stream StagingAlerts, with one block: a3's 0.9 in
+        # staging passes `risk * 100 / 100 > 0.75 and env == 'staging'`, math:round(0.9) is 1.0, the rate limit has
+        # nothing before it: one alert (a3, 1.0, 00:00:01), as its then-list says, so Tier 1 stays green. HighRisk's
+        # four keys hold the file's pragma and params, the streams and tables HighRisk uses and HighRisk itself, none
+        # of which changed (StagingAlerts is not one HighRisk uses): no verdict. The new block's key is new:
+        # additive-new-block, recorded. TestBaseline counts one block more, so the world's blWantBlocks moves 15 -> 16,
+        # as a developer adding a block would move it.
         stored_09 = self.stored_lines("09-params-and-quoting.cep")
         path = os.path.join(self.world.repo, EX09)
         text = support.read_text(path)
         self.assertEqual(text.count(LAST_LINE_09), 1, "the plant's anchor moved")
         self.world.write(EX09, text.replace(LAST_LINE_09, LAST_LINE_09 + STAGING_RULE))
         test = support.read_text(os.path.join(self.world.repo, BASELINE_TEST))
-        want = re.compile(r"\bwantBlocks(\s*)=(\s*)15\b")
+        # The constant is blWantBlocks (the file's bl prefix; fixture edit at T4, named in the record).
+        want = re.compile(r"\bblWantBlocks(\s*)=(\s*)15\b")
         self.assertEqual(len(want.findall(test)), 1, "the wantBlocks anchor moved")
-        self.world.write(BASELINE_TEST, want.sub(r"wantBlocks\1=\g<2>16", test))
+        self.world.write(BASELINE_TEST, want.sub(r"blWantBlocks\1=\g<2>16", test))
         before = self.snapshot()
 
         code, printed = self.regen()
