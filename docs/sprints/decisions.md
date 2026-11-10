@@ -64,6 +64,7 @@
 | 2026-11-09 | [after PR #26's merge](#owner-decisions-2026-11-09--after-pr-26s-merge) |
 | 2026-11-09 | [after PR #27's merge: merged fix branches](#owner-decisions-2026-11-09--after-pr-27s-merge-merged-fix-branches) |
 | 2026-11-09 | [S3.3-2's design, after the panel](#owner-decisions-2026-11-09--s33-2s-design-after-the-panel) |
+| 2026-11-10 | [S3.3-2's review and break-it](#owner-decisions-2026-11-10--s33-2s-review-and-break-it) |
 
 ## The decisions
 
@@ -586,4 +587,10 @@ Eight questions, asked in plain language with a worked example each, after the b
 6. **The rule that a "not built yet" corpus file turns red once its sprint arrives is built in S1.1c**, with the current-sprint marker S1.1c owns; S3.3-2 lists each file under the sprint the plan's corpus map gives it and checks the exact construct it stops on. Rejected: a marker built now (overlapping S1.1c's).
 7. **The language refuses `optional` on a stream's time attribute now** (≠ R): a second reason under E-TIME-003, a SPEC change-log line (rev 10), about +0.25 point. The recommendation left it to a later language cleanup, since live ingest and E-EXP-002 already refuse an event without a time.
 8. **S3.3-2 stays one sprint, re-sized at about 9.75 points** (7.5 + the panel's fixes + 2 + 7). Rejected: splitting the `Close` fix (S3.3-1-2) into its own PR.
+
+### Owner decisions, 2026-11-10 — S3.3-2's review and break-it
+
+One question, asked in plain language with a worked example after the combined review (R-S2) and the break-it (Q-S5) found the same gap: a rule reading a stream with a required `object` attribute could carry no passing expect block (no literal is an object; leaving a required field out or writing `null` is E-EXP-002, decision 2 of 2026-11-09).
+
+1. **An `object` field in an expect block takes a string holding its JSON text, now** (≠ R: the recommendation kept the refusal with a clearer message and left object values to a later language sprint). The string must be one JSON object or array; it is stored as the Go boundary stores an object (compact, member order kept); a then-record compares the object by that text; a string that is not one JSON object or array is E-EXP-002 at the value. No grammar change: a string literal already exists (SPEC rev 10's change-log line). Rejected: letting a block leave a required object out (an event live ingest refuses).
 
