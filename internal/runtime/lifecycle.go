@@ -44,9 +44,10 @@ func New(cfg Config) (*Runtime, error) {
 // items; every shard builds its own state for it and acks; on any shard's error nothing is installed, the id is
 // consumed (its slot stays nil) and the error is returned. Nothing accepts the app's input until Activate.
 func (r *Runtime) Add(ctx context.Context, app App) (AppID, error) {
-	if r.isClosed() {
+	if r.isClosed() || !r.inflight.enter() { // Close has begun: refused before it lists the apps (S3.3-1-2)
 		return 0, ErrClosed
 	}
+	defer r.inflight.leave() // after the router's reply: the install is complete when Close sees the gate empty
 	if err := validateApp(len(r.appList()), &app); err != nil {
 		return 0, err
 	}
@@ -81,6 +82,10 @@ func (r *Runtime) requestQueued(ctx context.Context, it item) (reply, error) {
 // a caller reads (review B1; break-it B2). Errors: ErrStarted (already active), ErrDrained (after Drain), ErrRemoved
 // (after or during Remove).
 func (r *Runtime) Activate(ctx context.Context, app AppID) error {
+	if r.isClosed() || !r.inflight.enter() { // Close has begun (S3.3-1-2)
+		return ErrClosed
+	}
+	defer r.inflight.leave() // after the tail below: Close never sees an activation half done (design s3-3-2 §9.1)
 	a, err := r.appOf(app)
 	if err != nil {
 		return err
@@ -277,6 +282,11 @@ func (r *Runtime) Remove(ctx context.Context, app AppID) error {
 	if err != nil {
 		return err
 	}
+	if f := r.removeFault; f != nil { // the package's tests only
+		if err := f(app); err != nil {
+			return err
+		}
+	}
 	switch appPhase(a.phase.Load()) {
 	case phaseActive:
 		return fmt.Errorf("%w (app %d)", ErrActive, app)
@@ -323,21 +333,34 @@ func (r *Runtime) Remove(ctx context.Context, app AppID) error {
 // running: nil once they have all returned, ctx's error otherwise (break-it S2: the truthful contract).
 func (r *Runtime) Close(ctx context.Context) error {
 	var first error
+	var failed []error
 	r.closeOnce.Do(func() {
+		// The in-flight gate first (S3.3-1-2; design s3-3-2 §9.1): no Add or Activate begins from here, and the ones
+		// inside finish before the apps are listed. Waited on with ctx: the router may be waiting on a stuck sink.
+		select {
+		case <-r.inflight.close():
+		case <-ctx.Done():
+			first = ctx.Err()
+		}
 		apps := r.appList()
 		for id := len(apps) - 1; id >= 0 && first == nil; id-- {
 			a := apps[id]
 			if a == nil || appPhase(a.phase.Load()) == phaseRemoved {
 				continue
 			}
-			if appPhase(a.phase.Load()) == phaseActive {
+			if a.started.Load() { // activated by the router, whatever the caller-side phase reads
 				if _, err := r.Drain(ctx, AppID(id)); err != nil && ctx.Err() != nil {
 					first = err
 					break
 				}
 			}
-			if err := r.Remove(ctx, AppID(id)); err != nil && ctx.Err() != nil {
-				first = err
+			if err := r.Remove(ctx, AppID(id)); err != nil {
+				switch {
+				case ctx.Err() != nil:
+					first = err
+				case !errors.Is(err, ErrRemoved): // an Undeploy got there first: nothing to report
+					failed = append(failed, fmt.Errorf("runtime: Close: app %d: %w", id, err))
+				}
 			}
 		}
 		close(r.stopped)
@@ -356,6 +379,9 @@ func (r *Runtime) Close(ctx context.Context) error {
 	go func() { r.wg.Wait(); close(done) }()
 	select {
 	case <-done:
+		if first == nil {
+			return errors.Join(failed...) // a Remove that failed without ctx is reported, never dropped (A3)
+		}
 		return first
 	case <-ctx.Done():
 		if first != nil {
@@ -380,6 +406,9 @@ func (rt *router) app(id AppID) *appState {
 // mAdd to every shard under a token; take completes it.
 func (rt *router) add(it item) {
 	r := rt.r
+	if r.addHold != nil { // the package's tests only
+		r.addHold()
+	}
 	start := rt.now(r.cfg.Now())
 	apps := r.appList()
 	a := r.newAppState(AppID(len(apps)), *it.add, start)

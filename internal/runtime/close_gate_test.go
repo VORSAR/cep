@@ -245,15 +245,23 @@ func TestCloseDrainsAnAppActivatedBeforeItBegan(t *testing.T) {
 	}
 }
 
-// A3b, S3: an Add in flight when Close begins — its install held behind the router, which waits on another app's
-// blocked sink. Close closes the gate and waits; once the sink is released the Add returns its id, and Close drains
-// and removes both apps and returns nil. Red today: Add never enters the gate (the bounded wait below ends).
+// A3b, S3: an Add in flight when Close begins — its install held inside the router (the addHold seam). Close closes
+// the gate and waits; once the hold is released the Add returns its id, and Close drains and removes both apps and
+// returns nil. (Fixture edit, named in the record: QA's first form held the install behind another app's blocked
+// sink, which lost the race about 1 run in 9 under -count=50 -cpu 1,4 — the router still reads handoffs while it
+// waits on a sink, so an Add read just before the wait completed at once. The seam holds it deterministically.)
 func TestCloseWaitsForAnAddInFlight(t *testing.T) {
 	ctx := cgCtx(t)
 	r := cgRuntime(t)
-	h := newCGHeld()
+	first, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil }))
+	if err != nil {
+		t.Fatalf("Add of the first app: %v", err)
+	}
+	hold := make(chan struct{})
+	h := &cgHeld{} // the release below: let() closes hold once
+	h.release = hold
 	t.Cleanup(h.let)
-	first := cgBlockRouter(t, ctx, r, h)
+	r.addHold = func() { <-hold }
 
 	type added struct {
 		id  AppID
@@ -304,5 +312,20 @@ func TestCloseWaitsForAnAddInFlight(t *testing.T) {
 		if !cgRemoved(r, id) {
 			t.Errorf("app %d after Close: phase %d; want removed", id, r.appList()[id].phase.Load())
 		}
+	}
+}
+
+// A3: a Remove that fails with a non-ctx error appears in Close's result, never dropped (QA lane 2's test; the seam is
+// removeFault).
+func TestCloseReportsARemoveError(t *testing.T) {
+	ctx := cgCtx(t)
+	r := cgRuntime(t)
+	planted := errors.New("cg: a planted remove fault")
+	r.removeFault = func(AppID) error { return planted }
+	if _, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil })); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := r.Close(ctx); !errors.Is(err, planted) {
+		t.Errorf("Close: %v; want it to carry the planted Remove error (errors.Join, A3)", err)
 	}
 }

@@ -160,6 +160,12 @@ type Runtime struct {
 	closeOnce sync.Once
 	wg        sync.WaitGroup
 	inflight  inflightGate // Add and Activate run inside it; Close closes it first (design s3-3-2 §9.1)
+	// removeFault is for the package's tests only: a non-nil error it returns is Remove's, before the router is asked
+	// (the seam TestCloseReportsARemoveError needs: nothing else makes Remove fail without ctx inside Close).
+	removeFault func(id AppID) error
+	// addHold is for the package's tests only: the router calls it as it begins an install, so a test can hold an Add
+	// in flight deterministically (TestCloseWaitsForAnAddInFlight). Set before the Add it holds.
+	addHold func()
 }
 
 type appState struct {
