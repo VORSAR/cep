@@ -2,7 +2,9 @@
 determinism rows, design s3-2b-2 §8, §9).
 
 It is judged as the unit row is: a failing or skipped test, a build failure or no test at all fails. GATE_COVERED
-counts the tests that ran and passed, so a pattern that matches nothing is red through min_wants.
+counts the packages the run tested, as the unit row does, so it equals the row's `go` expected_scope however many
+tests and sub-tests the pattern matches (S3.3-2: the conformance runner's twelve sub-tests read 13 and turned a
+green row red); a pattern that matches nothing is red through the judge's "no test ran".
 Arguments: `-run <pattern>`, then package patterns.
 """
 
@@ -11,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import jsonstream, rows
+from gate.runner import rows
 from gate.runner.rows import unit
 
 
@@ -23,13 +25,8 @@ def main(argv: list[str]) -> int:
         print("usage: gotest.py -run <pattern> <package>...", file=sys.stderr)
         return 2
     code = rows.run_tool(["go", "test", "-json", "-count=1", "-run", args[1], *args[2:]], out, err)
-    failures, _ = unit.judge(out, code)
-    with open(out, "rb") as f:
-        try:
-            events = jsonstream.parse(f.read())
-        except ValueError:
-            events = []
-    rows.covered(len({(e.get("Package"), e["Test"]) for e in events if e.get("Action") == "pass" and "Test" in e}))
+    failures, packages = unit.judge(out, code)
+    rows.covered(len(packages))
     return rows.finish(sorted(failures))
 
 
