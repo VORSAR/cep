@@ -116,7 +116,7 @@ func TestWithParamIsTheLanguagesLiteral(t *testing.T) {
 	ctx := fcCeiling(t)
 	r := fcNew(t, cep.Config{})
 	sink, bind := fcSink("RiskAlerts")
-	h := fcDeploy(t, ctx, r, "09", fcExample(t, "09-params-and-quoting.cep"), bind,
+	h := fcDeploy(t, ctx, r, "09", fcExampleWithoutExpects(t, "09-params-and-quoting.cep"), bind,
 		cep.WithParam("threshold", "0.5"), cep.WithParam("label", "'prod'"))
 	fcStart(t, ctx, h)
 	fcSend(t, ctx, fcInput(t, h, "agent-events"), fc09("a1", 0.6, "prod", fcAt(1)))

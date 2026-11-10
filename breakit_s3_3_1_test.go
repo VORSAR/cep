@@ -590,7 +590,7 @@ func TestBreakitWithParamNamesAndTypes(t *testing.T) {
 	t.Parallel()
 	ctx := fcCeiling(t)
 	r := fcNew(t, cep.Config{})
-	src := fcExample(t, "09-params-and-quoting.cep")
+	src := fcExampleWithoutExpects(t, "09-params-and-quoting.cep")
 	_, bind := fcSink("RiskAlerts")
 	if h, err := r.Deploy(ctx, "09", src, bind, cep.WithParam("threshhold", "0.5")); err == nil {
 		t.Errorf("WithParam of an undeclared param (threshhold, a typo of threshold) deployed; want a Deploy error naming it, not a silently ignored override")
