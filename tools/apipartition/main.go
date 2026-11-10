@@ -177,6 +177,34 @@ func surface(dir string) ([]entry, error) {
 	return out, nil
 }
 
+// funcIdent is a function's name, or a method's `<Type>.<Method>`: the receiver's type without its star and type
+// parameters (known issue S3.3-1-1; design s3-3-2 §9.2), so two types' methods of one name are two entries.
+func funcIdent(d *ast.FuncDecl) string {
+	if d.Recv == nil || len(d.Recv.List) == 0 {
+		return d.Name.Name
+	}
+	t := d.Recv.List[0].Type
+	for {
+		switch x := t.(type) {
+		case *ast.StarExpr:
+			t = x.X
+			continue
+		case *ast.IndexExpr:
+			t = x.X
+			continue
+		case *ast.IndexListExpr:
+			t = x.X
+			continue
+		case *ast.ParenExpr:
+			t = x.X
+			continue
+		case *ast.Ident:
+			return x.Name + "." + d.Name.Name
+		}
+		return d.Name.Name // not reachable for a method the compiler accepts
+	}
+}
+
 func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string, hidden map[string]*ast.TypeSpec) ([]entry, error) {
 	var out []entry
 	for _, d := range f.Decls {
@@ -188,7 +216,7 @@ func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string, hid
 			fd := *d
 			fd.Doc, fd.Body = nil, nil
 			canon(&fd)
-			out = append(out, entry{pkg: pkg, ident: d.Name.Name, kind: "func", sig: print(fset, &fd)})
+			out = append(out, entry{pkg: pkg, ident: funcIdent(d), kind: "func", sig: print(fset, &fd)})
 		case *ast.GenDecl:
 			var lastType ast.Expr
 			var lastValues []ast.Expr
