@@ -47,7 +47,7 @@ rule Div
 `
 
 const (
-	xpS, xpO = 0, 2 // stream ids
+	xpS, xpO = 0, 1 // stream ids, in declaration order: S, O, O2
 	xpT      = 0    // table id
 	xpR      = 0    // rule R
 	xpDiv    = 1    // rule Div

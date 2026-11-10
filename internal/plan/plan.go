@@ -56,6 +56,7 @@ type Table struct {
 // Rule is one rule: its routing (the runtime's routing table) and its body.
 type Rule struct {
 	Name      string
+	Target    int          // the stream id it inserts into (design s3-3-2 §5.4: the sandbox prints then-records by it)
 	Inputs    []int        // the stream ids it reads; exactly one when OnArrival
 	KeyAttrs  [][]int      // per input, the key attributes' indexes in part order; nil: key-less (the pseudo-key "")
 	KeyTypes  []event.Type // per part, the one type of that position; a key-less rule: {TString}
@@ -225,7 +226,7 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 	if _, err := spec.compile(); err != nil { // fail at deploy, not per event (review F1)
 		return Rule{}, err
 	}
-	pr := Rule{Name: r.Name, Inputs: []int{src}, KeyTypes: []event.Type{event.TString}, OnArrival: true}
+	pr := Rule{Name: r.Name, Target: target, Inputs: []int{src}, KeyTypes: []event.Type{event.TString}, OnArrival: true}
 	for _, k := range r.Partition.Keys {
 		if k.Stream != r.Body.Source.Stream {
 			continue
