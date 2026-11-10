@@ -101,8 +101,18 @@ func (r *Runtime) Activate(ctx context.Context, app AppID) error {
 	if _, err := r.requestQueued(ctx, item{kind: iActivate, app: app}); err != nil {
 		return err
 	}
+	if r.activateHold != nil { // the package's tests only
+		r.activateHold()
+	}
 	// The router has activated the app (a.activated, a.started): its flushers and recorder run from here, whatever
 	// a Drain begun meanwhile does to the phase — the router's drain of an activated app pushes markers they consume.
+	// Starting them and Close's stop exclude each other (the combined review's R-S3): once Close has given up at its
+	// deadline and stopped the runtime, nothing starts and the caller is told ErrClosed.
+	r.inflight.mu.Lock()
+	defer r.inflight.mu.Unlock()
+	if r.isClosed() {
+		return ErrClosed
+	}
 	for _, q := range a.all {
 		r.wg.Add(1)
 		go q.run(r)
@@ -124,6 +134,11 @@ func (r *Runtime) Run(ctx context.Context, app AppID, runs ...func(ctx context.C
 	}
 	a.runMu.Lock()
 	defer a.runMu.Unlock()
+	r.inflight.mu.Lock() // as Activate's tail: no run starts once Close has stopped the runtime (R-S3)
+	defer r.inflight.mu.Unlock()
+	if r.isClosed() {
+		return ErrClosed
+	}
 	for _, run := range runs {
 		rs := &runState{done: make(chan struct{})}
 		a.runs = append(a.runs, rs)
@@ -363,7 +378,9 @@ func (r *Runtime) Close(ctx context.Context) error {
 				}
 			}
 		}
+		r.inflight.mu.Lock() // excludes Activate's and Run's goroutine starts (R-S3)
 		close(r.stopped)
+		r.inflight.mu.Unlock()
 		for _, a := range r.appList() {
 			if a != nil {
 				a.cancelSrc()
@@ -408,6 +425,10 @@ func (rt *router) add(it item) {
 	r := rt.r
 	if r.addHold != nil { // the package's tests only
 		r.addHold()
+	}
+	if r.stopping() { // Close stopped the runtime meanwhile: install nothing (the break-it's Q-L3)
+		it.reply <- reply{err: ErrClosed}
+		return
 	}
 	start := rt.now(r.cfg.Now())
 	apps := r.appList()
