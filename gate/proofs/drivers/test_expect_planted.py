@@ -105,8 +105,8 @@ class ExpectPlanted(support.DriverTest):
     def test_the_clean_corpus_passes(self):
         run = self.run_conformance()
         self.assertParityPassed(run, "test")
-        # gotest.py counts every passing (package, test): TestCorpus and one sub-test per corpus file.
-        self.assertRow(run, "test", "conformance", True, f"covered {1 + WANT_FILES}")
+        # covered counts packages, as the unit row does (gotest.py, S3.3-2's build; QA's first form read 1 + 12 tests)
+        self.assertRow(run, "test", "conformance", True, "covered 1")
 
     def test_wrong_value(self):
         self.plant(

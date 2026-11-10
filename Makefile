@@ -2,7 +2,7 @@
 # missing pinned tools first, then hands over to the pinned CPython through the bootstrap; a system python3 >= 3.12
 # only starts it, with -I so that nothing in the caller's environment can run inside it.
 
-.PHONY: tools clean-tools setup ci-workflow check combine-check strict-gate ci
+.PHONY: tools clean-tools setup ci-workflow check combine-check strict-gate ci regen-baseline
 
 tools:
 	python3 -I -B gate/bootstrap.py install
@@ -26,3 +26,8 @@ strict-gate: tools
 	python3 -I -B gate/bootstrap.py exec -- --tier T4
 
 ci: strict-gate
+
+# Tier 2 (design s3-3-2 §8.3): re-record conformance/baseline/ after Tier 1 passes; a refused class writes nothing.
+# ACCEPT names the blocks a SPEC revision changed: ACCEPT='<file>:<rule>:<ordinal> …' or a whole '<file>'.
+regen-baseline: tools
+	python3 -I -B gate/baseline/regen.py --accept "$(ACCEPT)"
