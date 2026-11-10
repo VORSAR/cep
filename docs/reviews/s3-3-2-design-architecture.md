@@ -1,0 +1,107 @@
+# S3.3-2 design note v1 — the architect's review (with the-fool)
+
+**This sprint:** [design](../sprints/s3-3-2-design.md) · [record](../sprints/s3-3-2-record.md) · reviews: [design: breaker](s3-3-2-design-breaker.md) · [design: challenger](s3-3-2-design-challenger.md) · **design: architecture** · [design: QA (testability)](s3-3-2-design-qa.md)
+
+*The agent's own write of this report was refused by the harness; the coordinator saved its final message verbatim.*
+
+**Reviewed:** `docs/sprints/s3-3-2-design.md` v1 at 0a3114c (read-only checkout `/Users/ramith/code/cep-wt/s3-3-2-panel`). Lens: contracts, layering, concurrency, failure modes, extensibility. Blind: the breaker's and challenger's folders not opened.
+**Sources opened:** the design note; `deploy.go`, `cep.go`, `apphandle.go`, `connectors.go`; `internal/plan/plan.go`; `internal/playback/driver.go`, `reader.go`; `internal/runtime/sync.go`, `lifecycle.go`, `runtime.go`, `ingest.go`; `internal/parser/grammar.go`, `lower.go`; `internal/table/table.go`; `tools/apipartition/main.go`; `api/clock.golden`; `gate/registry.json`; `tools/importcheck/rules.json`; ARCHITECTURE §3, §5; ADR-0005; SPEC §2, §4, §6; SEMANTICS line 47; qa-strategy §3; `decisions.md` (S3.3's plan check, S3.3-1's design, S3.3-2's plan check); `sprint-plan.md` lines 95–101; corpus 01, 07, 10 and the torture files.
+**Scratch programs** (a copy of 0a3114c at `…/scratchpad/panel/architect/repo`; pinned Go 1.27.3, `GOTOOLCHAIN=local`; exit codes read from `t1.exit`–`t4.exit`, outputs `t1.out`–`t4.out`):
+- **t1** (`zz_arch_test.go`, package `cep_test`, `-race`), exit 0: with a stuck sink the router answers no intake item — `Stats` hits its 300 ms deadline (`context deadline exceeded`); today's `Close` with a 300 ms ctx returns at 300 ms.
+- **t2** (`internal/playback/zz_arch_test.go`, `TestArchBlockCost`), exit 0: one block of n given events (n = 1k / 10k / 50k): parse 46 ms / 277 ms / 1.28 s; Check+Build 1 / 5 / 23 ms; sandbox (NewPlanDriver, Step, End) 1 / 5 / 24 ms — linear in the source text; parsing costs more than the sandbox.
+- **t3** (`TestArchDefeatPathPassesOnAPanic`), exit 0: a body that panics on a null attribute → `outputs=0`, so an empty then-list passes; only `Stats.Rules[0][0].Panics=1` records it.
+- **t4** (`TestArchDriverCost`), exit 0: one fresh sandbox (`NewPlanDriver` on 09) allocates **465 KiB**, 49 µs.
+**Tools:** Read and grep over the checkout; the scratch tests. GitNexus not needed (every caller relied on is quoted from source).
+
+**Counts: 1 blocker, 8 should-fix, 3 later.**
+
+---
+
+## Findings, ranked
+
+### A1 — blocker — Close's barrier, as written, can hang Close past its deadline
+**What breaks.** §9.1 step 3: `Close` "queues a barrier item … and waits for its answer"; it handles only "ctx ends before the barrier is queued". The router does not read its intake while its head `send` is blocked on a full sink queue or mailbox (`runtime.go:787-823`: with `pending` non-empty the select has no intake case) — the documented backpressure, "full queue ⇒ the ROUTER waits" (ARCHITECTURE §5 step 8). So with a stuck sink a queued barrier is never answered. The lifecycle's precedent for an item "whose effect must reach its caller" is `requestQueued` (`lifecycle.go:60-76`), which ignores ctx and waits on `<-r.stopped`, closed only by `Close` (`lifecycle.go:345`): an implementer following it writes a `Close` that deadlocks itself, breaking `lifecycle.go:320-323` ("Past ctx's deadline it signals every goroutine and returns ctx.Err()").
+**Evidence.** t1: with the sink stuck, `Stats` (an intake item) is not answered within 300 ms; today's `Close` is bounded by its ctx.
+**Fix (§9.1 step 3):**
+> 3. `Close` then queues a barrier item (`iBarrier`) and waits for its answer **with `r.await(ctx, reply)` semantics (never `requestQueued`): the answer, or ctx's end**. The router answers the barrier in intake order, and only once no `Add` queued before it is still installing (A3). If ctx ends before the barrier is queued or before it is answered, `Close` reads `appList()` as today and continues: its drains then fail on the same ctx, `stopped` is closed, and the deadline is its result. **Test:** `TestCloseBarrierHonoursDeadline` — a Go-bound sink whose `Write` ignores its context, `SinkQueue: 1`, `Mailbox: 1`, a dozen rows sent so the router is blocked; `Close` with a 300 ms ctx returns `context.DeadlineExceeded` within the test ceiling; red if the barrier is awaited without ctx.
+
+### A2 — should-fix — a defeat path passes when the rule panics, and a "missing output" never says why
+**What breaks.** The shard recovers a body's panic and counts it (`runtime.go:1449-1476`); SEMANTICS §10 drops an event on an expression error or a key error and counts it; §5.1/§5.3 compare outputs only. (1) An engine panic on a defeat path is a **pass** — 10's block 4 asserts "no alert" because of a key error (`10-grouped-keys.cep:15,21`); a regression that panics on the null key gives the same zero outputs. (2) A failing fire path says only `output 1 is missing`, never stream-late, key error or expression error. (3) Tier 2 locks outputs only, so a defeat path whose *reason* changes is not locked.
+**Evidence.** t3: 0 outputs, an empty then-list passes, `Panics=1` visible only in `Driver.Stats()`.
+**Fix (§5, §5.3):**
+> `BlockResult` gains `Counts BlockCounts` (from `Driver.Stats()` after `End`: the rule's `Panics`, `Errored`, `KeyErrors`, `ConstructLate`, `Suppressed`; the given streams' stream-late drops). **A block with `Panics > 0` fails whatever its then-list says** (divergence `the rule panicked <k> time(s)`). Any other divergence whose counters are non-zero appends them: `output 1 is missing: expected {…}; the rule emitted 0 (1 event dropped as a key error)`. §8's baseline line records `counts` beside `outputs`, so Tier 2 locks why a defeat path is silent. **Tests:** `TestPanicFailsADefeatPath` (a body wrapper that panics, as t3) and `TestMissingOutputNamesTheDrop` (10's block 4 with its then-list changed to one alert: the divergence names the key error).
+
+### A3 — should-fix — the barrier leaves two windows: Activate's caller-side tail, and an Add still installing
+**What breaks.** (a) The router answers `iActivate` (`runtime.go:868-878`: sets `activated`, `started`); the caller then does `wg.Add`, `go q.run` and the phase CAS (`lifecycle.go:99-108`) *after* the answer. Nothing orders this tail against `Close`, which reads the phase after the barrier and drains only `phaseActive` (`lifecycle.go:333`). In the window `Close` skips the drain and calls `Remove`; the router refuses with `ErrDrainIncomplete` (`lifecycle.go:404-406`); `Close` drops it (ctx not done, `lifecycle.go:338`). The app is left neither drained nor removed, and the caller's `r.wg.Add(1)` can race `Close`'s `wg.Wait()` (`lifecycle.go:356`). S3.3-1-2's "no app left unremoved" fails for `Activate`. (b) An `Add` dequeued before the barrier is in `appList()` (`lifecycle.go:383-386`) but its install is pending; `Close` removes it mid-install; when the install completes, `installAck`'s default branch re-installs the routes `remove` just cleared and answers the `Add` with success (`lifecycle.go:460-462`); the failed-install rollback branch (`lifecycle.go:451-458`) would send a second `mRemove` for the same app.
+**Fix (§9.1 steps 2 and 4):**
+> 2. The router answers an `iAdd` or an `iActivate` with `ErrClosed` when `closing` is set; **it answers `iBarrier` only when no add-install queued before it is pending** (it parks the reply and answers from `installAck` when the last pending add completes).
+>
+> 4. After the barrier, `Close` drains every app **the router activated (`a.started.Load()`)**, not only `phaseActive` (`Drain` already handles an inactive-phase app the router has activated, `lifecycle.go:174-188`). A `Remove` error that is not ctx's becomes part of `Close`'s result (`errors.Join`), never dropped. **Tests:** `TestCloseDrainsAnAppActivatedBeforeTheBarrier` (`-race`, `GOMAXPROCS=1`, 200 iterations of `Start` racing `Close`: each ends with the app removed and no error but ctx's); `TestCloseWaitsForAPendingInstall` (two shards, an `Add` queued just before `Close`: `Add` returns `ErrClosed` or an id whose app is removed, its routes empty).
+
+### A4 — should-fix — the sandbox's failure policy is to panic on the embedding program's goroutine
+**What breaks.** §4: "a contradiction is a panic naming the rule"; §5.1 step 2: a `NewPlanDriver` error "is a panic"; §5.1 step 3 writes rows through `Driver.Step`, which panics on a refused table row (`driver.go:75-77`). `Deploy` runs on the caller's goroutine, so any validator gap crashes the host process (without X4, a null in a non-optional column reaches `Table.Upsert`'s refusal, `table.go:226-228`). The runtime's precedent is the opposite: "its panic is Start's error, never its caller's panic" (`runtime.go:1318-1326`).
+**Fix (§5's signature, §5.1 steps 2–3):**
+> `func RunExpects(p *plan.App) ([]BlockResult, error)` — the error is an engine fault, never a block failure. Step 2: a `NewPlanDriver` error is returned as `playback: rule <R>, expect block <n>: <err>`. Step 3: a table row is written through the driver's `Sync.TableWrite` and its error checked, never through `Step`'s panicking path; a refusal is returned in the same form. Each block runs under a `recover` that turns a panic into that error. `Deploy` returns it as `fmt.Errorf("cep: deploy %s: the expect sandbox: %w", name, err)`. **Test:** `TestSandboxFaultIsAnError` (a hand-built plan whose `Expects` holds a null key row: `RunExpects` returns an error, no panic).
+
+### A5 — should-fix — the runner drops the plan's skip rule, mislabels sprints, and will go red at S4.1 for a connector
+**What breaks.** (1) "a skip naming the current sprint is red at that sprint's own T4, and every skip still open at S12 is red" (`sprint-plan.md:100`); ADR-0005 §4: a not-yet-built case is "recorded, never green, and failing T4 once its sprint closes". §7's listed files pass with a `t.Logf`, so a sprint can close with its own example still listed. (2) The labels disagree with `sprint-plan.md:100`: 06 → **S7** (note: S4.1), 02 → **S9.1** (note: S8), 04 → **S9.2** with its batch rule S8 (note: S8); `torture/lexical.cep` also uses `window delay` (`:65`) and `has_ci` (`:32`), so it cannot deploy at S4.1. (3) 01 (`:20`, `@sink(type='http')`), `torture/comments.cep` (`:20`, `log`) and `torture/lexical.cep` (`:24`, `http`) carry connector annotations; once their bodies build, `Deploy` with `cep.Config{}` fails at `bind` with `ErrConnectorNotBuilt` (`connectors.go:45-51`), and the runner turns red at S4.1 for something that is not a construct. S3.3-1's decision 5 records the cure: "example 01 … deploys in tests … by attaching an in-memory destination".
+**Fix (§7's sub-test paragraph):**
+> Each sub-test: `cep.New(cep.Config{})`, then `Deploy(ctx, file, src, cep.WithConnectors(corpusFactory{}))`, where `corpusFactory` returns an `io/inmemory` source and sink for every annotated stream (S3.3-1's decision 5; `io/*` is in the runner's import row), then `Close`. `notBuilt` names, per file, the **last** sprint the plan's corpus map gives it: 01, 08 → S4.1; 05, 06 → S7; 03 → S8; 02 → S9.1; 04 → S9.2; `torture/comments` → S4.1; `torture/lexical` → S9.2. A listed file must fail with `errors.Is(err, <not-built>)`. **When `CEP_SPRINT` (set by the gate from the sprint plan's status line) is at or past a listed file's sprint, its sub-test fails at T4** (it logs at T2/T3). **Proof:** a planted proof sets `CEP_SPRINT=S4.1` and the row goes red naming 01.
+
+### A6 — should-fix — the design merges lists of one stream, which SPEC §6.8 does not allow
+**What breaks.** SPEC §6.8: "the given events (one or more `given` sections, **one per input stream**)" (SPEC.md:178). §5.2 MUST 4's test uses "two lists of one stream", and E-EXP-002's table has no row for a stream given twice. A plain rule has exactly one input (`plan.go:56`, "exactly one when OnArrival"), so in v0.1 the merge exists only for an input the SPEC rules out; it also leaves the merge's list count unbounded (A9).
+**Fix:** an X9 row: "`given` names a stream already given in this block | the second `NamePos` | **proposed** (Q2): SPEC §6.8 says one per input stream". MUST 4's tests become `TestListsInterleaveByTime` over a synthetic two-input `plan.App`, keeping `TestListOrderIsArrivalOrder` (07's last block). 01's block 2 (`01:44-46`, AgentActions and HumanApprovals) is the first real use, at S4.1.
+
+### A7 — should-fix — the Tier-2 key `(file, rule, block ordinal)` does not survive the corpus growing
+**What breaks.** The plan adds blocks to examples in every owning sprint (`sprint-plan.md:100`). A block inserted before an existing one shifts every later ordinal; each shifted block is compared with its predecessor's outputs and refused as `count-change` or `value-change`; a removed block has no recordable class (Q4). S8's changelog rows (`+`/`−`) change the line's shape: with no format marker that reads as 15 refused value-changes.
+**Fix (§8's key and the class table):**
+> A block is keyed by `(file, rule, fingerprint)` — the SHA-256 of the block's given sections in canonical form (tables, then lists, each record's fields sorted, values canonical); the ordinal is kept for display. Added rows: `additive-new-block` (a new fingerprint: recorded) and `block-removed` (a fingerprint gone **and** that corpus file changed in the same diff: recorded, printed). A gone fingerprint with the corpus file unchanged is `count-change`: refused. The header gains `"format":1`; a baseline with another format is refused with `format-change: run regen with --migrate`, a declared step the record lists.
+
+### A8 — should-fix — baseline determinism is checked on one OS only
+**What breaks.** The `baseline` row is in job `test`; the two-OS check runs only `^TestDeterminismGolden$` (`gate/registry.json` rows `determinism`, `determinism-macos`). SPEC §8 (2) and ADR-0005 §3 promise byte-identical outputs "across runs and across machines".
+**Fix (§8's row paragraph):**
+> Both determinism rows run `-run '^(TestDeterminismGolden|TestBaseline)$' ./internal/playback`, so each OS asserts the same committed bytes.
+
+### A12 — should-fix (low) — E-EXP-002 does not cover S7's engine-owned `text_invisibles`
+**What breaks.** A given record naming a declared `text_invisibles` is accepted by X2; ingest silently overwrites it (`ingest.go:63-65`), so the block fails or passes for a reason the author cannot see. Blocks can carry invisible characters through `\uXXXX` escapes (SPEC.md:33), so S7's cases are expressible; only this field is a trap.
+**Fix:** an X10 row: "a `given` record names `text_invisibles` | the field's `Pos` | **proposed** (Q2): the engine computes it (SPEC §4.2 rev 3)"; message `…: <S>.text_invisibles is computed by the engine; a block cannot give it`.
+
+### A9 — later — ctx and bounds in the expect stage
+**Evidence.** t2: the stage is linear in the source text and ~50× cheaper than the parse, so a huge block is not a new DoS class. Two gaps: `Deploy` never checks ctx before `bind` (a cancelled deploy still calls the caller's `ConnectorFactory`, `deploy.go:71` — the same argument §6 makes for the stage before `bind`); the merge as written ("take the head with the smallest Ts") is a linear scan per event, O(lists × events).
+**Fix:** §6: "`Deploy` returns `ctx.Err()` if ctx has ended after the expect stage, before `bind`". §5.1 step 4: "the heads are kept in a min-heap keyed `(Ts, list index)`" (or X9 bounds the list count by the rule's inputs).
+
+### A10 — later — sandbox weight, and blocks carried into the runtime
+**Evidence.** t4: 465 KiB per block, mostly `build`'s channels `Sync` never uses (`runtime.go:352-374`: intake 1024, mailbox 1024, record queue 65536). Separately, `Rule.Expects` would travel into `runtime.App.Rules` (`sync.go:158`) and the handle's plan (`deploy.go:97`) for the app's whole lifetime.
+**Fix:** `NewSync` passes `Mailbox: 1, Intake: 1, SinkQueue: 1, RecordQueue: 1`; the blocks live on `plan.App` as `Expects [][]Expect` (by rule index), not on `plan.Rule`, so `FromPlan` never carries them.
+
+### A11 — later — the golden rewrite and the freeze wording
+**What breaks.** §9.2 rewrites `api/clock.golden` just before the freeze; the only check is "reviewed line by line".
+**Fix:** a one-off test in `tools/apipartition` maps each old entry through the new ident rule and asserts it equals the `--write` output, for both goldens (mechanical, not by hand). §10's freeze line: "a change to an exported `internal/clock` **signature**" — a format-only rewrite by the tool needs no owner decision.
+
+---
+
+## What holds (conceded)
+- **`plan` owns the blocks as values:** keeps L2 and MUST 12; `cep` stays model-free; decision 1 holds by construction (a block's field is a literal or `null`, no param reference, `grammar.go:228-232`, `342-357`; the only parameterised part is the rule, which `Build` compiled with the overrides).
+- **`internal/playback` owns the sandbox:** ARCHITECTURE §3 places the "expect runner" there; the `cep → playback` edge exists for it.
+- **The stage before `bind`:** sound — no factory call, connector or sink touched on a refused deploy; ADR-0005 §4's "the runner and the deploy stage are one implementation" honoured.
+- **`+∞` at a block's end:** right (Q5).
+
+## The-fool
+**Steelman.** One deterministic sandbox — `Deploy → RunExpects` over one-shard `runtime.Sync` — serves the deploy gate, the runner and Tier 2, reuses the live router's and shard's steps, adds no goroutine, keeps the facade model-free.
+**Assumptions audit.** "The router always answers" — false under backpressure (A1). "A built plan always drives, so panics are fine" — true only while E-EXP-002 is complete (A4). "Outputs are the whole verdict" — false for defeat paths (A2). "Block ordinals are stable" — false under the plan's growth rule (A7). "Not built means the construct" — false for connector annotations (A5). "One list per stream is a v1 detail" — the SPEC says otherwise (A6).
+**Pre-mortem — "It is S4.1 and this design failed because…"**
+1. …01 and both torture files went red at `bind` with `ErrConnectorNotBuilt` the day patterns built, and the runner's labels said S4.1 for files the plan gives to S7 and S9.2 (A5).
+2. …QA added a near-miss block in the middle of 07's blocks and `regen-baseline` refused six shifted blocks, so the baseline was hand-edited (a law path) before S1.1c could show it (A7).
+3. …an absence-timer bug panicked on the defeat path, and 01's block 2 (`then [ ]`) stayed green while production missed approvals (A2).
+4. …a `Close` during an S5 HTTP outage hung the host's shutdown forever, because the barrier waited like `requestQueued` (A1).
+5. …a validator gap in a new S4.1 field type crashed a customer's process inside `Deploy` instead of refusing the program (A4).
+**Inversion check.** To guarantee failure: wait without ctx, trust panics, key by position, treat every red as a missing construct. The fixes above remove each.
+
+## Q1–Q7
+- **Q1:** do not add `cep.ErrNotBuilt`; wrap the standard library's `errors.ErrUnsupported`: `fmt.Errorf("cep: deploy %s: %w: %w", name, errors.ErrUnsupported, err)`, documented on `Deploy`; the runner uses `errors.Is(err, errors.ErrUnsupported)`. No new export, no `exports.golden` line, no dead name at S12; still meaningful later for a language-version construct an engine parses but cannot run. Second choice: the public sentinel. Reject text matching and the import-law change.
+- **Q2:** X4, X5, X6, X7 — all four — plus X9 (A6) and X10 (A12). X4 is not optional while §5 writes table rows through a panicking path (A4).
+- **Q3:** E-EXP-001 at the diverging then-record's `{`; at `then` for an extra output or an empty then-list. One diagnostic per failing block; the message keeps "expect block <n>" and the `expect` line. Editors and the VS Code extension put the squiggle where the fix goes. Needs `Line, Col` on `plan.ThenRecord` and `ThenLine, ThenCol` on `plan.Expect`.
+- **Q4:** no — add `block-removed` and key blocks by fingerprint (A7). A deliberate corpus edit is visible in the same diff; the corpus is a spec-corpus law path.
+- **Q5:** `+∞` — what SEMANTICS line 47 says of playback end; `Driver.End` already does it in a fixture (`driver.go:112-117`). Example 01's block 1 needs it: its last event is at 10:03 and it expects the alert at 10:05, the absence deadline (`01:41-43`); Stop's "one past the max" would never fire it.
+- **Q6:** refuse (X8) now; forward to the first sprint that needs an arrival-stamped block the fixture format's own convention — an event of a `time arrival` stream carries an explicit `ts` (`reader.go:472-473`; SPEC §4.2 rev 3) — better than "the latest ts so far", which invents times.
+- **Q7:** forward, to the sprint that adds an object literal or to S11's gallery, whichever comes first. X4 refuses such a block clearly at deploy meanwhile. Note for S4.1: the `chain(...)` evidence object is locked only by Tier 2, so its canonical text must be deterministic.
