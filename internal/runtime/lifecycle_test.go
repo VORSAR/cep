@@ -7,7 +7,6 @@ package runtime_test
 import (
 	"context"
 	"errors"
-	goruntime "runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -356,31 +355,20 @@ func TestClosedRuntimeIsErrClosedFirst(t *testing.T) {
 	}
 }
 
-// lcGoroutines waits for the goroutine count to fall to at most n under ctx (api_test.go's pattern).
-func lcGoroutines(t *testing.T, ctx context.Context, n int) int {
-	t.Helper()
-	g := goruntime.NumGoroutine()
-	for ; g > n; g = goruntime.NumGoroutine() {
-		if ctx.Err() != nil {
-			return g
-		}
-		goruntime.Gosched()
-	}
-	return g
-}
-
 // TestAddStartsNoGoroutine (T5; MUST 4): Add starts nothing; Activate starts the flushers and the recorder, whose
 // header is the recording's first record; Run starts the sources.
 func TestAddStartsNoGoroutine(t *testing.T) {
 	ctx := rtCeiling(t)
 	d := &lcRec{}
 	r := lcNew(t, runtime.Config{Shards: 1})
-	base := goruntime.NumGoroutine() // S3.3-1 build: lcGoroutines(t, ctx, 0) spun to the ceiling (a fixture fix, named in the record)
+	// The goroutines started since this snapshot, by id: a goroutine an earlier test left behind, exiting meanwhile,
+	// moves nothing (S3.3-2, main's CI: the count read 19 for 20; goroutines_s3_3_2_test.go).
+	base := grTake()
 	app := lcApp(t, func(event.Event) error { return nil }, func(event.Event) error { return nil })
 	app.Recorder = d
 	id := lcAdd(t, ctx, r, app)
-	if g := lcGoroutines(t, ctx, base); g != base {
-		t.Errorf("%d goroutines after Add; want %d (Add starts none)", g, base)
+	if n := grStarted(base); n != 0 {
+		t.Errorf("%d goroutines started by Add; want none", n)
 	}
 	lcActivate(t, ctx, r, id)
 	rtSend(t, ctx, r, id, rtEv(0, rtAt(1), rtStr("a")))
@@ -389,8 +377,8 @@ func TestAddStartsNoGoroutine(t *testing.T) {
 		t.Errorf("recorder log %v; want the header first", log)
 	}
 	lcRemove(t, ctx, r, id)
-	if g := lcGoroutines(t, ctx, base); g != base {
-		t.Errorf("%d goroutines after Remove; want %d (the flushers and the recorder returned)", g, base)
+	if n := grWaitNoneStarted(ctx, base); n != 0 {
+		t.Errorf("%d goroutines still running after Remove; want none (the flushers and the recorder returned)", n)
 	}
 }
 

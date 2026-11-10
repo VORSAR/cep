@@ -56,6 +56,7 @@
 | Q-L4 | break-it | later | a Tier-1 row missing from the registry left Tier 1 green | fixed (22cbbbc; QA's test) |
 | Q-L5 | break-it | later | a string literal holding a raw 0xFF byte passed the lexer (SPEC §2.1: source is UTF-8) | fixed: non-UTF-8 source is E-SYN-001 at its first malformed byte (26fc68d; QA's test) |
 | breaker L2 | design panel | later | a block with no given event (or only late ones) passes vacuously | forwarded: known issues at close-out (the owner places it) |
+| CI-1 | main's CI (gate run 42615035345 on ebb8496; nightly 42803107946, race-stress 2 of 20) | should-fix (a flaky test, ground rule 11) | `TestAddStartsNoGoroutine` (S3.3-1) compared the process's goroutine count with its base, so a goroutine an earlier test left behind, exiting meanwhile, read as the count falling ("19 goroutines after Add; want 20") | fixed in this PR at the owner's direction: `goroutines_s3_3_2_test.go` measures the goroutines started since a snapshot by their ids; `TestStartedIgnoresAGoroutineThatExits` forces the timing and was red against the count; the test rewritten on it; `-race -count=50 -cpu 1,4` 0 failures. Not reproduced locally in 15 race repeats of the package (a copy dumping every goroutine never fired), so the exiting goroutine is not named |
 
 ## Done-done
 
