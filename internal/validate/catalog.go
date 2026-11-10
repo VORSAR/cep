@@ -7,6 +7,7 @@ type Entry struct {
 	Fix         string
 	Later       string // the sprint that implements it; "" when implemented
 	Unreachable bool   // no v0.1 program raises it (errors.md says so); its check has a unit test
+	Deploy      bool   // raised by cep.Deploy's expect stage, not by Check; its tests are the facade's and the runner's
 }
 
 // catalog holds every [static] code. The lowering raises four of them (internal/parser LoweringCodes); the rest are
@@ -16,6 +17,7 @@ var catalog = map[string]Entry{
 	"E-DUR-003":   {Title: "Zero or negative duration in a bound slot", Fix: "use a positive duration."},
 	"E-EMIT-002":  {Title: "Emit mode does not match the window kind", Fix: "the message names the kind's mode."},
 	"E-EXP-001":   {Title: "`expect` block failed", Fix: "correct the rule or the example.", Later: "S3.3"},
+	"E-EXP-002":   {Title: "Mistake inside an `expect` block", Fix: "name a stream or table the rule reads or writes, and give each field a value of its declared type."},
 	"E-FN-001":    {Title: "Unknown function arity or argument kind", Fix: "the message cites the signature."},
 	"E-GRAPH-001": {Title: "Cycle in the rule–stream graph", Fix: "break the cycle with a separate stream.", Unreachable: true},
 	"E-GRAPH-002": {Title: "Insert into a source stream", Fix: "insert into a new derived stream."},

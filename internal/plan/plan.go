@@ -22,6 +22,9 @@ type App struct {
 	Streams []Stream // declaration order: the index is the stream id (SEMANTICS §2.2)
 	Tables  []Table  // declaration order: the index is the table id
 	Rules   []Rule   // declaration order
+	// Expects is every rule's expect blocks as values, rule by rule in declaration order, block by block in written
+	// order (design s3-3-2 §4). On the app, not on Rule, so runtime.FromPlan never carries them into a running app.
+	Expects []Expect
 }
 
 // Stream is one declared stream.

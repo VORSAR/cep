@@ -302,6 +302,7 @@ type SelectItem struct {
 type Expect struct {
 	Givens []Given
 	Then   Then
+	Pos    Pos // `expect` (design s3-3-2 §2)
 }
 
 // Given is `given [table] Name [records]`.
@@ -309,23 +310,30 @@ type Given struct {
 	Table   bool
 	Name    string
 	Records []Record
+	Pos     Pos // `given`
+	NamePos Pos // the stream or table name
 }
 
 // Then is `then Name [records]`; no records asserts that nothing fires.
 type Then struct {
 	Name    string
 	Records []Record
+	Pos     Pos // `then`
+	NamePos Pos // the stream name
 }
 
 // Record is `{field: value, …}` in written order.
 type Record struct {
 	Fields []Field
+	Pos    Pos // `{`
 }
 
 // Field is `name: literal-or-null`.
 type Field struct {
-	Name  string
-	Value Literal
+	Name     string
+	Value    Literal
+	Pos      Pos // the field's name
+	ValuePos Pos // the value's first token: `-`, the literal, or `null`
 }
 
 // ExprKind names an expression node (the grammar's expressions, SPEC §2.5).
