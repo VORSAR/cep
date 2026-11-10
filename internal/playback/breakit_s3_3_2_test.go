@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/plan"
 )
 
@@ -45,5 +46,24 @@ func TestLargeBlockDivergenceIsNotQuadraticInMemory(t *testing.T) {
 	if got := after.TotalAlloc - before.TotalAlloc; got > limit {
 		t.Errorf("RunExpects allocated %d MB for one block of %d events and %d then-records; want under %d MB "+
 			"(the alignment's table is (n+1)*(m+1) ints)", got>>20, n, n, limit>>20)
+	}
+}
+
+// TestAnotherOrderNamesTheDrops: design s3-3-2 §5.4 case 4 — when a drop count is non-zero the divergence text ends
+// with its reason. The order case (2) returns without it: three events, the third's key null (a key error), the
+// then-list naming the two outputs in another order.
+func TestAnotherOrderNamesTheDrops(t *testing.T) {
+	null := plan.GivenEvent{Ts: xpAt(2 * time.Second), Values: []event.Value{xpNull(event.TString), xpInt(1), xpFlt(0.5), xpTs(xpAt(2 * time.Second))}}
+	b := xpBlock(xpR, 1, nil, []plan.GivenList{{Stream: xpS, Events: []plan.GivenEvent{
+		xpEv("a", 1, xpAt(0)), xpEv("b", 1, xpAt(time.Second)), null,
+	}}}, xpK(1, 1, "b"), xpK(1, 2, "a"))
+	res := xpRun(t, xpPlan(t, b))
+	r := res[0]
+	if r.Counts.KeyErrors != 1 {
+		t.Fatalf("key errors %d; want 1 (the null key)", r.Counts.KeyErrors)
+	}
+	const want = "the outputs are in another order: then-record 1 matches output 2 (1 dropped by a key error)"
+	if r.Divergence != want {
+		t.Errorf("divergence %q; want %q", r.Divergence, want)
 	}
 }
