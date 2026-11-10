@@ -127,6 +127,7 @@ func diverge(target event.Schema, x *plan.Expect, o []event.Event, c Counts) (st
 	}() {
 		return "", 0, 0
 	}
+	reason := drops(c)
 	if n == m { // another order: each then-record, in order, takes the first unused output it matches
 		used, of := make([]bool, n), make([]int, m)
 		all := true
@@ -143,48 +144,69 @@ func diverge(target event.Schema, x *plan.Expect, o []event.Event, c Counts) (st
 		if all {
 			for j := range m {
 				if of[j] != j {
-					return fmt.Sprintf("the outputs are in another order: then-record %d matches output %d", j+1, of[j]+1), t[j].Line, t[j].Col
+					return fmt.Sprintf("the outputs are in another order: then-record %d matches output %d", j+1, of[j]+1) + reason, t[j].Line, t[j].Col
 				}
 			}
 		}
 	}
-	// The alignment: a longest common subsequence under match; its first edit is the divergence.
-	L := make([][]int, n+1)
-	for i := range L {
-		L[i] = make([]int, m+1)
+	// The alignment: a longest common subsequence under match; its first edit is the divergence. A matched prefix is
+	// always paired (pairing a match never shortens the subsequence), so the walk starts where the prefix ends; the
+	// first edit then needs only two subsequence lengths, computed in rows of the then-list's width (linear memory,
+	// the break-it's Q-S1). Past alignCap comparisons the positional reading stands in for them.
+	i := 0
+	for i < n && i < m && match(i, i) {
+		i++
 	}
-	for i := n - 1; i >= 0; i-- {
-		for j := m - 1; j >= 0; j-- {
-			best := max(L[i+1][j], L[i][j+1])
-			if match(i, j) {
-				best = max(best, 1+L[i+1][j+1])
-			}
-			L[i][j] = best
+	thenFirst := func() (string, int, int) {
+		text := fmt.Sprintf("then-record %d has no output: expected %s", i+1, thenText(target, t[i]))
+		if near := nearest(target, o, i, t[i]); near != "" {
+			text += "; " + near
+		} else {
+			text += fmt.Sprintf("; the rule emitted %d", n)
 		}
+		return text + reason, t[i].Line, t[i].Col
 	}
-	reason := drops(c)
-	for i, j := 0, 0; i < n || j < m; {
-		switch {
-		case i < n && j < m && match(i, j) && L[i][j] == 1+L[i+1][j+1]:
-			i, j = i+1, j+1
-		case j < m && (i == n || L[i][j+1] >= L[i+1][j]):
-			text := fmt.Sprintf("then-record %d has no output: expected %s", j+1, thenText(target, t[j]))
-			if near := nearest(target, o, i, t[j]); near != "" {
-				text += "; " + near
-			} else {
-				text += fmt.Sprintf("; the rule emitted %d", n)
-			}
-			return text + reason, t[j].Line, t[j].Col
-		default:
-			tail := fmt.Sprintf("; the then-list has %d", m)
-			if m == 0 {
-				tail = "; the then-list is empty"
-			}
-			return fmt.Sprintf("output %d was not expected: %s%s", i+1, outputText(target, o[i]), tail) + reason, x.ThenLine, x.ThenCol
+	outputFirst := func() (string, int, int) {
+		tail := fmt.Sprintf("; the then-list has %d", m)
+		if m == 0 {
+			tail = "; the then-list is empty"
 		}
+		return fmt.Sprintf("output %d was not expected: %s%s", i+1, outputText(target, o[i]), tail) + reason, x.ThenLine, x.ThenCol
 	}
-	return "the outputs do not match the then-list" + reason, x.ThenLine, x.ThenCol // unreachable: n == m paired would have passed
+	switch {
+	case i == m: // every then-record paired: output i is the first edit
+		return outputFirst()
+	case i == n: // every output paired: then-record i is
+		return thenFirst()
+	case int64(n-i)*int64(m-i) > alignCap:
+		return thenFirst()
+	}
+	// The walk's choice at (i, i): then-record i first when the subsequence without it is no shorter.
+	lcs := func(a, b int) int { // the LCS length of o[a:] and t[b:]
+		w := m - b
+		next, cur := make([]int, w+1), make([]int, w+1)
+		for r := n - 1; r >= a; r-- {
+			cur[w] = 0
+			for k := w - 1; k >= 0; k-- {
+				best := max(next[k], cur[k+1])
+				if match(r, b+k) {
+					best = max(best, 1+next[k+1])
+				}
+				cur[k] = best
+			}
+			next, cur = cur, next
+		}
+		return next[0]
+	}
+	if lcs(i, i+1) >= lcs(i+1, i) {
+		return thenFirst()
+	}
+	return outputFirst()
 }
+
+// alignCap bounds the comparisons the alignment makes for one block (a block of thousands of records each way);
+// past it the first divergence is read by position.
+const alignCap = 4_000_000
 
 // nearest is "the nearest output is <i>: <a> is <actual>, expected <expected>" — the first attribute, in the
 // then-record's written order, whose value differs from output i's; "" when there is no output i or none differs.
@@ -236,17 +258,28 @@ func sameValue(a, b event.Value) bool {
 		return a.T == b.T
 	case event.TDuration:
 		return a.D == b.D
+	case event.TObject: // both in event.CleanObject's form: the same text is the same object (owner, 2026-11-10)
+		sa, oka := a.Obj.(string)
+		sb, okb := b.Obj.(string)
+		return oka && okb && sa == sb
 	}
-	return false // an object: a then-record holds none (E-EXP-002 X3)
+	return false
 }
 
-// canon is a value's canonical text; a value AppendValue refuses (a non-finite float) with %v.
+// canon is a value's canonical text; a value AppendValue refuses is printed for what it is: a non-finite float with
+// %v, a timestamp outside the years 0000-9999 by its milliseconds (the combined review's R-L4).
 func canon(v event.Value) string {
 	b, err := AppendValue(nil, v)
-	if err != nil {
-		return fmt.Sprintf("%v", v.F)
+	if err == nil {
+		return string(b)
 	}
-	return string(b)
+	switch v.Kind {
+	case event.TFloat:
+		return fmt.Sprintf("%v", v.F)
+	case event.TTimestamp:
+		return fmt.Sprintf("%d ms (outside the years 0000-9999)", v.T)
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 func thenText(target event.Schema, r plan.ThenRecord) string {
