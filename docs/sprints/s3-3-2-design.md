@@ -383,6 +383,43 @@ Stdlib Python under the pinned interpreter (`python3.15 -I -B -X utf8 -m gate.ba
    `ACCEPT` is a space-separated list of `<file>:<rule>:<ordinal>` or `<file>` (owner, 2026-11-09, 5).
 4. Any refused block: print every block with its class and exit 1, writing nothing. Otherwise copy the fresh files over `conformance/baseline/` (each header with the current `source_sha256` and `spec_rev`), print every recorded block with its class, exit 0. No difference: `no change`, exit 0.
 
+**The Python interface** (`gate/baseline/regen.py`; what the pytests call):
+
+```python
+@dataclass(frozen=True)
+class Block:
+    file: str          # the corpus file's name, e.g. "07-consent-gate.cep"
+    rule: str
+    ordinal: int       # 1-based within the rule; display only
+    key: str           # §8.1's content key, with its "#2" suffix if any
+    outputs: tuple[str, ...]  # each output's canonical JSON text, as the line holds it
+    counts: tuple[tuple[str, int], ...]  # sorted (name, value) pairs
+
+@dataclass(frozen=True)
+class Baseline:
+    file: str
+    format: int
+    source_sha256: str
+    spec_rev: int
+    blocks: tuple[Block, ...]
+
+@dataclass(frozen=True)
+class Verdict:
+    file: str
+    rule: str
+    ordinal: int       # the new run's ordinal; the old one's for a gone block
+    key: str
+    cls: str           # §8.3's class name
+    recorded: bool
+
+def parse(text: str) -> Baseline: ...                      # one .jsonl file; ValueError on a malformed line
+def render(b: Baseline) -> str: ...                        # the inverse, byte for byte
+def classify(old: dict[str, Baseline], new: dict[str, Baseline], spec_rev: int, accept: frozenset[str]) -> list[Verdict]: ...
+def main(argv: list[str]) -> int: ...                      # steps 1–4; argv: ["--accept", "<tokens>"]
+```
+
+`classify` compares every file present in `old` or `new` (a file only in `new` gives `additive-new-block` for each block; a file only in `old` gives `block-removed` for each, since its source is gone); verdicts are sorted by `(file, ordinal, key)`; an `accept` token is `<file>` or `<file>:<rule>:<ordinal>` (the new ordinal). `main` writes nothing unless every verdict is `recorded` or there is none.
+
 **Tests:** `gate/baseline/tests/test_regen.py` (the `pytests` row) — one case per class on synthetic files, plus: an unnamed `spec-rev` refused as `value-change`; equal keys taking `#2`; Tier 1 red refused (the gate runner stubbed). **Proofs (exit 6)** — `gate/proofs/drivers/test_regen_baseline.py`, in a world with the gate, the module, the corpus and the baseline: `count-change` (10's block 2 given list and then-list both extended by one event, so Tier 1 stays green) refused, the baseline byte-identical; `ordering-change` (10's block 3: its first two given events and first two then-records swapped — passes Tier 1, the breaker's S7) refused; `timestamp-drift` (one given `ts` and its then-record's `ts` moved by 1 ms where no rate limit changes the outcome) refused; `additive-new-block` (a new rule with one block appended to 09) recorded. `proofs` `min_wants` 27 → 31.
 
 ## 9. The two known issues
