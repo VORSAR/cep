@@ -1,6 +1,6 @@
 # S3.3-2 QA break-it of the combined build (base 1f64dc3, branch s3-3-2/qa)
 
-**This sprint:** [design](../sprints/s3-3-2-design.md) · [record](../sprints/s3-3-2-record.md) · reviews: [design: breaker](s3-3-2-design-breaker.md), [design: challenger](s3-3-2-design-challenger.md), [design: architecture](s3-3-2-design-architecture.md), [design: QA (testability)](s3-3-2-design-qa.md), [combined build: architecture](s3-3-2-combined-architecture.md), **break-it: QA**
+> **Historical — S3.3-2, the expect sandbox, the conformance runner, the Tier-2 baselines and the clock freeze; merged in PR #28.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-08--s33-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-3-2-design.md) · [record](../sprints/s3-3-2-record.md) · reviews: [design: breaker](s3-3-2-design-breaker.md), [design: challenger](s3-3-2-design-challenger.md), [design: architecture](s3-3-2-design-architecture.md), [design: QA (testability)](s3-3-2-design-qa.md), [combined build: architecture](s3-3-2-combined-architecture.md), **break-it: QA**. **← [S3.3-1](../sprints/s3-3-1-record.md) · [S1.1c (next)](../sprints/sprint-plan.md#status) →**
 
 Worktree /Users/ramith/code/cep-wt/s3-3-2-qa. Every finding below has a red test, committed, red for the reason
 stated. No production code was touched. Nothing pushed.
