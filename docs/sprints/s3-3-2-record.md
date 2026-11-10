@@ -1,7 +1,9 @@
 # S3.3-2 — sprint record (the full loop, with the design panel)
 
+> **Historical — S3.3-2, the expect sandbox, the conformance runner, the Tier-2 baselines and the clock freeze; merged in PR #28.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-08--s33-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [design](s3-3-2-design.md) · **record** · reviews: [design: breaker](../reviews/s3-3-2-design-breaker.md), [design: challenger](../reviews/s3-3-2-design-challenger.md), [design: architecture](../reviews/s3-3-2-design-architecture.md), [design: QA (testability)](../reviews/s3-3-2-design-qa.md), [combined build: architecture](../reviews/s3-3-2-combined-architecture.md), [break-it: QA](../reviews/s3-3-2-breakit-qa.md). **← [S3.3-1](s3-3-1-record.md) · [S1.1c (next)](sprint-plan.md#status) →**
+
 **Sprint:** S3.3-2 — the expect sandbox, the conformance runner, the Tier-2 baselines and the clock freeze · **Routine:** the full loop with the design panel (owner, 2026-11-08) · **Size:** about 7.5 SP, re-sized to about 9.75 after the panel (owner, 2026-11-09) · **Branch:** `s3-3-2/integration`
-**What to build and how each item is proven:** [sprint plan — S3.3](sprint-plan.md#s33--the-deploy-pipeline-and-the-conformance-runner--clock-freeze) (items 3, 4, 6, 7, the forwards, exits 8 and 9), its "how S3.3-2 runs" note and the plan check's readings · **Design:** [s3-3-2-design.md](s3-3-2-design.md) (v2, build-ready; v1 at 0a3114c) · **Reviews:** [design: breaker](../reviews/s3-3-2-design-breaker.md), [design: challenger](../reviews/s3-3-2-design-challenger.md), [design: architecture](../reviews/s3-3-2-design-architecture.md), [design: QA (testability)](../reviews/s3-3-2-design-qa.md) · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.3-1](s3-3-1-record.md)
+**What to build and how each item is proven:** [sprint plan — S3.3](history.md#s33--the-deploy-pipeline-and-the-conformance-runner--clock-freeze) (items 3, 4, 6, 7, the forwards, exits 8 and 9), its "how S3.3-2 runs" note and the plan check's readings · **Design:** [s3-3-2-design.md](s3-3-2-design.md) (v2, build-ready; v1 at 0a3114c) · **Reviews:** [design: breaker](../reviews/s3-3-2-design-breaker.md), [design: challenger](../reviews/s3-3-2-design-challenger.md), [design: architecture](../reviews/s3-3-2-design-architecture.md), [design: QA (testability)](../reviews/s3-3-2-design-qa.md) · **Process:** [00-sprint-model.md](00-sprint-model.md) · **Before:** [S3.3-1](s3-3-1-record.md)
 
 ## Plan and decisions
 
@@ -67,9 +69,9 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-07; S3.3-2's plan ch
 Design (G1)  ☑ the design note (v2) ☑ the panel's three reports ☑ QA's testability review (the coordinator's, owner's direction) ☑ owner decisions recorded
 Build (G2)   ☑ T2 (a39c663 + the coverage re-run at a9f9eac) ☑ T3 (a9f9eac, exit 0) ☑ tests on the real code
 Review (G3)  ☑ architecture review of the combined build ☑ QA break-it ☑ every finding fixed, forwarded or rejected (three later findings forwarded; no blocker)
-Verify (G4)  ☑ the fix round under the race detector ☑ T4 exit 0 (741e290) ☐ owner's check ☑ exits 1, 2, 6, 7, 8, 9 met by their proofs (1: conformance; 2: the six planted proofs; 6: the regen proofs; 7: clockgolden; 8: the E-EXP-002 programs; 9: the 09-override facade test)
-Exit (G5)    ☐ one PR, merged by the owner ☐ main CI green ☐ record + retro ☐ known issues S3.3-1-1, S3.3-1-2 closed
-             ☐ the clock freeze declared ☐ status line ☐ documents reconciled ☐ memory updated ☐ worktrees removed ☐ points and duration
+Verify (G4)  ☑ the fix round under the race detector ☑ T4 exit 0 (741e290) ☑ owner's check (the owner merged PR #28) ☑ exits 1, 2, 6, 7, 8, 9 met by their proofs (1: conformance; 2: the six planted proofs; 6: the regen proofs; 7: clockgolden; 8: the E-EXP-002 programs; 9: the 09-override facade test)
+Exit (G5)    ☑ one PR, merged by the owner (#28, rebase, 49 commits, main d14814a, 2026-11-10; PR CI all 7 jobs green on the final head 6d33f4e) ☐ main CI green (the owner reports) ☑ record + retro
+             ☑ known issues S3.3-1-1, S3.3-1-2 closed ☑ the clock freeze declared ☑ status line ☑ documents reconciled ☑ memory updated ☑ worktrees removed ☑ points and duration
 ```
 
 ## For the owner (the owner's check)
@@ -81,6 +83,18 @@ Written from the sprint's diff. Each item takes a minute or two.
 3. **By reading — the baselines:** `conformance/baseline/README.md` (the classes the regen tool records or refuses) and one recorded file, e.g. `conformance/baseline/10-grouped-keys.cep.jsonl` (block 4's silence locked as one key error). Optionally `make regen-baseline`: `no change`.
 4. **LAW Δ, by hand until S1.1c's block — read and intended:** `api/exports.golden`, `api/clock.golden` (the `<Type>.<Method>` rewrite, format only); `conformance/baseline/` (new); `gate/registry.json` (rows `conformance`, `baseline`; the determinism rows run `TestBaseline`; `proofs` min_wants 21); `gate/runner/rows/gotest.py` (counts packages; names a test an anchored pattern names but never ran); `gate/baseline/regen.py` (new); `docs/language/SPEC.md` rev 10 and `errors.md` (E-EXP-002; E-EXP-001's position; E-TIME-003's second reason; objects in blocks); `Makefile` (`regen-baseline`); the generated workflow; ADR-0005, ADR-0012, ADR-0015 (annotations).
 
+## The clock freeze (item 7)
+
+**The clock contract is frozen from `main` @ d14814a** (S3.3's G5, 2026-11-10): a change to an exported `internal/clock` **signature** turns the `clockgolden` row red and needs an owner decision; a format-only rewrite of `api/clock.golden` by `tools/apipartition` (as this sprint's `<Type>.<Method>` one) is not a signature change. ADR-0004 carries the same line. `gate/law.json` and the LAW Δ block that will list `api/clock.golden` are S1.1c's.
+
+## Points and duration
+
+About 9.75 points (re-sized from 7.5 at the design, owner 2026-11-09), delivered as planned; the review and break-it added no scope beyond the owner's object decision (a string as JSON text: no grammar change, about +0.25). G0 2026-11-08, G1 2026-11-09, merged 2026-11-10: about two days.
+
 ## Retro
 
-*(at close-out)*
+- **Kept:** QA's tests first in two independent lanes, and the blind panel before any code: three blockers (a time field skipped in a block, the `Close` barrier's hang, both found twice) were design fixes, not code fixes. The build followed v2 step by step; the conformance runner was green at step 6.
+- **Kept:** the combined review and the break-it found what the panel could not see in a design — an `Activate` succeeding after `Close`, a quadratic alignment, four holes in the regen tool — each fixed with a test red first in one batched round.
+- **Changed late:** a proof that runs only at T4 (the regen driver) first met the real build at T4 and exposed a gap in the baseline key (a new rule's stream re-keyed its file's blocks); the first recording was redone before the PR. A proof driver should meet the real build before T4.
+- **Changed late:** a count-based goroutine test from S3.3-1 flaked on main's CI (19 for 20, an unrelated goroutine exiting); measured by id now. A test about goroutines should never count the process.
+- **Tooling:** every review agent's write to the session scratchpad was refused, so four reports were relayed by message and saved by the coordinator; briefs now ask for a Bash heredoc or the full report in the final message.

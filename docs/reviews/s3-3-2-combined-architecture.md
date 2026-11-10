@@ -1,6 +1,6 @@
 # S3.3-2 — architecture review of the combined build
 
-**This sprint:** [design](../sprints/s3-3-2-design.md) · [record](../sprints/s3-3-2-record.md) · reviews: [design: breaker](s3-3-2-design-breaker.md), [design: challenger](s3-3-2-design-challenger.md), [design: architecture](s3-3-2-design-architecture.md), [design: QA (testability)](s3-3-2-design-qa.md), **combined build: architecture**, [break-it: QA](s3-3-2-breakit-qa.md)
+> **Historical — S3.3-2, the expect sandbox, the conformance runner, the Tier-2 baselines and the clock freeze; merged in PR #28.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-08--s33-2s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [design](../sprints/s3-3-2-design.md) · [record](../sprints/s3-3-2-record.md) · reviews: [design: breaker](s3-3-2-design-breaker.md), [design: challenger](s3-3-2-design-challenger.md), [design: architecture](s3-3-2-design-architecture.md), [design: QA (testability)](s3-3-2-design-qa.md), **combined build: architecture**, [break-it: QA](s3-3-2-breakit-qa.md). **← [S3.3-1](../sprints/s3-3-1-record.md) · [S1.1c (next)](../sprints/sprint-plan.md#status) →**
 
 *The agent's own write of this report was refused by the harness; the coordinator saved its final message verbatim.*
 

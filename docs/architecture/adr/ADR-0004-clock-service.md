@@ -3,6 +3,8 @@
 ## Status
 Accepted (owner, 2026-11-01 — conditions in ADR-0015/qa-strategy.md); **revised 2026-11-01** after architect review F2/F3 and pre-mortem RC-1 (the original per-instance `Observe` could not express SEMANTICS §2.1's per-stream admission watermarks, had no punctuation input, and gave quiet keys no way to advance — the flagship absence on a gone-quiet agent could never fire in live mode).
 
+*(Annotated 2026-11-10, S3.3-2's close-out ([record](../../sprints/s3-3-2-record.md#the-clock-freeze-item-7)): **the clock contract is frozen from `main` @ d14814a** — a change to an exported `internal/clock` signature turns the `clockgolden` row red and needs an owner decision; a format-only rewrite of `api/clock.golden` by `tools/apipartition` is not a signature change. The LAW Δ listing is S1.1c's.)*
+
 ## Context
 SEMANTICS §2.1 (as pinned): a stream's **admission watermark** is per-stream — `max(event time seen on that stream) − d` — identical in live and playback. A rule instance's **construct clock** is the clamped-monotonic min over its *input streams' contributions*, where contribution = `max(admission wm, idle floor [live], virtual floor [playback])`, **per stream**. Derived streams carry **punctuations**, never recomputed watermarks. At each clock advance the engine must perform events → completions/timers → discards, in that order (SEMANTICS §6.4). A key that receives no events must still see its streams' clocks move (that is the whole point of absence detection). Every behavior here has an executable oracle in `docs/language/checks/` (40 checks; 48 at SPEC rev 4) plus the pre-mortem's mandated new case.
 
