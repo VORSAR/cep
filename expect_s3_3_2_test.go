@@ -26,6 +26,44 @@ type exWant struct {
 	block int    // the failing block, 1-based in source order
 	rule  string // the owning rule's name, named in the message
 	attr  string // the diverging attribute, named in the message; "" when the divergence names none
+	// at is where E-EXP-001 points (design s3-3-2 v2 §5.4; owner, 2026-11-09, decision 3): k > 0 the block's k-th
+	// then-record's `{` (an expected record that did not come out, or the first out of order); exThen the block's
+	// `then` (an output the then-list does not have); exAtExpect its `expect` (a panic).
+	at int
+}
+
+const (
+	exThen     = 0
+	exAtExpect = -1
+)
+
+// exAt is the line and column exWant.at names in block n of src: the `then` keyword is the first "then " token after
+// the block's `expect`; then-record k's `{` is the k-th "{" after it.
+func exAt(t testing.TB, src string, n, at int) (line, col int) {
+	t.Helper()
+	el, ec := exExpectPos(t, src, n)
+	if at == exAtExpect {
+		return el, ec
+	}
+	lines := strings.SplitAfter(src, "\n")
+	off := ec - 1
+	for _, l := range lines[:el-1] {
+		off += len(l)
+	}
+	m := regexp.MustCompile(`\sthen\s`).FindStringIndex(src[off:])
+	if m == nil {
+		t.Fatalf("block %d has no then", n)
+	}
+	off += m[0] + 1
+	for k := 0; k < at; k++ {
+		j := strings.Index(src[off+1:], "{")
+		if j < 0 {
+			t.Fatalf("block %d's then-list has fewer than %d records", n, at)
+		}
+		off += j + 1
+	}
+	before := src[:off]
+	return strings.Count(before, "\n") + 1, off - (strings.LastIndex(before, "\n") + 1) + 1
 }
 
 // exExpectPos is the line and column of the n-th (1-based) `expect` keyword of src: the first token of a line
@@ -107,7 +145,7 @@ func exDeploys(t testing.TB, src string, opts ...cep.DeployOption) {
 }
 
 // exRefused asserts err is a *cep.DeployError of exactly the wanted E-EXP-001 diagnostics, in source order, each
-// at its block's `expect` keyword, naming the rule and the attribute.
+// at its exWant.at, naming the rule and the attribute.
 func exRefused(t testing.TB, src string, h *cep.AppHandle, err error, wants ...exWant) {
 	t.Helper()
 	var de *cep.DeployError
@@ -122,9 +160,9 @@ func exRefused(t testing.TB, src string, h *cep.AppHandle, err error, wants ...e
 	}
 	for i, w := range wants {
 		d := de.Diagnostics[i]
-		line, col := exExpectPos(t, src, w.block)
+		line, col := exAt(t, src, w.block, w.at)
 		if d.Code != "E-EXP-001" || d.Line != line || d.Col != col {
-			t.Errorf("diagnostic %d: %s at %d:%d; want E-EXP-001 at %d:%d (block %d's expect)", i, d.Code, d.Line, d.Col, line, col, w.block)
+			t.Errorf("diagnostic %d: %s at %d:%d; want E-EXP-001 at %d:%d (block %d, at %d: the then-record, 0 then, -1 expect)", i, d.Code, d.Line, d.Col, line, col, w.block, w.at)
 		}
 		if !exNames(d.Message, w.rule) {
 			t.Errorf("diagnostic %d's message %q does not name the rule %s", i, d.Message, w.rule)
@@ -173,31 +211,31 @@ func TestExpectPlantedWrongExpects(t *testing.T) {
 		// 09 block 1: math:round(0.9) is 1.0; the block now expects 2.0.
 		{"wrong value", ex09, func(t *testing.T, s string) string {
 			return exPlant(t, s, "scaled: 1.0, ts: timestamp '2026-01-01T00:00:01Z'} ]", "scaled: 2.0, ts: timestamp '2026-01-01T00:00:01Z'} ]")
-		}, exWant{1, "HighRisk", "scaled"}},
+		}, exWant{1, "HighRisk", "scaled", 1}},
 		// 10 block 1: the grant's scope is now 'read', so the alert the then-list expects never comes.
 		{"missing output", ex10, func(t *testing.T, s string) string {
 			return exPlant(t, s, "expect given Grants [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]",
 				"expect given Grants [ {tenantId: 't1', userId: 'alice', scope: 'read', ts: timestamp '2026-01-01T10:00:00Z'} ]")
-		}, exWant{1, "AdminScopeGrant", ""}},
+		}, exWant{1, "AdminScopeGrant", "", 1}},
 		// 07 block 5: the then-list drops t2's alert, which still fires: one output more than listed.
 		{"extra output", ex07, func(t *testing.T, s string) string {
 			return exPlantRe(t, s, `,\s*\{tenantId: 't2', appId: 'rogue', ts: timestamp '2026-01-01T10:02:00Z'\} \]`, " ]")
-		}, exWant{5, "UnknownAppConsent", ""}},
+		}, exWant{5, "UnknownAppConsent", "", exThen}},
 		// 07 block 5: t2's alert (10:02) listed before t1's (10:00).
 		{"wrong order", ex07, func(t *testing.T, s string) string {
 			return exPlantRe(t, s,
 				`\{tenantId: 't1', appId: 'rogue', ts: timestamp '2026-01-01T10:00:00Z'\},(\s*)\{tenantId: 't2', appId: 'rogue', ts: timestamp '2026-01-01T10:02:00Z'\} \]`,
 				"{tenantId: 't2', appId: 'rogue', ts: timestamp '2026-01-01T10:02:00Z'},${1}{tenantId: 't1', appId: 'rogue', ts: timestamp '2026-01-01T10:00:00Z'} ]")
-		}, exWant{5, "UnknownAppConsent", ""}},
+		}, exWant{5, "UnknownAppConsent", "", 1}},
 		// 09 block 3: a risk of 0.76 crosses the 0.75 threshold under `then RiskAlerts [ ]`.
 		{"an output under an empty then", ex09, func(t *testing.T, s string) string {
 			return exPlant(t, s, "risk: 0.75", "risk: 0.76")
-		}, exWant{3, "HighRisk", ""}},
+		}, exWant{3, "HighRisk", "", exThen}},
 		// 10 block 1: the alert is at 10:00:00; the block now expects 10:00:01.
 		{"wrong timestamp", ex10, func(t *testing.T, s string) string {
 			return exPlant(t, s, "then GrantAlerts [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]",
 				"then GrantAlerts [ {tenantId: 't1', userId: 'alice', scope: 'admin', ts: timestamp '2026-01-01T10:00:01Z'} ]")
-		}, exWant{1, "AdminScopeGrant", "ts"}},
+		}, exWant{1, "AdminScopeGrant", "ts", 1}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -218,7 +256,7 @@ func TestExpectEveryFailingBlockInSourceOrder(t *testing.T) {
 		"{tenantId: 't1', userId: 'bob', scope: 'admin', ts: timestamp '2026-01-01T10:00:00Z'} ]")
 	// block 2: an admin scope fires under `then GrantAlerts [ ]`
 	src = exPlant(t, src, "scope: 'read'", "scope: 'admin'")
-	exRefusedDeploy(t, src, []exWant{{2, "AdminScopeGrant", ""}, {4, "AdminScopeGrant", ""}})
+	exRefusedDeploy(t, src, []exWant{{2, "AdminScopeGrant", "", exThen}, {4, "AdminScopeGrant", "", exThen}})
 }
 
 // exSandboxSrc: a partitioned, rate-limited rule over a table (one alert per key every 5 min, keys not in T).
@@ -278,7 +316,7 @@ func TestExpectFreshSandboxPerBlock(t *testing.T) {
 		t.Run(c.name+"/stale refused", func(t *testing.T) {
 			t.Parallel()
 			src := exSandbox(c.first, c.stale)
-			exRefusedDeploy(t, src, []exWant{{2, "R", ""}})
+			exRefusedDeploy(t, src, []exWant{{2, "R", "", exThen}})
 		})
 	}
 }
@@ -297,7 +335,7 @@ func TestExpectGivenTableSeedsBeforeAnyEvent(t *testing.T) {
 	t.Run("seeded after refused", func(t *testing.T) {
 		t.Parallel()
 		src := exSandbox(given + "         then O [ {k: 'c', ts: timestamp '2026-01-01T10:00:00Z'} ]\n")
-		exRefusedDeploy(t, src, []exWant{{1, "R", ""}})
+		exRefusedDeploy(t, src, []exWant{{1, "R", "", 1}})
 	})
 }
 
@@ -310,7 +348,7 @@ func TestExpectListOrderIsArrivalOrder(t *testing.T) {
 	src := exPlant(t, fcExample(t, ex07),
 		"then ConsentAlerts [ {tenantId: 't1', appId: 'app-b', ts: timestamp '2026-01-01T10:00:30Z'} ]",
 		"then ConsentAlerts [ {tenantId: 't1', appId: 'app-a', ts: timestamp '2026-01-01T10:00:00Z'} ]")
-	exRefusedDeploy(t, src, []exWant{{6, "UnknownAppConsent", ""}})
+	exRefusedDeploy(t, src, []exWant{{6, "UnknownAppConsent", "", 1}})
 }
 
 // TestExpectThenChecksOnlyNamedAttributes (rule 2; guard): 07 block 1's then-record naming tenantId alone passes;
@@ -325,7 +363,7 @@ func TestExpectThenChecksOnlyNamedAttributes(t *testing.T) {
 	t.Run("named wrong refused", func(t *testing.T) {
 		t.Parallel()
 		src := exPlant(t, fcExample(t, ex07), old, "then ConsentAlerts [ {tenantId: 't2'} ]")
-		exRefusedDeploy(t, src, []exWant{{1, "UnknownAppConsent", "tenantId"}})
+		exRefusedDeploy(t, src, []exWant{{1, "UnknownAppConsent", "tenantId", 1}})
 	})
 }
 
@@ -341,7 +379,7 @@ func TestExpectOmittedGivenAttributeIsNull(t *testing.T) {
 	t.Run("omitted alerts under an empty then", func(t *testing.T) {
 		t.Parallel()
 		src := exPlant(t, omitted(t), "then ConsentAlerts [ {tenantId: 't1', appId: 'missing', ts: timestamp '2026-01-01T10:00:00Z'} ]", "then ConsentAlerts [ ]")
-		exRefusedDeploy(t, src, []exWant{{3, "UnknownAppConsent", ""}})
+		exRefusedDeploy(t, src, []exWant{{3, "UnknownAppConsent", "", exThen}})
 	})
 }
 
@@ -364,7 +402,7 @@ func TestExpectRunsWithTheDeploymentsParams(t *testing.T) {
 	t.Parallel()
 	t.Run("lookback 2 hour refused", func(t *testing.T) {
 		t.Parallel()
-		exRefusedDeploy(t, fcExample(t, ex09), []exWant{{2, "HighRisk", ""}}, cep.WithParam("lookback", "2 hour"))
+		exRefusedDeploy(t, fcExample(t, ex09), []exWant{{2, "HighRisk", "", 2}}, cep.WithParam("lookback", "2 hour"))
 	})
 	for _, p := range [][2]string{{"threshold", "0.79"}, {"lookback", "90 min"}, {"strict", "false"}} {
 		t.Run(p[0]+" "+p[1]+" deploys", func(t *testing.T) {
@@ -498,7 +536,7 @@ func TestExpectSandboxTouchesNothingLive(t *testing.T) {
 		}}
 		bad := exPlant(t, fcExample(t, ex07), "then ConsentAlerts [ ]", "then ConsentAlerts [ {tenantId: 't1'} ]")
 		h, err := r.Deploy(ctx, "07", bad, cep.WithSource("ConsentGrants", src), cep.WithSink("ConsentAlerts", sink))
-		exRefused(t, bad, h, err, exWant{2, "UnknownAppConsent", ""})
+		exRefused(t, bad, h, err, exWant{2, "UnknownAppConsent", "", 1})
 		if err := r.Close(ctx); err != nil {
 			t.Errorf("Close: %v", err)
 		}
@@ -552,6 +590,8 @@ func TestCloseRefusesADeployOnceItHasBegun(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("ceiling hit waiting for the sink to hold the alert: %v", ctx.Err())
 	}
+	// idle is deployed and never started: Close has begun when its Start comes (the Start case, design v2 §11).
+	idle := fcDeploy(t, ctx, r, "idle", fcExample(t, ex07))
 	closed := make(chan error, 1)
 	go func() { closed <- r.Close(ctx) }()
 	select {
@@ -562,6 +602,9 @@ func TestCloseRefusesADeployOnceItHasBegun(t *testing.T) {
 	late, err := r.Deploy(ctx, "late", fcExample(t, ex09))
 	if !errors.Is(err, cep.ErrClosed) || late != nil {
 		t.Errorf("Deploy while Close drains: handle %v, error %v; want ErrClosed and no handle (S3.3-1-2)", late != nil, err)
+	}
+	if err := idle.Start(ctx); !errors.Is(err, cep.ErrClosed) {
+		t.Errorf("Start while Close drains: %v; want ErrClosed (S3.3-1-2)", err)
 	}
 	free()
 	select {
