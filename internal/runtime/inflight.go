@@ -47,3 +47,10 @@ func (g *inflightGate) close() <-chan struct{} {
 	}
 	return ch
 }
+
+// closed reports whether Close has begun (the facade's Deploy refuses at once from here: the combined review's R-L2).
+func (g *inflightGate) closed() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.closing
+}

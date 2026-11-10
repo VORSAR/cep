@@ -166,6 +166,9 @@ type Runtime struct {
 	// addHold is for the package's tests only: the router calls it as it begins an install, so a test can hold an Add
 	// in flight deterministically (TestCloseWaitsForAnAddInFlight). Set before the Add it holds.
 	addHold func()
+	// activateHold is for the package's tests only: Activate calls it between the router's answer and its tail, so a
+	// test can hold an activation there while Close gives up at its deadline (the combined review's R-S3).
+	activateHold func()
 }
 
 type appState struct {
@@ -679,7 +682,7 @@ func CheckRows(table string, attrs []event.Attr, rows [][]event.Value) error {
 }
 
 // Closed says Close has begun: the facade checks it before reading a program (§3.7: Deploy after Close is ErrClosed).
-func (r *Runtime) Closed() bool { return r.isClosed() }
+func (r *Runtime) Closed() bool { return r.isClosed() || r.inflight.closed() }
 
 // Tick hands a wall tick to the intake, behind every event already there.
 func (r *Runtime) Tick(ctx context.Context, now int64) error {

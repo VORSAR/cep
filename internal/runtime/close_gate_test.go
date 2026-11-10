@@ -329,3 +329,41 @@ func TestCloseReportsARemoveError(t *testing.T) {
 		t.Errorf("Close: %v; want it to carry the planted Remove error (errors.Join, A3)", err)
 	}
 }
+
+// The combined review's R-S3: an Activate the router answered, held before its tail while Close gives up at its
+// deadline, returns ErrClosed and starts nothing once released (it used to start its flushers, set the phase and
+// return nil on a closed runtime).
+func TestActivateAfterCloseGaveUpIsErrClosed(t *testing.T) {
+	ctx := cgCtx(t)
+	r := cgRuntime(t)
+	id, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil }))
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	hold, held := make(chan struct{}), make(chan struct{})
+	r.activateHold = func() { close(held); <-hold }
+	act := make(chan error, 1)
+	go func() { act <- r.Activate(ctx, id) }()
+	select {
+	case <-held:
+	case <-ctx.Done():
+		t.Fatal("Activate never reached its tail: the ceiling")
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := r.Close(cctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Close with a cancelled ctx: %v; want context.Canceled", err)
+	}
+	close(hold)
+	select {
+	case err := <-act:
+		if !errors.Is(err, ErrClosed) {
+			t.Errorf("Activate after Close gave up: %v; want ErrClosed", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Activate never returned: the ceiling")
+	}
+	if ph := appPhase(r.appList()[id].phase.Load()); ph == phaseActive {
+		t.Errorf("the app is active on a closed runtime; want it never activated by the caller")
+	}
+}
