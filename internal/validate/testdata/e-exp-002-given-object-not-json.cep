@@ -1,0 +1,15 @@
+-- expect: E-EXP-002 (S.doc is object; the block's string is not one JSON object or array) @ 12:34
+language cep/0.1;
+
+stream S (k string, doc object, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Pass every key.'
+  from S
+  expect given S [ {k: 'a', doc: 'not json', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then Out [ {k: 'a'} ]
+  select k
+  insert into Out;

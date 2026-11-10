@@ -39,6 +39,7 @@ func TestExpectMistakeMessages(t *testing.T) {
 		{"X8", "given-arrival-stream", "A is stamped on arrival; a block cannot give it events"},
 		{"X9", "given-stream-twice", "S is given twice; give each stream one list"},
 		{"X10", "given-text-invisibles", "S.text_invisibles is computed by the engine; a block cannot give it"},
+		{"X3", "given-object-not-json", "S.doc is object; the block's string is not one JSON object or array"},
 	} {
 		t.Run(c.row+"/"+c.file, func(t *testing.T) {
 			t.Parallel()
