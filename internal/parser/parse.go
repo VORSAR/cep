@@ -8,6 +8,7 @@ package parser
 import (
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -57,6 +58,9 @@ var filterGrammar = participle.MustBuild[Expr](
 // Parse parses one source. A leading UTF-8 BOM is ignored (SPEC §2.1). The error, if any, is a *Error.
 func Parse(name, src string) (*Result, error) {
 	src = strings.TrimPrefix(src, "\xEF\xBB\xBF")
+	if at := invalidUTF8(src); at.Line > 0 { // SPEC §2.1: source is UTF-8 (the S3.3-2 break-it's Q-L5)
+		return nil, mk(name, "E-SYN-001", at, "the source is not UTF-8: this byte starts no character")
+	}
 	code, trivia, err := lexAll(name, src)
 	if err != nil {
 		return nil, lexError(name, src, err)
@@ -212,4 +216,26 @@ func closingBracket(toks []Token, open int) int {
 		}
 	}
 	return -1
+}
+
+// invalidUTF8 is the position of src's first byte that starts no UTF-8 character (its line, and its column in
+// characters, both 1-based); a zero Position when src is valid UTF-8.
+func invalidUTF8(src string) Position {
+	if utf8.ValidString(src) {
+		return Position{}
+	}
+	line, col := 1, 1
+	for i := 0; i < len(src); {
+		r, size := utf8.DecodeRuneInString(src[i:])
+		if r == utf8.RuneError && size <= 1 {
+			return Position{Line: line, Column: col}
+		}
+		if r == '\n' {
+			line, col = line+1, 1
+		} else {
+			col++
+		}
+		i += size
+	}
+	return Position{}
 }
