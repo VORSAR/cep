@@ -101,3 +101,31 @@ rule R
 		t.Errorf("the then-record's values %+v; want true and 5 min", th)
 	}
 }
+
+// The owner, 2026-11-10 (S3.3-2's break-it decision 1): an object field in a block is a string holding its JSON text,
+// carried in the form the live boundary requires (event.CleanObject: whitespace outside strings removed).
+func TestBuildCarriesAnObjectAsItsJSONText(t *testing.T) {
+	t.Parallel()
+	const src = `language cep/0.1;
+
+stream S (k string, doc object, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream Out (k string, doc object, ts timestamp);
+
+rule R
+  intent 'Forward every event.'
+  from S
+  expect given S [ {k: 'a', doc: '{ "tool": "rm" }', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then Out [ {doc: '[1, 2]'} ]
+  select k, doc
+  insert into Out;
+`
+	p := pqBuild(t, "object.cep", src)
+	if got := p.Expects[0].Lists[0].Events[0].Values[1]; got != (event.Value{Kind: event.TObject, Obj: `{"tool":"rm"}`}) {
+		t.Errorf("the given object %+v; want its compact JSON text", got)
+	}
+	if got := p.Expects[0].Then[0].Values[0]; got != (event.Value{Kind: event.TObject, Obj: `[1,2]`}) {
+		t.Errorf("the then-record's object %+v; want its compact JSON text", got)
+	}
+}

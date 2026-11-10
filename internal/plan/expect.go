@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/model"
@@ -181,6 +182,8 @@ func value(l model.Literal, t event.Type) (event.Value, error) {
 		return event.Value{Kind: t, Null: true}, nil
 	case l.Kind == model.LitString && t == event.TString:
 		return event.Value{Kind: t, Str: l.Str}, nil
+	case l.Kind == model.LitString && t == event.TObject: // its JSON text, in the boundary's stored form (owner, 2026-11-10)
+		return event.Value{Kind: t, Obj: event.CleanObject([]byte(strings.TrimSpace(l.Str)))}, nil
 	case l.Kind == model.LitInt && t == event.TInt:
 		return event.Value{Kind: t, I: l.Int}, nil
 	case l.Kind == model.LitInt && t == event.TFloat:

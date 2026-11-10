@@ -1,8 +1,10 @@
 package validate
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/model"
@@ -96,8 +98,8 @@ func (c *checker) givenRecord(at, owner string, attrs []model.Attr, timeAttr str
 		switch {
 		case f.Value.Kind == model.LitNull && required:
 			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is required; the block gives it null", owner, f.Name))
-		case f.Value.Kind != model.LitNull && !fits(f.Value, a.Type):
-			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is %s; the block gives %s", owner, f.Name, a.Type, article(kindName(f.Value))))
+		case f.Value.Kind != model.LitNull:
+			c.blockValue(at, owner, a, f)
 		}
 	}
 	for _, a := range attrs {
@@ -127,13 +129,36 @@ func (c *checker) thenRecord(at, owner string, attrs []model.Attr, rec *model.Re
 		switch {
 		case f.Value.Kind == model.LitNull && !a.Optional:
 			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is never null; the block expects null", owner, f.Name))
-		case f.Value.Kind != model.LitNull && !fits(f.Value, a.Type):
-			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is %s; the block gives %s", owner, f.Name, a.Type, article(kindName(f.Value))))
+		case f.Value.Kind != model.LitNull:
+			c.blockValue(at, owner, a, f)
 		}
 	}
 }
 
 func (c *checker) mistake(p model.Pos, msg string) { c.report("E-EXP-002", p, "%s", msg) }
+
+// blockValue is X3 for one written value: it fits the field's type — an object field takes a string holding one JSON
+// object or array, as the Go boundary takes it (owner, 2026-11-10, S3.3-2's break-it decision 1).
+func (c *checker) blockValue(at, owner string, a *model.Attr, f *model.Field) {
+	switch {
+	case a.Type == event.TObject && f.Value.Kind == model.LitString:
+		if !objectText(f.Value.Str) {
+			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is object; the block's string is not one JSON object or array", owner, f.Name))
+		}
+	case !fits(f.Value, a.Type):
+		c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is %s; the block gives %s", owner, f.Name, a.Type, article(kindName(f.Value))))
+	}
+}
+
+// objectText says s is one JSON object or array an object value can hold: valid, an object or an array at the top,
+// nested within the log's limit once in its stored form (event.CleanObject, event.ExactObject).
+func objectText(s string) bool {
+	t := strings.TrimSpace(s)
+	if t == "" || (t[0] != '{' && t[0] != '[') || !json.Valid([]byte(t)) {
+		return false
+	}
+	return event.ExactObject(event.CleanObject([]byte(t)))
+}
 
 // unknownText is "unknown <what> <name>" — or, with a prefix, "<prefix> <what> <name>" — with the nearest candidate.
 func (c *checker) unknownText(what, name string, candidates []string, prefix ...string) string {
