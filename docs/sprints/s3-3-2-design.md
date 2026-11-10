@@ -554,3 +554,12 @@ Every finding verified by the coordinator against the source before it was taken
 | Architect Q3 — E-EXP-001 at the then-record | — | adopted (owner 3) |
 | Testability Q-1 — X7's "reads a table" undefined | should-fix | fixed: §3.1 Definitions |
 | Testability Q-2 — "the file changed in the same diff" needs a base | should-fix | fixed: §8.1 `source_sha256` |
+
+## 15. The fix round, as built (after the combined review and the break-it; the owner's decision of 2026-11-10)
+
+- **§5.4's alignment** (Q-S1): the matched prefix is paired without a table (pairing a match never shortens the subsequence); at the first unpaired position the walk's choice needs two subsequence lengths, computed in rows of the then-list's width; past 4,000,000 comparisons the first divergence is read by position. The texts are §5.4's; "another order" now carries the drop reason too (Q-L2); a timestamp `AppendValue` cannot write prints `<ms> ms (outside the years 0000-9999)` (R-L4).
+- **§9.1's gate** (R-S3, R-L2, Q-L3): Activate's tail and `Run`'s goroutine starts take the gate's mutex and refuse with `ErrClosed` once the runtime is stopped; Close stops the runtime under the same mutex; `Runtime.Closed()` is true once Close has begun, so `Deploy` refuses at once; the router installs nothing once stopped. A third seam for the package's tests: `activateHold`.
+- **Objects in blocks** (owner, 2026-11-10, ≠ R): an `object` field takes a string holding one JSON object or array; it is stored as `event.CleanObject` stores it (the Go boundary's form) and a then-record compares it by that text; any other string is E-EXP-002 at the value (§3.1's X3).
+- **Source is UTF-8** (Q-L5): `parser.Parse` refuses a malformed byte with E-SYN-001 at its line and column (SPEC §2.1, unchanged).
+- **The regen tool** (Q-S2, Q-S3, Q-S4, Q-L1, Q-L4): a key twice in a file or a non-integer count is a malformed baseline (refused); `classify` takes the corpus files' hashes, so a file only in the stored run whose corpus file is unchanged is `block-vanished`; the `ACCEPT` hint only when SPEC's rev is above the stored one; a Tier 1 missing a row is refused. `gotest.py` reports a name an anchored list pattern names but never ran (R-L1).
+

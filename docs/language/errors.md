@@ -164,7 +164,7 @@ Rule: SPEC §6.8 — the given/then example did not reproduce under playback.
 Message names the rule, the block and the first difference between the outputs and the then-list; it points at the expected record that did not come out, or at `then` for an output the then-list does not have (rev 10). Fix: correct the rule or the example.
 
 ### E-EXP-002 Mistake inside an `expect` block **[static]**
-Rule: SPEC §6.8 (rev 10) — a block names only streams and tables its rule reads or writes, each `given` stream once; every field is declared, written once and has its declared type; a required field — and a stream's time attribute, always — has a value; the engine-owned `text_invisibles` is never given. Checked before any block runs.
+Rule: SPEC §6.8 (rev 10) — a block names only streams and tables its rule reads or writes, each `given` stream once; every field is declared, written once and has its declared type (an `object` field a string holding one JSON object or array); a required field — and a stream's time attribute, always — has a value; the engine-owned `text_invisibles` is never given. Checked before any block runs.
 Message names the block, the stream or table, the field and the expected type. Fix: name a stream or table the rule reads or writes, and give each field a value of its declared type.
 
 ### E-STR-002 Unknown string escape **[static]**
