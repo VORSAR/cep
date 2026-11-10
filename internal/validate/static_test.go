@@ -195,7 +195,9 @@ func TestEveryStaticCodeIsAccountedFor(t *testing.T) {
 			t.Errorf("%s has a test program but is marked for %s", code, e.Later)
 		case e.Unreachable && tested[code]:
 			t.Errorf("%s has a test program but is marked unreachable", code)
-		case e.Later == "" && !e.Unreachable && !tested[code]:
+		case e.Deploy && tested[code]:
+			t.Errorf("%s is raised at deploy, not by Check, but has a test program", code)
+		case e.Later == "" && !e.Unreachable && !e.Deploy && !tested[code]:
 			t.Errorf("%s has no test program in testdata/", code)
 		}
 	}

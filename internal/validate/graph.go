@@ -115,6 +115,8 @@ func (c *checker) timeAttr(s *model.Stream) {
 		c.unknown(s.Time.AttrPos, "attribute of "+s.Name, s.Time.Attr, attrNames(s.Attrs))
 	case a.Type != event.TTimestamp:
 		c.report("E-TIME-003", s.Time.AttrPos, "the time attribute %s of %s is declared %s, not timestamp", a.Name, s.Name, a.Type)
+	case a.Optional: // owner, 2026-11-09, design 7: live ingest refuses an event without a time, whatever optional says
+		c.report("E-TIME-003", s.Time.AttrPos, "the time attribute %s of %s is declared optional: every event needs a time", a.Name, s.Name)
 	}
 }
 

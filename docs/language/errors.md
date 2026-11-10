@@ -79,9 +79,9 @@ Rule: SEMANTICS §2.1 — derived streams carry propagated watermarks; re-declar
 *(Owner, 2026-11-04, S2.2b: a stream with a time clause that a rule inserts into is this error when nothing uses it as a source — no rule reads it and it has no `@source`; otherwise it is `E-GRAPH-002`. Never both.)*
 Fix: remove the clause; declare clocks on source streams only.
 
-### E-TIME-003 Time attribute is not a timestamp **[static]**
-Rule: SPEC §4.2 (rev 3) — `time <attr>` names the stream's event-time attribute, so `<attr>` is declared `timestamp`.
-Message names the attribute and its declared type. Fix: declare the attribute `timestamp`, or name the stream's timestamp attribute.
+### E-TIME-003 Time attribute is not a timestamp, or is optional **[static]**
+Rule: SPEC §4.2 (rev 3) — `time <attr>` names the stream's event-time attribute, so `<attr>` is declared `timestamp`; (rev 10) and never `optional`: every event needs a time, and live ingest refuses an event without one.
+Message names the attribute and its declared type, or that it is optional. Fix: declare the attribute `timestamp` without `optional`, or name the stream's timestamp attribute.
 
 ### E-IDLE-001 Missing `idle after` on a timer-feeding stream **[static]**
 Rule: SEMANTICS §2.1 / SPEC §4.2 — every stream consumed by a rule that holds timers (any pattern with an absence, any window rule, any multi-stream rule) declares idleness, or a quiet stream stalls that rule's clock. A plain rule — partitioned and rate-limited or not — holds no such timer: its keys expire on its own stream's admission watermark (SEMANTICS §9), so it needs no `idle after`.
@@ -161,7 +161,11 @@ Fix: resolve the question and delete the clause.
 
 ### E-EXP-001 `expect` block failed **[static]**
 Rule: SPEC §6.8 — the given/then example did not reproduce under playback.
-Message carries the first diverging output. Fix: correct the rule or the example.
+Message names the rule, the block and the first difference between the outputs and the then-list; it points at the expected record that did not come out, or at `then` for an output the then-list does not have (rev 10). Fix: correct the rule or the example.
+
+### E-EXP-002 Mistake inside an `expect` block **[static]**
+Rule: SPEC §6.8 (rev 10) — a block names only streams and tables its rule reads or writes, each `given` stream once; every field is declared, written once and has its declared type; a required field — and a stream's time attribute, always — has a value; the engine-owned `text_invisibles` is never given. Checked before any block runs.
+Message names the block, the stream or table, the field and the expected type. Fix: name a stream or table the rule reads or writes, and give each field a value of its declared type.
 
 ### E-STR-002 Unknown string escape **[static]**
 Rule: SPEC §2.4 — the escape set is exhaustive: `\\ \' \" \n \t \r \uXXXX`.

@@ -103,6 +103,7 @@ func (c *checker) run() {
 	c.graph()
 	c.bounds()
 	c.expressions()
+	c.expects()
 }
 
 func (c *checker) index() {
