@@ -211,24 +211,35 @@ type ExpectBlock struct {
 }
 
 type GivenSec struct {
+	Pos     Position
 	Table   bool      `parser:"'given' @'table'?"`
-	Name    string    `parser:"@(Ident|Backticked)"`
+	Name    *NameTok  `parser:"@@"`
 	Records []*Record `parser:"'[' (@@ (',' @@)*)? ']'"`
 }
 
 type ThenSec struct {
-	Name    string    `parser:"'then' @(Ident|Backticked)"`
+	Pos     Position
+	Name    *NameTok  `parser:"'then' @@"`
 	Records []*Record `parser:"'[' (@@ (',' @@)*)? ']'"`
 }
 
 type Record struct {
+	Pos    Position
 	Fields []*Field `parser:"'{' @@ (',' @@)* '}'"`
 }
 
 type Field struct {
-	Name  string         `parser:"@(Ident|Backticked) ':'"`
-	Null  bool           `parser:"( @'null'"`
-	Value *SignedLiteral `parser:"| @@ )"`
+	Pos   Position
+	Name  string      `parser:"@(Ident|Backticked) ':'"`
+	Value *FieldValue `parser:"@@"`
+}
+
+// FieldValue is a record field's value: `null` or a signed literal, with the position of its first token (design
+// s3-3-2 §2).
+type FieldValue struct {
+	Pos  Position
+	Null bool           `parser:"( @'null'"`
+	Lit  *SignedLiteral `parser:"| @@ )"`
 }
 
 type SelItem struct {

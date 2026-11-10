@@ -164,7 +164,7 @@ func (l *lowerer) rule(r *RuleDecl) model.Rule {
 	out.Body = l.body(r.Body)
 	for _, e := range r.Extras {
 		if e.Expect != nil {
-			out.Expects = append(out.Expects, l.expect(e.Expect))
+			out.Expects = append(out.Expects, l.expect(e.Expect, e.Pos))
 		} else {
 			out.Todos = append(out.Todos, l.str(e.Todo.Value, e.Todo.Pos))
 			out.TodoPos = append(out.TodoPos, pos(e.Pos))
@@ -267,25 +267,30 @@ func (l *lowerer) late(c *LateClause) model.LateEvents {
 	return model.LateEvents{Mode: "allow", Allow: l.durationOrParam(c.Allow), Pos: pos(c.Pos)}
 }
 
-func (l *lowerer) expect(e *ExpectBlock) model.Expect {
-	out := model.Expect{Givens: []model.Given{}}
+// expect lowers one block; at is the enclosing `expect` keyword (design s3-3-2 §2).
+func (l *lowerer) expect(e *ExpectBlock, at Position) model.Expect {
+	out := model.Expect{Givens: []model.Given{}, Pos: pos(at)}
 	for _, g := range e.Givens {
-		out.Givens = append(out.Givens, model.Given{Table: g.Table, Name: name(g.Name), Records: l.records(g.Records)})
+		out.Givens = append(out.Givens, model.Given{
+			Table: g.Table, Name: name(g.Name.Value), Records: l.records(g.Records), Pos: pos(g.Pos), NamePos: pos(g.Name.Pos),
+		})
 	}
-	out.Then = model.Then{Name: name(e.Then.Name), Records: l.records(e.Then.Records)}
+	out.Then = model.Then{
+		Name: name(e.Then.Name.Value), Records: l.records(e.Then.Records), Pos: pos(e.Then.Pos), NamePos: pos(e.Then.Name.Pos),
+	}
 	return out
 }
 
 func (l *lowerer) records(in []*Record) []model.Record {
 	out := []model.Record{}
 	for _, r := range in {
-		rec := model.Record{Fields: []model.Field{}}
+		rec := model.Record{Fields: []model.Field{}, Pos: pos(r.Pos)}
 		for _, f := range r.Fields {
-			field := model.Field{Name: name(f.Name)}
-			if f.Null {
+			field := model.Field{Name: name(f.Name), Pos: pos(f.Pos), ValuePos: pos(f.Value.Pos)}
+			if f.Value.Null {
 				field.Value = model.Literal{Kind: model.LitNull}
 			} else {
-				field.Value = l.signedLiteral(f.Value)
+				field.Value = l.signedLiteral(f.Value.Lit)
 			}
 			rec.Fields = append(rec.Fields, field)
 		}
