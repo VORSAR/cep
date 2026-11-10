@@ -1,48 +1,50 @@
-clock Admission func func (r *StreamRegistry) Admission(sid int) int64
-clock Advance func func (rc *RuleClock) Advance(cb Callbacks)
-clock ApplyAdvance func func (rc *RuleClock) ApplyAdvance(a WMAdvance) (clock int64, advanced bool)
 clock BatchClose const const BatchClose TimerKind = iota + 1 // iota 3
-clock Birth func func (in *Instance) Birth() (birth uint64, born bool)
-clock Buffer func func (in *Instance) Buffer(e event.Event) (constructLate bool)
 clock Callbacks type type Callbacks struct {
 	OnEvent   func(in *Instance, e event.Event)
 	OnTimers  func(in *Instance, fires []Timer)
 	OnDiscard func(in *Instance, refs []uint64)
 }
-clock Cancel func func (in *Instance) Cancel(k TimerKind, ref uint64) bool
-clock CancelAll func func (in *Instance) CancelAll()
-clock Clock func func (rc *RuleClock) Clock() int64
 clock Completion const const Completion TimerKind = iota + 1 // iota 0
-clock Contribution func func (r *StreamRegistry) Contribution(sid int) int64
 clock CronClose const const CronClose TimerKind = iota + 1 // iota 1
 clock DelayDue const const DelayDue TimerKind = iota + 1 // iota 2
 clock Discard const const Discard TimerKind = iota + 1 // iota 5
-clock Drain func func (r *StreamRegistry) Drain(buf []WMAdvance) []WMAdvance
-clock Empty func func (in *Instance) Empty() bool
-clock EndOfInput func func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance
-clock Events func func (in *Instance) Events(dst []event.Event) []event.Event
-clock Free func func (rc *RuleClock) Free(in *Instance)
 clock Instance type type Instance struct {
 }
-clock NewInstance func func (rc *RuleClock) NewInstance() *Instance
+clock Instance.Birth func func (in *Instance) Birth() (birth uint64, born bool)
+clock Instance.Buffer func func (in *Instance) Buffer(e event.Event) (constructLate bool)
+clock Instance.Cancel func func (in *Instance) Cancel(k TimerKind, ref uint64) bool
+clock Instance.CancelAll func func (in *Instance) CancelAll()
+clock Instance.Empty func func (in *Instance) Empty() bool
+clock Instance.Events func func (in *Instance) Events(dst []event.Event) []event.Event
+clock Instance.Ordinal func func (in *Instance) Ordinal() uint64
+clock Instance.Schedule func func (in *Instance) Schedule(due int64, k TimerKind, ref uint64)
+clock Instance.Timers func func (in *Instance) Timers(dst []Timer) []Timer
 clock NewRuleClock func func NewRuleClock(inputs []int) *RuleClock
 clock NewStreamRegistry func func NewStreamRegistry(specs []StreamSpec, start int64) *StreamRegistry
-clock ObserveEvent func func (r *StreamRegistry) ObserveEvent(sid int, ts, arrival int64) (streamLate bool, advance WMAdvance)
-clock ObservePunctuation func func (r *StreamRegistry) ObservePunctuation(sid int, w int64) WMAdvance
-clock ObserveTick func func (r *StreamRegistry) ObserveTick(now int64, buf []WMAdvance) []WMAdvance
-clock ObserveVirtual func func (r *StreamRegistry) ObserveVirtual(now int64, buf []WMAdvance) []WMAdvance
-clock Ordinal func func (in *Instance) Ordinal() uint64
 clock RuleClock type type RuleClock struct {
 }
+clock RuleClock.Advance func func (rc *RuleClock) Advance(cb Callbacks)
+clock RuleClock.ApplyAdvance func func (rc *RuleClock) ApplyAdvance(a WMAdvance) (clock int64, advanced bool)
+clock RuleClock.Clock func func (rc *RuleClock) Clock() int64
+clock RuleClock.Free func func (rc *RuleClock) Free(in *Instance)
+clock RuleClock.NewInstance func func (rc *RuleClock) NewInstance() *Instance
+clock RuleClock.State func func (rc *RuleClock) State() RuleState
 clock RuleState type type RuleState struct {
 	Inputs        []int
 	Contributions []int64
 	Clock         int64
 }
-clock Schedule func func (in *Instance) Schedule(due int64, k TimerKind, ref uint64)
-clock State func func (rc *RuleClock) State() RuleState
 clock StreamRegistry type type StreamRegistry struct {
 }
+clock StreamRegistry.Admission func func (r *StreamRegistry) Admission(sid int) int64
+clock StreamRegistry.Contribution func func (r *StreamRegistry) Contribution(sid int) int64
+clock StreamRegistry.Drain func func (r *StreamRegistry) Drain(buf []WMAdvance) []WMAdvance
+clock StreamRegistry.EndOfInput func func (r *StreamRegistry) EndOfInput(buf []WMAdvance) []WMAdvance
+clock StreamRegistry.ObserveEvent func func (r *StreamRegistry) ObserveEvent(sid int, ts, arrival int64) (streamLate bool, advance WMAdvance)
+clock StreamRegistry.ObservePunctuation func func (r *StreamRegistry) ObservePunctuation(sid int, w int64) WMAdvance
+clock StreamRegistry.ObserveTick func func (r *StreamRegistry) ObserveTick(now int64, buf []WMAdvance) []WMAdvance
+clock StreamRegistry.ObserveVirtual func func (r *StreamRegistry) ObserveVirtual(now int64, buf []WMAdvance) []WMAdvance
+clock StreamRegistry.Walk func func (r *StreamRegistry) Walk(fn func(component, key string, state any))
 clock StreamSpec type type StreamSpec struct {
 	Name      string
 	Delay     int64
@@ -68,10 +70,8 @@ clock Timer type type Timer struct {
 	Ref  uint64
 }
 clock TimerKind type type TimerKind uint8
-clock Timers func func (in *Instance) Timers(dst []Timer) []Timer
 clock WMAdvance type type WMAdvance struct {
 	StreamID     int
 	Contribution int64
 	Moved        bool
 }
-clock Walk func func (r *StreamRegistry) Walk(fn func(component, key string, state any))
