@@ -65,6 +65,7 @@
 | 2026-11-09 | [after PR #27's merge: merged fix branches](#owner-decisions-2026-11-09--after-pr-27s-merge-merged-fix-branches) |
 | 2026-11-09 | [S3.3-2's design, after the panel](#owner-decisions-2026-11-09--s33-2s-design-after-the-panel) |
 | 2026-11-10 | [S3.3-2's review and break-it](#owner-decisions-2026-11-10--s33-2s-review-and-break-it) |
+| 2026-11-10 | [S3.3-2's close-out](#owner-decisions-2026-11-10--s33-2s-close-out) |
 
 ## The decisions
 
@@ -593,4 +594,12 @@ Eight questions, asked in plain language with a worked example each, after the b
 One question, asked in plain language with a worked example after the combined review (R-S2) and the break-it (Q-S5) found the same gap: a rule reading a stream with a required `object` attribute could carry no passing expect block (no literal is an object; leaving a required field out or writing `null` is E-EXP-002, decision 2 of 2026-11-09).
 
 1. **An `object` field in an expect block takes a string holding its JSON text, now** (≠ R: the recommendation kept the refusal with a clearer message and left object values to a later language sprint). The string must be one JSON object or array; it is stored as the Go boundary stores an object (compact, member order kept); a then-record compares the object by that text; a string that is not one JSON object or array is E-EXP-002 at the value. No grammar change: a string literal already exists (SPEC rev 10's change-log line). Rejected: letting a block leave a required object out (an event live ingest refuses).
+
+### Owner decisions, 2026-11-10 — S3.3-2's close-out
+
+Three questions after PR #28's merge; all as recommended.
+
+1. **The close-out goes up as its own docs PR** (`docs/s3-3-2-close-out`), as S3.3-1's did.
+2. **The sprint's branches are deleted** — `s3-3-2/integration` local and remote, `s3-3-2/qa` and `s3-3-2/qa-py` local — every commit on `main` by patch (`git cherry`).
+3. **Two lasting rules from the retro:** a proof that runs at T4 only meets the real build before T4 (sprint model §10; S3.3-2's regen proof first ran at T4 and exposed a gap in the baseline key late); a test about goroutines counts those started since a snapshot by their ids, never the process's total (testing.md, rule 2; S3.3-1's `TestAddStartsNoGoroutine` flaked on main's CI as an unrelated goroutine exited).
 
