@@ -394,9 +394,10 @@ v1's barrier is replaced: a barrier queued on the intake is never answered while
 `internal/runtime/lifecycle.go`:
 
 ```go
-// gate is the lifecycle's in-flight gate (S3.3-1-2): Add and Activate enter it; Close closes it and waits for the
-// calls inside. sync.Mutex is internal/runtime's to use (archcheck).
-type gate struct {
+// inflightGate is the lifecycle's in-flight gate (S3.3-1-2): Add and Activate enter it; Close closes it and waits
+// for the calls inside. sync.Mutex is internal/runtime's to use (archcheck). (Named so beside Runtime.gate, the
+// per-app caller-side check of design s3-3-1 §2.5.) File: internal/runtime/inflight.go.
+type inflightGate struct {
 	mu      sync.Mutex
 	closing bool
 	n       int
@@ -404,7 +405,7 @@ type gate struct {
 }
 
 // enter admits a call unless Close has begun.
-func (g *gate) enter() bool {
+func (g *inflightGate) enter() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closing {
@@ -415,7 +416,7 @@ func (g *gate) enter() bool {
 }
 
 // leave ends an admitted call.
-func (g *gate) leave() {
+func (g *inflightGate) leave() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.n--
@@ -426,7 +427,7 @@ func (g *gate) leave() {
 }
 
 // close refuses every later call; the channel is closed once the calls inside have left.
-func (g *gate) close() <-chan struct{} {
+func (g *inflightGate) close() <-chan struct{} {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.closing = true
@@ -440,14 +441,14 @@ func (g *gate) close() <-chan struct{} {
 }
 ```
 
-`Runtime` gains `gate gate`. **`Add`**: `if r.isClosed() || !r.gate.enter() { return 0, ErrClosed }; defer r.gate.leave()`, then as today. **`Activate`**: the same two lines first, then as today (its tail runs before `leave`). **`Close`**, inside `closeOnce`:
-1. `select { case <-r.gate.close(): case <-ctx.Done(): first = ctx.Err() }`.
+`Runtime` gains `inflight inflightGate`. **`Add`**: `if r.isClosed() || !r.inflight.enter() { return 0, ErrClosed }; defer r.inflight.leave()`, then as today. **`Activate`**: the same two lines first, then as today (its tail runs before `leave`). **`Close`**, inside `closeOnce`:
+1. `select { case <-r.inflight.close(): case <-ctx.Done(): first = ctx.Err() }`.
 2. When `first == nil`: `apps := r.appList()` and the walk, in reverse id order: an app that is nil or removed is skipped; an app the router activated (`a.started.Load()`, not only `phaseActive` — `Drain` handles an activated app whose phase is still inactive, `lifecycle.go:174-188`) is drained (`Drain(ctx, id)`; a ctx error ends the walk with `first = err`; any other error is ignored, as today — e.g. `ErrDrained` after the app's own `Stop`); then `Remove(ctx, id)`: a ctx error ends the walk; `ErrRemoved` is ignored (an `Undeploy` got there first); any other error is collected and `errors.Join`ed into the result (A3: never dropped).
 3. `close(r.stopped)`, the per-app `cancelSrc`/`onRemoved` loop and the wait on the group — as today (`lifecycle.go:343-364`). A ctx that ended at step 1 skips the walk and comes here at once: `Close` returns `ctx.Err()` at its deadline, whatever the router is waiting on.
 
 The router needs no change: no barrier item, no refusal by `closing`; the existing `requestQueued` callers (`Add`, `Remove`, `Activate`) keep their reply-or-`stopped` wait, which `close(r.stopped)` ends with `ErrClosed` on the deadline path.
 
-**MUSTs and tests** (`internal/runtime/close_gate_test.go`, `-race`): a `Deploy` and a `Start` refused with `ErrClosed` once `Close` has begun (lane 1's facade test + a `Start` case); `TestCloseReturnsAtDeadlineBehindABlockedSink` (a sink whose `Write` ignores its context, `SinkQueue: 1`, `Mailbox: 1`, rows sent until the router waits; `Close` with a 300 ms ctx returns `context.DeadlineExceeded` within the test's ceiling — red against a barrier awaited through `requestQueued`); `TestCloseDrainsAnAppActivatedBeforeItBegan` (`GOMAXPROCS=1`, 200 iterations of `Activate` racing `Close`: each ends with the app removed and `Close` returning nil); `TestCloseWaitsForAnAddInFlight` (an `Add` whose install is held — a test hook parking the shard's `mAdd` ack, as the saturation tests hold a sink — while `Close` begins: `Close` waits; once released, the `Add` returns its id and the app is drained and removed); `TestCloseReportsARemoveError` (a `Remove` that fails with a non-ctx error appears in `Close`'s result); `TestGateRefusesAfterClose` (unit: `enter` false after `close`; `close`'s channel closed at once when empty, after the last `leave` otherwise).
+**MUSTs and tests** (`internal/runtime/close_gate_test.go`, `-race`): a `Deploy` and a `Start` refused with `ErrClosed` once `Close` has begun (lane 1's facade test + a `Start` case); `TestCloseReturnsAtDeadlineBehindABlockedSink` (a sink whose `Write` ignores its context, `SinkQueue: 1`, `Mailbox: 1`, rows sent until the router waits; `Close` with a 300 ms ctx returns `context.DeadlineExceeded` within the test's ceiling — red against a barrier awaited through `requestQueued`); `TestCloseDrainsAnAppActivatedBeforeItBegan` (`GOMAXPROCS=1`, 200 iterations of `Activate` racing `Close`: each ends with the app removed and `Close` returning nil); `TestCloseWaitsForAnAddInFlight` (an `Add` whose install is held — a test hook parking the shard's `mAdd` ack, as the saturation tests hold a sink — while `Close` begins: `Close` waits; once released, the `Add` returns its id and the app is drained and removed); `TestCloseReportsARemoveError` (a `Remove` that fails with a non-ctx error appears in `Close`'s result); `TestInflightGateRefusesAfterClose` (unit: `enter` false after `close`; `close`'s channel closed at once when empty, after the last `leave` otherwise).
 
 ### 9.2 S3.3-1-1: a method's entry is `<Type>.<Method>`
 
@@ -467,7 +468,7 @@ The [testability review](../reviews/s3-3-2-design-qa.md) §1 is the test table (
 
 ## 12. The build, in order (the coordinator, main session; each step its own commit on `s3-3-2/integration`)
 
-1. **Stubs** so every test compiles and fails: the model and parser fields (§2, positions zero); `plan.Expect` and its types, `App.Expects` empty; `playback.RunExpects` returning `nil, errors.New("not built")`, `Counts`, `BlockResult`; E-EXP-002 in the catalogue without a check, `Entry.Deploy`; `gate` with every method panicking; `conformance/doc.go`. Commit; T0 green. Cherry-pick QA lanes 1 and 2.
+1. **Stubs** so every test compiles and fails: the model and parser fields (§2, positions zero); `plan.Expect` and its types, `App.Expects` empty; `playback.RunExpects` returning `nil, errors.New("not built")`, `Counts`, `BlockResult`; E-EXP-002 in the catalogue without a check, `Entry.Deploy`; `inflightGate` with every method panicking; `conformance/doc.go`. Commit; T0 green. Cherry-pick QA lanes 1 and 2.
 2. §2 positions; `go test ./internal/parser ./internal/model` (goldens unchanged).
 3. §3: `expects.go`, E-TIME-003's case, the catalogue, the programs, `errors.md`, SPEC rev 10; `go test ./internal/validate`.
 4. §4 `plan/expect.go`; `go test ./internal/plan`.

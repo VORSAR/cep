@@ -159,6 +159,7 @@ type Runtime struct {
 	stopped   chan struct{}
 	closeOnce sync.Once
 	wg        sync.WaitGroup
+	inflight  inflightGate // Add and Activate run inside it; Close closes it first (design s3-3-2 §9.1)
 }
 
 type appState struct {
