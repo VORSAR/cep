@@ -1,0 +1,17 @@
+-- expect: E-EXP-002 (A is stamped on arrival; a block cannot give it events) @ 14:16
+language cep/0.1;
+
+stream A (k string)
+  time arrival;
+
+table T (k string) primary key (k);
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward the keys not in T.'
+  from A[k not in T]
+  expect given A [ {k: 'a'} ]
+         then Out [ {k: 'a'} ]
+  select k
+  insert into Out;

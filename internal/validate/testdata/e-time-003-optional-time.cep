@@ -1,0 +1,13 @@
+-- expect: E-TIME-003 (the time attribute ts of S is declared optional) @ 5:8
+language cep/0.1;
+
+stream S (k string, ts timestamp optional)
+  time ts watermark bounded 1 min;
+
+stream Out (k string, ts timestamp);
+
+rule R
+  intent 'Forward every event.'
+  from S
+  select k
+  insert into Out;

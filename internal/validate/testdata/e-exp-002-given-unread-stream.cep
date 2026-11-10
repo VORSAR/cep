@@ -1,0 +1,28 @@
+-- expect: E-EXP-002 (rule R does not read U) @ 19:16
+language cep/0.1;
+
+stream S (k string, n int, ts timestamp)
+  time ts watermark bounded 1 min;
+
+table T (k string) primary key (k);
+
+stream Out (k string, ts timestamp);
+
+stream U (k string, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream Out2 (k string, ts timestamp);
+
+rule R
+  intent 'Forward the keys not in T.'
+  from S[k not in T]
+  expect given U [ {k: 'a', ts: timestamp '2026-01-01T10:00:00Z'} ]
+         then Out [ ]
+  select k
+  insert into Out;
+
+rule R2
+  intent 'Forward every U key.'
+  from U
+  select k
+  insert into Out2;
