@@ -16,9 +16,11 @@ import (
 	cepio "github.com/vorsar/cep/io"
 )
 
-// Deploy parses, validates and plans src, binds its connectors and registers the app, inactive (design s3-3-1
-// §3.2). Every parse or static defect is returned at once as a *DeployError; lints are on the handle. Expect
-// blocks are not run in S3.3-1 (S3.3-2 adds the sandbox stage here). The facade never holds the model: the plan does.
+// Deploy parses, validates and plans src, runs its expect blocks, binds its connectors and registers the app,
+// inactive (design s3-3-1 §3.2, s3-3-2 §6). Every parse or static defect is returned at once as a *DeployError, and
+// so is every failing expect block (E-EXP-001, one per block); lints are on the handle. A construct this release
+// cannot run yet is refused with an error wrapping errors.ErrUnsupported. The facade never holds the model: the plan
+// does.
 func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOption) (*AppHandle, error) {
 	if r.rt.Closed() { // §3.7: Deploy after Close is ErrClosed, whatever the program (review, later)
 		return nil, ErrClosed
@@ -65,8 +67,27 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 		return nil, &DeployError{Name: name, Diagnostics: bad}
 	}
 	p, err := plan.Build(checked)
+	if errors.Is(err, plan.ErrNotBuilt) { // owner, 2026-11-09, design 1: the standard "not supported" marker
+		return nil, fmt.Errorf("cep: deploy %s: %w: %w", name, errors.ErrUnsupported, err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cep: deploy %s: %w", name, err)
+	}
+	// The expect stage, before bind: a refused deploy has called no factory and touched nothing live (design s3-3-2 §6).
+	results, err := playback.RunExpects(p)
+	if err != nil {
+		return nil, fmt.Errorf("cep: deploy %s: the expect sandbox: %w", name, err)
+	}
+	for _, res := range results {
+		if res.Divergence != "" {
+			bad = append(bad, Diagnostic{Code: "E-EXP-001", Line: res.Line, Col: res.Col, Message: fmt.Sprintf("rule %s, expect block %d: %s", res.Rule, res.Block, res.Divergence), Fix: "correct the rule or the example."})
+		}
+	}
+	if len(bad) > 0 {
+		return nil, &DeployError{Name: name, Diagnostics: bad}
+	}
+	if err := ctx.Err(); err != nil { // a cancelled deploy calls no connector factory (design s3-3-2 §6, A9)
+		return nil, err
 	}
 	h, bindings, err := r.bind(name, p, o)
 	if err != nil {

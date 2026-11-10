@@ -61,7 +61,7 @@ func TestHandleReachesNoModel(t *testing.T) {
 	ctx := fcCeiling(t)
 	r := fcNew(t, cep.Config{})
 	_, bind := fcSink("RiskAlerts")
-	h := fcDeploy(t, ctx, r, "09", fcExample(t, "09-params-and-quoting.cep"), bind, cep.WithParam("threshold", "0.5"))
+	h := fcDeploy(t, ctx, r, "09", fcExampleWithoutExpects(t, "09-params-and-quoting.cep"), bind, cep.WithParam("threshold", "0.5"))
 	seen := map[uintptr]bool{}
 	fcWalk(t, reflect.ValueOf(r), "Runtime", seen)
 	fcWalk(t, reflect.ValueOf(h), "AppHandle", seen)
