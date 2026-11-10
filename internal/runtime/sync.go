@@ -27,7 +27,8 @@ func NewSync(app App, start int64, virtual bool, out func(e event.Event)) (*Sync
 	if virtual {
 		start = 0
 	}
-	r, err := build(Config{Shards: 1, Now: func() int64 { return start }}, []App{app})
+	// A Sync delivers in place and never queues: one-slot queues, not the live defaults (design s3-3-2 §5.2, C5).
+	r, err := build(Config{Shards: 1, Mailbox: 1, Intake: 1, SinkQueue: 1, RecordQueue: 1, Now: func() int64 { return start }}, []App{app})
 	if err != nil {
 		return nil, err
 	}
