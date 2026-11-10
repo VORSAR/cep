@@ -21,17 +21,18 @@ const ceiling = 60 * time.Second
 
 // wantFixture is testdata/fixture's exact surface: sorted by line; no doc text, no bodies, nothing from the
 // _test.go (FromTest); Handle's unexported field (hidden) absent and its fields aligned; the unexported type's
-// exported method (Reach) present; the alias keeping its "="; the generic func's type parameters printed.
+// exported method (priv.Reach) present, each method named <Type>.<Method> (S3.3-1-1); the alias keeping its "=";
+// the generic func's type parameters printed.
 const wantFixture = "fixture Added func func Added()\n" +
 	"fixture Alias type type Alias = Handle\n" +
 	"fixture Handle type type Handle struct {\n\tPublic int\n\tCount  int64\n}\n" +
+	"fixture Handle.Name func func (h *Handle) Name() string\n" +
 	"fixture Limit const const Limit = 10\n" +
 	"fixture Map func func Map[T any](xs []T, f func(T) T) []T\n" +
-	"fixture Name func func (h *Handle) Name() string\n" +
 	"fixture Open func func Open() *priv\n" +
-	"fixture Reach func func (p *priv) Reach() int\n" +
 	"fixture Run func func Run(ctx context.Context, n int) (int, error)\n" +
-	"fixture Version var var Version = \"1\"\n"
+	"fixture Version var var Version = \"1\"\n" +
+	"fixture priv.Reach func func (p *priv) Reach() int\n"
 
 const (
 	fixture = "testdata/fixture"
