@@ -17,6 +17,7 @@ import (
 	"github.com/vorsar/cep/internal/partition"
 	"github.com/vorsar/cep/internal/plan"
 	"github.com/vorsar/cep/internal/playback"
+	"github.com/vorsar/cep/internal/runtime"
 )
 
 // xpSrc has no expect block: every test fills p.Expects by hand. Rule R (index 0) passes each S event whose key is
@@ -459,4 +460,38 @@ func TestRunExpectsBytes(t *testing.T) {
 	if got := r.AllocedBytesPerOp(); got >= 200_000 {
 		t.Errorf("RunExpects on 07: %d bytes per run; want < 200000", got)
 	}
+}
+
+// §4 (A10): the blocks live on plan.App, never on plan.Rule, so runtime.FromPlan carries none into a running app. A
+// walk of runtime.App's type reaches no plan.Expect (the type, so an empty field counts too). In internal/playback,
+// not internal/plan: plan's tests may not import internal/runtime. A guard: red once plan.Rule gains an Expects field.
+func TestFromPlanCarriesNoBlocks(t *testing.T) {
+	p := pbBuild(t, "07-consent-gate.cep", pbExample(t, "07-consent-gate.cep"))
+	app := runtime.FromPlan(p, pbTables(t, p), nil)
+	target := reflect.TypeFor[plan.Expect]()
+	seen := map[reflect.Type]bool{}
+	var walk func(ty reflect.Type, path string)
+	walk = func(ty reflect.Type, path string) {
+		if ty == target {
+			t.Errorf("runtime.App reaches plan.Expect at %s", path)
+			return
+		}
+		if seen[ty] {
+			return
+		}
+		seen[ty] = true
+		switch ty.Kind() {
+		case reflect.Pointer, reflect.Slice, reflect.Array, reflect.Map, reflect.Chan:
+			if ty.Kind() == reflect.Map {
+				walk(ty.Key(), path+"[key]")
+			}
+			walk(ty.Elem(), path+"[]")
+		case reflect.Struct:
+			for i := range ty.NumField() {
+				f := ty.Field(i)
+				walk(f.Type, path+"."+f.Name)
+			}
+		}
+	}
+	walk(reflect.TypeOf(app), "runtime.App")
 }
