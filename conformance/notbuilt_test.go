@@ -37,6 +37,16 @@ func TestNotBuiltListIsLaw(t *testing.T) {
 			want: `json: unknown field "comment"`,
 		},
 		{
+			name: "a missing note",
+			data: `{"schema": 1, "entries": []}`,
+			want: `missing key "note"`,
+		},
+		{
+			name: "missing entries",
+			data: `{"schema": 1, "note": "n"}`,
+			want: `missing key "entries"`,
+		},
+		{
 			name: "an empty construct",
 			data: `{"schema": 1, "note": "n", "entries": [{"file": "x.cep", "construct": "", "sprint": "S4.1"}]}`,
 			want: `entries[0]: file, construct and sprint must be non-empty`,

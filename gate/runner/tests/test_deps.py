@@ -116,6 +116,15 @@ class LoadAllowlist(unittest.TestCase):
             " missing [], unexpected ['licence']",
         )
 
+    def test_an_optional_replace_key_is_accepted(self):
+        # Owner, 2026-11-11 (the fix round): an entry may approve exactly one replace target.
+        entries = deps.load_allowlist(listing({**entry("example.com/a"), "replace": "../a"}))
+        self.assertEqual(entries[0].replace, "../a")
+        self.assertEqual(deps.load_allowlist(listing(entry("example.com/a")))[0].replace, "")
+        self.assertFault(
+            listing({**entry("example.com/a"), "replace": ""}), f"{ALLOWLIST}: modules[0]: replace is empty"
+        )
+
     def test_every_field_is_a_non_empty_string(self):
         self.assertFault(
             listing({**entry("example.com/a"), "version": ""}),
@@ -168,12 +177,26 @@ class ClassifyLicense(unittest.TestCase):
         self.assertIsNone(deps.classify_license(GPL3))
         self.assertIsNone(deps.classify_license(""))
 
+    def test_gpl_citing_apache_is_none(self):
+        # A GPL text that mentions "the Apache License, Version 2.0" is not Apache-2.0: the negatives come first
+        # (S1.1c-1 break-it, probed weakness 1).
+        self.assertIsNone(deps.classify_license(GPL3 + "\nSee also the Apache License, Version 2.0.\n"))
+        self.assertIsNone(deps.classify_license("Mozilla Public License\n" + MIT))
+
     def test_apache_needs_both_phrases(self):
         self.assertIsNone(deps.classify_license("Apache License\n"))
         self.assertIsNone(deps.classify_license("Version 2.0\n"))
 
 
 class DecodeJsonStream(unittest.TestCase):
+    def test_the_two_versions_line_names_the_cure(self):
+        self.assertEqual(
+            deps.two_versions_line("golang.org/x/mod", "v0.41.0", "v0.42.0"),
+            "deps: golang.org/x/mod: go.mod has v0.41.0, gate/proofs/go.mod has v0.42.0;"
+            " one version across both modules:"
+            " restore the pins in go.mod (see its comment)",
+        )
+
     def test_objects_back_to_back(self):
         text = '{\n\t"Path": "a",\n\t"Main": true\n}\n{\n\t"Path": "b",\n\t"Version": "v1"\n}\n'
         self.assertEqual(deps.decode_json_stream(text), [{"Path": "a", "Main": True}, {"Path": "b", "Version": "v1"}])
@@ -359,3 +382,50 @@ class Compare(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReplaceApproval(unittest.TestCase):
+    """A replace directive is red unless the allowlist entry approves exactly its target (owner, 2026-11-11, the fix
+    round, after the break-it's finding 3)."""
+
+    def module(self, replace: str = "") -> deps.Module:
+        return deps.Module("example.com/a", "v1.0.0", "/cache/a", False, replace)
+
+    def entry(self, replace: str = "") -> deps.Entry:
+        return deps.Entry("example.com/a", "v1.0.0", "runtime", "MIT", "2026-11-11", "why", replace)
+
+    def test_an_unapproved_replace_is_red(self):
+        out = deps.compare(
+            [self.module("../a")], frozenset({"example.com/a"}), [self.entry()], list(deps.GOMODS), lambda d: None
+        )
+        self.assertEqual(
+            out, ["deps: example.com/a: replaced in go.mod by ../a; not approved in tools/deps-allowlist.json"]
+        )
+
+    def test_an_approved_replace_passes(self):
+        out = deps.compare(
+            [self.module("../a")], frozenset({"example.com/a"}), [self.entry("../a")], list(deps.GOMODS), lambda d: None
+        )
+        self.assertEqual(out, [])
+
+    def test_an_approval_without_a_replace_is_red(self):
+        out = deps.compare(
+            [self.module()], frozenset({"example.com/a"}), [self.entry("../a")], list(deps.GOMODS), lambda d: None
+        )
+        self.assertEqual(out, ["deps: example.com/a: the allowlist approves a replace by ../a, go.mod has none"])
+
+    def test_a_different_target_is_red(self):
+        out = deps.compare(
+            [self.module("example.com/a v0.9.0")],
+            frozenset({"example.com/a"}),
+            [self.entry("../a")],
+            list(deps.GOMODS),
+            lambda d: None,
+        )
+        self.assertEqual(
+            out,
+            [
+                "deps: example.com/a: replaced in go.mod by example.com/a v0.9.0;"
+                " not approved in tools/deps-allowlist.json"
+            ],
+        )

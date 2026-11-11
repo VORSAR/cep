@@ -29,6 +29,15 @@ ADR_0015_1_3 = (
     "docs/language/errors.md",
     "docs/architecture/ARCHITECTURE.md",
     "docs/architecture/adr/",
+    # As-built law the ADR names elsewhere (owner, 2026-11-11, the fix round): the analyzer and its purity exceptions in
+    # code (§2 as annotated), the workflow generator, the planted proofs the min_wants count pins, ruff.toml (§1.4), and
+    # the two module files (§1.4; ADR-0009).
+    "tools/archcheck/",
+    "gate/ci/",
+    "gate/proofs/drivers/",
+    "ruff.toml",
+    "go.mod",
+    "gate/proofs/go.mod",
 )
 # Named by §1.3, not built: they land with S1.1c-2's allowlist checker and analyzers (owner, 2026-11-04).
 NOT_YET = ("tools/allowlists/", "tools/analyzers/")
