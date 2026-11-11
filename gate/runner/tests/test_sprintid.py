@@ -4,6 +4,7 @@ section 6 "The grammar, the order, the marker"; sprint-plan.md section 3's gramm
 Pure: strings in, values out. The order tests read gate/sprints.json and docs/sprints/sprint-plan.md as they are.
 """
 
+import json
 import os
 import unittest
 
@@ -142,6 +143,21 @@ class ThePlanTable(unittest.TestCase):
             sprintid.plan_rows(text.replace(anchor, f"| S4.1 {CROSS} | The pattern engine"))
         self.assertIn("S4.1", str(caught.exception))
 
+    def test_a_tick_outside_the_id_cell_is_an_error_naming_the_line(self):
+        # Owner 2026-11-11 (the design, 6): a tick anywhere but a plan row's id cell is an error.
+        text = read(PLAN)
+        anchor = "| S4.1 | The pattern engine"
+        self.assertEqual(text.count(anchor), 1, "the row anchor moved")
+        line = next(n for n, row in enumerate(text.splitlines(), 1) if row.startswith(anchor))
+        with self.assertRaises(ValueError) as caught:
+            sprintid.plan_rows(text.replace(anchor, f"| S4.1 | The pattern engine {TICK}"))
+        self.assertEqual(str(caught.exception), f"sprint-plan.md line {line}: {TICK} outside the id cell")
+
+    def test_a_missing_header_is_an_error(self):
+        with self.assertRaises(ValueError) as caught:
+            sprintid.plan_rows("# A plan\n\n| Other | Table |\n|---|---|\n| S4.1 | x |\n")
+        self.assertEqual(str(caught.exception), "sprint-plan.md: the §3 table header was not found")
+
     def test_the_three_tick_forms_are_recognised(self):
         text = read(PLAN)
         for form in (f"S1.1a-1 [{TICK}](s1-1a-1-record.md)", f"S3.1 {TICK} ([S3.1-1]", f"S3.2c {TICK} ([record]"):
@@ -161,3 +177,87 @@ class TheMarker(unittest.TestCase):
         for text in ("S1.1c-1", "S1.1c-1\n\n", "\r\n", "", "S1.1c-1\nS4.1\n"):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 sprintid.read_marker(text)
+
+
+def table(*rows: tuple[str, bool]) -> str:
+    return json.dumps({"schema": 1, "note": "a fixture", "rows": [{"id": i, "closed": c} for i, c in rows]})
+
+
+class TheOrdersFaults(unittest.TestCase):
+    """load_order's faults with the note present, so each case fails on its own fault and the text names it."""
+
+    def test_each_fault_is_named(self):
+        cases = {
+            "a duplicate": (table(("S4.1", False), ("S4.1", False)), "gate/sprints.json: rows[1]: duplicate id S4.1"),
+            "an unparseable id": (table(("s4.1", False)), "gate/sprints.json: rows[0]: 's4.1': not a sprint id"),
+            "no rows": (table(), "gate/sprints.json: rows is not a non-empty list"),
+            "no note": ('{"schema": 1, "rows": [{"id": "S4.1", "closed": false}]}', "gate/sprints.json: keys"),
+            "an extra row key": (
+                '{"schema": 1, "note": "", "rows": [{"id": "S4.1", "closed": false, "x": 1}]}',
+                "gate/sprints.json: rows[0]: keys",
+            ),
+            "a schema 2": ('{"schema": 2, "note": "", "rows": [{"id": "S4.1", "closed": false}]}', "schema 2, not 1"),
+            "not json": ("{", "gate/sprints.json: "),
+        }
+        for name, (text, needle) in cases.items():
+            with self.subTest(name=name), self.assertRaises(ValueError) as caught:
+                sprintid.load_order(text)
+            self.assertIn(needle, str(caught.exception))
+
+    def test_every_row_closed_is_first_opens_error(self):
+        with self.assertRaises(ValueError) as caught:
+            sprintid.load_order(table(("S4.1", True), ("S4.2", True))).first_open()
+        self.assertEqual(str(caught.exception), "every row of gate/sprints.json is closed")
+
+
+class ThePinHelpers(unittest.TestCase):
+    """compare_rows and first_open_mismatch on fixtures (design note section 3.5); the pins run them on the files."""
+
+    def test_equal_tables_compare_empty(self):
+        plan = [sprintid.Row("S3.3", True), sprintid.Row("S1.1c", False), sprintid.Row("S4.1", False)]
+        self.assertEqual(sprintid.compare_rows(plan, sprintid.load_order(table(*((r.id, r.closed) for r in plan)))), "")
+
+    def test_a_flipped_mark_names_the_row_both_ways(self):
+        plan = [sprintid.Row("S3.3", True), sprintid.Row("S1.1c", False), sprintid.Row("S4.1", False)]
+        order = sprintid.load_order(table(("S3.3", True), ("S1.1c", True), ("S4.1", False)))
+        self.assertEqual(
+            sprintid.compare_rows(plan, order),
+            "gate/sprints.json row 2 is S1.1c (closed); sprint-plan.md §3 row 2 is S1.1c (open)",
+        )
+
+    def test_a_different_id_names_the_first_difference_only(self):
+        plan = [sprintid.Row("S3.3", True), sprintid.Row("S1.1c", False), sprintid.Row("S4.1", False)]
+        order = sprintid.load_order(table(("S3.3", True), ("S4.1", False), ("S4.2", False)))
+        self.assertEqual(
+            sprintid.compare_rows(plan, order),
+            "gate/sprints.json row 2 is S4.1 (open); sprint-plan.md §3 row 2 is S1.1c (open)",
+        )
+
+    def test_a_row_missing_on_either_side_is_absent(self):
+        plan = [sprintid.Row("S3.3", True), sprintid.Row("S1.1c", False)]
+        longer = sprintid.load_order(table(("S3.3", True), ("S1.1c", False), ("S4.1", False)))
+        shorter = sprintid.load_order(table(("S3.3", True)))
+        self.assertEqual(
+            sprintid.compare_rows(plan, longer),
+            "gate/sprints.json row 3 is S4.1 (open); sprint-plan.md §3 row 3 is absent",
+        )
+        self.assertEqual(
+            sprintid.compare_rows(plan, shorter),
+            "gate/sprints.json row 2 is absent; sprint-plan.md §3 row 2 is S1.1c (open)",
+        )
+
+    def test_the_marker_at_the_first_open_rows_part_matches(self):
+        order = sprintid.load_order(table(("S3.3", True), ("S1.1c", False), ("S4.1", False)))
+        self.assertEqual(sprintid.first_open_mismatch(sprintid.parse("S1.1c-1"), order), "")
+        self.assertEqual(sprintid.first_open_mismatch(sprintid.parse("S1.1c"), order), "")
+
+    def test_a_marker_past_or_before_the_first_open_row_is_named(self):
+        order = sprintid.load_order(table(("S3.3", True), ("S1.1c", False), ("S4.1", False)))
+        self.assertEqual(
+            sprintid.first_open_mismatch(sprintid.parse("S4.1"), order),
+            "gate/current-sprint S4.1 is not the first open row S1.1c",
+        )
+        self.assertEqual(
+            sprintid.first_open_mismatch(sprintid.parse("S3.3-2"), order),
+            "gate/current-sprint S3.3-2 is not the first open row S1.1c",
+        )
