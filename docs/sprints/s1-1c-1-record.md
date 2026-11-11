@@ -26,7 +26,7 @@ The full draft is [s1-1c-1-plan-check.md](s1-1c-1-plan-check.md) (v2), drafted r
 7. **The order is `gate/sprints.json`, pinned to the plan table by a T2 test; the marker pinned to its first open row.**
 8. **`github.com/kr/pretty` and `gopkg.in/check.v1` approved as graph-only entries.**
 
-**The design — the owner, YYYY-MM-DD** (after the design note and its reviews): *(pending)*
+**The design — the owner, 2026-11-11** ([decisions](decisions.md#owner-decisions-2026-11-11--s11c-1s-design-after-the-reviews); all as recommended, ranked by code health): 1. CI warms the module cache by a generated `go mod download` setup step for jobs holding a `NEEDS_MODULES` row; the `deps` row stays offline. 2. The block names uncommitted law edits at local tiers (a sixth text). 3. Document lines print `§<n>` for numbered headings, else the heading text, plus `(first of <k> hunks)`. 4. `code`/`workflow` lines are grouped last, one per manifest entry. 5. CI's record check requires the schema number, named on mismatch. 6. A `✓` outside a plan row's id cell is an error. 7. The `tool apidiff` directive and its four `x/*` requires move to `gate/proofs/go.mod` (W2). Reviews: [architecture](../reviews/s1-1c-1-design-architecture.md), [QA](../reviews/s1-1c-1-design-qa.md); every finding placed in [the design's §10](s1-1c-1-design.md#10-review-placement).
 
 **During the build — the owner, YYYY-MM-DD:** *(pending)*
 

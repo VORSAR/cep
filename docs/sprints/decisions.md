@@ -69,6 +69,7 @@
 | 2026-11-10 | [after PR #29's merge: merged close-out docs branches](#owner-decisions-2026-11-10--after-pr-29s-merge-merged-close-out-docs-branches) |
 | 2026-11-10 | [S1.1c's scope, before its plan check](#owner-decisions-2026-11-10--s11cs-scope-before-its-plan-check) |
 | 2026-11-11 | [S1.1c-1's plan check](#owner-decisions-2026-11-11--s11c-1s-plan-check) |
+| 2026-11-11 | [S1.1c-1's design, after the reviews](#owner-decisions-2026-11-11--s11c-1s-design-after-the-reviews) |
 
 ## The decisions
 
@@ -639,3 +640,15 @@ The plan check ([s1-1c-1-plan-check.md](s1-1c-1-plan-check.md), v1 at 2dd3c13) w
 8. **`github.com/kr/pretty` (MIT) and `gopkg.in/check.v1` (BSD-2-Clause) are approved as graph-only allowlist entries**, dated today: every module in either tracked module's graph is listed. Rejected: exempting the proofs module's graph.
 
 Carried without a question, from the reviews (the plan check v2 §10 places each): the LAW Δ row writes its block to `law.txt` in its row directory and the scheduler carries it into the record, every record carrying a `law` field (CI's `summarize` requires equal keys); the row is `blocking: true`, a delta of any size passes, and it fails only when it cannot read (no merge base, an untracked listed path, a parser crash) — ADR-0015 §1.3's "never blocking" is annotated to that; the block has five texts (the block, `none`, `HEAD is main`, `FAILED — see the lawdelta row`, `not run — the lawdelta row is not in this registry`); a `doc` line names the first changed heading so the flag never becomes wallpaper; proof worlds name their branches explicitly; `gate/sprints.json` entries and `notbuilt.json` entries name rows, never parts.
+
+### Owner decisions, 2026-11-11 — S1.1c-1's design, after the reviews
+
+The design note ([s1-1c-1-design.md](s1-1c-1-design.md) v1 at fef1c03) was reviewed blind by the architect with the-fool ([review](../reviews/s1-1c-1-design-architecture.md): 1 blocker, 7 should-fix, 4 later) and by QA for testability ([review](../reviews/s1-1c-1-design-qa.md): 1 blocker, 14 should-fix, 7 later); the coordinator verified every claim that changes the design against the code (no `go mod download` in CI's setup and no `needs` between the `lint` job's rows; `git diff --numstat -z` prints a rename as an empty path and two names; `go mod graph` holds `go` and `toolchain` nodes; Python's `$` accepts a trailing newline; SPEC's heading is `## 9. Canonical form`; every G0 file carries a `note` key). Seven questions, options ranked by code health; all as recommended. The rest of the findings are design-text fixes placed in v2 §10.
+
+1. **CI warms the module cache by a generated setup step:** `gate/ci/generate.py` gains `NEEDS_MODULES = frozenset({"deps"})` beside `NEEDS_HISTORY`; a job holding such a row runs `go mod download all` in `.` and in `gate/proofs` before any row; the `deps` row itself stays offline (`GOPROXY=off`); a test pins the step. Rejected: `deps` at T4 after `apidiff` (no T2/T3 check, still a race); the row fetching for itself (breaks the offline rule for rows).
+2. **The block names uncommitted law edits:** at a local tier, when `git status --porcelain -- <law paths>` is non-empty, the block ends with `LAW Δ: <n> law files have uncommitted edits (not shown)`; the row still passes. Rejected: commits only.
+3. **A document's line prints `§<n>` for a heading that starts with a number, else the heading's text, and `(first of <k> hunks)` when the file has more than one changed region.** Rejected: the heading text only, first hunk only.
+4. **The `code` and `workflow` kinds are grouped last, one line per manifest entry** (`gate/runner/: 7 files +120/−40`); the law data files and the documents keep one line each, first. Rejected: one line per file in path order.
+5. **CI's record check also requires `record["schema"] == records.SCHEMA`**, and a mismatch reads `malformed: schema 1, expected 2`. Rejected: keys only.
+6. **A `✓` anywhere but a plan row's id cell is an error** in `plan_rows` (`sprint-plan.md line 61: ✓ outside the id cell`). Rejected: the first cell only.
+7. **The `tool golang.org/x/exp/cmd/apidiff` directive and its four `x/*` requires move from `go.mod` to `gate/proofs/go.mod`** (a coordinator item in W2): an embedder's module graph then holds only participle, x/text and goleak-as-test-only; `apidiff.py` runs the tool from `gate/proofs`; the four allowlist entries and ADR-0009 §2 say so. Rejected: leaving them in `go.mod`.
