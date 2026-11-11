@@ -60,6 +60,7 @@ type recQ struct {
 	records int64
 	failed  bool // the recording has ended: a full queue (set by the router at once) or the Recorder's failure
 	err     string
+	cutOff  bool // a drain's deadline cut the recording off while it still had writes to make (cut, once)
 }
 
 func newRecQ(rec Recorder, capacity int) *recQ {
@@ -110,6 +111,24 @@ func (q *recQ) fail(msg string) {
 	if !q.failed {
 		q.failed, q.err = true, msg
 	}
+}
+
+// cut is a drain's deadline passing while the recording still has writes to make — a live one its stop, an ended one
+// the records queued before its end (owner, 2026-11-06, decision 1; 2026-11-11): the recording is marked incomplete,
+// once. An ended recording keeps its cause, the cut appended; Records stays what was written at the cut. fail is the
+// router's and the Recorder's, and keeps its first-wins meaning.
+func (q *recQ) cut() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.cutOff {
+		return
+	}
+	q.cutOff = true
+	if !q.failed {
+		q.failed, q.err = true, "runtime: the recording's stop was not written before the drain's deadline: the recording is incomplete"
+		return
+	}
+	q.err += "; its queued records were not written before the drain's deadline: the recording is incomplete"
 }
 
 func (q *recQ) isFailed() bool {

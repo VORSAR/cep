@@ -245,7 +245,11 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 		case <-rep.recMarker:
 		case <-r.stopped:
 		case <-ctx.Done():
-			a.rec.fail("runtime: the recording's stop was not written before the drain's deadline: the recording is incomplete")
+			select {
+			case <-rep.recMarker: // written as the deadline passed: complete
+			default: // a live recording's stop, or a stopped recording's queued records, still unwritten (owner, 2026-11-11)
+				a.rec.cut()
+			}
 		}
 	}
 	return DrainResult{Pending: rep.pending, Runs: runs}, nil
