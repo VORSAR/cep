@@ -15,22 +15,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from gate.runner import rows
+from gate.runner.git import git, merge_base  # one contract: "" with no base; this row then passes by decision
 
 INCOMPATIBLE = "Incompatible changes:"
 GOLDEN = os.path.join("api", "exports.golden")
-
-
-def git(*args: str) -> tuple[int, str]:
-    p = subprocess.run(["git", *args], stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    return p.returncode, p.stdout.strip()
-
-
-def merge_base() -> str:
-    for ref in ("origin/main", "main"):
-        code, out = git("merge-base", "HEAD", ref)
-        if code == 0 and out:
-            return out
-    return ""
 
 
 def module_path(root: str = "") -> str:
