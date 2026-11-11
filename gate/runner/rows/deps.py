@@ -51,13 +51,13 @@ def read_license(directory: str) -> str | None:
 
 def gather(row_dir: str, env: dict[str, str]) -> tuple[list[deps.Module], frozenset[str], list[str]]:
     """The union of the build lists marked imported, the union of the graphs, and the two-version lines."""
-    builds: dict[str, dict[str, tuple[str, str]]] = {}
+    builds: dict[str, dict[str, tuple[str, str, str]]] = {}
     mains: list[str] = []
     graph: set[str] = set()
     imported: set[str] = set()
     for mod in MODULES:
         tag = "root" if mod == "." else mod.replace("/", "_")
-        build: dict[str, tuple[str, str]] = {}
+        build: dict[str, tuple[str, str, str]] = {}
         main = ""
         for obj in deps.decode_json_stream(
             run(row_dir, env, mod, f"{tag}.list-m", ["go", "list", "-m", "-json", "all"])
@@ -65,7 +65,9 @@ def gather(row_dir: str, env: dict[str, str]) -> tuple[list[deps.Module], frozen
             if obj.get("Main"):
                 main = obj["Path"]
             elif "Version" in obj:
-                build[obj["Path"]] = (obj["Version"], obj.get("Dir") or "")
+                rep = obj.get("Replace") or {}
+                target = (rep.get("Path", "") + (" " + rep["Version"] if rep.get("Version") else "")) if rep else ""
+                build[obj["Path"]] = (obj["Version"], obj.get("Dir") or "", target)
         builds[mod], mains = build, [*mains, main]
         graph |= deps.graph_nodes(run(row_dir, env, mod, f"{tag}.graph", ["go", "mod", "graph"]), [main])
         listing = ["go", "list", "-e", "-deps", "-test", "-f", MODULE_PATH, "./..."]
@@ -77,14 +79,14 @@ def gather(row_dir: str, env: dict[str, str]) -> tuple[list[deps.Module], frozen
             imported |= set(found)
             break
     failures = [
-        f"deps: {path}: go.mod has {builds['.'][path][0]}, gate/proofs/go.mod has {builds['gate/proofs'][path][0]}"
+        deps.two_versions_line(path, builds["."][path][0], builds["gate/proofs"][path][0])
         for path in sorted(set(builds["."]) & set(builds["gate/proofs"]))
         if builds["."][path][0] != builds["gate/proofs"][path][0]
     ]
     modules: dict[str, deps.Module] = {}
     for mod in MODULES:
-        for path, (version, directory) in builds[mod].items():
-            modules.setdefault(path, deps.Module(path, version, directory, path in imported))
+        for path, (version, directory, replace) in builds[mod].items():
+            modules.setdefault(path, deps.Module(path, version, directory, path in imported, replace))
     return [modules[path] for path in sorted(modules)], frozenset(graph - set(mains)), failures
 
 
