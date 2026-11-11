@@ -87,9 +87,10 @@ class TheOrder(unittest.TestCase):
 
     def test_load_order_refuses_a_bad_table(self):
         bad = {
-            "a duplicate": '{"schema": 1, "rows": [{"id": "S4.1", "closed": false}, {"id": "S4.1", "closed": false}]}',
-            "an unparseable id": '{"schema": 1, "rows": [{"id": "s4.1", "closed": false}]}',
-            "no rows": '{"schema": 1, "rows": []}',
+            "a duplicate": '{"schema": 1, "note": "x", "rows": [{"id": "S4.1", "closed": false}, '
+            '{"id": "S4.1", "closed": false}]}',
+            "an unparseable id": '{"schema": 1, "note": "x", "rows": [{"id": "s4.1", "closed": false}]}',
+            "no rows": '{"schema": 1, "note": "x", "rows": []}',
         }
         for name, text in bad.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
@@ -119,7 +120,7 @@ class TheOrder(unittest.TestCase):
 
     def test_first_open(self):
         self.assertEqual(order().first_open(), "S1.1c")
-        closed = '{"schema": 1, "rows": [{"id": "S4.1", "closed": true}, {"id": "S4.2", "closed": true}]}'
+        closed = '{"schema": 1, "note": "x", "rows": [{"id": "S4.1", "closed": true}, {"id": "S4.2", "closed": true}]}'
         with self.assertRaises(ValueError):
             sprintid.load_order(closed).first_open()
 
