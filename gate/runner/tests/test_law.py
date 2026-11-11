@@ -141,14 +141,14 @@ class Block(unittest.TestCase):
                 "gate/current-sprint +1/−1 — marker S1.1c-1 → S4.1",
                 "tools.json +2/−2 — go: 1.27.3 → 1.27.4",
                 "gate/runner/: 7 files +120/−40",
-                ".github/workflows/: 1 files +3/−3",
+                ".github/workflows/: 1 file +3/−3",
             ],
         )
 
     def test_grouped_only(self):
         self.assertEqual(
             law.block("abc1234", [], {"gate/run.py": (1, 1, 1)}),
-            ["LAW Δ (1 files, vs abc1234)", "gate/run.py: 1 files +1/−1"],
+            ["LAW Δ (1 file, vs abc1234)", "gate/run.py: 1 file +1/−1"],
         )
 
 
