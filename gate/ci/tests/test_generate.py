@@ -17,6 +17,15 @@ ROWS = [row("gofmt", "lint"), row("unit", "test"), row("proofs", "proofs", ("T4"
 NIGHTLY = [*ROWS, row("fuzz-parser", "nightly", ("nightly",))]
 
 
+def jobs_of(text: str) -> dict[str, str]:
+    """The rendered workflow's job blocks by name: the text from each `  <job>:` header to the next."""
+    marks = [m for m in re.finditer(r"^  ([a-z-]+):\n    runs-on", text, re.M)]
+    return {
+        m.group(1): text[m.start() : (marks[i + 1].start() if i + 1 < len(marks) else len(text))]
+        for i, m in enumerate(marks)
+    }
+
+
 class Render(unittest.TestCase):
     def setUp(self):
         self.text = generate.render(ROWS)
@@ -67,8 +76,14 @@ class Render(unittest.TestCase):
         self.assertIn("      - run: go mod download all\n        working-directory: gate/proofs\n", lint)
         self.assertGreater(lint.index("go mod download"), lint.index("make setup tools"), lint)
         self.assertLess(lint.index("go mod download"), lint.index("bootstrap.py exec"), lint)
-        self.assertNotIn("go mod download", text[text.index("  test:") :])
-        self.assertNotIn("go mod download", self.text)
+        # A job holding a NEEDS_MODULES row downloads modules (lint: deps; proofs: the deps driver); no other does.
+        for job, body in jobs_of(text).items():
+            self.assertEqual(
+                body.count("      - run: go mod download all\n"), 2 if job in ("lint", "proofs") else 0, job
+            )
+        default = jobs_of(self.text)  # no deps row: only the proofs job warms (the driver reads the real modules)
+        self.assertNotIn("go mod download", default["lint"])
+        self.assertEqual(default["proofs"].count("      - run: go mod download all\n"), 2)
 
     def test_the_tool_cache_is_where_a_developer_has_it(self):
         # First CI run (2026-11-04): a cache inside the checkout put the project's go.mod above every tool, so go
