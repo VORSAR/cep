@@ -1,0 +1,125 @@
+"""The deps row's proofs (S1.1c-1, plan check v2 section 6 "deps"; ADR-0009 section 1, ADR-0001 section 1): a
+module in the graph that the allowlist does not list, a listed module whose licence file is unknown, missing or
+disagrees with its `license` field, an allowlist entry in no graph, and a third tracked go.mod are each red, named.
+
+One world per case. The world holds the gate, copies of go.mod, go.sum, gate/proofs/go.mod and go.sum and of
+tools/deps-allowlist.json (edited per case), a package in each module, and a planted module `example.com/planted`
+wired in by `replace example.com/planted => ../planted` (a directory beside the repository, so it is never a third
+tracked go.mod) with `require example.com/planted v1.0.0`: a replace to a directory resolves offline with no go.sum
+entry (proven by a scratch run under the pinned go, GOPROXY=off, GOFLAGS=-mod=readonly, before this driver).
+
+The world's real modules (participle, goleak, x/text, ...) have no importer here, so the row sees them as
+graph-only while their entries' scopes say otherwise: each case asserts its own planted line among the row's
+`failed:` lines, never that it is the only one.
+"""
+
+import json
+import os
+
+from gate.proofs.drivers import support
+
+ALLOWLIST = "tools/deps-allowlist.json"
+PLANTED = "example.com/planted"
+VERSION = "v1.0.0"
+MIT = (
+    "MIT License\n\nCopyright (c) 2026 the proofs\n\nPermission is hereby granted, free of charge, to any person "
+    'obtaining a copy of this software and associated documentation files (the "Software"), to deal in the '
+    "Software without restriction.\n"
+)
+BSD3 = (
+    "Copyright (c) 2026 the proofs. All rights reserved.\n\nRedistribution and use in source and binary forms, "
+    "with or without modification, are permitted provided that the following conditions are met:\n\n"
+    "1. Redistributions of source code must retain the above copyright notice.\n"
+    "2. Redistributions in binary form must reproduce the above copyright notice.\n"
+    "3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or "
+    "promote products derived from this software without specific prior written permission.\n"
+)
+GPL3 = (
+    "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n\n"
+    "Everyone is permitted to copy and distribute verbatim copies of this license document.\n"
+)
+ENTRY = {
+    "module": PLANTED,
+    "version": VERSION,
+    "scope": "runtime (the proof's plant)",
+    "license": "MIT",
+    "approved": "2026-11-11",
+    "why": "the deps proof's planted module",
+}
+PLANTED_GO = (
+    "// Package planted is the proof's planted dependency.\npackage planted\n\n"
+    "// Answer is its one export.\nfunc Answer() int { return 42 }\n"
+)
+GONE = {**ENTRY, "module": "example.com/gone", "why": "the deps proof's stale entry"}
+
+
+class DepsPlanted(support.DriverTest):
+    def deps_world(self, *, license_text: str | None, entries: list[dict]) -> None:
+        w = self.world
+        w.copy_gate()
+        for rel in ("go.mod", "go.sum", "gate/proofs/go.mod", "gate/proofs/go.sum", ALLOWLIST):
+            w.copy(rel)
+        planted = os.path.join(w.root, "planted")
+        os.makedirs(planted)
+        with open(os.path.join(planted, "go.mod"), "w", encoding="utf-8") as f:
+            f.write(f"module {PLANTED}\n\ngo 1.27.0\n")
+        with open(os.path.join(planted, "planted.go"), "w", encoding="utf-8") as f:
+            f.write(PLANTED_GO)
+        if license_text is not None:
+            with open(os.path.join(planted, "LICENSE"), "w", encoding="utf-8") as f:
+                f.write(license_text)
+        w.write(
+            "internal/planted/planted.go",
+            f'// Package planted imports the planted module.\npackage planted\n\nimport "{PLANTED}"\n\n'
+            "// Use reads it.\nfunc Use() int { return planted.Answer() }\n",
+        )
+        w.write(
+            "gate/proofs/internal/planted/planted.go",
+            "// Package planted keeps the proofs module non-empty.\npackage planted\n",
+        )
+        gomod = support.read_text(os.path.join(w.repo, "go.mod"))
+        w.write("go.mod", f"{gomod}\nrequire {PLANTED} {VERSION}\n\nreplace {PLANTED} => ../planted\n")
+        path = os.path.join(w.repo, ALLOWLIST)
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["modules"].extend(entries)
+        w.write(ALLOWLIST, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+    def run_row(self) -> support.Run:
+        self.world.commit()
+        return self.world.run(registry=self.world.registry(support.registry_row("deps")), tier="T2")
+
+    def assertRedLine(self, run: support.Run, *needles: str) -> None:
+        """Red, the row FAIL, and one of its `failed:` lines holding every needle."""
+        self.assertGateFailed(run)
+        record = run.record("lint", "deps")
+        self.assertEqual(record["verdict"], "fail", run.stdout)
+        out = run.row_stdout("lint", "deps")
+        failed = [line.removeprefix("failed: ") for line in out.split("\n") if line.startswith("failed: ")]
+        hits = [line for line in failed if all(needle in line for needle in needles)]
+        self.assertTrue(hits, (needles, failed, record["reason"]))
+
+    def test_an_unlisted_module_is_red(self):
+        self.deps_world(license_text=MIT, entries=[])
+        self.assertRedLine(self.run_row(), f"deps: {PLANTED} {VERSION} is not in {ALLOWLIST}")
+
+    def test_an_unknown_licence_text_is_red(self):
+        self.deps_world(license_text=GPL3, entries=[ENTRY])
+        self.assertRedLine(self.run_row(), PLANTED, "unknown licence text")
+
+    def test_a_missing_licence_file_is_red(self):
+        self.deps_world(license_text=None, entries=[ENTRY])
+        self.assertRedLine(self.run_row(), PLANTED, "no LICENSE file")
+
+    def test_a_field_disagreeing_with_the_file_is_red(self):
+        self.deps_world(license_text=BSD3, entries=[ENTRY])
+        self.assertRedLine(self.run_row(), PLANTED, "license field MIT, file reads BSD-3-Clause")
+
+    def test_a_stale_entry_is_red(self):
+        self.deps_world(license_text=MIT, entries=[ENTRY, GONE])
+        self.assertRedLine(self.run_row(), "example.com/gone", "stale entry")
+
+    def test_a_third_tracked_go_mod_is_red(self):
+        self.deps_world(license_text=MIT, entries=[ENTRY])
+        self.world.track("internal/x/go.mod", "module github.com/vorsar/cep/internal/x\n\ngo 1.27.0\n")
+        self.assertRedLine(self.run_row(), "internal/x/go.mod", "ADR-0001 §1 allows two")
