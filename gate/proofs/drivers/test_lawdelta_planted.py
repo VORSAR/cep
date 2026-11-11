@@ -167,3 +167,17 @@ class LawDeltaPlanted(support.DriverTest):
         self.assertTrue(self.first_line(run).startswith(NOT_RUN), run.stdout)
         cells = run.summary("lint", "ruff")
         self.assertEqual(cells[2], "PASS", run.stdout)
+
+    def test_a_dirty_law_file_is_named_on_a_last_line_and_the_row_passes(self):
+        # owner, 2026-11-11 (design 2): at a local tier the block ends with the count of uncommitted law edits.
+        self.law_world()
+        self.on_main()
+        self.on_change()
+        self.world.write("planted-notes.txt", "not a law path\n")
+        self.world.commit()
+        self.world.write(MARKER, "S4.1\n")
+        run = self.run_committed()
+        self.assertRow(run, "lint", "lawdelta", True, "covered 1")
+        block = self.assertBlockFirst(run)
+        self.assertEqual(block[:2], [NONE, f"{BLOCK}: 1 law files have uncommitted edits (not shown)"], run.stdout)
+        self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
