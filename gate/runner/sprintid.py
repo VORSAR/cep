@@ -9,14 +9,22 @@ row S1.1c, and S9.2 precedes S10. Pure: strings in, values out; the callers read
 import dataclasses
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 GRAMMAR = re.compile(r"S(?P<stage>[1-9][0-9]*)(?:\.(?P<part>[1-9][0-9]*))?(?P<letter>[a-z])?(?:-(?P<n>[1-9][0-9]*))?")
 HEADER = "| Sprint | Title | SP (items) | Routine | Depends on |"
 SPRINTS = "gate/sprints.json"
 MARKER = "gate/current-sprint"
+PLAN = "sprint-plan.md"
+TICK = "✓"
 ORDER_KEYS = frozenset({"schema", "note", "rows"})
 ROW_KEYS = frozenset({"id", "closed"})
+# A plan row's id cell, stripped: struck (skipped), open, closed by a linked tick, closed by a tick and a parenthesis.
+STRUCK = re.compile(r"~~.*~~")
+OPEN = re.compile(r"(?P<id>\S+)")
+LINKED = re.compile(r"(?P<id>\S+) \[✓\]\([^()\s]+\)")
+TICKED = re.compile(r"(?P<id>\S+) ✓ \(.+\)")
 
 
 @dataclass(frozen=True)
@@ -119,3 +127,61 @@ def read_marker(text: str) -> ID:
     if not text.endswith("\n") or not body or any(ch.isspace() for ch in body):
         raise ValueError(f"{MARKER}: one line, one trailing newline, got {text!r}")
     return parse(body)
+
+
+def _plan_cell(n: int, cell: str) -> Row | None:
+    """A plan row's id cell: None for a struck row, else its Row; the three shapes are pinned here."""
+    if STRUCK.fullmatch(cell):
+        return None
+    for shape, closed in ((OPEN, False), (LINKED, True), (TICKED, True)):
+        m = shape.fullmatch(cell)
+        if m is not None:
+            try:
+                parse(m["id"])
+            except ValueError as e:
+                raise ValueError(f"{PLAN} line {n}: {e}") from None
+            return Row(m["id"], closed)
+    raise ValueError(f"{PLAN} line {n}: unknown row shape {cell!r}")
+
+
+def plan_rows(markdown: str) -> list[Row]:
+    """The plan's §3 table (used only by the T2 pin test): one Row per printed row, struck rows skipped."""
+    lines = markdown.split("\n")
+    if HEADER not in lines:
+        for n, line in enumerate(lines, 1):
+            if line.startswith("| Sprint"):
+                raise ValueError(f"{PLAN} line {n}: the §3 table header reads {line!r}, not {HEADER!r}")
+        raise ValueError(f"{PLAN}: the §3 table header was not found")
+    rows: list[Row] = []
+    first = lines.index(HEADER) + 2  # the header's line, then the separator row, both skipped
+    for n, line in enumerate(lines[first:], first + 1):
+        if not line.startswith("| "):
+            break
+        cells = line.split("|")
+        if any(TICK in cell for cell in cells[2:]):
+            raise ValueError(f"{PLAN} line {n}: {TICK} outside the id cell")
+        row = _plan_cell(n, cells[1].strip())
+        if row is not None:
+            rows.append(row)
+    return rows
+
+
+def _state(row: Row | None) -> str:
+    return "absent" if row is None else f"{row.id} ({'closed' if row.closed else 'open'})"
+
+
+def compare_rows(plan: Sequence[Row], order: Order) -> str:
+    """ "" when gate/sprints.json equals the plan's table; else the first difference, named both ways."""
+    for i in range(max(len(plan), len(order.rows))):
+        b = plan[i] if i < len(plan) else None
+        a = order.rows[i] if i < len(order.rows) else None
+        if a != b:
+            return f"{SPRINTS} row {i + 1} is {_state(a)}; {PLAN} §3 row {i + 1} is {_state(b)}"
+    return ""
+
+
+def first_open_mismatch(marker: ID, order: Order) -> str:
+    """ "" when the marker's row is the first open row; else the mismatch, naming both."""
+    if row_of(marker) == order.first_open():
+        return ""
+    return f"{MARKER} {canonical(marker)} is not the first open row {order.first_open()}"
