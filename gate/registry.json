@@ -830,7 +830,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 21,
+      "min_wants": 24,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [
