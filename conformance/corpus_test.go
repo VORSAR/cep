@@ -1,11 +1,14 @@
 package conformance_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -21,26 +24,72 @@ const corpus = "../docs/language/examples"
 // it (and the differential swap proof's pinned count).
 const wantFiles = 12
 
-// notBuilt is every corpus file this release cannot deploy: the construct its error names and the last sprint the
-// plan's corpus map gives it (sprint-plan.md, "Corpus examples → the sprint that turns each green"). A file whose
-// construct changes is red (move its entry); a listed file that deploys is red (remove it). Turning red once its
-// sprint arrives is S1.1c's, with the current-sprint marker (owner, 2026-11-09, decision 6).
-var notBuilt = map[string]struct{ construct, sprint string }{
-	"01-agent-kill-switch.cep": {"a pattern body", "S4.1"},
-	"08-session-flow.cep":      {"a pattern body", "S4.1"},
-	"05-text-operators.cep":    {"text operators (S7)", "S7"},
-	"06-once-and-group.cep":    {"a pattern body", "S7"},
-	"03-sort-leaderboard.cep":  {"a window body", "S8"},
-	"02-cron-digest.cep":       {"a window body", "S9.1"},
-	"04-delay-and-batch.cep":   {"a window body", "S9.2"},
-	"torture/comments.cep":     {"a pattern body", "S4.1"},
-	"torture/lexical.cep":      {"a pattern body", "S9.2"},
+// notBuiltEntry is one entry of conformance/notbuilt.json (a law path): the construct a refusal names and the plan row
+// that turns the file green. The expiry — red at T4 once gate/current-sprint reaches the row — is the gate's notbuilt
+// row (S1.1c-1); this test only reads the list, and never loosely.
+type notBuiltEntry struct {
+	File      string `json:"file"`
+	Construct string `json:"construct"`
+	Sprint    string `json:"sprint"`
+}
+
+type notBuiltFile struct {
+	Schema  int             `json:"schema"`
+	Note    string          `json:"note"`
+	Entries []notBuiltEntry `json:"entries"`
+}
+
+// notBuiltPath is the list, relative to this package's directory (go test runs a package in its own directory).
+const notBuiltPath = "notbuilt.json"
+
+var sprintRow = regexp.MustCompile(`^S[1-9][0-9]*(\.[1-9][0-9]*)?[a-z]?$`) // a row, never a part (no -<n>)
+
+// parseNotBuilt is pure: the file's bytes to the map, or the first fault.
+func parseNotBuilt(data []byte) (map[string]notBuiltEntry, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	var f notBuiltFile
+	if err := dec.Decode(&f); err != nil {
+		return nil, err
+	}
+	if f.Schema != 1 {
+		return nil, fmt.Errorf("schema %d, want 1", f.Schema)
+	}
+	out := make(map[string]notBuiltEntry, len(f.Entries))
+	for i, e := range f.Entries {
+		if e.File == "" || e.Construct == "" || e.Sprint == "" {
+			return nil, fmt.Errorf("entries[%d]: file, construct and sprint must be non-empty", i)
+		}
+		if _, dup := out[e.File]; dup {
+			return nil, fmt.Errorf("entries[%d]: duplicate file %q", i, e.File)
+		}
+		if !sprintRow.MatchString(e.Sprint) {
+			return nil, fmt.Errorf("entries[%d]: %q names a part, not a row", i, e.Sprint)
+		}
+		out[e.File] = e
+	}
+	return out, nil
+}
+
+// loadNotBuilt reads conformance/notbuilt.json and fails the test on any fault.
+func loadNotBuilt(t *testing.T) map[string]notBuiltEntry {
+	t.Helper()
+	data, err := os.ReadFile(notBuiltPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := parseNotBuilt(data)
+	if err != nil {
+		t.Fatalf("%s: %v", notBuiltPath, err)
+	}
+	return m
 }
 
 // TestCorpus is the conformance runner (design s3-3-2 §7): every corpus file deploys through the public API with its
 // expect blocks passing (exit 1), or is refused as not built yet with the construct its entry names. It never skips:
 // the gate judges a skip red.
 func TestCorpus(t *testing.T) {
+	notBuilt := loadNotBuilt(t)
 	files := corpusFiles(t)
 	if len(files) != wantFiles {
 		t.Fatalf("read %d corpus files under %s, want %d: %v", len(files), corpus, wantFiles, files)
@@ -66,13 +115,13 @@ func TestCorpus(t *testing.T) {
 			want, listed := notBuilt[name]
 			switch {
 			case listed && err == nil:
-				t.Errorf("%s deploys: remove its notBuilt entry (%s, %s)", name, want.construct, want.sprint)
+				t.Errorf("%s deploys: remove its notBuilt entry (%s, %s)", name, want.Construct, want.Sprint)
 			case listed && !errors.Is(err, errors.ErrUnsupported):
-				t.Errorf("%s: %v; want a not-built refusal (errors.ErrUnsupported) naming %q", name, err, want.construct)
-			case listed && !strings.Contains(err.Error(), want.construct):
-				t.Errorf("%s: %v; want it to stop on %q: move its notBuilt entry", name, err, want.construct)
+				t.Errorf("%s: %v; want a not-built refusal (errors.ErrUnsupported) naming %q", name, err, want.Construct)
+			case listed && !strings.Contains(err.Error(), want.Construct):
+				t.Errorf("%s: %v; want it to stop on %q: move its notBuilt entry", name, err, want.Construct)
 			case listed:
-				t.Logf("not built until %s (%s)", want.sprint, want.construct)
+				t.Logf("not built until %s (%s)", want.Sprint, want.Construct)
 			case err != nil:
 				t.Errorf("%s does not deploy:%s", name, describe(err))
 			}
