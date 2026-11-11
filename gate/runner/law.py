@@ -143,11 +143,13 @@ def line(path: str, added: int, removed: int, one_liner: str) -> str:
 
 def block(base_short: str, data_lines: Sequence[str], grouped: Mapping[str, tuple[int, int, int]]) -> list[str]:
     """The block: the data lines (git's path order) first, then one line per grouped entry (manifest order)."""
-    grouped_lines = [f"{entry}: {files} files +{a}/−{b}" for entry, (files, a, b) in grouped.items()]
+    grouped_lines = [
+        f"{entry}: {files} file{'s' if files != 1 else ''} +{a}/−{b}" for entry, (files, a, b) in grouped.items()
+    ]
     if not data_lines and not grouped_lines:
         return [NONE]
     n = len(data_lines) + sum(files for files, _, _ in grouped.values())
-    return [f"LAW Δ ({n} files, vs {base_short})", *data_lines, *grouped_lines]
+    return [f"LAW Δ ({n} file{'s' if n != 1 else ''}, vs {base_short})", *data_lines, *grouped_lines]
 
 
 def _heading_above(lines: Sequence[str], index: int) -> str:

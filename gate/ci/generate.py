@@ -49,7 +49,7 @@ def _uses(name: str) -> str:
 NEEDS_HISTORY = frozenset({"apidiff", "lawdelta"})
 # Rows that read the module cache offline: their job downloads every module of both tracked go.mod files at setup
 # (owner, 2026-11-11, S1.1c-1's design, decision 1), so a cold cache is never a verdict.
-NEEDS_MODULES = frozenset({"deps"})
+NEEDS_MODULES = frozenset({"deps", "proofs"})  # proofs: the deps driver fingerprints the real modules from the cache
 MODULE_DOWNLOAD = "      - run: go mod download all"
 
 

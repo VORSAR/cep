@@ -102,7 +102,7 @@ class LawDelta(support.GateTest):
         code, out, row_dir = self.run_script()
         self.assertEqual(code, 0, out)
         base = self.git("merge-base", "HEAD", "main").decode().strip()[:7]
-        want = ["GATE_COVERED 1", f"LAW Δ (1 files, vs {base})", "gate/run.py: 1 files +1/−1"]
+        want = ["GATE_COVERED 1", f"LAW Δ (1 file, vs {base})", "gate/run.py: 1 file +1/−1"]
         self.assertEqual(out.splitlines(), want, out)
         self.assertEqual(self.law_txt(row_dir), "\n".join(want[1:]) + "\n")
 
