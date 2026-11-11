@@ -74,6 +74,7 @@
 | 2026-11-11 | [S1.1c-1's fix round](#owner-decisions-2026-11-11--s11c-1s-fix-round) |
 | 2026-11-11 | [the recorder flake found at S1.1c-1's T2](#owner-decisions-2026-11-11--the-recorder-flake-found-at-s11c-1s-t2) |
 | 2026-11-11 | [the GitNexus hook](#owner-decisions-2026-11-11--the-gitnexus-hook) |
+| 2026-11-11 | [the left-running flake at S1.1c-1's T4](#owner-decisions-2026-11-11--the-left-running-flake-at-s11c-1s-t4) |
 
 ## The decisions
 
@@ -684,3 +685,10 @@ T2 on the fix round went red on one test this sprint never touched: `internal/pl
 Every commit in the main checkout runs `gate/hooks/gitnexus_reindex.py`, and every reindex — the hook's incremental one or a forced one — leaves an open GitNexus MCP server serving a stale handle (the incremental run also failed to build the full-text index on 2026-11-10); the coordinator restarted the servers by hand six times in two days.
 
 1. **The hook restarts the servers after a forced reindex** (as recommended): it reindexes with `--force` (a full rebuild, about ten seconds) and then sends TERM to every `gitnexus mcp` process that is a child of a Claude Code process on this machine; the clients restart them on the next call. Its test plants a fake server process in a world. A small fix PR of its own, after S1.1c-1 merges. Rejected: `--force` alone (the stale handle stays); leaving it as is.
+
+### Owner decisions, 2026-11-11 — the left-running flake at S1.1c-1's T4
+
+T4 on the rebased branch failed once on one proof case: inside its world the `lawdelta` row was judged `left running processes`. About 75 targeted runs (alone, four in parallel, all 14 cores pinned, under a probe that names survivors) never repeated it; the row starts nothing that can outlive it and git starts no child (traced). The verdict's one source is the runner's group probe, which counts two answers alike — the group still exists, or EPERM, which macOS gives for a member caught mid-exit — and the run kept no record of which.
+
+1. **Make the check name its cause, then a fresh T4** (as recommended): after a positive probe the runner records which answer fired and the group's members, in the row's reason and a `left_running.txt` in its folder; what counts as a failure is unchanged, so nothing is masked. The flake is known issue S1.1c-1-1, forwarded with the owner's consent; its root is fixed on its next occurrence, which now explains itself. Rejected: hunting further before anything ships (hours, no guarantee); waiting briefly for a process mid-exit before declaring it left (changes the rule without proof of the cause, could hide a short-lived real leftover).
+
