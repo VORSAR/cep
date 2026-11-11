@@ -73,7 +73,8 @@ func (w *bdStuck) Write(b []byte) (int, error) {
 
 // TestARecordingThatFallsBehindStops (owner D2 of S3.2b-2's design; review F2; MUST 13): a writer that blocks never
 // slows detection — the recorder writes on its own goroutine behind a bounded queue, a full queue ends the recording,
-// counted and reported, and every alert still goes out.
+// counted and reported, and every alert still goes out. The drain waits for the stalled recording's queued records
+// only until its own deadline (owner, 2026-11-06, decision 1), then succeeds.
 func TestARecordingThatFallsBehindStops(t *testing.T) {
 	t.Parallel()
 	p := pbBuild(t, "qa-recorder.cep", rcSrc)
@@ -113,8 +114,10 @@ func TestARecordingThatFallsBehindStops(t *testing.T) {
 			t.Fatalf("SendPayload %d: %v", i, err)
 		}
 	}
-	if _, err := r.Drain(ctx, 0); err != nil {
-		t.Fatalf("Drain: %v (a stalled recording must not hold the drain)", err)
+	dctx, dcancel := context.WithTimeout(ctx, 300*time.Millisecond) // the drain's deadline: the stalled recording holds it no longer
+	defer dcancel()
+	if _, err := r.Drain(dctx, 0); err != nil {
+		t.Fatalf("Drain: %v (a stalled recording holds the drain only until its deadline)", err)
 	}
 	st, err := r.Stats(ctx)
 	if err != nil {
