@@ -75,6 +75,7 @@
 | 2026-11-11 | [the recorder flake found at S1.1c-1's T2](#owner-decisions-2026-11-11--the-recorder-flake-found-at-s11c-1s-t2) |
 | 2026-11-11 | [the GitNexus hook](#owner-decisions-2026-11-11--the-gitnexus-hook) |
 | 2026-11-11 | [the left-running flake at S1.1c-1's T4](#owner-decisions-2026-11-11--the-left-running-flake-at-s11c-1s-t4) |
+| 2026-11-11 | [S1.1c-1's close-out](#owner-decisions-2026-11-11--s11c-1s-close-out) |
 
 ## The decisions
 
@@ -692,3 +693,9 @@ T4 on the rebased branch failed once on one proof case: inside its world the `la
 
 1. **Make the check name its cause, then a fresh T4** (as recommended): after a positive probe the runner records which answer fired and the group's members, in the row's reason and a `left_running.txt` in its folder; what counts as a failure is unchanged, so nothing is masked. The flake is known issue S1.1c-1-1, forwarded with the owner's consent; its root is fixed on its next occurrence, which now explains itself. Rejected: hunting further before anything ships (hours, no guarantee); waiting briefly for a process mid-exit before declaring it left (changes the rule without proof of the cause, could hide a short-lived real leftover).
 
+### Owner decisions, 2026-11-11 — S1.1c-1's close-out
+
+Two questions after PR #31's merge; both as recommended.
+
+1. **The sprint's branches are deleted** — `s1-1c/integration` local and remote, the six lane branches local — every commit on `main` by patch, and the one QA commit split when it landed has all its files there too.
+2. **The close-out goes up as its own docs PR** (`docs/s1-1c-1-close-out`), as at S3.3-1 and S3.3-2.

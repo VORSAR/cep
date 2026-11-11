@@ -1,7 +1,9 @@
 # S1.1c-1 — sprint record
 
+> **Historical — S1.1c-1, the law manifest and the LAW Δ block, the current-sprint marker and the not-built expiry, the dependency checks, the error-code counts; merged in PR #31.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-10--s11cs-scope-before-its-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1c-1-plan-check.md) · [design](s1-1c-1-design.md) · **record** · reviews: [plan check: architecture](../reviews/s1-1c-1-plan-check-architecture.md), [plan check: QA](../reviews/s1-1c-1-plan-check-qa.md), [design: architecture](../reviews/s1-1c-1-design-architecture.md), [design: QA (testability)](../reviews/s1-1c-1-design-qa.md), [combined build: architecture](../reviews/s1-1c-1-combined-architecture.md), [break-it: QA](../reviews/s1-1c-1-breakit-qa.md). **← [S3.3-2](s3-3-2-record.md) · [S1.1c-2 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S1.1c-1 — the law manifest and the LAW Δ block, the current-sprint marker and the not-built expiry, the dependency checks, the error-code counts · **Routine:** the full loop without the semantics panel · **Size:** 8 SP (items ≈ 6) as sized against the 2-week cap · **Branch:** `s1-1c/integration`
-**What to build and how each item is proven:** [sprint plan — S1.1c-1](sprint-plan.md#s11c-1--the-law-manifest-and-the-law-δ-block-the-current-sprint-marker-and-the-not-built-expiry-the-dependency-checks-the-error-code-counts) · **How it runs:** below · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S1.1c-1](history.md#s11c-1--the-law-manifest-and-the-law-δ-block-the-current-sprint-marker-and-the-not-built-expiry-the-dependency-checks-the-error-code-counts) · **How it runs:** below · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -27,6 +29,8 @@ The full draft is [s1-1c-1-plan-check.md](s1-1c-1-plan-check.md) (v2), drafted r
 8. **`github.com/kr/pretty` and `gopkg.in/check.v1` approved as graph-only entries.**
 
 **The design — the owner, 2026-11-11** ([decisions](decisions.md#owner-decisions-2026-11-11--s11c-1s-design-after-the-reviews); all as recommended, ranked by code health): 1. CI warms the module cache by a generated `go mod download` setup step for jobs holding a `NEEDS_MODULES` row; the `deps` row stays offline. 2. The block names uncommitted law edits at local tiers (a sixth text). 3. Document lines print `§<n>` for numbered headings, else the heading text, plus `(first of <k> hunks)`. 4. `code`/`workflow` lines are grouped last, one per manifest entry. 5. CI's record check requires the schema number, named on mismatch. 6. A `✓` outside a plan row's id cell is an error. 7. The `tool apidiff` directive and its four `x/*` requires move to `gate/proofs/go.mod` (W2). Reviews: [architecture](../reviews/s1-1c-1-design-architecture.md), [QA](../reviews/s1-1c-1-design-qa.md); every finding placed in [the design's §10](s1-1c-1-design.md#10-review-placement).
+
+**Close-out — the owner, 2026-11-11** ([decisions](decisions.md#owner-decisions-2026-11-11--s11c-1s-close-out)): the sprint's branches deleted (all on `main` by patch); the close-out as its own docs PR.
 
 **During the build — the owner, 2026-11-11:** align the two modules' `x/mod` and `x/tools` versions by pinning them in `go.mod` ([decisions](decisions.md#owner-decisions-2026-11-11--during-s11c-1s-build)), with the correction that `x/text` carries them into every embedder's graph anyway.
 
@@ -106,15 +110,21 @@ Build (G2)   ☑ every lane at T2 (the lane reports) ☑ T3 combine-check exit 0
              ☑ tests on the real code ☑ every breaker's red test committed (29e678c, 58b7669)
 Review (G3)  ☑ architecture review of the combined diff: no drift (0 blockers)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason (the findings table)
-Verify (G4)  ☑ T4 strict-gate exit 0, run complete (run 20261111T093413Z-58c94d) ☐ owner's check passed
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (run 20261111T093413Z-58c94d) ☑ owner's check passed (2026-11-11: the expiry red at S4.1, the marker pin, the marker, the two sprint-model lines; the PR's LAW Δ block read, then merged)
              ☑ every acceptance line met by its named proof (the T4 run: proofs, pytests, unit, notbuilt, deps, lawdelta)
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
+Exit (G5)    ☑ one PR, ≤ 100 commits, merged by the owner (#31, 39 commits, main 208cd13)
+             ☐ main CI green on the merge commit (the owner reports)
+             ☑ sprint record + five-line retro ☑ known issues (S1.1c-1-1 forwarded) ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only) ☑ memory updated
+             ☑ worktrees removed ☑ points and duration recorded (below)
 ```
 
 ## Retro
 
-*(at close-out)*
+**Points and duration.** Card 8 (items ≈ 5.5 at the plan check, ≈ 6 at G0); as built ≈ 7 — the fix round's owner additions (six more law paths, the `replace` rule, the rename-once count) and the self-naming group check came on top. G0 on 2026-11-11, merged the same day (#31), after the scope review of 2026-11-10: about one day of build, with the recorder fix (#30) between T2 and T4.
+
+1. **Worked — proofs first, then lanes.** QA's three drivers and the counts test were red on named stubs before any lane started; all four lanes landed green against them, each verified by a run of mine before it was cherry-picked.
+2. **Worked — the reviews earned their cost.** The plan-check reviews found that a Go test cannot be T4-only and that the `deps` row would be red on the real tree; the design reviews found the module-cache race and the rename crash; the break-it found four real gaps. None reached `main`.
+3. **Missed — two commits went in on a red gate.** A command chained a commit after a gate and read the result afterwards (0f4dcec, the generator test; e92198a, a link to a review not yet filed); each cost a repair commit. A commit follows a gate only on that gate's own exit 0.
+4. **Friction — the machine, not the code.** Two load-only flakes (the recorder race — a real engine fault, fixed at its root in #30 — and S1.1c-1-1, still open), a stale GitNexus server after every re-index, and the advisor killing agents cost more time than any lane.
+5. **Change next sprint.** The GitNexus hook restarts the servers after a forced re-index (owner, 2026-11-11; its own PR next); S1.1c-2 carries the two forwards (a version check for graph-only modules, up to three headings per document line) and, if S1.1c-1-1 recurs, its root fix from the evidence the check now names.
