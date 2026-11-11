@@ -18,6 +18,7 @@ class Facts:
     spawn_error: str = ""
     scope_error: str = ""
     left_running: bool = False
+    left_detail: str = ""  # what the probe saw, when it saw something (S1.1c-1-1)
     returncode: int = 0  # Popen's convention: negative means killed by that signal
     first_failure: str = ""  # the row's own first failure line, if it printed one (step.first_failure)
     covered: Covered = field(default_factory=Covered)
@@ -45,7 +46,7 @@ def decide(f: Facts) -> Verdict:
     if f.scope_error:
         return Verdict(False, f"scope error: {f.scope_error}")
     if f.left_running:
-        return Verdict(False, "left running processes")
+        return Verdict(False, f"left running processes: {f.left_detail}" if f.left_detail else "left running processes")
     if f.returncode < 0:
         return Verdict(False, f"killed by signal {-f.returncode}")
     if f.returncode > 0:

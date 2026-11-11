@@ -18,6 +18,7 @@ class Group:
         self._lock = threading.Lock()
         self._pgid: int | None = None
         self._signalled = False
+        self.left_detail = ""  # after a positive probe: which answer fired and the group's members (S1.1c-1-1)
 
     def spawn(
         self, argv: Sequence[str], *, cwd: str, env: Mapping[str, str], stdout: str, stderr: str
@@ -48,12 +49,15 @@ class Group:
         code = proc.wait()
         with self._lock:
             self._pgid = None
+        self.left_detail = ""
         try:
             os.killpg(proc.pid, 0)
+            answer = "the group still exists"
         except ProcessLookupError:
             return code, False
-        except PermissionError:
-            pass  # the group exists, and holds something this user may not signal
+        except PermissionError:  # the group exists, and holds something this user may not signal (or one mid-exit)
+            answer = "the group exists but may not be signalled (EPERM)"
+        self.left_detail = f"{answer}: {members(proc.pid)}"  # named before the kill (known issue S1.1c-1-1)
         with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(proc.pid, signal.SIGKILL)
         return code, True
@@ -65,3 +69,26 @@ class Group:
             if self._pgid is not None:
                 with contextlib.suppress(ProcessLookupError, PermissionError):
                     os.killpg(self._pgid, signum)
+
+
+def members(pgid: int) -> str:
+    """The group's members as `ps` lists them now — "pid state command", the command's program by its base name —
+    joined by "; "; a group whose members have already exited, or a `ps` that fails, says so. Only read on the
+    failure path, to name what a positive probe saw (owner, 2026-11-11, known issue S1.1c-1-1)."""
+    try:
+        listing = subprocess.run(
+            ["ps", "-A", "-o", "pgid=,pid=,stat=,command="],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"ps failed: {e}"
+    found = []
+    for line in listing.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) == 4 and parts[0] == str(pgid):
+            program, _, args = parts[3].partition(" ")
+            found.append(" ".join(x for x in (parts[1], parts[2], os.path.basename(program), args) if x))
+    return "; ".join(found) if found else "no member listed (gone before it could be named)"

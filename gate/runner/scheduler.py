@@ -364,6 +364,7 @@ class Runner:
                 spawn_error=outcome.spawn_error,
                 scope_error=outcome.scope_error,
                 left_running=outcome.left_running,
+                left_detail=outcome.left_detail,
                 returncode=outcome.returncode or 0,
                 first_failure=outcome.first_failure,
                 covered=outcome.covered,
