@@ -30,6 +30,7 @@ class Outcome:
     spawn_error: str = ""
     returncode: int | None = None  # None: no process of the row's own ever ran
     left_running: bool = False
+    left_detail: str = ""  # what the probe saw (S1.1c-1-1)
     covered: Covered = field(default_factory=Covered)
     expected: int = 0
     scope_sha256: str = ""
@@ -85,11 +86,14 @@ def execute(row: Row, group: Group, ctx: Context) -> Outcome:
     if proc is None:
         return done
     returncode, left_running = group.reap(proc)
+    if left_running:  # the whole listing, unbounded; the reason carries it bounded (known issue S1.1c-1-1)
+        records.write_atomic(os.path.join(directory, "left_running.txt"), (group.left_detail + "\n").encode("utf-8"))
     with open(stdout, "rb") as f:
         printed = f.read()
     return Outcome(
         returncode=returncode,
         left_running=left_running,
+        left_detail=group.left_detail,
         covered=covered.parse(printed),
         expected=expansion.count,
         scope_sha256=digest,
