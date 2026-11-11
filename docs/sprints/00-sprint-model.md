@@ -268,6 +268,7 @@ Exit (G5)    ☐ one PR (or the two the owner chose), ≤ 100 commits each, merg
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
              ☐ documents reconciled (plan + reasons only) ☐ memory updated
              ☐ worktrees removed ☐ points and duration recorded
+             ☐ the row closed in gate/sprints.json as in the plan table (the T2 pin; S1.1c-1)
 ```
 
 ---

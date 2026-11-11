@@ -52,6 +52,7 @@ At most two agents at once.
 - **Lane B** (1 commit): `go test ./conformance` green (TestCorpus's twelve sub-tests, `TestNotBuiltListIsLaw` six, `TestSprintRowGrammar`); the red that counts quoted in its report (`got map[x.cep:{x.cep c S1.1c-2}] and no error, want "entries[0]: \"S1.1c-2\" names a part, not a row"`).
 - **After W1 (coordinator):** `make check` on integration at 0f4dcec — every row green but `pytests` (`test_generate.py`, repaired in ba2fbe4; 0f4dcec went in on a red run, against ground rule 12).
 - **Decision 7 (coordinator):** the apidiff tests, the API proof driver, the `deps` row and its driver green after the move and the pins.
+- **The fix round (2026-11-11):** the combined review (no blocker, 2 should-fix, 6 later) and the break-it (4 red tests, 2 probes) gave 17 findings: 12 fixed with a test, 2 forwarded to S1.1c-2, 2 rejected with a reason, 1 recorded on S4.1's card; the red tests committed first (58b7669), every fix verified in one run, then T2.
 - **The combined check (T3), 2026-11-11, integration @ 6317470:** `make combine-check` — 19 rows PASS, `GATE PASSED`, exit 0 (parity, lawdelta covered 1, gofmt 258, vet 36, archcheck 236, ruff 183, pyfloor 5, hooks 3, ci-fresh 2, doclinks 147, apipartition 3, clockgolden 1, deps 3, unit 20, coverage-inclusion 16, pytests 70, semantics 1, conformance 1, baseline 1); the block first: `LAW Δ (39 files, vs 9cd4188)` — the G0 law files added, the registry's three rows and `proofs` 21 → 24, the allowlist's entries, SPEC's Appendix C line, the ADR annotations, `gate/runner/` grouped, the workflows.
 
 ## Test material
@@ -66,7 +67,23 @@ None.
 
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
-| *(plan-check findings are in the plan check's §10)* | | | | |
+| — | plan check, design | — | *(placed in the plan check's §10 and the design's §10)* | — |
+| B-1 | QA break-it | should-fix | a changed line that is itself a heading (a renamed or appended section) named the section above it | fixed: `law._heading_in` names a heading inside the first hunk, else the one above (`test_breakit_s11c1.DocLine`, two cases) |
+| B-2 | QA break-it | should-fix | a manifest entry naming a directory without its slash passed liveness and matched nothing | fixed: a slash-less entry must be exactly one tracked file, else red naming the directory (`test_a_directory_entry_without_a_slash_is_not_live`) |
+| B-3 | QA break-it | should-fix | a `replace` directive was invisible to the `deps` row | fixed (owner, 2026-11-11: red unless approved): `gather` carries the replacement, an entry may approve one target by an optional `replace` key, `compare` is red on an unapproved or missing replace (`test_deps.ReplaceApproval`, four cases; the driver's world approves `../planted`) |
+| B-4 | QA break-it | later | a staged rename counted as two uncommitted law edits | fixed (owner: renames once, untracked counts): `git.dirty` skips a rename's second record (`test_a_staged_rename_under_the_law_paths_is_one_edit`) |
+| B-5 | QA break-it (probe) | later | a GPL text citing the Apache License fingerprinted as Apache-2.0 | fixed: the copyleft negatives are checked first (`test_gpl_citing_apache_is_none`) |
+| B-6 | QA break-it (probe) | later | `_delta_registry` says nothing for a top-level change; two rows with one id diff as one; `index("S1.1c-2")` is a row's index | rejected: the registry's duplicate ids are refused by `registry.load` before any row runs; a top-level change still prints the file's line counts; the part guard lives in `load_entries` by design |
+| A-S1 | architect | should-fix | `gate/law.json` omitted as-built law (`tools/archcheck/`, `gate/ci/`, `gate/proofs/drivers/`, `ruff.toml`, `go.mod`, `gate/proofs/go.mod`) | fixed (owner, 2026-11-11: all six as `code`): listed; the pin test names them; ADR-0015 §1.3 annotated |
+| A-S2 | architect | should-fix | `parseNotBuilt` accepted a missing `note` or `entries` | fixed: every top-level key required, `missing key "note"` / `"entries"` (`TestNotBuiltListIsLaw`, two fixtures) |
+| A-L1 | architect | later | the drivers' docstring said T2 only | fixed (`support.py`) |
+| A-L2 | architect | later | the design's §11 did not record `NEEDS_MODULES` gaining `proofs` | fixed (design §11) |
+| A-L3 | architect | later | graph-only modules get no version check | forwarded to S1.1c-2 (a tightening of decision 4's field-only rule) |
+| A-L4 | architect | later | the two-version line did not name the cure | fixed: `deps.two_versions_line` ends with the cure (`test_the_two_versions_line_names_the_cure`) |
+| A-L5 | architect | later | untracked files count as uncommitted edits | rejected (owner, 2026-11-11): a new file under a law path is a law edit the commits do not show; it counts |
+| A-L6 | architect | later | a document's line names one heading | forwarded to S1.1c-2 (up to three headings) |
+| A-PM2 | architect (pre-mortem) | later | closing a sprint needs the plan's ✓ and `gate/sprints.json`'s `closed` | fixed: the sprint model's G5 list names `gate/sprints.json` |
+| A-PM1 | architect (pre-mortem) | — | S4.1's T4 is red by design from its first commit until 01 and 08 deploy | recorded on S4.1's card (entry criteria) |
 
 ## Done-done
 
