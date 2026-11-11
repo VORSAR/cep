@@ -85,7 +85,7 @@
     {
       "module": "golang.org/x/exp",
       "version": "v0.0.0-20261106192419-47ce03d25ef0",
-      "scope": "build-time (go tool apidiff, the T4 apidiff row only)",
+      "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
       "why": "apidiff labels each public API change compatible or breaking (ADR-0015 §3's apipartition row; owner, S3.3's plan check decision 3)"
@@ -93,7 +93,7 @@
     {
       "module": "golang.org/x/mod",
       "version": "v0.42.0",
-      "scope": "build-time (apidiff's graph)",
+      "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
       "why": "required by golang.org/x/exp/cmd/apidiff"
@@ -101,7 +101,7 @@
     {
       "module": "golang.org/x/sync",
       "version": "v0.24.0",
-      "scope": "build-time (apidiff's graph)",
+      "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
       "why": "required by golang.org/x/exp/cmd/apidiff"
@@ -109,7 +109,7 @@
     {
       "module": "golang.org/x/tools",
       "version": "v0.52.1-0.20261106145633-d407941a339a",
-      "scope": "build-time (apidiff's graph)",
+      "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
       "why": "required by golang.org/x/exp/cmd/apidiff (go/packages)"
