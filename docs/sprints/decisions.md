@@ -71,6 +71,9 @@
 | 2026-11-11 | [S1.1c-1's plan check](#owner-decisions-2026-11-11--s11c-1s-plan-check) |
 | 2026-11-11 | [S1.1c-1's design, after the reviews](#owner-decisions-2026-11-11--s11c-1s-design-after-the-reviews) |
 | 2026-11-11 | [during S1.1c-1's build](#owner-decisions-2026-11-11--during-s11c-1s-build) |
+| 2026-11-11 | [S1.1c-1's fix round](#owner-decisions-2026-11-11--s11c-1s-fix-round) |
+| 2026-11-11 | [the recorder flake found at S1.1c-1's T2](#owner-decisions-2026-11-11--the-recorder-flake-found-at-s11c-1s-t2) |
+| 2026-11-11 | [the GitNexus hook](#owner-decisions-2026-11-11--the-gitnexus-hook) |
 
 ## The decisions
 
@@ -659,3 +662,25 @@ The design note ([s1-1c-1-design.md](s1-1c-1-design.md) v1 at fef1c03) was revie
 One question, after decision 7 of the design was applied: with the apidiff tool moved to `gate/proofs/go.mod`, the engine's module selects `golang.org/x/mod` and `golang.org/x/tools` at the versions `x/text` requires (v0.41.0, v0.51.0) while the proofs module builds the tool at v0.42.0 and v0.52.1, and the new `deps` row reports the split. A correction went with the question: `x/text` requires `x/mod`, `x/sync` and `x/tools` on its own, so every embedder carries them whatever the gate does; the move removes `x/exp` only.
 
 1. **Align by pinning** (as recommended): `go.mod` keeps `golang.org/x/mod` and `golang.org/x/tools` as indirect requires at the tool's versions, with a comment saying why; one version of a module across the repository's two modules. `go mod tidy` drops the pins, and the `deps` row's two-version line then goes red — loud, by design. Rejected: approving each module at each version in the allowlist (a looser schema and two stale-version approvals); reverting the move.
+
+### Owner decisions, 2026-11-11 — S1.1c-1's fix round
+
+Three questions after the combined review ([architecture](../reviews/s1-1c-1-combined-architecture.md)) and the break-it ([QA](../reviews/s1-1c-1-breakit-qa.md)); all as recommended, ranked by code health.
+
+1. **`gate/law.json` lists the six as-built law paths as `code`:** `tools/archcheck/`, `gate/ci/`, `gate/proofs/drivers/`, `ruff.toml`, `go.mod`, `gate/proofs/go.mod` (the ADRs name each as law; this sprint's dependency move was invisible in the block). A `gomod` kind with require/replace/tool one-liners follows in S1.1c-2. Rejected: the two module files only; leaving the manifest as is.
+2. **A `replace` directive is red unless the module's allowlist entry approves exactly its target** by an optional `replace` field — a seventh, optional key. The proof driver's world approves its `../planted`. Rejected: always red (the driver would need a world-local module cache); report only.
+3. **The block's uncommitted-edits line counts a rename once and counts an untracked file** under a law path (a new file there is a law edit the commits do not show). Rejected: untracked ignored.
+
+### Owner decisions, 2026-11-11 — the recorder flake found at S1.1c-1's T2
+
+T2 on the fix round went red on one test this sprint never touched: `internal/playback` `TestARecordingThatOverflowsStaysReadable` (S3.2b-2), 50 of 50 green alone, red once under a full T2's load with `Records: 0` while the file held all 64 lines. Root (verified in the code, fix branch `fix/recorder-drain-stats`): after a queue-full stop the router queues no stop marker, so `Drain` had nothing of the recording to wait for and returned before the recorder wrote its queued records; `Stats` before `Close` raced the flush. Three questions; all as recommended.
+
+1. **Fix the root first, in its own PR** (ground rule 11: a flake stops the line and is fixed at the root, never retried): a test that forces the timing, then the fix; the owner merges it before S1.1c-1, which rebases. Rejected: a known issue with the owner's consent and a rerun; the fix inside the sprint's PR.
+2. **One rule for live and stopped recordings:** `Drain` waits for a stopped recording's already-queued records as it waits for a live one, until its deadline (the decision of 2026-11-06 made no exception); after `Drain`, `Stats` counts exactly what was written. The older test that encoded "a stalled recording must not hold the drain" gets its own short drain deadline, as its sibling already had. Rejected: a stopped recording never holds the drain (the flaky test's contract would change instead of the engine).
+3. **At the drain's deadline a stopped recording still flushing is marked incomplete**, as a live one is — the drain succeeds, the error names the deadline, `Records` counts what was written at the cut; `Close` still waits for the goroutine. Rejected: keeping the "queue full" message while the goroutine finishes.
+
+### Owner decisions, 2026-11-11 — the GitNexus hook
+
+Every commit in the main checkout runs `gate/hooks/gitnexus_reindex.py`, and every reindex — the hook's incremental one or a forced one — leaves an open GitNexus MCP server serving a stale handle (the incremental run also failed to build the full-text index on 2026-11-10); the coordinator restarted the servers by hand six times in two days.
+
+1. **The hook restarts the servers after a forced reindex** (as recommended): it reindexes with `--force` (a full rebuild, about ten seconds) and then sends TERM to every `gitnexus mcp` process that is a child of a Claude Code process on this machine; the clients restart them on the next call. Its test plants a fake server process in a world. A small fix PR of its own, after S1.1c-1 merges. Rejected: `--force` alone (the stale handle stays); leaving it as is.
