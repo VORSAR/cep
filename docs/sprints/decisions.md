@@ -76,6 +76,7 @@
 | 2026-11-11 | [the GitNexus hook](#owner-decisions-2026-11-11--the-gitnexus-hook) |
 | 2026-11-11 | [the left-running flake at S1.1c-1's T4](#owner-decisions-2026-11-11--the-left-running-flake-at-s11c-1s-t4) |
 | 2026-11-11 | [S1.1c-1's close-out](#owner-decisions-2026-11-11--s11c-1s-close-out) |
+| 2026-11-11 | [the rest of S1.1c, cut in two](#owner-decisions-2026-11-11--the-rest-of-s11c-cut-in-two) |
 | 2026-11-12 | [the left-running flake's root (S1.1c-1-1)](#owner-decisions-2026-11-12--the-left-running-flakes-root-s11c-1-1) |
 
 ## The decisions
@@ -700,6 +701,12 @@ Two questions after PR #31's merge; both as recommended.
 
 1. **The sprint's branches are deleted** — `s1-1c/integration` local and remote, the six lane branches local — every commit on `main` by patch, and the one QA commit split when it landed has all its files there too.
 2. **The close-out goes up as its own docs PR** (`docs/s1-1c-1-close-out`), as at S3.3-1 and S3.3-2.
+
+### Owner decisions, 2026-11-11 — the rest of S1.1c, cut in two
+
+Measured on `main` fd274e4 with the full ADR-0015 §2 lint set and the pinned golangci-lint v2.15.0: 308 findings in production code across 46 files — 186 long lines, 79 functions over cyclomatic 10, 15 `panic`s outside an allowlist, 12 `fmt.Print*` (most in the gate's own programs under `tools/`), 9 files over 500 lines (`internal/runtime/runtime.go` 1,536), 6 `gocritic`, 1 over five parameters — and, in tests (exempt from the complexity, length and parameter limits by §2.1), 724 long lines, 27 `panic`s, 17 unchecked errors, 6 `os.Getenv`, 2 `gocritic`. The 79 complexity refactors fall mostly in `internal/validate`, `internal/runtime` and `internal/playback`.
+
+1. **The rest of S1.1c is two sprints, the instruments first** (as recommended): **S1.1c-2** = the instruments — the suppressions checker and the one allowlist grammar, the `testhygiene` fence, the rule-fragment test on the real grammar, `docsync` (a), registry-lint and the teeth meta-test rebuilt as-built, `govulncheck` nightly, advisory aging and the weekly canary, and the three forwards from S1.1c-1 (a `gomod` kind for the LAW Δ block, a version check for graph-only modules, up to three headings per document line); **S1.1c-3** = the strict lint set, fixed and loud (decision 1 of 2026-11-10), with its fix wave, test-first behind the conformance, determinism and coverage nets — its own plan check, which may split it again by package. The order is forced: S1.1c-3's genuine exceptions need the allowlist grammar S1.1c-2 builds. The ids follow the sprint-id grammar, which has no letter after a `-<n>` part. Rejected: the lint set first; one sprint (over the 13-point cap).
 
 ### Owner decisions, 2026-11-12 — the left-running flake's root (S1.1c-1-1)
 
