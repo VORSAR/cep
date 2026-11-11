@@ -24,15 +24,13 @@ RUN_PY = os.path.join(support.REPO, "gate", "run.py")
 class Summarize(support.GateTest):
     def setUp(self) -> None:
         super().setUp()
-        rows = [
+        self.rows = [
             self.row("gofmt", tiers=("T1", "T2", "T3", "T4")),
             self.row("ruff", tiers=("T4",), blocking=False),
             self.row("fast", tiers=("T1",)),  # not at T4: never expected
             self.row("unit", job="test", tiers=("T2", "T3", "T4")),
         ]
-        self.registry = self.registry_file(rows)
-        with open(self.registry, "rb") as f:
-            self.digest = hashlib.sha256(f.read()).hexdigest()
+        self.law(self.rows)
         self.artifacts = os.path.join(self.root, "artifacts")
         self.blocking = {"gofmt": True, "ruff": False, "unit": True, "parity": True}
         self.clock = 1_000_000
@@ -43,6 +41,18 @@ class Summarize(support.GateTest):
             self.tree[name] = {"job": job, "registry_sha256": self.digest, "records": {}}
             for row_id in ids:
                 self.tree[name]["records"][(job, row_id)] = self.rec(job, row_id)
+
+    def law(self, rows: list) -> None:
+        """The registry the artifacts' run.json files name."""
+        self.registry = self.registry_file(rows)
+        with open(self.registry, "rb") as f:
+            self.digest = hashlib.sha256(f.read()).hexdigest()
+        for art in getattr(self, "tree", {}).values():
+            art["registry_sha256"] = self.digest
+
+    def with_lawdelta_row(self) -> None:
+        """S1.1c-1 design 2.6 (review QA-S13): the four fixture rows plus the lawdelta row in lint at T1-T4."""
+        self.law([*self.rows, self.row("lawdelta", tiers=("T1", "T2", "T3", "T4"))])
 
     def rec(self, job: str, row_id: str, **over: object) -> dict:
         self.clock += 1000
@@ -248,3 +258,60 @@ class Summarize(support.GateTest):
     def test_a_skip_at_t4_is_red(self):
         self.set("lint", "gofmt", verdict="skip", reason="skip: nothing staged in scope (3 tracked)", exit_code=-1)
         self.assertRed("lint", "gofmt", "skip")
+
+    # The LAW delta block through the record (S1.1c-1 design 2.5; plan check section 6 LAW delta (10), (13)).
+
+    def test_a_registry_without_the_row_says_not_run(self):
+        code, out = self.summarize()
+        self.assertEqual(code, 0, out)
+        lines = out.split("\n")
+        self.assertEqual(lines[0], "LAW Δ: not run — the lawdelta row is not in this registry at T4", out)
+        self.assertEqual(lines[1], "", out)
+
+    def test_a_missing_lawdelta_record_is_failed_in_the_block_and_a_missing_row(self):
+        self.with_lawdelta_row()
+        code, out = self.summarize()
+        lines = out.split("\n")
+        self.assertEqual(lines[0], "LAW Δ: FAILED — see the lawdelta row", out)
+        self.assertEqual(lines[1], "", out)
+        self.assertEqual(
+            self.cells(out, "lint", "lawdelta"),
+            ["lint", "lawdelta", "FAIL", "0.0s", "missing: no job recorded it"],
+            out,
+        )
+        self.assertEqual((code, self.tail(out)), (1, ["GATE FAILED", "exit: 1"]), out)
+
+    def test_a_passing_lawdelta_record_with_no_law_is_inconsistent(self):
+        self.with_lawdelta_row()
+        self.set("lint", "lawdelta")
+        out = self.assertRed("lint", "lawdelta", "inconsistent")
+        self.assertEqual(self.cells(out, "lint", "lawdelta")[4], "inconsistent: pass with no LAW Δ block", out)
+        self.assertEqual(out.split("\n")[0], "LAW Δ: FAILED — see the lawdelta row", out)
+
+    def test_a_passing_lawdelta_record_gives_the_block_first(self):
+        self.with_lawdelta_row()
+        block = ["LAW Δ (1 files, vs abc1234)", "gate/current-sprint +1/−1 — marker S1.1c-1 → S4.1"]
+        self.set("lint", "lawdelta", law=block)
+        code, out = self.summarize()
+        self.assertEqual(out.split("\n")[:4], [*block, "", "job  | step     | verdict | time | reason"], out)
+        self.assertEqual((code, self.tail(out)), (0, ["GATE PASSED", "exit: 0"]), out)
+
+    def test_a_failing_lawdelta_record_is_failed_in_the_block(self):
+        self.with_lawdelta_row()
+        self.set("lint", "lawdelta", verdict="fail", reason="exit 1: lawdelta: no merge base with main", exit_code=1)
+        out = self.assertRed("lint", "lawdelta", "merge base")
+        self.assertEqual(out.split("\n")[0], "LAW Δ: FAILED — see the lawdelta row", out)
+
+    def test_a_record_without_law_is_malformed(self):
+        rec = self.rec("lint", "gofmt")
+        del rec["law"]
+        self.tree[f"records-lint-{ATTEMPT}"]["records"][("lint", "gofmt")] = records.json_bytes(rec)
+        self.assertRed("lint", "gofmt", "malformed")
+
+    def test_a_schema_1_record_names_the_schema(self):
+        # owner, 2026-11-11 (design 5): the record check names the schema it expected.
+        rec = self.rec("lint", "gofmt")
+        rec["schema"] = 1
+        self.tree[f"records-lint-{ATTEMPT}"]["records"][("lint", "gofmt")] = records.json_bytes(rec)
+        out = self.assertRed("lint", "gofmt", "malformed")
+        self.assertEqual(self.cells(out, "lint", "gofmt")[4], "malformed: schema 1, expected 2", out)

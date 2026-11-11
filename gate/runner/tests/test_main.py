@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from unittest import mock
 
 from gate.runner import main
@@ -188,6 +189,64 @@ class Cli(support.GateTest):
         reg = self.reg(self.row("x", tiers=("T1", "T2")))
         self.assertEqual(self.cli("--tier", "T1", "--registry", reg, "--run-dir", self.run_dir), 0)
         self.assertFalse(self.toolchain.calls[0][1])
+
+
+class FirstLine(support.GateTest):
+    """The LAW delta block is the summary's first line, end to end (S1.1c-1 design 2.6; review QA-S2). The fixture is
+    a git repository with a one-entry manifest (gate/law.json itself) and the real lawdelta row script."""
+
+    LAW = os.path.join("gate", "law.json")
+    SCRIPT = os.path.join(support.REPO, "gate", "runner", "rows", "lawdelta.py")
+    IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
+
+    def setUp(self):
+        super().setUp()
+        self.git("checkout", "-q", "-b", "main")
+        self.track(
+            self.LAW, '{"schema": 1, "note": "a fixture", "paths": [{"path": "gate/law.json", "kind": "law"}]}\n'
+        )
+        self.git(*self.IDENTITY, "commit", "-q", "-m", "main")
+
+    def rows(self, trivial_job="lint"):
+        command = (sys.executable, "-I", "-B", "-X", "utf8", self.SCRIPT)
+        law = self.row(
+            "lawdelta", tiers=("T1", "T2", "T3", "T4"), command=command, expected_scope=("git", self.LAW), min_wants=1
+        )
+        return self.registry_file([self.row("trivial", tiers=("T0", "T1", "T2"), job=trivial_job), law])
+
+    def first_line(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            main.main(
+                [*argv, "--run-dir", os.path.join(self.root, f"run-{len(os.listdir(self.root))}")], deps=self.deps()
+            )
+        self.output = out.getvalue()
+        return self.output.split("\n")[0]
+
+    def test_t0_says_not_run_at_t0(self):
+        self.assertEqual(
+            self.first_line("--tier", "T0", "--registry", self.rows()),
+            "LAW Δ: not run — the lawdelta row is not in this registry at T0",
+        )
+
+    def test_t1_and_t2_on_main_say_head_is_main(self):
+        for tier in ("T1", "T2"):
+            with self.subTest(tier):
+                self.assertEqual(
+                    self.first_line("--tier", tier, "--registry", self.rows()),
+                    "LAW Δ: HEAD is main — read the PR run",
+                )
+
+    def test_a_branch_with_a_non_law_commit_says_none(self):
+        self.git("checkout", "-q", "-b", "change")
+        self.track("notes.txt", "not a law path\n")
+        self.git(*self.IDENTITY, "commit", "-q", "-m", "change")
+        self.assertEqual(self.first_line("--tier", "T2", "--registry", self.rows()), "LAW Δ: none")
+        self.assertEqual(self.output.split("\n")[1], "")
+
+    def test_a_job_without_the_row_says_not_run_at_the_job(self):
+        line = self.first_line("--tier", "T2", "--job", "test", "--registry", self.rows(trivial_job="test"))
+        self.assertEqual(line, "LAW Δ: not run — the lawdelta row is not in this registry at T2, job test")
 
 
 class RealParts(support.GateTest):

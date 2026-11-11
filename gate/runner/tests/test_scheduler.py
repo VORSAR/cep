@@ -251,7 +251,7 @@ class CompletionOrder(support.GateTest):
 
     def test_the_summary_lists_rows_in_registry_order_whatever_finished_first(self):
         result, _ = self.run_in_order("b", "a")
-        steps = [x.split(" | ")[1].strip() for x in result.summary.splitlines()[1:4]]
+        steps = [x.split(" | ")[1].strip() for x in result.summary.splitlines()[3:6]]  # after the LAW Δ block
         self.assertEqual(steps, ["parity", "a", "b"])
 
     def test_scripted_per_row_times_survive_either_order(self):
@@ -261,8 +261,8 @@ class CompletionOrder(support.GateTest):
                 script = ScriptedClock({"parity": (0, 0), "a": (0, 1500), "b": (0, 150)})
                 result, _ = self.run_in_order(first, second, script.clock, script.observe)
                 table = result.summary.splitlines()
-                self.assertEqual(table[2].split(" | ")[3].strip(), "1.5s")
-                self.assertEqual(table[3].split(" | ")[3].strip(), "0.1s")
+                self.assertEqual(table[4].split(" | ")[3].strip(), "1.5s")  # the table follows the LAW Δ block
+                self.assertEqual(table[5].split(" | ")[3].strip(), "0.1s")
                 # By hand: wall 1500, summed 1650; (1650 - 1500) * 100 // 1650 = 9.
                 self.assertEqual(table[-3], "wall 1.5s · summed 1.6s · saved 9%")
 
@@ -294,8 +294,8 @@ class Footer(support.GateTest):
         script = ScriptedClock({"parity": (0, 0), "a": (0, 150), "b": (50, 150)})
         result = self.run_rows([self.row("a"), self.row("b")], clock=script.clock, observer=script.observe)
         lines = result.summary.splitlines()
-        self.assertEqual(lines[2].split(" | ")[3].strip(), "0.1s")
-        self.assertEqual(lines[3].split(" | ")[3].strip(), "0.1s")
+        self.assertEqual(lines[4].split(" | ")[3].strip(), "0.1s")  # the table follows the LAW Δ block
+        self.assertEqual(lines[5].split(" | ")[3].strip(), "0.1s")
         self.assertEqual(lines[-3], "wall 0.2s · summed 0.3s · saved 33%")
 
     def test_a_gap_gives_a_negative_saving(self):
@@ -371,3 +371,49 @@ class Crash(support.GateTest):
             result = self.run_rows([self.row("a")])
         self.assertEqual(result.exit_code, 2)
         self.assertIn("planted parity bug", self.reason("parity"))
+
+
+class LawDelta(support.GateTest):
+    """The record channel of the LAW delta block (S1.1c-1 design 2.5; review: architect S1)."""
+
+    def test_lawdelta_pass_without_law_txt_is_a_failure(self):
+        result = self.run_rows([self.row("lawdelta")])
+        record = self.record("lint", "lawdelta")
+        self.assertEqual(
+            (record["verdict"], record["reason"]), ("fail", "lawdelta: exit 0 but law.txt is empty or missing")
+        )
+        self.assertEqual(record["law"], [])
+        self.assertEqual(result.summary.split("\n")[0], "LAW Δ: FAILED — see the lawdelta row")
+        self.assertEqual(result.exit_code, 1)
+
+    def test_the_rows_law_txt_reaches_its_record_and_the_summary(self):
+        law_txt = os.path.join(self.run_dir, "rows", "lint", "lawdelta", "law.txt")
+        script = self.script(
+            "lawdelta",
+            os.path.join(self.root, "bin"),
+            "import os, sys\n"
+            f"open({law_txt!r}, 'w', encoding='utf-8').write('LAW \\u0394: none\\n\\n')\n"
+            "print('GATE_COVERED 1')\n",
+        )
+        result = self.run_rows([self.row("lawdelta", command=(script,))])
+        record = self.record("lint", "lawdelta")
+        self.assertEqual((record["verdict"], record["law"]), ("pass", ["LAW Δ: none"]))
+        self.assertEqual(
+            result.summary.split("\n")[:3], ["LAW Δ: none", "", "job  | step     | verdict | time | reason"]
+        )
+
+    def test_every_other_record_carries_an_empty_law(self):
+        self.run_rows([self.row("x")])
+        self.assertEqual(self.record("lint", "x")["law"], [])
+        self.assertEqual(self.record("lint", "parity")["law"], [])
+
+    def test_a_registry_without_the_row_says_not_run_at_the_scope(self):
+        result = self.run_rows([self.row("x")])
+        self.assertEqual(
+            result.summary.split("\n")[0], "LAW Δ: not run — the lawdelta row is not in this registry at T2"
+        )
+        result = self.run_rows([self.row("y")], job="lint", run_dir=os.path.join(self.root, "run2"))
+        self.assertEqual(
+            result.summary.split("\n")[0],
+            "LAW Δ: not run — the lawdelta row is not in this registry at T2, job lint",
+        )
