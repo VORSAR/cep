@@ -105,7 +105,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 #### S1.1c-2 — The instruments: the one allowlist grammar and the suppressions checker, the test-sleep fence, the fragment test, docsync (a), the teeth, govulncheck, advisory aging and the canary
 
-*The second part of S1.1c ([owner, 2026-11-11](decisions.md#owner-decisions-2026-11-11--the-rest-of-s11c-cut-in-two), decision 1); the strict lint set and its fix wave are S1.1c-3. Plan check: [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md) (v1 draft, under review).*
+*The second part of S1.1c ([owner, 2026-11-11](decisions.md#owner-decisions-2026-11-11--the-rest-of-s11c-cut-in-two), decision 1); the strict lint set and its fix wave are S1.1c-3. Plan check: [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md) (v2: reviewed by architecture, QA and product; after the reviews the work is ≈ 16.25 points, so its Q1 proposes splitting it before G0 — this card is rewritten once the owner answers).*
 
 | | |
 |---|---|
