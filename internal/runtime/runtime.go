@@ -169,6 +169,9 @@ type Runtime struct {
 	// activateHold is for the package's tests only: Activate calls it between the router's answer and its tail, so a
 	// test can hold an activation there while Close gives up at its deadline (the combined review's R-S3).
 	activateHold func()
+	// recordingWait is for the package's tests only: Drain calls it as it begins to wait for the recording, so a test
+	// can release a held Recorder only once Drain waits for it (TestDrainWaitsForAStoppedRecordingsQueuedRecords).
+	recordingWait func()
 }
 
 type appState struct {
@@ -268,7 +271,7 @@ type reply struct {
 	id        AppID // iAdd's
 	pending   int64
 	markers   []chan struct{}
-	recMarker chan struct{} // a drain's recording stop, waited for only until the drain's deadline (owner, 2026-11-06)
+	recMarker chan struct{} // a drain's recording stop, or an ended recording's queued records, waited for only until the drain's deadline (owner, 2026-11-06)
 	stats     Stats
 }
 
@@ -755,7 +758,7 @@ type drainWait struct {
 	acks      int
 	pending   int64
 	replies   []chan reply  // the Drain calls waiting for this drain's result
-	recMarker chan struct{} // closed once the recording's stop is written; nil: no recording, or it ended
+	recMarker chan struct{} // closed once the recording's stop is written, or an ended recording's queued records are; nil: no recording
 }
 
 type statsWait struct {
@@ -985,12 +988,9 @@ func (rt *router) ingest(it item) {
 		a.drained = true
 		rt.token++
 		a.drainTok = rt.token
-		dw := &drainWait{app: a, replies: []chan reply{it.reply}}
-		if a.rec.put(recItem{kind: rStop}) {
-			if m := make(chan struct{}); a.rec.put(recItem{kind: rMarker, marker: m}) {
-				dw.recMarker = m // the drain waits until the stop is written (design s3-2b-2 §7)
-			}
-		}
+		// The drain waits until the stop is written (design s3-2b-2 §7), or, for a recording that ended, until the
+		// records queued before its end are (owner D2 of S3.2b-2's design; review C3).
+		dw := &drainWait{app: a, replies: []chan reply{it.reply}, recMarker: a.rec.drainStop()}
 		rt.drains[rt.token] = dw
 		rt.drainApp(a, rt.token)
 	case iStats:
