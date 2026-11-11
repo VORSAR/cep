@@ -33,7 +33,12 @@ def pinned_go() -> str:
 class ApiGatePlanted(support.DriverTest):
     def engine_world(self) -> None:
         self.world.copy_gate()
-        for rel in ("go.mod", "go.sum"):
+        for rel in (
+            "go.mod",
+            "go.sum",
+            "gate/proofs/go.mod",
+            "gate/proofs/go.sum",
+        ):  # the apidiff tool is gate/proofs's
             self.world.copy(rel)
         for prefix in (":(glob)*.go", "api", "io", "internal", "tools"):
             for rel in self.world.tracked(prefix):

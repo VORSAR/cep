@@ -19,6 +19,7 @@ from gate.runner.git import git, merge_base  # one contract: "" with no base; th
 
 INCOMPATIBLE = "Incompatible changes:"
 GOLDEN = os.path.join("api", "exports.golden")
+TOOL_MODULE = os.path.join("gate", "proofs")  # the module that declares `tool golang.org/x/exp/cmd/apidiff`
 
 
 def module_path(root: str = "") -> str:
@@ -66,8 +67,12 @@ def main(argv: list[str]) -> int:
         rows.covered(len(pkgs))
         return rows.finish([])
     module = module_path()
-    # The tool binary is the current module's (the merge base may predate the `tool` line): `go tool -n` names it.
-    p = subprocess.run(["go", "tool", "-n", "apidiff"], stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    # The tool is declared in gate/proofs/go.mod, not the engine's go.mod, so an embedder's module graph never
+    # carries it (owner, 2026-11-11, S1.1c-1's design, 7); `go -C gate/proofs tool -n` builds it from that module and
+    # prints its path. The binary is HEAD's, whatever the merge base declares.
+    p = subprocess.run(
+        ["go", "-C", TOOL_MODULE, "tool", "-n", "apidiff"], stdin=subprocess.DEVNULL, capture_output=True, text=True
+    )
     if p.returncode != 0 or not p.stdout.strip():
         rows.covered(0)
         return rows.finish([f"go tool -n apidiff failed with exit {p.returncode}: {p.stderr.strip()}"])

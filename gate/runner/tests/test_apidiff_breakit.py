@@ -20,6 +20,9 @@ class ApidiffBreakit(support.GateTest):
     def base(self, *, with_q: bool = False) -> None:
         self.track("go.mod", throwaway_module())
         self.track("go.sum", real("go.sum"))
+        # the apidiff tool lives in gate/proofs/go.mod (owner, 2026-11-11, design 7): the row resolves it there
+        self.track("gate/proofs/go.mod", real("gate/proofs/go.mod"))
+        self.track("gate/proofs/go.sum", real("gate/proofs/go.sum"))
         self.track("p/p.go", BASE)
         golden = "p F func func F()\n"
         if with_q:
