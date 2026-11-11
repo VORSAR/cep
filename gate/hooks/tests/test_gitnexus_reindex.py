@@ -4,6 +4,7 @@ Each test owns its world: a temporary git repository, a temporary GitNexus regis
 `gitnexus` on PATH that records how it was started. Nothing touches the real index.
 """
 
+import contextlib
 import json
 import os
 import subprocess
@@ -20,6 +21,7 @@ import json, os, sys
 with open(os.environ["FAKE_GITNEXUS_OUT"] + ".tmp", "w") as f:
     json.dump({{"argv": sys.argv[1:], "cwd": os.getcwd()}}, f)
 os.rename(os.environ["FAKE_GITNEXUS_OUT"] + ".tmp", os.environ["FAKE_GITNEXUS_OUT"])
+sys.exit(int(os.environ.get("FAKE_GITNEXUS_EXIT", "0")))
 """
 
 
@@ -72,6 +74,8 @@ class World:
             "HOME": self.root,
             "GITNEXUS_HOME": self.home,
             "FAKE_GITNEXUS_OUT": self.out,
+            # The follow-up would restart this machine's real servers; its restart is tested on planted ones.
+            gitnexus_reindex.NO_RESTART: "1",
         }
 
     def pidfile(self) -> str:
@@ -124,7 +128,9 @@ class Reindex(unittest.TestCase):
     def test_an_index_behind_head_starts_an_index_only_analyze_of_the_checkout(self):
         world = World(self, indexed="0" * 40)
         self.assertEqual(world.run(world.prompt()), 0)
-        self.assertEqual(world.started(), {"argv": ["analyze", "--index-only", world.repo], "cwd": world.repo})
+        self.assertEqual(
+            world.started(), {"argv": ["analyze", "--force", "--index-only", world.repo], "cwd": world.repo}
+        )
         self.assertTrue(os.path.exists(world.pidfile()))
 
     def test_a_git_command_from_a_subdirectory_counts_for_the_checkout(self):
@@ -132,7 +138,7 @@ class Reindex(unittest.TestCase):
         sub = os.path.join(world.repo, "sub")
         os.mkdir(sub)
         self.assertEqual(world.run(bash("git commit -m y", sub)), 0)
-        self.assertEqual(world.started()["argv"], ["analyze", "--index-only", world.repo])
+        self.assertEqual(world.started()["argv"], ["analyze", "--force", "--index-only", world.repo])
 
     def test_a_stale_pidfile_does_not_block_a_new_run(self):
         world = World(self, indexed="0" * 40)
@@ -206,3 +212,109 @@ class LeaveAlone(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --------------------------------------------------------------------------------------------- the restart (2026-11-11)
+# Owner, 2026-11-11 ("the GitNexus hook"): every re-index left an open `gitnexus mcp` server on a stale handle; after a
+# forced re-index the hook's follow-up restarts the servers Claude Code runs, which restart them on their next call.
+
+CLAUDE = "/Users/u/.vscode/extensions/anthropic.claude-code-2.1.319-darwin-arm64/resources/native-binary/claude"
+LISTING = f"""\
+  100     1 {CLAUDE} --output-format stream-json
+  200   100 node /Users/u/.nvm/versions/node/v26.13.0/bin/gitnexus mcp
+  210   100 node /Users/u/.nvm/versions/node/v26.13.0/bin/gitnexus analyze --index-only /r
+  300    50 node /usr/local/bin/gitnexus mcp
+   50     1 -zsh
+  400   100 /usr/bin/python3 -I -B /x/gitnexus_reindex.py
+  500   100 node /opt/bin/gitnexus mcp --http
+"""
+
+
+class Servers(unittest.TestCase):
+    def test_only_a_gitnexus_mcp_whose_parent_is_claude_code_is_chosen(self):
+        # 200 and 500 run under Claude Code; 210 is an analyze, 300 runs under a shell, 400 is not gitnexus.
+        self.assertEqual(gitnexus_reindex.servers(LISTING), [200, 500])
+
+    def test_an_empty_or_garbled_listing_chooses_nothing(self):
+        self.assertEqual(gitnexus_reindex.servers(""), [])
+        self.assertEqual(gitnexus_reindex.servers("not a listing\n  x y z\n"), [])
+
+
+class Restart(unittest.TestCase):
+    """A planted tree: a process named `claude` and its `gitnexus mcp` child. Only the planted processes are ever
+    listed to the restart, so no server of this machine is touched."""
+
+    def plant(self) -> tuple[int, int]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        pidfile = os.path.join(tmp.name, "child.pid")
+        claude = os.path.join(tmp.name, "claude")
+        with open(claude, "w") as f:
+            f.write(
+                f"#!{sys.executable} -I\n"
+                "import subprocess, sys, time\n"
+                f"child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)', 'gitnexus', 'mcp'])\n"
+                f"open({pidfile!r} + '.tmp', 'w').write(str(child.pid))\n"
+                "import os; os.rename(" + repr(pidfile) + " + '.tmp', " + repr(pidfile) + ")\n"
+                "time.sleep(120)\n"
+            )
+        os.chmod(claude, 0o755)
+        parent = subprocess.Popen([claude], stdin=subprocess.DEVNULL, start_new_session=True)
+        self.addCleanup(lambda: (parent.kill(), parent.wait()))
+
+        def child_pid():
+            try:
+                with open(pidfile) as f:
+                    return int(f.read())
+            except (OSError, ValueError):
+                return None
+
+        child = wait.until("the planted server to start", child_pid, cap_s=30)
+        self.addCleanup(lambda: _kill_quietly(child))
+        return parent.pid, child
+
+    def planted_listing(self, *pids: int) -> str:
+        listing = gitnexus_reindex.ps_listing()
+        return "\n".join(line for line in listing.splitlines() if line.split() and line.split()[0] in map(str, pids))
+
+    def test_the_planted_server_is_terminated_and_its_claude_parent_lives(self):
+        parent, child = self.plant()
+        self.assertEqual(gitnexus_reindex.restart(self.planted_listing(parent, child)), [child])
+        wait.until("the planted server to end", lambda: not _alive(child) or None, cap_s=30)
+        self.assertTrue(_alive(parent))
+
+
+class FollowUp(unittest.TestCase):
+    def follow_up(self, exit_code: int) -> list[str]:
+        world = World(self, indexed="0" * 40)
+        calls: list[str] = []
+        environ = {**world.environ, "FAKE_GITNEXUS_EXIT": str(exit_code)}
+        code = gitnexus_reindex.reindex(
+            os.path.join(world.bin, "gitnexus"), world.repo, environ, restart_servers=lambda: calls.append("restart")
+        )
+        self.assertEqual(world.started()["argv"], ["analyze", "--force", "--index-only", world.repo])
+        self.assertEqual(code, exit_code)
+        return calls
+
+    def test_a_successful_reindex_restarts_the_servers(self):
+        self.assertEqual(self.follow_up(0), ["restart"])
+
+    def test_a_failed_reindex_restarts_nothing(self):
+        self.assertEqual(self.follow_up(1), [])
+
+
+def _alive(pid: int) -> bool:
+    """Whether the process exists and is not a zombie (a killed child of the planted parent stays one until reaped)."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(state) and not state.startswith("Z")
+
+
+def _kill_quietly(pid: int) -> None:
+    with contextlib.suppress(OSError):
+        os.kill(pid, 9)
