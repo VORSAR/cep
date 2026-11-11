@@ -381,7 +381,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.3-2 merged (PRs #1–#28, the last on 2026-11-10): S3.3 is closed — the public Go API, the expect sandbox, the conformance runner and the Tier-2 baselines — and the clock contract is frozen (main d14814a) → next: S1.1c's plan check (the gate extras), then S4.1, the pattern engine.**
+**Phase 1 in progress: S1.1a-1 to S3.3-2 merged (PRs #1–#28, the last on 2026-11-10); the clock contract is frozen (main d14814a). S1.1c-1 passed G0 on 2026-11-11 (branch `s1-1c/integration` @ 41c2825: the law commit — `gate/current-sprint`, `gate/sprints.json`, `gate/law.json`, `conformance/notbuilt.json`, the rows `lawdelta`, `deps`, `notbuilt` as named stubs): the law manifest and the LAW Δ block, the current-sprint marker and the not-built expiry, the dependency checks, the error-code counts, the full loop without the panel → next: QA's proofs first (W0) and the design note (G1); then S1.1c-2 (the strict lint set with the suppressions checker, the fragment test, docsync (a), the teeth, govulncheck, advisory aging and the canary), then S4.1.**
 
 
 *Earlier lines, 2026-11-01 to 2026-11-07: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
