@@ -52,6 +52,7 @@ At most two agents at once.
 - **Lane B** (1 commit): `go test ./conformance` green (TestCorpus's twelve sub-tests, `TestNotBuiltListIsLaw` six, `TestSprintRowGrammar`); the red that counts quoted in its report (`got map[x.cep:{x.cep c S1.1c-2}] and no error, want "entries[0]: \"S1.1c-2\" names a part, not a row"`).
 - **After W1 (coordinator):** `make check` on integration at 0f4dcec — every row green but `pytests` (`test_generate.py`, repaired in ba2fbe4; 0f4dcec went in on a red run, against ground rule 12).
 - **Decision 7 (coordinator):** the apidiff tests, the API proof driver, the `deps` row and its driver green after the move and the pins.
+- **The gates on the branch rebased onto main f2e3ae1 (#30), 2026-11-11, at a96d5d4:** T3 `make combine-check` — 19 rows PASS, `GATE PASSED`, exit 0 (run 20261111T093305Z-065953); T4 `make strict-gate` — 27 rows PASS, `GATE PASSED`, exit 0 (run 20261111T093413Z-58c94d: `lawdelta` covered 1, `deps` 3, `notbuilt` 1, `proofs` 24 drivers, `race`, both determinism legs, `apidiff` against the merge base). The first T4 on the rebased branch was red once on a proof case — finding T4-1, known issue S1.1c-1-1 — before the check that now names its cause.
 - **The fix round (2026-11-11):** the combined review (no blocker, 2 should-fix, 6 later) and the break-it (4 red tests, 2 probes) gave 17 findings: 12 fixed with a test, 2 forwarded to S1.1c-2, 2 rejected with a reason, 1 recorded on S4.1's card; the red tests committed first (58b7669), every fix verified in one run, then T2.
 - **The combined check (T3), 2026-11-11, integration @ 6317470:** `make combine-check` — 19 rows PASS, `GATE PASSED`, exit 0 (parity, lawdelta covered 1, gofmt 258, vet 36, archcheck 236, ruff 183, pyfloor 5, hooks 3, ci-fresh 2, doclinks 147, apipartition 3, clockgolden 1, deps 3, unit 20, coverage-inclusion 16, pytests 70, semantics 1, conformance 1, baseline 1); the block first: `LAW Δ (39 files, vs 9cd4188)` — the G0 law files added, the registry's three rows and `proofs` 21 → 24, the allowlist's entries, SPEC's Appendix C line, the ADR annotations, `gate/runner/` grouped, the workflows.
 
@@ -98,15 +99,15 @@ Entry (G0)   ☑ card complete and approved (sprint-plan.md, the S1.1c-1 card; o
              ☑ plan check reviewed (architect, QA) and answered by the owner (decisions.md 2026-11-11)
              ☑ test material exists, or making it is an item (lane QA, W0)
              ☑ `gate/current-sprint` set to S1.1c-1, the first commit (the G0 law commit)
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
-             ☐ conformance cases for every construct shipped or changed (n/a: no construct)
-             ☐ tests on the real code ☐ every breaker's red test committed
-Review (G3)  ☐ architecture review of the combined diff: no drift
-             ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 strict-gate / CI exit 0, run complete ☐ owner's check passed
-             ☐ every acceptance line met by its named proof
+Design (G1)  ☑ architecture + the-fool findings resolved ☑ QA testability findings resolved (design §10)
+             ☑ owner decisions recorded (decisions.md, 2026-11-11) ☑ ADRs annotated for lasting decisions (ADR-0001, -0005, -0009, -0015)
+Build (G2)   ☑ every lane at T2 (the lane reports) ☑ T3 combine-check exit 0 (run 20261111T093305Z-065953)
+             ☑ conformance cases for every construct shipped or changed (n/a: no construct)
+             ☑ tests on the real code ☑ every breaker's red test committed (29e678c, 58b7669)
+Review (G3)  ☑ architecture review of the combined diff: no drift (0 blockers)
+             ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason (the findings table)
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (run 20261111T093413Z-58c94d) ☐ owner's check passed
+             ☑ every acceptance line met by its named proof (the T4 run: proofs, pytests, unit, notbuilt, deps, lawdelta)
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main CI green on the merge commit
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
