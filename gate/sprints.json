@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "note": "The sprint plan's §3 table as printed, in order, with its closed marks (ADR-0015 §1.3; owner 2026-11-11, S1.1c-1's plan check, 7). A T2 test pins it to docs/sprints/sprint-plan.md; the expiry row reads it for the order. Entries name rows, never parts.",
+  "rows": [
+    {
+      "id": "S1.1a-1",
+      "closed": true
+    },
+    {
+      "id": "S1.1a-2",
+      "closed": true
+    },
+    {
+      "id": "S1.1b",
+      "closed": true
+    },
+    {
+      "id": "S1.2",
+      "closed": true
+    },
+    {
+      "id": "S2.1",
+      "closed": true
+    },
+    {
+      "id": "S2.2a",
+      "closed": true
+    },
+    {
+      "id": "S2.2b",
+      "closed": true
+    },
+    {
+      "id": "S3.1",
+      "closed": true
+    },
+    {
+      "id": "S3.2a",
+      "closed": true
+    },
+    {
+      "id": "S3.2b",
+      "closed": true
+    },
+    {
+      "id": "S3.2c",
+      "closed": true
+    },
+    {
+      "id": "S3.3",
+      "closed": true
+    },
+    {
+      "id": "S1.1c",
+      "closed": false
+    },
+    {
+      "id": "S4.1",
+      "closed": false
+    },
+    {
+      "id": "S4.2",
+      "closed": false
+    },
+    {
+      "id": "S5.1",
+      "closed": false
+    },
+    {
+      "id": "S5.2",
+      "closed": false
+    },
+    {
+      "id": "S6.1",
+      "closed": false
+    },
+    {
+      "id": "S6.2",
+      "closed": false
+    },
+    {
+      "id": "S7",
+      "closed": false
+    },
+    {
+      "id": "S8",
+      "closed": false
+    },
+    {
+      "id": "S9.1",
+      "closed": false
+    },
+    {
+      "id": "S9.2",
+      "closed": false
+    },
+    {
+      "id": "S10",
+      "closed": false
+    },
+    {
+      "id": "S11",
+      "closed": false
+    },
+    {
+      "id": "S12",
+      "closed": false
+    }
+  ]
+}

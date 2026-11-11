@@ -2,6 +2,37 @@
   "schema": 1,
   "rows": [
     {
+      "id": "lawdelta",
+      "job": "lint",
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 60,
+      "needs": [],
+      "scope": [
+        "tools"
+      ],
+      "expected_scope": [
+        "git",
+        "gate/law.json"
+      ],
+      "min_wants": 1,
+      "lands_in": "S1.1c-1",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/lawdelta.py"
+      ]
+    },
+    {
       "id": "gofmt",
       "job": "lint",
       "tiers": [
@@ -367,6 +398,38 @@
       ]
     },
     {
+      "id": "deps",
+      "job": "lint",
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 120,
+      "needs": [],
+      "scope": [
+        "tools"
+      ],
+      "expected_scope": [
+        "git",
+        "go.mod",
+        "gate/proofs/go.mod",
+        "tools/deps-allowlist.json"
+      ],
+      "min_wants": 3,
+      "lands_in": "S1.1c-1",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/deps.py"
+      ]
+    },
+    {
       "id": "unit",
       "job": "test",
       "tiers": [
@@ -625,6 +688,34 @@
         "-run",
         "^TestBaseline$",
         "./internal/playback"
+      ]
+    },
+    {
+      "id": "notbuilt",
+      "job": "test",
+      "tiers": [
+        "T4"
+      ],
+      "blocking": true,
+      "timeout_s": 60,
+      "needs": [],
+      "scope": [
+        "test"
+      ],
+      "expected_scope": [
+        "git",
+        "conformance/notbuilt.json"
+      ],
+      "min_wants": 1,
+      "lands_in": "S1.1c-1",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/notbuilt.py"
       ]
     },
     {

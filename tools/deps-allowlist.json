@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "The approved module dependencies (ADR-0009 \u00a71). A go.mod module not listed here fails the deps row (S1.1c). Owner approvals are dated.",
+  "note": "The approved module dependencies (ADR-0009 §1), one module per entry. The deps row (S1.1c-1) fails on a module in either tracked module's graph that is not listed, on a listed module no longer in the graph, and, for a module whose packages are built or tested, on a licence file that is missing, unknown or disagrees with `license`. Owner approvals are dated.",
   "modules": [
     {
       "module": "github.com/alecthomas/participle/v2",
@@ -40,7 +40,7 @@
       "scope": "runtime",
       "license": "BSD-3-Clause",
       "approved": "2026-11-01",
-      "why": "internal/text: NFC and the pinned Unicode tables (ADR-0007, ADR-0009 \u00a76); Unicode 17.0.0 under Go 1.27, equal to unicode.Version (owner, 2026-11-04, S3.1-2 P5)"
+      "why": "internal/text: NFC and the pinned Unicode tables (ADR-0007, ADR-0009 §6); Unicode 17.0.0 under Go 1.27, equal to unicode.Version (owner, 2026-11-04, S3.1-2 P5)"
     },
     {
       "module": "go.uber.org/goleak",
@@ -48,7 +48,7 @@
       "scope": "test",
       "license": "MIT",
       "approved": "2026-11-01",
-      "why": "the leak check of internal/runtime's and internal/playback's tests and the gate's leak proof (ADR-0015 \u00a74; owner, S3.2b's plan check Q6, 2026-11-06)"
+      "why": "the leak check of internal/runtime's and internal/playback's tests and the gate's leak proof (ADR-0015 §4; owner, S3.2b's plan check Q6, 2026-11-06)"
     },
     {
       "module": "github.com/stretchr/testify",
@@ -88,7 +88,7 @@
       "scope": "build-time (go tool apidiff, the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "apidiff labels each public API change compatible or breaking (ADR-0015 \u00a73's apipartition row; owner, S3.3's plan check decision 3)"
+      "why": "apidiff labels each public API change compatible or breaking (ADR-0015 §3's apipartition row; owner, S3.3's plan check decision 3)"
     },
     {
       "module": "golang.org/x/mod",
@@ -115,12 +115,76 @@
       "why": "required by golang.org/x/exp/cmd/apidiff (go/packages)"
     },
     {
-      "module": "github.com/google/go-cmp v0.6.0, github.com/yuin/goldmark v1.4.13, golang.org/x/net v0.61.0, golang.org/x/sys v0.49.0, golang.org/x/telemetry v0.0.0-20261009151841-97e8ea77aa2a, golang.org/x/tools/go/expect v0.1.1-deprecated, golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated",
-      "version": "as listed",
+      "module": "github.com/google/go-cmp",
+      "version": "v0.6.0",
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
-      "license": "BSD-3-Clause / MIT (goldmark)",
+      "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design \u00a76.4); listed so the deps row (S1.1c) sees the whole surface the owner approved"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "github.com/yuin/goldmark",
+      "version": "v1.4.13",
+      "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
+      "license": "MIT",
+      "approved": "2026-11-07",
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "golang.org/x/net",
+      "version": "v0.61.0",
+      "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
+      "license": "BSD-3-Clause",
+      "approved": "2026-11-07",
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "golang.org/x/sys",
+      "version": "v0.49.0",
+      "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
+      "license": "BSD-3-Clause",
+      "approved": "2026-11-07",
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "golang.org/x/telemetry",
+      "version": "v0.0.0-20261009151841-97e8ea77aa2a",
+      "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
+      "license": "BSD-3-Clause",
+      "approved": "2026-11-07",
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "golang.org/x/tools/go/expect",
+      "version": "v0.1.1-deprecated",
+      "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
+      "license": "BSD-3-Clause",
+      "approved": "2026-11-07",
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "golang.org/x/tools/go/packages/packagestest",
+      "version": "v0.1.1-deprecated",
+      "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
+      "license": "BSD-3-Clause",
+      "approved": "2026-11-07",
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+    },
+    {
+      "module": "github.com/kr/pretty",
+      "version": "v0.1.0",
+      "scope": "module graph only, never built (goleak → testify → gopkg.in/yaml.v3's tests; the proofs module's graph)",
+      "license": "MIT",
+      "approved": "2026-11-11",
+      "why": "required by gopkg.in/yaml.v3's go.mod (owner, S1.1c-1's plan check, 8)"
+    },
+    {
+      "module": "gopkg.in/check.v1",
+      "version": "v1.0.0-20180628173108-788fd7840127",
+      "scope": "module graph only, never built (goleak → testify → gopkg.in/yaml.v3's tests; the proofs module's graph)",
+      "license": "BSD-2-Clause",
+      "approved": "2026-11-11",
+      "why": "required by gopkg.in/yaml.v3's go.mod (owner, S1.1c-1's plan check, 8)"
     }
   ]
 }

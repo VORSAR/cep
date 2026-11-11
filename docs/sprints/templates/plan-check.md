@@ -6,6 +6,7 @@
 Sprint S<N> — <title> · routine: full | lighter (+ whole-engine break-it if it closes a release) · SP ≈ <n> as sized · cap 2 weeks
 Entry (G0)   ☐ card complete and approved ☐ dependencies merged, main green
              ☐ fits the cap, lanes ≤ 8 days ☐ test material exists, or making it is an item
+             ☐ `gate/current-sprint` set to S<N> as the first commit (§4 item 7)
              ☐ reviewed by the architect (§10) ☐ reviewed by QA (§10) ☐ answered by the owner (§11)
 ```
 *At G0 the full done-done block ([§13](00-sprint-model.md#13-done-done-the-exit-checklist)) is copied into the sprint record.*
