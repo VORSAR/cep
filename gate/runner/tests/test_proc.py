@@ -3,6 +3,7 @@
 import os
 import signal
 import sys
+from unittest import mock
 
 from gate import wait
 from gate.runner import proc
@@ -57,6 +58,40 @@ class Group(support.GateTest):
         w.started(1)
         self.assertEqual(group.reap(p), (0, True))
         w.gone()
+
+    def test_a_survivor_is_named_with_the_answer_that_fired(self):
+        # Known issue S1.1c-1-1 (owner, 2026-11-11): a positive probe names which answer fired and what was in the
+        # group, so a rare "left running processes" explains itself; what counts as a failure is unchanged.
+        w = self.witness("start")
+        group = proc.Group()
+        p = self.spawn(group, "spawn", 3, "start", w.path, "block")
+        w.started(1)
+        self.assertEqual(group.reap(p), (0, True))
+        self.assertTrue(group.left_detail.startswith("the group still exists: "), group.left_detail)
+        self.assertIn("rowfix.py", group.left_detail)
+        w.gone()
+
+    def test_a_group_that_may_not_be_signalled_is_named_so(self):
+        # macOS answers EPERM for a group whose only member is caught mid-exit; it still counts, and is named.
+        real = os.killpg
+
+        def probe_says_eperm(pgid, sig):
+            if sig == 0:
+                raise PermissionError(1, "Operation not permitted")
+            return real(pgid, sig)
+
+        group = proc.Group()
+        p = self.spawn(group, "status", 0)
+        with mock.patch.object(proc.os, "killpg", probe_says_eperm):
+            self.assertEqual(group.reap(p), (0, True))
+        self.assertTrue(
+            group.left_detail.startswith("the group exists but may not be signalled (EPERM): "), group.left_detail
+        )
+
+    def test_a_clean_reap_names_nothing(self):
+        group = proc.Group()
+        self.assertEqual(group.reap(self.spawn(group, "status", 0)), (0, False))
+        self.assertEqual(group.left_detail, "")
 
     def test_signal_reaches_every_process_in_the_group(self):
         w = self.witness("start")
