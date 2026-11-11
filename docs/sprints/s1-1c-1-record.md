@@ -28,7 +28,7 @@ The full draft is [s1-1c-1-plan-check.md](s1-1c-1-plan-check.md) (v2), drafted r
 
 **The design — the owner, 2026-11-11** ([decisions](decisions.md#owner-decisions-2026-11-11--s11c-1s-design-after-the-reviews); all as recommended, ranked by code health): 1. CI warms the module cache by a generated `go mod download` setup step for jobs holding a `NEEDS_MODULES` row; the `deps` row stays offline. 2. The block names uncommitted law edits at local tiers (a sixth text). 3. Document lines print `§<n>` for numbered headings, else the heading text, plus `(first of <k> hunks)`. 4. `code`/`workflow` lines are grouped last, one per manifest entry. 5. CI's record check requires the schema number, named on mismatch. 6. A `✓` outside a plan row's id cell is an error. 7. The `tool apidiff` directive and its four `x/*` requires move to `gate/proofs/go.mod` (W2). Reviews: [architecture](../reviews/s1-1c-1-design-architecture.md), [QA](../reviews/s1-1c-1-design-qa.md); every finding placed in [the design's §10](s1-1c-1-design.md#10-review-placement).
 
-**During the build — the owner, YYYY-MM-DD:** *(pending)*
+**During the build — the owner, 2026-11-11:** align the two modules' `x/mod` and `x/tools` versions by pinning them in `go.mod` ([decisions](decisions.md#owner-decisions-2026-11-11--during-s11c-1s-build)), with the correction that `x/text` carries them into every embedder's graph anyway.
 
 ## How it runs (revised after the plan check)
 
@@ -45,7 +45,14 @@ At most two agents at once.
 
 ## Measured results
 
-*(filled as lanes land)*
+- **W0 (QA, s1-1c-1/qa):** three drivers and `test_sprintid.py` red on their stubs' lines; the counts test red on SPEC's `67` vs `68` and `44` vs `45` (quoted in its commit, 68a7921); green after the SPEC line (0030d44).
+- **Lane D** (6 commits): 37 unit tests and the 7-case driver green under the coordinator's run; the two pins shown red by scratch edits (`gate/sprints.json row 13 is S1.1c (closed); sprint-plan.md §3 row 13 is S1.1c (open)`; `gate/current-sprint S4.1 is not the first open row S1.1c`).
+- **Lane A** (6 commits): 250 runner tests and the 8-case driver green under the coordinator's run; the pin shown red by removing `api/clock.golden` from `gate/law.json`; a T4 `lint` job on the lane's branch printed the block (28 files vs 9cd4188: the G0 law files added, the registry's three rows and `proofs` 21 → 24, the allowlist's nine entries, SPEC's Appendix C line, 20 `gate/runner/` files).
+- **Lane C** (2 commits): 39 pure tests and the 6-world driver green; the `deps` row on the real tree `GATE_COVERED 3`, exit 0 — imported: participle, goleak, x/text, x/exp, x/mod, x/sync, x/tools; graph-only: 16 modules, 9 without source on disk.
+- **Lane B** (1 commit): `go test ./conformance` green (TestCorpus's twelve sub-tests, `TestNotBuiltListIsLaw` six, `TestSprintRowGrammar`); the red that counts quoted in its report (`got map[x.cep:{x.cep c S1.1c-2}] and no error, want "entries[0]: \"S1.1c-2\" names a part, not a row"`).
+- **After W1 (coordinator):** `make check` on integration at 0f4dcec — every row green but `pytests` (`test_generate.py`, repaired in ba2fbe4; 0f4dcec went in on a red run, against ground rule 12).
+- **Decision 7 (coordinator):** the apidiff tests, the API proof driver, the `deps` row and its driver green after the move and the pins.
+- **The combined check (T3), 2026-11-11, integration @ 6317470:** `make combine-check` — 19 rows PASS, `GATE PASSED`, exit 0 (parity, lawdelta covered 1, gofmt 258, vet 36, archcheck 236, ruff 183, pyfloor 5, hooks 3, ci-fresh 2, doclinks 147, apipartition 3, clockgolden 1, deps 3, unit 20, coverage-inclusion 16, pytests 70, semantics 1, conformance 1, baseline 1); the block first: `LAW Δ (39 files, vs 9cd4188)` — the G0 law files added, the registry's three rows and `proofs` 21 → 24, the allowlist's entries, SPEC's Appendix C line, the ADR annotations, `gate/runner/` grouped, the workflows.
 
 ## Test material
 

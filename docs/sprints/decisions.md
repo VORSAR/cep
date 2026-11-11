@@ -70,6 +70,7 @@
 | 2026-11-10 | [S1.1c's scope, before its plan check](#owner-decisions-2026-11-10--s11cs-scope-before-its-plan-check) |
 | 2026-11-11 | [S1.1c-1's plan check](#owner-decisions-2026-11-11--s11c-1s-plan-check) |
 | 2026-11-11 | [S1.1c-1's design, after the reviews](#owner-decisions-2026-11-11--s11c-1s-design-after-the-reviews) |
+| 2026-11-11 | [during S1.1c-1's build](#owner-decisions-2026-11-11--during-s11c-1s-build) |
 
 ## The decisions
 
@@ -652,3 +653,9 @@ The design note ([s1-1c-1-design.md](s1-1c-1-design.md) v1 at fef1c03) was revie
 5. **CI's record check also requires `record["schema"] == records.SCHEMA`**, and a mismatch reads `malformed: schema 1, expected 2`. Rejected: keys only.
 6. **A `✓` anywhere but a plan row's id cell is an error** in `plan_rows` (`sprint-plan.md line 61: ✓ outside the id cell`). Rejected: the first cell only.
 7. **The `tool golang.org/x/exp/cmd/apidiff` directive and its four `x/*` requires move from `go.mod` to `gate/proofs/go.mod`** (a coordinator item in W2): an embedder's module graph then holds only participle, x/text and goleak-as-test-only; `apidiff.py` runs the tool from `gate/proofs`; the four allowlist entries and ADR-0009 §2 say so. Rejected: leaving them in `go.mod`.
+
+### Owner decisions, 2026-11-11 — during S1.1c-1's build
+
+One question, after decision 7 of the design was applied: with the apidiff tool moved to `gate/proofs/go.mod`, the engine's module selects `golang.org/x/mod` and `golang.org/x/tools` at the versions `x/text` requires (v0.41.0, v0.51.0) while the proofs module builds the tool at v0.42.0 and v0.52.1, and the new `deps` row reports the split. A correction went with the question: `x/text` requires `x/mod`, `x/sync` and `x/tools` on its own, so every embedder carries them whatever the gate does; the move removes `x/exp` only.
+
+1. **Align by pinning** (as recommended): `go.mod` keeps `golang.org/x/mod` and `golang.org/x/tools` as indirect requires at the tool's versions, with a comment saying why; one version of a module across the repository's two modules. `go mod tidy` drops the pins, and the `deps` row's two-version line then goes red — loud, by design. Rejected: approving each module at each version in the allowlist (a looser schema and two stale-version approvals); reverting the move.
