@@ -72,7 +72,7 @@ class Record(unittest.TestCase):
         self.assertEqual(
             rec,
             {
-                "schema": 1,
+                "schema": 2,
                 "run_id": "r",
                 "commit": "c",
                 "tier": "T2",
@@ -88,9 +88,20 @@ class Record(unittest.TestCase):
                 "ended_ms": 9,
                 "duration_ms": 4,
                 "scope_sha256": "ab",
+                "law": [],
             },
         )
         json.loads(records.json_bytes(rec))
+
+    def test_a_record_carries_the_law_block_one_line_each(self):
+        # S1.1c-1 design 2.5: every record has `law`; the lawdelta row's holds its block, each line bounded to one line.
+        rec = records.make(
+            run_id="r", commit="c", tier="T2", job="lint", row_id="lawdelta", blocking=True, verdict="pass",
+            reason="covered 1", exit_code=0, covered=1, expected=1, started_ms=5, ended_ms=9, duration_ms=4,
+            scope_sha256="ab", law=["LAW Δ (1 files, vs abc1234)", "gate/current-sprint +1/−1\n"],
+        )  # fmt: skip
+        self.assertEqual(rec["schema"], 2)
+        self.assertEqual(rec["law"], ["LAW Δ (1 files, vs abc1234)", "gate/current-sprint +1/−1 "])
 
     def test_a_multi_line_reason_stays_one_line(self):
         rec = records.make(

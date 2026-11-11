@@ -189,8 +189,8 @@ class CollectAll(support.GateTest):
         self.assertEqual(result.exit_code, 1)
         self.assertEqual([self.reason(r) for r in "abcd"], ["covered 1", "exit 1", "covered 1", "exit 2"])
         lines = result.summary.splitlines()
-        self.assertIn("exit 1", lines[3])
-        self.assertIn("exit 2", lines[5])
+        self.assertIn("exit 1", lines[5])  # the table follows the LAW Δ block and a blank line (S1.1c-1)
+        self.assertIn("exit 2", lines[7])
 
 
 class RowOutput(support.GateTest):
@@ -315,7 +315,7 @@ class RunFiles(support.GateTest):
         self.assertEqual([(r["job"], r["id"]) for r in run["records"]],
                          [("test", "parity"), ("lint", "parity"), ("test", "b"), ("lint", "a")])  # fmt: skip
         self.assertEqual((run["wall_ms"], run["summed_ms"]), (0, 0))
-        self.assertEqual((run["schema"], run["run_id"], run["tier"]), (1, support.RUN_ID, "T2"))
+        self.assertEqual((run["schema"], run["run_id"], run["tier"]), (2, support.RUN_ID, "T2"))
 
     def test_parity_has_one_record_per_job_and_one_summary_line(self):
         # design note §4: labelled `*` in an all-jobs run.
@@ -323,12 +323,12 @@ class RunFiles(support.GateTest):
         self.assertEqual(self.record("lint", "parity")["job"], "lint")
         self.assertEqual(self.record("test", "parity")["job"], "test")
         lines = result.summary.splitlines()
-        self.assertEqual(lines[1].split(" | ")[:2], ["*   ", "parity"])
+        self.assertEqual(lines[3].split(" | ")[:2], ["*   ", "parity"])  # after the LAW Δ block
         self.assertEqual(sum(1 for line in lines if "parity" in line), 1)
 
     def test_a_single_job_run_labels_parity_with_its_job(self):
         result = self.run_rows([self.row("a", job="lint")], job="lint")
-        self.assertEqual(result.summary.splitlines()[1].split(" | ")[0].strip(), "lint")
+        self.assertEqual(result.summary.splitlines()[3].split(" | ")[0].strip(), "lint")
 
     def test_parity_counts_its_tools(self):
         self.run_rows([self.row("a")])

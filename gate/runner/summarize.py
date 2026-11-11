@@ -37,7 +37,11 @@ FIELDS = {
     "ended_ms": int,
     "duration_ms": int,
     "scope_sha256": str,
+    "law": list,
 }
+LAWDELTA = "lawdelta"
+MALFORMED = "malformed: unreadable or not the record schema"
+LAW_FAILED = "LAW Δ: FAILED — see the lawdelta row"
 
 
 class UsageError(Exception):
@@ -57,7 +61,7 @@ class _Found:
     attempt: int
     registry_sha256: str
     records: list[dict]
-    malformed: list[tuple[str, str]]  # (job folder, file stem)
+    malformed: dict[tuple[str, str], str]  # (job folder, file stem) -> the reason
 
 
 def _parse(argv: Sequence[str]) -> argparse.Namespace:
@@ -71,7 +75,16 @@ def _parse(argv: Sequence[str]) -> argparse.Namespace:
 def _valid(record: object) -> bool:
     if type(record) is not dict or record.keys() != FIELDS.keys():
         return False
-    return all(type(record[name]) is kind for name, kind in FIELDS.items())
+    if not all(type(record[name]) is kind for name, kind in FIELDS.items()):
+        return False
+    return record["schema"] == records.SCHEMA and all(type(x) is str for x in record["law"])
+
+
+def _malformed(record: object) -> str:
+    """Why a record is not one: the schema it carries when that is the fault (owner, 2026-11-11, design 5)."""
+    if type(record) is dict and type(record.get("schema")) is int and record["schema"] != records.SCHEMA:
+        return f"malformed: schema {record['schema']}, expected {records.SCHEMA}"
+    return MALFORMED
 
 
 def _read_json(path: str) -> object:
@@ -80,7 +93,7 @@ def _read_json(path: str) -> object:
 
 
 def _artifact(path: str, job: str, attempt: int) -> _Found:
-    found = _Found(job, attempt, "", [], [])
+    found = _Found(job, attempt, "", [], {})
     try:
         run = _read_json(os.path.join(path, "run.json"))
         found.registry_sha256 = run.get("registry_sha256", "") if type(run) is dict else ""
@@ -99,7 +112,7 @@ def _artifact(path: str, job: str, attempt: int) -> _Found:
             if _valid(record) and record["job"] == folder and name == f"{record['id']}.json":
                 found.records.append(record)
             else:
-                found.malformed.append((folder, name.removesuffix(".json")))
+                found.malformed[(folder, name.removesuffix(".json"))] = _malformed(record)
     return found
 
 
@@ -123,7 +136,23 @@ def _inconsistent(record: dict, blocking: bool) -> str:
         return f"inconsistent: blocking {str(record['blocking']).lower()} but the registry says {str(blocking).lower()}"
     if record["ended_ms"] < record["started_ms"]:
         return "inconsistent: ended before it started"
+    if record["id"] == LAWDELTA and record["verdict"] == "pass" and not record["law"]:
+        return "inconsistent: pass with no LAW Δ block"
     return ""
+
+
+def _law_block_ci(
+    rows: Sequence[registry.Row], lines: Sequence[summary.Line], used: Sequence[dict], tier: str
+) -> list[str]:
+    """The block CI's aggregate opens with: the lawdelta row's record, judged (S1.1c-1 design §2.5)."""
+    job = next((r.job for r in rows if r.id == LAWDELTA), None)  # never a literal job name (review: architect L4)
+    if job is None:
+        return [f"LAW Δ: not run — the lawdelta row is not in this registry at {tier}"]
+    line = next((x for x in lines if (x.job, x.step) == (job, LAWDELTA)), None)
+    if line is None or line.verdict != "PASS":
+        return [LAW_FAILED]
+    record = next(r for r in used if (r["job"], r["id"]) == (job, LAWDELTA))
+    return list(record["law"])
 
 
 def _judge(record: dict, args: argparse.Namespace, blocking: bool, sha: str, found_sha: str) -> tuple[str, str]:
@@ -158,9 +187,9 @@ def summarize(args: argparse.Namespace) -> tuple[str, int, dict]:
     used: list[dict] = []
     for job, row_id, blocking in expected:
         mine = [(f, r) for f in current for r in f.records if (r["job"], r["id"]) == (job, row_id)]
-        broken = [f for f in current if (job, row_id) in f.malformed]
+        broken = [f.malformed[(job, row_id)] for f in current if (job, row_id) in f.malformed]
         if broken:
-            word, reason, ms = "FAIL", "malformed: unreadable or not the record schema", 0
+            word, reason, ms = "FAIL", broken[0], 0
         elif len(mine) > 1:
             word, reason, ms = "FAIL", f"duplicate: {len(mine)} records", 0
         elif not mine:
@@ -188,6 +217,7 @@ def summarize(args: argparse.Namespace) -> tuple[str, int, dict]:
     exit_code = 1 if any(line.verdict == "FAIL" for line in lines) else 0
     text = summary.render(
         lines,
+        law=_law_block_ci(rows, lines, used, args.tier),
         wall_ms=wall_ms,
         summed_ms=summed_ms,
         exit_code=exit_code,

@@ -4,9 +4,9 @@ import json
 import os
 import re
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
-SCHEMA = 1
+SCHEMA = 2  # 2 (S1.1c-1): every record carries `law`, the LAW Δ block's lines (the lawdelta row's; [] elsewhere)
 REASON_MAX = 300
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
 
@@ -52,8 +52,10 @@ def make(
     duration_ms: int,
     scope_sha256: str,
     reason_max: int | None = REASON_MAX,
+    law: Sequence[str] = (),
 ) -> dict[str, object]:
-    """One step record. `reason_max=None` keeps a reason whole: parity's lists every failing tool (review BA5)."""
+    """One step record. `reason_max=None` keeps a reason whole: parity's lists every failing tool (review BA5).
+    `law` is the LAW Δ block as the lawdelta row wrote it, one bounded line per entry (S1.1c-1 design §2.5)."""
     return {
         "schema": SCHEMA,
         "run_id": run_id,
@@ -71,4 +73,5 @@ def make(
         "ended_ms": ended_ms,
         "duration_ms": duration_ms,
         "scope_sha256": scope_sha256,
+        "law": [one_line(x, None) for x in law],
     }

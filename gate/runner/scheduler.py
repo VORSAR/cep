@@ -34,6 +34,10 @@ SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 INTERRUPTED = "interrupted"
 DEADLOCK = "not run: dependency deadlock"
 NEVER_RAN = -1  # exit_code of a row with no process of its own
+LAWDELTA = "lawdelta"
+LAW_TXT = "law.txt"
+LAW_FAILED = "LAW Δ: FAILED — see the lawdelta row"
+NO_BLOCK = "lawdelta: exit 0 but law.txt is empty or missing"
 
 
 class Toolchain(Protocol):
@@ -77,6 +81,7 @@ class _Done:
     start_ns: int = 0
     end_ns: int = 0
     ran: bool = False
+    law: tuple[str, ...] = ()  # the lawdelta row's block, read from its law.txt (S1.1c-1 design §2.5)
 
     @property
     def duration_ms(self) -> int:
@@ -375,6 +380,10 @@ class Runner:
         del self._running[row.id]
         self._cancel(live.watchdog, live.grace)
         end_ns, end_ms = self._stamp("end", row.id, row.job)
+        law = self._read_law(row) if row.id == LAWDELTA else ()
+        if row.id == LAWDELTA and decided.ok and not decided.skip and not law:
+            # a pass with no block would print nothing where the owner reads (review: architect S1)
+            decided = verdict.Verdict(False, NO_BLOCK)
         done = _Done(
             job=row.job,
             id=row.id,
@@ -391,9 +400,29 @@ class Runner:
             start_ns=live.start_ns,
             end_ns=end_ns,
             ran=True,
+            law=law,
         )
         self._finished[row.id] = done
         self._write_record(done, row.job)
+
+    def _read_law(self, row: Row) -> tuple[str, ...]:
+        """The non-empty lines of the row's law.txt; () when absent."""
+        try:
+            with open(os.path.join(step.row_dir(self._run_dir, row), LAW_TXT), "rb") as f:
+                text = f.read().decode("utf-8", errors="replace")
+        except OSError:
+            return ()
+        return tuple(line for line in text.splitlines() if line.strip())
+
+    def _law_block(self) -> list[str]:
+        """The block the summary opens with (S1.1c-1 design §2.5; the five texts of the plan check §5 P1)."""
+        if not any(r.id == LAWDELTA for r in self._rows):
+            scope = self._tier if self._label == ALL_JOBS else f"{self._tier}, job {self._label}"
+            return [f"LAW Δ: not run — the lawdelta row is not in this registry at {scope}"]
+        done = self._finished[LAWDELTA]
+        if done.ok and not done.skipped and done.law:
+            return list(done.law)
+        return [LAW_FAILED]
 
     def _not_run(self, row: Row, reason: str) -> None:
         _, now_ms = self._stamp("not-run", row.id, row.job)
@@ -493,6 +522,7 @@ class Runner:
             duration_ms=done.duration_ms,
             scope_sha256=done.scope_sha256,
             reason_max=None if done.id == PARITY_ID else records.REASON_MAX,
+            law=done.law,
         )
 
     def _exit_code(self, ordered: list[_Done]) -> int:
@@ -510,6 +540,7 @@ class Runner:
         lines = [summary.Line(d.job, d.id, _word(d), d.duration_ms, d.reason) for d in ordered]
         text = summary.render(
             lines,
+            law=self._law_block(),
             wall_ms=wall_ms,
             summed_ms=summed_ms,
             exit_code=exit_code,
