@@ -84,6 +84,8 @@ None.
 | A-L6 | architect | later | a document's line names one heading | forwarded to S1.1c-2 (up to three headings) |
 | A-PM2 | architect (pre-mortem) | later | closing a sprint needs the plan's ✓ and `gate/sprints.json`'s `closed` | fixed: the sprint model's G5 list names `gate/sprints.json` |
 | A-PM1 | architect (pre-mortem) | — | S4.1's T4 is red by design from its first commit until 01 and 08 deploy | recorded on S4.1's card (entry criteria) |
+| T2-1 | the fix round's T2 | blocker (flaky test) | `internal/playback TestARecordingThatOverflowsStaysReadable` red once under load: `Drain` did not wait for a stopped recording's queued records | fixed at the root first, in its own PR #30 (owner: fix first; one drain rule; incomplete at the deadline); main CI green on its merge (f2e3ae1) |
+| T4-1 | the rebased branch's T4 | blocker (flaky gate check) | a proof world's `lawdelta` row judged `left running processes` once; never recurred in about 75 targeted runs | forwarded with the owner's consent as known issue S1.1c-1-1; the check now names its cause (`test_proc`: three cases; `test_step`, `test_verdict`) so the next occurrence explains itself |
 
 ## Done-done
 
