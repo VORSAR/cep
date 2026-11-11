@@ -105,8 +105,6 @@ class DepsGather(support.GateTest):
 
         with mock.patch.object(deps_row, "run", fake):
             modules, graph, failures = deps_row.gather(self.run_dir, {})
-        self.assertEqual(
-            [f for f in failures if "replace" in f],
-            ["deps: example.com/dep: replaced in go.mod by example.com/dep v1.0.0"],
-            f"modules {modules}, failures {failures}",
-        )
+        # Owner, 2026-11-11 (the fix round): gather carries the replacement; the allowlist decides (compare).
+        self.assertEqual([f for f in failures if "replace" in f], [], f"failures {failures}")
+        self.assertEqual([m.replace for m in modules if m.path == "example.com/dep"], ["example.com/dep v1.0.0"])
