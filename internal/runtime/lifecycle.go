@@ -238,6 +238,9 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 		}
 	}
 	if rep.recMarker != nil { // every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
+		if r.recordingWait != nil { // the package's tests only
+			r.recordingWait()
+		}
 		select {
 		case <-rep.recMarker:
 		case <-r.stopped:
