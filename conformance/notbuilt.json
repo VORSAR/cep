@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "note": "Every corpus file this release cannot deploy: the construct its refusal names and the row of the sprint plan that turns it green (sprint-plan.md, 'Corpus examples → the sprint that turns each green'). TestCorpus reads it (a listed file that deploys is red; an unlisted refused file is red; a wrong construct is red); the notbuilt row turns red at T4 once gate/current-sprint reaches an entry's row (owner 2026-11-09, 6; 2026-11-11, 2 and 6). Entries name rows, never parts.",
+  "entries": [
+    {
+      "file": "01-agent-kill-switch.cep",
+      "construct": "a pattern body",
+      "sprint": "S4.1"
+    },
+    {
+      "file": "08-session-flow.cep",
+      "construct": "a pattern body",
+      "sprint": "S4.1"
+    },
+    {
+      "file": "05-text-operators.cep",
+      "construct": "text operators (S7)",
+      "sprint": "S7"
+    },
+    {
+      "file": "06-once-and-group.cep",
+      "construct": "a pattern body",
+      "sprint": "S7"
+    },
+    {
+      "file": "03-sort-leaderboard.cep",
+      "construct": "a window body",
+      "sprint": "S8"
+    },
+    {
+      "file": "02-cron-digest.cep",
+      "construct": "a window body",
+      "sprint": "S9.1"
+    },
+    {
+      "file": "04-delay-and-batch.cep",
+      "construct": "a window body",
+      "sprint": "S9.2"
+    },
+    {
+      "file": "torture/comments.cep",
+      "construct": "a pattern body",
+      "sprint": "S4.1"
+    },
+    {
+      "file": "torture/lexical.cep",
+      "construct": "a pattern body",
+      "sprint": "S9.2"
+    }
+  ]
+}

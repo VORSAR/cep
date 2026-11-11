@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "note": "The law manifest (ADR-0015 §1.3): every path whose content is a rule. The lawdelta row diffs them against the merge base with main and prints the LAW Δ block first in every summary. A path ending in / covers every tracked file under it; kind names the semantic parser; a doc carries its flag. Listed paths must be tracked (liveness).",
+  "paths": [
+    {
+      "path": "gate/registry.json",
+      "kind": "registry"
+    },
+    {
+      "path": "gate/law.json",
+      "kind": "law"
+    },
+    {
+      "path": "gate/current-sprint",
+      "kind": "marker"
+    },
+    {
+      "path": "gate/sprints.json",
+      "kind": "sprints"
+    },
+    {
+      "path": "gate/tripwire.json",
+      "kind": "ceilings"
+    },
+    {
+      "path": "gate/run.py",
+      "kind": "code"
+    },
+    {
+      "path": "gate/runner/",
+      "kind": "code"
+    },
+    {
+      "path": "gate/baseline/regen.py",
+      "kind": "code"
+    },
+    {
+      "path": ".github/workflows/",
+      "kind": "workflow"
+    },
+    {
+      "path": "tools.json",
+      "kind": "tools"
+    },
+    {
+      "path": "tools/deps-allowlist.json",
+      "kind": "deps"
+    },
+    {
+      "path": "tools/importcheck/rules.json",
+      "kind": "edges"
+    },
+    {
+      "path": "api/exports.golden",
+      "kind": "exports"
+    },
+    {
+      "path": "api/clock.golden",
+      "kind": "exports"
+    },
+    {
+      "path": "conformance/baseline/",
+      "kind": "baseline"
+    },
+    {
+      "path": "conformance/notbuilt.json",
+      "kind": "notbuilt"
+    },
+    {
+      "path": "docs/language/grammar.lark",
+      "kind": "doc",
+      "flag": "the grammar changed — owner decision required"
+    },
+    {
+      "path": "docs/language/grammar.ebnf",
+      "kind": "doc",
+      "flag": "the grammar changed — owner decision required"
+    },
+    {
+      "path": "docs/language/SPEC.md",
+      "kind": "doc",
+      "flag": "SPEC changed — owner decision required"
+    },
+    {
+      "path": "docs/language/SEMANTICS.md",
+      "kind": "doc",
+      "flag": "SEMANTICS changed — owner decision required"
+    },
+    {
+      "path": "docs/language/errors.md",
+      "kind": "doc",
+      "flag": "the error catalogue changed — owner decision required"
+    },
+    {
+      "path": "docs/architecture/ARCHITECTURE.md",
+      "kind": "doc",
+      "flag": "ARCHITECTURE changed — owner decision required"
+    },
+    {
+      "path": "docs/architecture/adr/",
+      "kind": "doc",
+      "flag": "an ADR changed — owner decision required"
+    }
+  ]
+}

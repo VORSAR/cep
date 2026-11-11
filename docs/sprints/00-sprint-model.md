@@ -66,6 +66,7 @@ Every sprint is defined by a **sprint card** in [sprint-plan.md](sprint-plan.md)
 4. For the first sprint of a phase: the phase's entry criteria hold (§9).
 5. The plan check is drafted, reviewed by the architect and the QA agent (full loop), and **answered by the owner**: no open question.
 6. The test material for every acceptance line exists, or making it is an item in the sprint.
+7. The sprint branch's first commit sets `gate/current-sprint` to the sprint's id, by the coordinator (owner, 2026-11-10, S1.1c's scope, 8): the gate's not-built expiry reads it, and a T2 test fails when it is not the sprint plan's first open row.
 
 **Exit — gate G5. A sprint ends only when the done-done block (§13) is ticked with evidence:**
 every acceptance line met by its named proof; T3 and T4 exit 0 from completed runs; every architecture and QA finding fixed, or forwarded to known issues with the owner's consent; the owner's check passed; merged by the owner; main green on the merge commit; the record and its retro written.
@@ -252,7 +253,7 @@ Sprint <id> — <title> · routine: full | lighter · SP <n> · cap 2 weeks
 Entry (G0)   ☐ card complete and approved (goal, in / not in scope, acceptance with named proofs)
              ☐ dependencies merged, main green ☐ fits the cap, lanes ≤ 8 days
              ☐ plan check reviewed (architect, QA) and answered by the owner
-             ☐ test material exists, or making it is an item
+             ☐ test material exists, or making it is an item ☐ `gate/current-sprint` set, the first commit
 Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
              ☐ owner decisions recorded ☐ ADRs written for lasting decisions
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
