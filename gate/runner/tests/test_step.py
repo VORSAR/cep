@@ -111,7 +111,11 @@ class Slots(support.GateTest):
         h = self.start([self.leaver(w)])
         w.started(1)
         h.join()
-        self.assertEqual(self.reason("x"), "left running processes")
+        reason = self.reason("x")
+        self.assertTrue(reason.startswith("left running processes: the group still exists: "), reason)
+        self.assertIn("rowfix.py", reason)
+        with open(os.path.join(self.run_dir, "rows", "lint", "x", "left_running.txt"), encoding="utf-8") as f:
+            self.assertIn("rowfix.py", f.read())  # the whole listing, unbounded (known issue S1.1c-1-1)
         w.gone()
 
     def test_slot_6_beats_the_leaders_exit_1(self):
@@ -119,7 +123,7 @@ class Slots(support.GateTest):
         h = self.start([self.leaver(w, "status", 1)])
         w.started(1)
         h.join()
-        self.assertEqual(self.reason("x"), "left running processes")
+        self.assertTrue(self.reason("x").startswith("left running processes: "), self.reason("x"))
         self.assertEqual(self.record("lint", "x")["exit_code"], 1)
         w.gone()
 

@@ -81,3 +81,14 @@ class Precedence(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LeftRunning(unittest.TestCase):
+    def test_the_detail_rides_the_reason(self):
+        facts = verdict.Facts(cap_s=60, left_running=True, left_detail="the group still exists: 123 S python3.15 x.py")
+        self.assertEqual(
+            verdict.decide(facts).reason, "left running processes: the group still exists: 123 S python3.15 x.py"
+        )
+
+    def test_without_a_detail_the_text_is_unchanged(self):
+        self.assertEqual(verdict.decide(verdict.Facts(cap_s=60, left_running=True)).reason, "left running processes")
