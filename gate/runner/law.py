@@ -152,9 +152,20 @@ def block(base_short: str, data_lines: Sequence[str], grouped: Mapping[str, tupl
     return [f"LAW Δ ({n} file{'s' if n != 1 else ''}, vs {base_short})", *data_lines, *grouped_lines]
 
 
+def _heading_in(lines: Sequence[str], start: int, end: int) -> str:
+    """The first heading within lines[start:end] (the break-it's finding 1: a new section appended at the end)."""
+    for text in lines[start:end]:
+        found = HEADING.match(text)
+        if found:
+            numbered = NUMBERED.match(found.group(1))
+            return f"§{numbered.group(1)}" if numbered else found.group(1)
+    return ""
+
+
 def _heading_above(lines: Sequence[str], index: int) -> str:
-    """The nearest heading before `index`: "§<n>" for a numbered one, else its text; "" when none."""
-    for text in reversed(lines[:index]):
+    """The nearest heading at or before `index` (a changed line that is itself a heading names its own section —
+    the break-it's finding 1): "§<n>" for a numbered one, else its text; "" when none."""
+    for text in reversed(lines[: index + 1]):
         found = HEADING.match(text)
         if found:
             numbered = NUMBERED.match(found.group(1))
@@ -172,8 +183,10 @@ def doc_line(old: str | None, new: str | None, flag: str) -> str:
     hunks = [op for op in matcher.get_opcodes() if op[0] != "equal"]
     heading = ""
     if hunks:
-        tag, i1, _, j1, _ = hunks[0]
-        heading = _heading_above(old_lines, i1) if tag == "delete" else _heading_above(new_lines, j1)
+        tag, i1, i2, j1, j2 = hunks[0]
+        lines, start, end = (old_lines, i1, i2) if tag == "delete" else (new_lines, j1, j2)
+        # a heading inside the first hunk (an added or renamed section) names its own section; else the one above
+        heading = _heading_in(lines, start, end) or _heading_above(lines, start)
     count = f" (first of {len(hunks)} hunks)" if len(hunks) > 1 else ""
     return " — ".join(x for x in (heading, flag) if x) + count
 

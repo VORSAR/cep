@@ -3,7 +3,8 @@
 Every driver:
 - works on real copies in its own temporary directory, never hard links, and never writes the shared tool cache:
   a temporary cache links to the real, read-only tool directories, and copies only what it must change;
-- runs the real runner, gate/run.py under the pinned python3.15 with -I -B -X utf8, at T2 and never T4 (so it can
+- runs the real runner, gate/run.py under the pinned python3.15 with -I -B -X utf8, at the tier each names (T2 for most;
+T4 for the notbuilt expiry's) (so it can
   never recurse into `proofs`), with a new run directory;
 - asserts the red verdict, its exact reason, `GATE FAILED` and `exit: 1`, and, outside the parity drivers, a parity
   PASS in the same run.

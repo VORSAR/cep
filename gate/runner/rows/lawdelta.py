@@ -53,11 +53,18 @@ def main(argv: list[str]) -> int:
         return rows.finish([f"lawdelta: {e}"])
     except OSError as e:
         return rows.finish([f"lawdelta: gate/law.json: {e}"])
-    untracked = [e.path for e in manifest.paths if not git.ls_files([e.path])]
-    if untracked:
-        return rows.finish(
-            [f"lawdelta: {p} is listed in gate/law.json but git tracks nothing there" for p in untracked]
-        )
+    faults: list[str] = []
+    for e in manifest.paths:
+        tracked = git.ls_files([e.path])
+        if not tracked:
+            faults.append(f"lawdelta: {e.path} is listed in gate/law.json but git tracks nothing there")
+        elif not e.path.endswith("/") and tracked != [e.path]:  # a directory listed without its slash (break-it 2)
+            faults.append(
+                f"lawdelta: {e.path} is listed in gate/law.json but git tracks nothing there"
+                f" (it is a directory: list it as {e.path}/)"
+            )
+    if faults:
+        return rows.finish(faults)
     rows.covered(1)  # the manifest is the row's scope, counted once it is read and every path is live
     base = git.merge_base()
     if not base:

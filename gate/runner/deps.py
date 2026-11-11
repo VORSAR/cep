@@ -32,6 +32,7 @@ class Module:
     version: str
     dir: str
     imported: bool
+    replace: str = ""  # the replace directive's target as go list -m -json reports it ("" when none)
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class Entry:
     license: str
     approved: str
     why: str
+    replace: str = ""  # the one replace target this entry approves (owner, 2026-11-11, the fix round)
 
 
 def _keys(value: object, keys: frozenset[str], where: str) -> dict:
@@ -71,14 +73,26 @@ def load_allowlist(text: str) -> tuple[Entry, ...]:
     entries: list[Entry] = []
     for i, item in enumerate(data["modules"]):
         where = f"{ALLOWLIST}: modules[{i}]"
-        item = _keys(item, ENTRY_KEYS, where)
+        optional = isinstance(item, dict) and "replace" in item
+        item = _keys(item, ENTRY_KEYS | frozenset({"replace"}) if optional else ENTRY_KEYS, where)
+        if optional and (not isinstance(item["replace"], str) or not item["replace"]):
+            fault = "replace is empty" if item["replace"] == "" else "replace is not a string"
+            raise ValueError(f"{where}: {fault}")
         for key in sorted(ENTRY_KEYS):
             if not isinstance(item[key], str) or not item[key]:
                 raise ValueError(f"{where}: {key} is not a non-empty string")
         if any(entry.module == item["module"] for entry in entries):
             raise ValueError(f"{where}: duplicate module {item['module']}")
         entries.append(
-            Entry(item["module"], item["version"], item["scope"], item["license"], item["approved"], item["why"])
+            Entry(
+                item["module"],
+                item["version"],
+                item["scope"],
+                item["license"],
+                item["approved"],
+                item["why"],
+                item.get("replace", ""),
+            )
         )
     return tuple(entries)
 
@@ -91,9 +105,28 @@ def spdx_parts(field: str) -> frozenset[str]:
     return frozenset(parts)
 
 
+NEGATIVES = (
+    "gnu general public license",
+    "gnu lesser general public license",
+    "gnu affero general public license",
+    "mozilla public license",
+)
+
+
+def two_versions_line(path: str, root: str, proofs: str) -> str:
+    """A module selected at two versions by the two tracked modules, with the cure (review L4)."""
+    return (
+        f"deps: {path}: go.mod has {root}, gate/proofs/go.mod has {proofs}; one version across both modules:"
+        " restore the pins in go.mod (see its comment)"
+    )
+
+
 def classify_license(text: str) -> str | None:
     """The SPDX tag a licence text's opening fingerprint names, case-insensitively, first match; None otherwise."""
     lower = text.lower()
+    for copyleft in NEGATIVES:  # a GPL text that cites the Apache License is not Apache-2.0 (the break-it's probe)
+        if copyleft in lower:
+            return None
     if "apache license" in lower and "version 2.0" in lower:
         return "Apache-2.0"
     if "permission is hereby granted, free of charge" in lower:
@@ -157,6 +190,14 @@ def compare(
     for module in sorted(by_module):
         if module not in by_path and module not in graph:
             failures.append(f"deps: stale entry {module}: not in the module graph of {' or '.join(GOMODS)}")
+    for path in sorted(by_path):  # a replace is red unless the entry approves exactly its target (owner, 2026-11-11)
+        module, entry = by_path[path], by_module.get(path)
+        if entry is None:
+            continue
+        if module.replace and entry.replace != module.replace:
+            failures.append(f"deps: {path}: replaced in go.mod by {module.replace}; not approved in {ALLOWLIST}")
+        elif entry.replace and not module.replace:
+            failures.append(f"deps: {path}: the allowlist approves a replace by {entry.replace}, go.mod has none")
     for module in sorted(by_module):
         found = by_path.get(module)
         if found is not None and found.version != by_module[module].version:

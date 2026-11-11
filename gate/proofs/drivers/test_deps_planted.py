@@ -49,6 +49,7 @@ ENTRY = {
     "license": "MIT",
     "approved": "2026-11-11",
     "why": "the deps proof's planted module",
+    "replace": "../planted",  # the replace is approved in the world (owner, 2026-11-11, the fix round)
 }
 PLANTED_GO = (
     "// Package planted is the proof's planted dependency.\npackage planted\n\n"

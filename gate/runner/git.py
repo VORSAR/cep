@@ -69,6 +69,17 @@ def show(rev: str, path: str, cwd: str | None = None) -> str | None:
 
 
 def dirty(paths: Sequence[str], cwd: str | None = None) -> int:
-    """How many uncommitted edits, staged or not, `git status --porcelain` reports under the paths."""
+    """How many uncommitted edits — staged, unstaged or untracked — `git status --porcelain -z` reports under the
+    paths; a rename or copy is one edit (its second record, the source path, is skipped — the break-it's finding 4;
+    owner, 2026-11-11)."""
     _, out = _raw("status", "--porcelain", "-z", "--", *paths, cwd=cwd)
-    return len(_nul_split(out))
+    count, skip = 0, False
+    for record in _nul_split(out):
+        if skip:
+            skip = False
+            continue
+        count += 1
+        status = record[:2]
+        status = status.decode("ascii", errors="replace") if isinstance(status, bytes) else status
+        skip = "R" in status or "C" in status
+    return count

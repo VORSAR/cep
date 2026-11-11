@@ -52,6 +52,15 @@ func parseNotBuilt(data []byte) (map[string]notBuiltEntry, error) {
 	if err := dec.Decode(&f); err != nil {
 		return nil, err
 	}
+	var keys map[string]json.RawMessage // every top-level key must be present (design §1); unknown ones failed above
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"schema", "note", "entries"} {
+		if _, ok := keys[key]; !ok {
+			return nil, fmt.Errorf("missing key %q", key)
+		}
+	}
 	if f.Schema != 1 {
 		return nil, fmt.Errorf("schema %d, want 1", f.Schema)
 	}

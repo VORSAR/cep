@@ -35,12 +35,32 @@
       "kind": "code"
     },
     {
+      "path": "gate/ci/",
+      "kind": "code"
+    },
+    {
+      "path": "gate/proofs/drivers/",
+      "kind": "code"
+    },
+    {
       "path": ".github/workflows/",
       "kind": "workflow"
     },
     {
+      "path": "go.mod",
+      "kind": "code"
+    },
+    {
+      "path": "gate/proofs/go.mod",
+      "kind": "code"
+    },
+    {
       "path": "tools.json",
       "kind": "tools"
+    },
+    {
+      "path": "ruff.toml",
+      "kind": "code"
     },
     {
       "path": "tools/deps-allowlist.json",
@@ -49,6 +69,10 @@
     {
       "path": "tools/importcheck/rules.json",
       "kind": "edges"
+    },
+    {
+      "path": "tools/archcheck/",
+      "kind": "code"
     },
     {
       "path": "api/exports.golden",
