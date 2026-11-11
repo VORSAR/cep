@@ -357,7 +357,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 merged (PRs #1–#31, the last on 2026-11-11): S1.1c-1 is closed — the law manifest and the LAW Δ block (printed first in every summary), the current-sprint marker with the plan's row order and the not-built expiry, the `deps` row, the error-code counts; the recorder flake it met fixed at the root in #30; known issue S1.1c-1-1 forwarded → next: S1.1c-2's plan check (the strict lint set fixed and loud with the suppressions checker, the fragment test, `docsync` (a), the teeth, `govulncheck`, advisory aging and the canary), then S4.1, the pattern engine.**
+**Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 merged (PRs #1–#33, the last on 2026-11-11): S1.1c-1 is closed — the law manifest and the LAW Δ block, the current-sprint marker and the not-built expiry, the `deps` row, the error-code counts (the recorder flake it met fixed in #30; known issue S1.1c-1-1 forwarded); the GitNexus hook now forces a full re-index and restarts the servers (#32). The rest of S1.1c is cut in two (owner, 2026-11-11) → next: S1.1c-2's plan check (the instruments: the suppressions checker and allowlist grammar, the test-sleep fence, the fragment test, `docsync` (a), the teeth, `govulncheck`, advisory aging and the canary, and S1.1c-1's three forwards); then S1.1c-3 (the strict lint set, fixed and loud: 308 production findings measured); then S4.1.**
 
 
 *Earlier lines, 2026-11-01 to 2026-11-07: [the status log](history.md#the-status-log). At each step, replace this line and append the old one to the log.*
