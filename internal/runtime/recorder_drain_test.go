@@ -5,9 +5,11 @@ package runtime
 // seam, which a test outside the package cannot set. Prefix: rd.
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vorsar/cep/internal/event"
 )
@@ -73,6 +75,70 @@ func (w *rdGated) written() (lines, flushedAt int) {
 func TestDrainWaitsForAStoppedRecordingsQueuedRecords(t *testing.T) {
 	t.Parallel()
 	ctx := cgCtx(t)
+	w, r, id := rdOverflowed(t, ctx)
+	waiting := make(chan struct{})
+	r.recordingWait = sync.OnceFunc(func() { close(waiting) }) // Close drains again: the seam fires once
+	go func() {
+		select {
+		case <-waiting: // Drain waits for the recording: let it write
+		case <-ctx.Done():
+		}
+		w.let()
+	}()
+	if _, err := r.Drain(ctx, id); err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	st, err := r.Stats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.let() // a Drain that returned without waiting left the recorder held: Close still needs it to finish
+	if err := r.Close(ctx); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	lines, flushedAt := w.written()
+	rs := st.Recording[id]
+	if !rs.Failed || !strings.Contains(rs.Err, "queue full") || lines != 65 || rs.Records != int64(lines) || flushedAt != lines {
+		t.Fatalf("Recording %+v after Drain; the recorder wrote %d lines, flushed after line %d; want Failed (queue full), 65 lines = Records, flushed after the last",
+			rs, lines, flushedAt)
+	}
+}
+
+// TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline (owner, 2026-11-11, relayed by the coordinator: at the
+// drain's deadline a stopped recording still flushing is marked incomplete like a live one; the drain succeeds): the
+// recording stopped on a full queue and the writer is never let through before the Stats cut; Drain with its own
+// deadline returns nil; Stats then reads Failed, an error naming the full queue and the deadline's cut, and Records =
+// the lines written at the cut, none. Close still waits for the recorder, let through at the end.
+func TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline(t *testing.T) {
+	t.Parallel()
+	ctx := cgCtx(t)
+	w, r, id := rdOverflowed(t, ctx)
+	dctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond) // the drain's deadline; the test waits for Drain's return
+	defer cancel()
+	if _, err := r.Drain(dctx, id); err != nil {
+		t.Fatalf("Drain: %v; want success at its deadline", err)
+	}
+	st, err := r.Stats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, _ := w.written()
+	w.let()
+	if err := r.Close(ctx); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	rs := st.Recording[id]
+	if !rs.Failed || !strings.Contains(rs.Err, "queue full") || !strings.Contains(rs.Err, "deadline") || !strings.Contains(rs.Err, "incomplete") || lines != 0 || rs.Records != int64(lines) {
+		t.Fatalf("Recording %+v after Drain at its deadline; the recorder had written %d lines; want Failed, an error naming the full queue and the deadline's cut (incomplete), Records = 0 lines",
+			rs, lines)
+	}
+}
+
+// rdOverflowed is a one-shard runtime with one app recording on w through a queue of 64, activated, its recorder
+// held inside its first write (the header) so it writes nothing until the gate opens, and the queue filled past its
+// 64 records so the recording has stopped — confirmed through Stats (the positive witness).
+func rdOverflowed(t *testing.T, ctx context.Context) (*rdGated, *Runtime, AppID) {
+	t.Helper()
 	w := newRDGated()
 	r, err := New(Config{Shards: 1, RecordQueue: 64, Now: func() int64 { return cgT0 }})
 	if err != nil {
@@ -87,7 +153,6 @@ func TestDrainWaitsForAStoppedRecordingsQueuedRecords(t *testing.T) {
 	if err := r.Activate(ctx, id); err != nil {
 		t.Fatalf("Activate: %v", err)
 	}
-	// The recorder is inside its first write (the header), held: it writes nothing until the gate opens.
 	select {
 	case <-w.entered:
 	case <-ctx.Done():
@@ -105,30 +170,5 @@ func TestDrainWaitsForAStoppedRecordingsQueuedRecords(t *testing.T) {
 	if rs := st.Recording[id]; !rs.Failed || !strings.Contains(rs.Err, "queue full") {
 		t.Fatalf("Recording %+v before the drain; want Failed: queue full", rs)
 	}
-	waiting := make(chan struct{})
-	r.recordingWait = sync.OnceFunc(func() { close(waiting) }) // Close drains again: the seam fires once
-	go func() {
-		select {
-		case <-waiting: // Drain waits for the recording: let it write
-		case <-ctx.Done():
-		}
-		w.let()
-	}()
-	if _, err := r.Drain(ctx, id); err != nil {
-		t.Fatalf("Drain: %v", err)
-	}
-	st, err = r.Stats(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w.let() // a Drain that returned without waiting left the recorder held: Close still needs it to finish
-	if err := r.Close(ctx); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	lines, flushedAt := w.written()
-	rs := st.Recording[id]
-	if !rs.Failed || !strings.Contains(rs.Err, "queue full") || lines != 65 || rs.Records != int64(lines) || flushedAt != lines {
-		t.Fatalf("Recording %+v after Drain; the recorder wrote %d lines, flushed after line %d; want Failed (queue full), 65 lines = Records, flushed after the last",
-			rs, lines, flushedAt)
-	}
+	return w, r, id
 }
