@@ -47,6 +47,29 @@ class Render(unittest.TestCase):
         self.assertIn("          fetch-depth: 0", lint)
         self.assertNotIn("fetch-depth", text[text.index("  test:") :])
 
+    def test_every_merge_base_row_checks_out_history_in_its_job_only(self):
+        # S1.1c-1 (review QA-S3): the set is pinned whole, and each member's job pays for the history, no other.
+        self.assertEqual(generate.NEEDS_HISTORY, frozenset({"apidiff", "lawdelta"}))
+        for row_id in sorted(generate.NEEDS_HISTORY):
+            with self.subTest(row_id):
+                text = generate.render([*ROWS, row(row_id, "lint", ("T4",))])
+                lint = text[text.index("  lint:") : text.index("  test:")]
+                self.assertIn("          fetch-depth: 0", lint)
+                self.assertNotIn("fetch-depth", text[text.index("  test:") :])
+
+    def test_the_job_running_deps_downloads_modules(self):
+        # owner, 2026-11-11 (design 1): CI warms the module cache by a generated setup step in the deps row's job,
+        # in the repository and in gate/proofs, so the offline deps row never fails on a cold cache.
+        self.assertEqual(generate.NEEDS_MODULES, frozenset({"deps"}))
+        text = generate.render([*ROWS, row("deps", "lint", ("T4",))])
+        lint = text[text.index("  lint:") : text.index("  test:")]
+        self.assertEqual(lint.count("      - run: go mod download all\n"), 2, lint)
+        self.assertIn("      - run: go mod download all\n        working-directory: gate/proofs\n", lint)
+        self.assertGreater(lint.index("go mod download"), lint.index("make setup tools"), lint)
+        self.assertLess(lint.index("go mod download"), lint.index("bootstrap.py exec"), lint)
+        self.assertNotIn("go mod download", text[text.index("  test:") :])
+        self.assertNotIn("go mod download", self.text)
+
     def test_the_tool_cache_is_where_a_developer_has_it(self):
         # First CI run (2026-11-04): a cache inside the checkout put the project's go.mod above every tool, so go
         # followed its toolchain line and a parity witness passed differently on CI than on a developer's machine.

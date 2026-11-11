@@ -44,11 +44,16 @@ def _uses(name: str) -> str:
 
 
 # Rows that compare against the merge base with main: their job checks out the full history (a shallow checkout has
-# no main, so apidiff would pass with nothing compared; S3.3-1). Every other job keeps the one-commit checkout.
-NEEDS_HISTORY = frozenset({"apidiff"})
+# no main, so apidiff would pass with nothing compared; S3.3-1; lawdelta fails outright, S1.1c-1). Every other job
+# keeps the one-commit checkout.
+NEEDS_HISTORY = frozenset({"apidiff", "lawdelta"})
+# Rows that read the module cache offline: their job downloads every module of both tracked go.mod files at setup
+# (owner, 2026-11-11, S1.1c-1's design, decision 1), so a cold cache is never a verdict.
+NEEDS_MODULES = frozenset({"deps"})
+MODULE_DOWNLOAD = "      - run: go mod download all"
 
 
-def _setup_steps(history: bool = False) -> list[str]:
+def _setup_steps(history: bool = False, modules: bool = False) -> list[str]:
     return [
         f"      - {_uses('checkout')}",
         "        with:",
@@ -66,17 +71,18 @@ def _setup_steps(history: bool = False) -> list[str]:
         "          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}",
         "          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-",
         "      - run: make setup tools",
+        *([MODULE_DOWNLOAD, MODULE_DOWNLOAD, "        working-directory: gate/proofs"] if modules else []),
     ]
 
 
-def _job(job: str, timeout_min: int, tier: str, history: bool = False) -> list[str]:
+def _job(job: str, timeout_min: int, tier: str, history: bool = False, modules: bool = False) -> list[str]:
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
         f"    runs-on: {RUNNERS.get(job, 'ubuntu-latest')}",
         f"    timeout-minutes: {timeout_min}",
         "    steps:",
-        *_setup_steps(history),
+        *_setup_steps(history, modules),
         f"      - run: python3 -I -B gate/bootstrap.py exec -- --tier {tier} --job {job} "
         f"--run-id {RUN_ID} --commit ${{{{ github.sha }}}} --run-dir {run_dir}",
         f"      - {_uses('upload')}",
@@ -152,7 +158,8 @@ def render(rows: Sequence[Row], tier: str = TIER) -> str:
         # A job's cap: its rows' watchdogs summed, plus a margin for setup (ADR-0015 §1.2: + 20%, at least 60 s).
         seconds = sum(r.timeout_s for r in chosen if r.job == job)
         history = any(r.id in NEEDS_HISTORY for r in chosen if r.job == job)
-        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier, history)
+        modules = any(r.id in NEEDS_MODULES for r in chosen if r.job == job)
+        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier, history, modules)
     lines += _strict_gate(jobs, tier)
     return "\n".join(lines) + "\n"
 
