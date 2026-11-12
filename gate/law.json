@@ -127,11 +127,11 @@
     },
     {
       "path": "gate/known-issues.json",
-      "kind": "code"
+      "kind": "known-issues"
     },
     {
       "path": "tools/allowlists/",
-      "kind": "code"
+      "kind": "allowlist"
     },
     {
       "path": "gate/",

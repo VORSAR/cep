@@ -34,14 +34,16 @@ NO_REASON = "write its reason as another comment: # fmt: skip  # <reason, 12+ ch
 ON_STATEMENT = "write # fmt: skip  # <reason> on the statement"
 NOQA = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
 
-# §2.7's examples, verbatim from the design (DQ-S6, DA-S14).
-EXAMPLES = (
-    '//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant" '
-    "ref=docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md"
-    "#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go sprint=S1.1c-2",
-    '//nolint:errcheck // TEMP reason="close error surfaced by the sink rework" expiry=2026-12-31 '
-    "issue=S3.3-2-1 sprint=S1.1c-2",
-)
+
+# §2.7's examples, read from DEVELOPMENT.md's suppression policy itself, so the policy and the checker cannot drift
+# (DQ-S6, DA-S14): every line of the policy's ```go fence that starts //nolint.
+def policy_examples() -> list[str]:
+    with open(os.path.join(support.REPO, "docs", "development", "DEVELOPMENT.md"), encoding="utf-8") as f:
+        text = f.read()
+    section = text[text.index("## Suppression policy") :]
+    fence = section[section.index("```go\n") + len("```go\n") : section.index("```", section.index("```go\n") + 6)]
+    return [line for line in fence.splitlines() if line.startswith("//nolint")]
+
 
 # §0.3, as data: (comment as written, golangci honours it, canonical).
 GOLANGCI = (
@@ -285,8 +287,10 @@ class Check(unittest.TestCase):
 
     def test_the_policys_examples_are_valid(self):
         # §2.7: Ctx(today=2026-11-12, tier="T2", order=<fixture>, current=S1.1c-2, issues={"S3.3-2-1"}), the
-        # linter injected as enabled. Read from the design until DEVELOPMENT.md carries them (the coordinator).
-        for example in EXAMPLES:
+        # linter injected as enabled. Read from DEVELOPMENT.md (two examples today; none is a failure).
+        examples = policy_examples()
+        self.assertEqual(len(examples), 2, examples)
+        for example in examples:
             with self.subTest(example=example):
                 directives, faults = suppressions.go_directives("x.go", go_line(example))
                 self.assertEqual((len(directives), faults), (1, []))

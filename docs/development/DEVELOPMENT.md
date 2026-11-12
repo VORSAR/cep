@@ -62,17 +62,16 @@ These follow from decided objectives; each names its source.
 
 ## Suppression policy
 
-*The policy holds now; its checker and golangci-lint's `nolintlint` land in S1.1c (owner, 2026-11-04). Until then review enforces it.*
+*The `suppressions` row checks it from S1.1c-2 (T1–T4 and nightly); golangci-lint's own linters and `nolintlint` turn on in S1.1c-4 — until then every `//nolint` is red, because no linter it could name is enabled (owner, 2026-11-12, S1.1c-2's design).*
 
 Every lint suppression in first-party code is **accountable**, checked by the gate. The metadata rides on the same line as the directive:
 
 ```go
-//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant" ref=ADR-0015#2 sprint=S1
-//nolint:errcheck // TEMP reason="close error surfaced by S4's sink rework" issue=#42 sprint=S4
-//nolint:revive // TEMP reason="exported name kept for one release" expiry=2027-03-01 sprint=S5
+//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go sprint=S1.1c-2
+//nolint:errcheck // TEMP reason="close error surfaced by the sink rework" expiry=2026-12-31 issue=S3.3-2-1 sprint=S1.1c-2
 ```
 
-Rules: the linter name is mandatory (no bare `//nolint`; golangci's `nolintlint` with require-specific + require-explanation is the first net); exactly one of PERMANENT or TEMP; a `reason="…"` of at least 12 characters; **PERMANENT carries `ref=<ADR-nnnn or docs path#anchor>` resolving to a recorded decision — the checker verifies the target exists** (a permanent exception must trace to a decision, never to convenience); TEMP carries `expiry=YYYY-MM-DD` (fails once past) or `issue=<#id|url>`; every suppression carries `sprint=S<n>` (the sprint that introduced it); a suppression for a linter that is not enabled is dead and fails. The gate summary prints `suppressions: N (+Δ this diff)`. The same grammar governs every allowlist file (ADR-0015 §3.10). Fix the code first; suppress only a genuine, documented necessity, never to quiet the gate.
+Rules (checked by the `suppressions` row, S1.1c-2): the canonical form only — `//nolint:<linter>[,<linter>]`, two slashes, no space (golangci-lint also honours `// nolint`, `///nolint` and `//nolint x`; each is red so none hides); exactly one of PERMANENT or TEMP; a `reason="…"` of at least 12 characters; **PERMANENT carries `ref=<repository path>#<heading anchor>` that resolves to a tracked document's heading — an ADR or a `docs/sprints/decisions.md` section** (a permanent exception traces to a decision, never to convenience); TEMP carries `expiry=YYYY-MM-DD`, at most 90 days ahead, and `issue=<id>` naming an entry of `gate/known-issues.json` (so it ages with that issue) — an expired one is red at T4 and the nightly, and earlier tiers show a countdown in the LAW Δ block; every suppression carries `sprint=<sprint id>`, a row or part of the sprint plan at or before the current sprint; a suppression for a linter that is not enabled fails. The same grammar governs every list under `tools/allowlists/` (ADR-0015 §3.10). A Python formatter waiver is `# fmt: skip  # <reason, 12+ characters>` on the statement (ruff ignores `# fmt: skip` followed by other text, and the gate runs ruff with `--ignore-noqa`, so `# noqa` waives nothing and is red); ruff's per-file waivers in `ruff.toml` each have an entry in `tools/allowlists/ruff.json`. The LAW Δ block ends with `exemptions: <n> in code, <m> listed (±d this diff)` and names each exemption a diff adds or removes. Fix the code first; suppress only a genuine, documented necessity, never to quiet the gate.
 
 ## TODO policy
 
