@@ -4,6 +4,8 @@ S1.1a-1 Lane B's first commit (design note [s1-1a-gate-design.md](../../docs/spr
 
 **How it was taken.** On darwin-arm64 (APFS), 2026-11-02, with the pinned CPython 3.15.2 (`-I -B`). Each archive's sha256 was first checked against `tools.json`: all ten match. The census reads the tar headers with `tarfile` (names decoded as UTF-8). It extracts nothing, except the five Linux executables, whose ELF dynamic sections were parsed to settle the `exec_sha256` question for Linux (§3: "Linux is checked by Lane B's census"). "Before target" means that a symlink member comes earlier in the archive than the member it points to.
 
+*(Annotated 2026-11-12, the Go 1.27.3 → 1.27.4 bump: the two go rows re-taken the same way, each archive's sha256 first checked against go.dev's published listing. go1.27.4 holds two more regular files than go1.27.3 and nothing else changes: no link, no special bit, no collision, the same two non-ASCII names and the same ten executables; §2–§6 hold as written.)*
+
 ## 1. Counts
 
 | Tool | Platform | Members | Regular | Dir | Symlink | Hard link | Device, FIFO, other | `strip` | Member equal to `strip` | Parents created on demand | Modes (non-symlink) |
@@ -12,8 +14,8 @@ S1.1a-1 Lane B's first commit (design note [s1-1a-gate-design.md](../../docs/spr
 | python 3.15.2 | linux-amd64 | 4641 | 3593 | 0 | 1048 | 0 | 0 | `python/` | none | 216 | reg 0o664 ×3572, 0o775 ×21 |
 | python-floor 3.12.16 | darwin-arm64 | 1665 | 1655 | 0 | 10 | 0 | 0 | `python/` | none | 153 | reg 0o664 ×1604, 0o775 ×51 |
 | python-floor 3.12.16 | linux-amd64 | 4536 | 3487 | 0 | 1049 | 0 | 0 | `python/` | none | 196 | reg 0o664 ×3435, 0o775 ×52 |
-| go go1.27.3 | darwin-arm64 | 17373 | 15657 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15603, 0o755 ×54 |
-| go go1.27.3 | linux-amd64 | 17373 | 15657 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15603, 0o755 ×54 |
+| go go1.27.4 | darwin-arm64 | 17375 | 15659 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15605, 0o755 ×54 |
+| go go1.27.4 | linux-amd64 | 17375 | 15659 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15605, 0o755 ×54 |
 | golangci-lint v2.15.0 | darwin-arm64 | 3 | 3 | 0 | 0 | 0 | 0 | `golangci-lint-2.15.0-darwin-arm64/` | none | 0 | reg 0o644 ×2, 0o755 ×1 |
 | golangci-lint v2.15.0 | linux-amd64 | 3 | 3 | 0 | 0 | 0 | 0 | `golangci-lint-2.15.0-linux-amd64/` | none | 0 | reg 0o644 ×2, 0o755 ×1 |
 | ruff 0.17.3 | darwin-arm64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-aarch64-apple-darwin/` | `ruff-aarch64-apple-darwin` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |

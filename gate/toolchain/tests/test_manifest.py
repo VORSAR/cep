@@ -123,7 +123,7 @@ class Load(support.ToolchainTest):
         want = [
             ("python", "3.15.2", "python3.15", "bin", "python-3.15.2"),
             ("python-floor", "3.12.16", "python3.12", "bin", "python-floor-3.12.16"),
-            ("go", "go1.27.3", "go", "bin", "go-go1.27.3"),
+            ("go", "go1.27.4", "go", "bin", "go-go1.27.4"),
             ("golangci-lint", "v2.15.0", "golangci-lint", ".", "golangci-lint-v2.15.0"),
             ("ruff", "0.17.3", "ruff", ".", "ruff-0.17.3"),
             ("lark", "1.3.1", "", ".", "lark-1.3.1"),  # a python-package: one sdist for both platforms
@@ -131,7 +131,7 @@ class Load(support.ToolchainTest):
         darwin_archives = (
             "285a6b924713",
             "fbf4afef53c2",
-            "dd3908cf2095",
+            "91a44a2b8a71",
             "d1e409481a8c",
             "118f7121aa83",
             "b426a7a6d6d5",
@@ -139,7 +139,7 @@ class Load(support.ToolchainTest):
         linux_archives = (
             "08d4ae9024a7",
             "6a79e922e500",
-            "65efbc80fdc1",
+            "7226736c2339",
             "9b7fe6a6bf63",
             "2b0890f5a559",
             "b426a7a6d6d5",

@@ -2,7 +2,7 @@
 
 Planted: a fixture tools.json whose go version_line says go1.27.2. The cache, the path and every hash are real, so
 the keyed directory exists, the stamp matches, bin/go answers with the pinned version, and only the version check can
-fail. By hand: "go: version: want 'go version go1.27.2 darwin/arm64', got 'go version go1.27.3 darwin/arm64': run
+fail. By hand: "go: version: want 'go version go1.27.2 darwin/arm64', got 'go version go1.27.4 darwin/arm64': run
 make clean-tools tools" on darwin-arm64.
 """
 
