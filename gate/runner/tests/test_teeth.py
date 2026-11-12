@@ -143,18 +143,31 @@ class PythonCases(unittest.TestCase):
 
 
 class GoCases(unittest.TestCase):
-    # design ambiguity: whether `-cases` prefixes each line with its file when given several files (§4.2: one run
-    # over every file); these listings are one file's, and the faults are taken as the text after "fault ".
+    # design §11's seam (it settles the ambiguity QA marked here): `-cases` prints `<path>: case <name>` and
+    # `<path>: fault <TestX>: <why>` per file in argument order, and go_cases groups the listing by path.
+    P = "internal/parser/keywords_test.go"
+    Q = "internal/expr/docsync_test.go"
+
     def test_case_lines(self):
-        listing = "case TestA\ncase TestA/one\ncase TestA/one/two\ncase TestB\n"
-        self.assertEqual(teeth.go_cases(listing), (["TestA", "TestA/one", "TestA/one/two", "TestB"], []))
+        listing = (
+            f"{self.P}: case TestA\n{self.P}: case TestA/one\n{self.P}: case TestA/one/two\n{self.P}: case TestB\n"
+        )
+        self.assertEqual(teeth.go_cases(listing), {self.P: (["TestA", "TestA/one", "TestA/one/two", "TestB"], [])})
 
     def test_fault_lines(self):
-        listing = "case TestA\nfault TestT: t.Run over a table -cases cannot count\n"
-        self.assertEqual(teeth.go_cases(listing), (["TestA"], ["TestT: t.Run over a table -cases cannot count"]))
+        listing = f"{self.P}: case TestA\n{self.P}: fault TestT: t.Run over a table -cases cannot count\n"
+        self.assertEqual(
+            teeth.go_cases(listing), {self.P: (["TestA"], ["TestT: t.Run over a table -cases cannot count"])}
+        )
+
+    def test_two_files_are_grouped_by_path(self):
+        listing = f"{self.P}: case TestA\n{self.Q}: case TestB\n{self.Q}: fault : expected 'package'\n"
+        self.assertEqual(
+            teeth.go_cases(listing), {self.P: (["TestA"], []), self.Q: (["TestB"], [": expected 'package'"])}
+        )
 
     def test_an_empty_listing(self):
-        self.assertEqual(teeth.go_cases(""), ([], []))
+        self.assertEqual(teeth.go_cases(""), {})
 
 
 if __name__ == "__main__":
