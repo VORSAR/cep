@@ -154,7 +154,7 @@ QA's tables: lane B's branch (`TestParseErrorContract` 63 rows green ×20; 14 re
 - **W0-11 (QA-B's stub notes):** faults stay strings, formatted `file:line: text`; the test helper matches `file:line:` with the colon (lane B may tighten it, saying so); `checkMarkdown` never reports `no fragments` — the real-document test does, per file.
 - **For the owner at G1 (§8):** F3 (a bare integer where a duration goes outside the rule body — `watermark bounded 1`, `idle after 5`, `window delay(5)` — gets E-SYN-001 at an earlier token, not E-DUR-001; older than this sprint); F5 (`-> ->` and a trailing `->` read "within comes before ->"); F7 (the filter re-parse places `S[a == ]` one column early); F8 (the incident message's wording).
 
-## 8. Questions for the owner at G1
+## 8. Questions for the owner at G1 — answered 2026-11-12 ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews): 1–3 as recommended; 4 ≠ R — F5 and F7 fixed now in lane B: `-> ->` and a trailing `->` → E-PAT-005 `a step must follow ->` at the token after the `->`; `S[a == ]` placed at the `]`)
 
 1. **The before/after list (§5)** — approve as written? Its open items: SEMANTICS:178 `every D` listed as a wrong example (recommended) or un-quoted; SEMANTICS:124's quoted wrong form `→ not B for D` listed (recommended — the annotation stays word for word) or un-quoted; SPEC:38 left as written and bound green (recommended) or rewritten; SPEC:284's history line reworded as shown.
 2. **The two new E-PAT-005 messages** users see: `an absence follows its step directly: drop the -> before and not` (for `-> and not`) and `an absence is written and not, straight after its step: write and not instead of -> not` (for `-> not`).

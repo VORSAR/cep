@@ -15,6 +15,8 @@ The full draft is [s1-1c-3-plan-check.md](s1-1c-3-plan-check.md), drafted read-o
 
 **Plan check — the owner, 2026-11-12** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check); ten questions in four batches and five to confirm; all as recommended): the split before G0 — S1.1c-3 the documents and the clocks, S1.1c-4 the scans with a plan check of its own, the strict lint set S1.1c-5 (1); the fragment rule as decided with angle placeholders bound and documented-invalid snippets a named register, every red snippet fixed and the before/after list read at G1 (2); E-PAT-005's text names the `-> and not` form (3); the vulnerability scan reads the database itself, x/vuln not added (4), at T4 and nightly (5); the canary sorts its reds by failure text (6); S1.1c-4's PR a draft after one pushed nightly (7); a forward to a part expires when the marker passes it (8); the 30-day correctness clock built now, no open entry being a correctness bug (9); BA10 through a separate process (10). Confirmed: generic syntax messages in rule words; each wrong example listed with its failing stage; an empty forward only with a naming decision; two older findings to known issues; the Python sleep-ban gap to the backlog.
 
+**The design (G1) — the owner, 2026-11-12** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews); after both design reviews of v1.1, every finding placed in the note's §9): the corrections list approved as recommended (1); the two E-PAT-005 messages as proposed (2); F3 fixed now in lane B (3); F5 and F7 fixed now in lane B (4, ≠ R).
+
 **G0 — the owner, 2026-11-12:** "main is green on c87942d" — the dependency (the Go 1.27.4 bump, PR #37) merged with main's CI green; the card was written from the owner's plan-check answers the same day.
 
 ## How it runs
@@ -48,7 +50,7 @@ At most two agents at once (plan check §1, §4, §8, §9).
 
 ## Scope changes
 
-None.
+- **2026-11-12, G1** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews), 3 and 4): three older diagnostics defects found by QA's W0 move in — F3 (bare-integer durations outside the rule body), F5 (`-> ->` and a trailing `->`), F7 (a broken filter's column); with the design reviews' fixes, items ≈ 8.25 → ≈ 9.75 (lane B ≈ 6.5, lane E2 ≈ 3.25) against the 13 cap.
 
 ## Findings
 
