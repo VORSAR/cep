@@ -26,7 +26,8 @@ class Group(support.GateTest):
         code = f"import os; open({path!r}, 'w').write(f'{{os.getpgid(0)}} {{os.getsid(0)}}')"
         group = proc.Group()
         p = group.spawn([sys.executable, "-I", "-c", code], cwd=self.repo, env=support.base_env(),
-                        stdout=os.path.join(self.root, "out"), stderr=os.path.join(self.root, "err"))  # fmt: skip
+                        stdout=os.path.join(self.root, "out"),
+                        stderr=os.path.join(self.root, "err"))  # fmt: skip  # aligned arguments
         self.assertEqual(group.reap(p), (0, False))
         with open(path, encoding="utf-8") as f:
             self.assertEqual(f.read(), f"{p.pid} {p.pid}")
@@ -41,7 +42,8 @@ class Group(support.GateTest):
         group = proc.Group()
         code = "import sys; print('o'); print('e', file=sys.stderr)"
         p = group.spawn([sys.executable, "-I", "-c", code], cwd=self.repo, env=support.base_env(),
-                        stdout=os.path.join(self.root, "out"), stderr=os.path.join(self.root, "err"))  # fmt: skip
+                        stdout=os.path.join(self.root, "out"),
+                        stderr=os.path.join(self.root, "err"))  # fmt: skip  # aligned arguments
         self.assertEqual(group.reap(p), (0, False))
         self.assertEqual((self.read("out"), self.read("err")), (b"o\n", b"e\n"))
 
@@ -123,7 +125,8 @@ class Group(support.GateTest):
         group = proc.Group()
         with self.assertRaises(OSError):
             group.spawn(["no-such-command-xyz"], cwd=self.repo, env=support.base_env(),
-                        stdout=os.path.join(self.root, "out"), stderr=os.path.join(self.root, "err"))  # fmt: skip
+                        stdout=os.path.join(self.root, "out"),
+                        stderr=os.path.join(self.root, "err"))  # fmt: skip  # aligned arguments
 
 
 class Probe(support.GateTest):

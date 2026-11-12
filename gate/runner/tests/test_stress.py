@@ -16,7 +16,7 @@ class Harness(support.GateTest):
     def harness(self, *modules, runs=50):
         out_dir = os.path.join(self.root, "out")
         argv = [sys.executable, "-I", "-B", "-X", "utf8", STRESS, "--no-hogs", "--runs", str(runs), "--parallel", "4",
-                "--out", out_dir, *modules]  # fmt: skip
+                "--out", out_dir, *modules]  # fmt: skip  # argv grouped by flag
         code, out, err = support.run_tool(argv, support.REPO)
         self.assertEqual(err, b"", err.decode(errors="replace"))
         counts = {}
@@ -101,7 +101,8 @@ class Child(support.GateTest):
     def test_the_flags_are_the_design_notes(self):
         flags = self.child(0, f"{PLANTS}.plant_clean")["flags"]
         self.assertEqual(flags, {"isolated": 0, "ignore_environment": 0, "no_user_site": 1, "safe_path": True,
-                                 "dont_write_bytecode": 1, "dev_mode": True, "warn_error": True})  # fmt: skip
+                                 "dont_write_bytecode": 1, "dev_mode": True,
+                                 "warn_error": True})  # fmt: skip  # a dict as a table
 
     def test_the_shuffle_is_seeded_and_crosses_modules(self):
         modules = (f"{PLANTS}.plant_clean", f"{PLANTS}.plant_order")
@@ -133,9 +134,10 @@ class Stopping(support.GateTest):
 class Environment(support.GateTest):
     def test_scrubbed_keeps_only_the_allow_list_and_sets_the_seed(self):
         base = {"PATH": "/p", "HOME": "/h", "PYTHONPATH": "/evil", "PYTHONHOME": "/evil", "GOFLAGS": "-x", "X": "1",
-                "VORSAR_CEP_TOOLS_CACHE": "/c", "GOCACHE": "/g"}  # fmt: skip
+                "VORSAR_CEP_TOOLS_CACHE": "/c", "GOCACHE": "/g"}  # fmt: skip  # a dict as a table
         self.assertEqual(stress.scrubbed(base, 7), {"PATH": "/p", "HOME": "/h", "VORSAR_CEP_TOOLS_CACHE": "/c",
-                                                    "GOCACHE": "/g", "PYTHONHASHSEED": "7"})  # fmt: skip
+                                                    "GOCACHE": "/g",
+                                                    "PYTHONHASHSEED": "7"})  # fmt: skip  # a dict as a table
 
     def test_no_child_flag_reads_isolated(self):
         argv = stress.child_argv("py", "s.py")

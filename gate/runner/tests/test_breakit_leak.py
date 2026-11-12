@@ -132,7 +132,7 @@ class QB4StoppedRowLeavesNothing(Base):
         later = os.path.join(self.root, "later")
         self.track("gate/x/test_later.py", f"open({later!r}, 'w').close()\n")  # sorts after test_hold.py
         h = self.start([self.row("pytests", command=wrapper("pytests"), expected_scope=TESTS, job="test")],
-                       environ={**support.base_env(), "VORSAR_CEP_WORKERS": "1"})  # fmt: skip
+                       environ={**support.base_env(), "VORSAR_CEP_WORKERS": "1"})  # fmt: skip  # aligned arguments
         w.started(1)
         self.stop_by_watchdog(h, w)
         self.assertFalse(os.path.exists(later))

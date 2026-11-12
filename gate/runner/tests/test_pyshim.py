@@ -52,7 +52,8 @@ class Shim(support.GateTest):
         out = os.path.join(self.root, "shim.stdout")
         with open(out, "wb") as f:
             proc = subprocess.Popen([sys.executable, *FLAGS, SHIM, self.repo, "pkg.test_m"], cwd=self.repo,
-                                    env=support.base_env(), stdin=subprocess.DEVNULL, stdout=f, stderr=f)  # fmt: skip
+                                    env=support.base_env(), stdin=subprocess.DEVNULL,
+                                    stdout=f, stderr=f)  # fmt: skip  # aligned arguments
         self.addCleanup(proc.wait)
         self.addCleanup(proc.kill)
         w.started(1)

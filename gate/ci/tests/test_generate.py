@@ -101,7 +101,7 @@ class Render(unittest.TestCase):
         jobs = re.findall(r"^  ([a-z][a-z0-9-]*):$", nightly[nightly.index("\njobs:\n") :], re.M)
         self.assertEqual(jobs, ["nightly", "strict-gate"])
         for needle in ("name: nightly", "schedule:", "workflow_dispatch:", "--tier nightly --job nightly",
-                       "summarize --registry gate/registry.json --tier nightly"):  # fmt: skip
+                       "summarize --registry gate/registry.json --tier nightly"):  # fmt: skip  # needles as a table
             with self.subTest(needle):
                 self.assertIn(needle, nightly)
         self.assertNotIn("pull_request", nightly)

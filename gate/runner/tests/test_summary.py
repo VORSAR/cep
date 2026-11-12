@@ -15,7 +15,8 @@ PREFIX = "LAW Δ: none\n\n"  # the block, then a blank line, then the table (S1.
 class Tenths(unittest.TestCase):
     def test_truncated_never_rounded(self):
         for ms, want in ((0, "0.0s"), (99, "0.0s"), (100, "0.1s"), (150, "0.1s"), (199, "0.1s"), (999, "0.9s"),
-                         (1500, "1.5s"), (1999, "1.9s"), (60000, "60.0s"), (31000, "31.0s")):  # fmt: skip
+                         (1500, "1.5s"), (1999, "1.9s"),
+                         (60000, "60.0s"), (31000, "31.0s")):  # fmt: skip  # cases as a table
             with self.subTest(ms):
                 self.assertEqual(summary.tenths(ms), want)
 

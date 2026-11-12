@@ -161,8 +161,8 @@ class Exemptions(support.GateTest):
         self.assertEqual(self.section(lines), want)
 
     def test_an_added_marker_is_named(self):
-        # design ambiguity: §2.6 shows a removed marker only (`−<path>:<line> # fmt: skip`); an added one is read
-        # as the same form with "+".
+        # design ambiguity (settled by §10.16): §2.6 shows a removed marker only, `−<path>:<line>` then the skip
+        # marker; an added one is read as the same form with "+".
         self.main_world()
         self.change({"gate/runner/z.py": "import os\n" + PY_MARK})
         code, lines = self.run_row()

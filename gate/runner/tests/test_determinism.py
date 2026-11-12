@@ -23,7 +23,7 @@ class HashSeeds(support.GateTest):
             probe = os.path.join(self.root, f"hash-{seed}")
             env = dict(support.base_env(), PYTHONHASHSEED=str(seed))
             argv = [sys.executable, "-s", "-B", "-P", "-X", "utf8", FROZEN_RUN, probe,
-                    "--tier", "T2", "--registry", registry, "--run-dir", run_dir]  # fmt: skip
+                    "--tier", "T2", "--registry", registry, "--run-dir", run_dir]  # fmt: skip  # argv grouped by flag
             code, out, err = support.run_tool(argv, self.repo, env)
             self.assertEqual((code, err), (1, b""))
             outputs.add(support.masked(out.decode("utf-8"), run_dir))  # the one line a run's directory may change

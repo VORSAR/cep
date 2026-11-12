@@ -28,7 +28,7 @@ class CleanEnv(unittest.TestCase):
 
     def test_drops_python_and_pathspec_variables(self):
         keys = ("PYTHONPATH", "PYTHONHOME", "PYTHONHASHSEED", "PYTHONSTARTUP", "GIT_LITERAL_PATHSPECS",
-                "GIT_GLOB_PATHSPECS", "GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS")  # fmt: skip
+                "GIT_GLOB_PATHSPECS", "GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS")  # fmt: skip  # keys as a table
         got = env.clean_env(dict.fromkeys(keys, "1"), [])
         for key in keys:
             self.assertNotIn(key, got)

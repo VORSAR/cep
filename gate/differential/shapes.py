@@ -31,7 +31,7 @@ def load_lark():
     for path in reversed(manifest.python_paths(cache, tools)):
         if path not in sys.path:
             sys.path.insert(0, path)
-    import lark  # noqa: PLC0415  (from the cache; this import is the point of the function)
+    import lark  # from the cache; this import is the point of the function
 
     return lark
 

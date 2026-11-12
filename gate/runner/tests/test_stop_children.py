@@ -31,7 +31,8 @@ class StopTest(support.GateTest):
             f.write(head + body)
         with open(os.path.join(self.root, "program.out"), "wb") as out:
             proc = subprocess.Popen([sys.executable, "-I", "-B", path], cwd=self.root, env=support.base_env(),
-                                    stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT)  # fmt: skip
+                                    stdin=subprocess.DEVNULL,
+                                    stdout=out, stderr=subprocess.STDOUT)  # fmt: skip  # aligned arguments
         self.addCleanup(proc.wait)
         self.addCleanup(proc.kill)
         return proc

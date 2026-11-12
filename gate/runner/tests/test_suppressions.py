@@ -326,8 +326,8 @@ class PyMarkers(unittest.TestCase):
 
 class Prefilter(unittest.TestCase):
     def test_every_recognised_form_contains_a_pattern(self):
-        # design ambiguity: a case variant (# FMT: SKIP) is recognised as red but no PREFILTER pattern (git grep is
-        # case-sensitive) matches it; it never counts as an exemption, so it is left out here.
+        # design ambiguity: a case variant (an upper-case FMT: SKIP) is recognised as red but no PREFILTER pattern
+        # (git grep is case-sensitive) matches it; it never counts as an exemption, so it is left out here.
         forms = [c for c, honoured, _ in GOLANGCI if honoured] + [c for c, _ in RUFF if "FMT" not in c]
         for form in forms:
             with self.subTest(form=form):

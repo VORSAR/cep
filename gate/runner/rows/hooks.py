@@ -28,7 +28,7 @@ def problems(repo: str, launchers: list[str]) -> list[str]:
     if setting(repo) != os.path.realpath(os.path.join(repo, ".githooks")):
         return [OFF]
     return [f"{rel} is not executable: run git checkout -- .githooks" for rel in launchers
-            if not os.access(os.path.join(repo, rel), os.X_OK)]  # fmt: skip
+            if not os.access(os.path.join(repo, rel), os.X_OK)]  # fmt: skip  # aligned comprehension
 
 
 def main() -> int:

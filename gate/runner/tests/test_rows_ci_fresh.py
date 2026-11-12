@@ -16,7 +16,7 @@ class CiFresh(support.GateTest):
     def setUp(self):
         super().setUp()
         rows = [self.row("x", tiers=("T2", "T4")), self.row("y", job="test", tiers=("T4",)),
-                self.row("z", job="nightly", tiers=("nightly",))]  # fmt: skip
+                self.row("z", job="nightly", tiers=("nightly",))]  # fmt: skip  # aligned list of rows
         self.reg_path = self.registry_file(rows)
         os.makedirs(os.path.join(self.repo, "gate"))
         with open(self.reg_path, "rb") as f, open(os.path.join(self.repo, "gate", "registry.json"), "wb") as g:

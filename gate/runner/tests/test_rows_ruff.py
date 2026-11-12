@@ -169,7 +169,7 @@ class Wrapper(support.GateTest):
         self.assertEqual(self.ruff_row(), "covered 257")
         names = os.listdir(os.path.join(self.run_dir, "rows", "lint", "ruff"))
         self.assertEqual(sorted(n for n in names if n.startswith("format.") and n.endswith(".stdout")),
-                         ["format.0.stdout", "format.1.stdout"])  # fmt: skip
+                         ["format.0.stdout", "format.1.stdout"])  # fmt: skip  # aligned arguments
 
     def test_a_file_named_like_a_flag_is_checked_as_a_file(self):
         self.track("-dash.py", CLEAN)
@@ -221,5 +221,5 @@ class FakeRuff(support.GateTest):
             "else:\n"
             "    print('X001 planted\\n --> gate/x/m.py:1:1')\n"
             "    sys.exit(1)\n"
-        ))  # fmt: skip
+        ))  # fmt: skip  # one script line per string
         self.assertEqual(self.ruff_row(), "exit 1: gate/x/m.py: ruff check (exit 1)")

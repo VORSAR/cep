@@ -145,7 +145,7 @@ class Refuses(unittest.TestCase):
     def test_the_top_level_shape(self):
         for text in ("[]", '{"rows": []}', '{"schema": 2, "rows": []}', '{"schema": true, "rows": []}',
                      '{"schema": 1}', '{"schema": 1, "rows": {}}', '{"schema": 1, "rows": [], "x": 1}',
-                     '{"schema": 1, "rows": [1]}'):  # fmt: skip
+                     '{"schema": 1, "rows": [1]}'):  # fmt: skip  # cases as a table
             with self.subTest(text), self.assertRaises(registry.RegistryError):
                 registry.loads(text)
 
