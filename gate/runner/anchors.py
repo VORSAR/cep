@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterator
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 HEADING = re.compile(r"^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
 HTML_ANCHOR = re.compile(r"<[A-Za-z][^>]*?\s(?:id|name)=\"([^\"]+)\"")
+COMMENT_OPEN = re.compile(r"^ {0,3}<!--")
 
 
 def slug(heading: str) -> str:
@@ -30,15 +31,25 @@ def slug(heading: str) -> str:
 
 
 def prose(lines: list[str]) -> Iterator[tuple[int, str]]:
-    """(line number, line) outside fenced blocks. A heading's code span is part of its anchor, so spans stay."""
+    """(line number, line) outside fenced blocks and HTML comment blocks. A heading's code span is part of its
+    anchor, so spans stay. A comment block is CommonMark's HTML block 2: a line starting (after up to three spaces)
+    with `<!--`, through the first line holding `-->`; it renders nothing, so nothing in it is prose (BK-L2)."""
     fence = ""
+    comment = False
     for number, line in enumerate(lines, 1):
+        if comment:
+            comment = "-->" not in line
+            continue
         m = FENCE.match(line)
         if m and (not fence or (m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence))):
             fence = "" if fence else m.group(1)
             continue
-        if not fence:
-            yield number, line
+        if fence:
+            continue
+        if COMMENT_OPEN.match(line):
+            comment = "-->" not in line[line.index("<!--") + 4 :]
+            continue
+        yield number, line
 
 
 def anchors(text: str) -> set[str]:
