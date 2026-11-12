@@ -54,7 +54,8 @@ class ParityHash(support.ParityDriver):
         path = os.path.join(self.world.repo, "tools.json")
         with open(path, "rb") as f:
             doc = json.loads(f.read())
-        (go,) = [t for t in doc["tools"] if t["name"] == "go"]
+        (index,) = [i for i, t in enumerate(doc["tools"]) if t["name"] == "go"]
+        go = doc["tools"][index]
         platform = manifest.platform_key()
         self.assertTrue(go["platforms"][platform]["exec_sha256"])
         go["platforms"][platform]["exec_sha256"] = {}
@@ -69,3 +70,6 @@ class ParityHash(support.ParityDriver):
         self.assertEqual((run.code, lines[-2:]), (2, ["GATE FAILED", "exit: 2"]), run.stdout)
         self.assertIn(f"(go) {platform}: field 'exec_sha256' is empty: parity would verify nothing", lines[0])
         self.assertFalse(os.path.exists(os.path.join(run.run_dir, "records")), "parity ran")
+        # The whole line, exactly: the world's tools.json, the go entry's index, the platform (S1.1c-2 W0).
+        reason = f"{path}: tools[{index}] (go) {platform}: field 'exec_sha256' is empty: parity would verify nothing"
+        self.assertRefusedAtLoad(run, reason)

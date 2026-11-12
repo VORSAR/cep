@@ -170,6 +170,13 @@ class LawDeltaPlanted(support.DriverTest):
         self.assertTrue(self.first_line(run).startswith(NOT_RUN), run.stdout)
         cells = run.summary("lint", "ruff")
         self.assertEqual(cells[2], "PASS", run.stdout)
+        # The row that did run passed over every file of its scope, counted from the world by the row's own
+        # pathspecs, never a hard-coded count (S1.1c-2 W0; design §4.2: a pass on the row run).
+        ruff = support.registry_row("ruff")
+        self.assertEqual(ruff["expected_scope"][0], "git")
+        in_scope = [p for p in self.world.git("ls-files", "-z", "--", *ruff["expected_scope"][1:]).split("\0") if p]
+        self.assertTrue(in_scope)
+        self.assertRow(run, "lint", "ruff", True, f"covered {len(in_scope)}")
 
     def test_a_dirty_law_file_is_named_on_a_last_line_and_the_row_passes(self):
         # owner, 2026-11-11 (design 2): at a local tier the block ends with the count of uncommitted law edits.

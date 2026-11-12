@@ -150,14 +150,19 @@ class RegenBaseline(support.DriverTest):
         code = support.run_process(argv, cwd=self.world.repo, env=env, out=out, err=err, cap_s=support.RUN_CAP_S)
         return code, support.read_text(out) + support.read_text(err)
 
-    def assertRefused(self, cls: str) -> None:
-        """Tier 1 green, the fresh run done, exactly the named class printed, exit 1, the baseline untouched."""
+    def assertRefused(self, cls: str, corpus_file: str, rule: str, ordinal: int) -> None:
+        """Tier 1 green, the fresh run done, exactly the named class printed, REFUSED for the planted block, the
+        refusal's own line, exit 1, the baseline untouched."""
         before = self.snapshot()
         code, printed = self.regen()
         self.assertNotIn("refused: Tier 1 is red", printed)
         self.assertNotIn("refused: the fresh run failed", printed)
         self.assertEqual(classes_in(printed), {cls}, printed)
-        self.assertEqual(code, 1, printed)
+        verdicts = [line for line in printed.split("\n") if line.startswith(f"{cls} ")]
+        self.assertEqual(len(verdicts), 1, printed)
+        self.assertTrue(verdicts[0].startswith(f"{cls} {corpus_file} rule {rule} block {ordinal} key "), printed)
+        self.assertTrue(verdicts[0].endswith(": REFUSED"), printed)
+        self.assertRegenRefused((code, printed), "refused: 1 block(s); nothing written")
         self.assertEqual(self.snapshot(), before, "a refused regen writes nothing")
 
     # ------------------------------------------------------------------------------------------------ the tests
@@ -173,7 +178,7 @@ class RegenBaseline(support.DriverTest):
             return [block_1[0]["outputs"][0]]
 
         self.replant(EX10, "AdminScopeGrant", 2, one_more)
-        self.assertRefused("count-change")
+        self.assertRefused("count-change", EX10, "AdminScopeGrant", 2)
 
     def test_ordering_change_is_refused(self):
         # 10's block 3 emits (t1, alice) 10:00, (t1, bob) 10:01, (t2, alice) 10:03 (the third alice grant is
@@ -186,7 +191,7 @@ class RegenBaseline(support.DriverTest):
             return [outputs[1], outputs[0], outputs[2]]
 
         self.replant(EX10, "AdminScopeGrant", 3, swapped)
-        self.assertRefused("ordering-change")
+        self.assertRefused("ordering-change", EX10, "AdminScopeGrant", 3)
 
     def test_timestamp_drift_is_refused(self):
         # 10's block 3's third alert, (t2, alice) at 10:03:00.000, alone in its partition, so no rate limit is near
@@ -204,7 +209,7 @@ class RegenBaseline(support.DriverTest):
             return outputs
 
         self.replant(EX10, "AdminScopeGrant", 3, drifted)
-        self.assertRefused("timestamp-drift")
+        self.assertRefused("timestamp-drift", EX10, "AdminScopeGrant", 3)
 
     def test_additive_new_block_is_recorded(self):
         # 09 gains a second rule, StagingRisk, writing its own new stream StagingAlerts, with one block: a3's 0.9 in
@@ -243,3 +248,10 @@ class RegenBaseline(support.DriverTest):
             self.assertEqual(header["source_sha256"], hashlib.sha256(f.read()).hexdigest())
         self.assertEqual((new["rule"], new["block"], len(new["outputs"])), ("StagingRisk", 1, 1))
         self.assertEqual(new["counts"], {"errored": 0, "key_errors": 0, "late": 0, "panics": 0})
+        # The gate's own reader of the baseline accepts what was recorded: the baseline row (TestBaseline, with the
+        # world's blWantBlocks at 16) passes on the recorded tree (S1.1c-2 design §4.2: a pass on a row, not the
+        # tool's word alone).
+        self.world.commit()
+        run = self.world.run(registry=self.world.registry(support.registry_row("baseline")))
+        self.assertRow(run, "test", "baseline", True, "covered 1")
+        self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)

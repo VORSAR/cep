@@ -19,6 +19,9 @@ GOOD = "internal/event/good.go"
 UNFORMATTED = "package event\nfunc  F( ) {\n}\n"
 FORMATTED = "package event\n\nfunc G() {}\n"
 GUARD = "has unstaged changes: stage them or stash them"
+# The gofmt row's reason and the guard's line, exactly (S1.1c-2 W0: a refusal is asserted by its reason).
+GOFMT_REASON = f"exit 1: {BAD} is not formatted: fix it with gofmt -w {BAD}"
+GUARD_LINE = f"{BAD} {GUARD}, so the check sees what you commit"
 
 
 class HookCommit(support.DriverTest):
@@ -46,6 +49,14 @@ class HookCommit(support.DriverTest):
         code = support.run_process(argv, cwd=self.world.repo, env=self.world.env, out=out, err=err, cap_s=900)
         return code, support.read_text(out) + support.read_text(err)
 
+    def hook_run(self, code: int, out: str) -> support.Run:
+        """The hook's own gate run, read from the run directory its summary names (`run: .gate/runs/<id>`)."""
+        named = [line.removeprefix("run: ") for line in out.split("\n") if line.startswith("run: ")]
+        self.assertEqual(len(named), 1, out)
+        self.assertIn("LAW Δ", out)
+        gate_out = out[out.index("LAW Δ") :]
+        return support.Run(code=code, stdout=gate_out, run_dir=os.path.join(self.world.repo, named[0]))
+
     def head(self) -> str:
         return self.world.git("rev-parse", "HEAD").strip()
 
@@ -71,6 +82,7 @@ class HookCommit(support.DriverTest):
         self.assertIn("gofmt", out)
         self.assertIn(BAD, out)
         self.assertIn(f"gofmt -w {BAD}", out)
+        self.assertHookRefused((code, out), GOFMT_REASON)
         self.assertEqual(self.snapshot(), before, "a refused commit changed the index, the work tree or HEAD")
 
     def test_an_unformatted_staged_file_is_refused(self):
@@ -98,6 +110,9 @@ class HookCommit(support.DriverTest):
         self.assertNotEqual(self.head(), before, out)
         self.assertIn("GATE PASSED", out)
         self.assertIn("exit: 0", out)
+        run = self.hook_run(code, out)
+        self.assertRow(run, "lint", "gofmt", True, "covered 1")
+        self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], out)
 
     def test_a_docs_only_commit_passes_with_rows_skipped(self):
         before = self.head()
@@ -111,6 +126,10 @@ class HookCommit(support.DriverTest):
         self.assertEqual(cells[2], "SKIP", out)
         self.assertTrue(cells[4].startswith("skip: nothing staged in scope ("), out)
         self.assertIn("GATE PASSED", out)
+        # The skip is the scope's, not a dead row: the same hooks still refuse an unformatted file staged next
+        # (S1.1c-2 design §4.2: a skip alone proves no row works).
+        self.world.track(BAD, UNFORMATTED)
+        self.assertRefusedUnformatted()
 
     def test_a_staged_file_with_unstaged_changes_is_refused_by_the_guard(self):
         self.world.track(BAD, FORMATTED)
@@ -121,6 +140,7 @@ class HookCommit(support.DriverTest):
         self.assertIn(f"{BAD} {GUARD}", out)
         self.assertNotIn("GATE PASSED", out)
         self.assertNotIn("| step", out, "the guard refuses before any row runs: no summary table")
+        self.assertHookRefused((code, out), GUARD_LINE)
         self.assertEqual(self.snapshot(), before)
 
     def test_a_no_op_pre_commit_hook_fails_this_proof(self):

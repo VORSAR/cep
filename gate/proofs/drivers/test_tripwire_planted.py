@@ -16,6 +16,7 @@ from gate.proofs.drivers import support
 CORPUS_TEST = "internal/playback/s3_2b_2_corpus_test.go"
 PLANT_SWITCH = 'os.Getenv("CEP_DETERMINISM_PLANT") == "maporder"'
 PLAYBACK = "github.com/vorsar/cep/internal/playback"
+TRIPWIRE_RED = f"exit 1: {PLAYBACK}: TestTripwire"
 
 
 class TripwireAndDeterminismPlanted(support.DriverTest):
@@ -46,6 +47,7 @@ class TripwireAndDeterminismPlanted(support.DriverTest):
         record = run.record("test", "tripwire")
         self.assertEqual(record["verdict"], "fail", run.stdout)
         self.assertIn("TestTripwire", record["reason"], record)
+        self.assertRed(run, "test", "tripwire", TRIPWIRE_RED)  # the exact reason (S1.1c-2 W0)
         self.assertIn("over its blocking ceiling 0", run.row_file("test", "tripwire", "test.json"))
 
     def test_a_metric_without_a_ceiling_is_red(self):
@@ -54,6 +56,7 @@ class TripwireAndDeterminismPlanted(support.DriverTest):
         run = self.run_row("test", "tripwire")
         record = run.record("test", "tripwire")
         self.assertEqual(record["verdict"], "fail", run.stdout)
+        self.assertRed(run, "test", "tripwire", TRIPWIRE_RED)  # the exact reason (S1.1c-2 W0)
         self.assertIn("no ceiling configured for sink-depth", run.row_file("test", "tripwire", "test.json"))
 
     def test_a_map_order_nondeterminism_is_red_against_the_golden(self):
