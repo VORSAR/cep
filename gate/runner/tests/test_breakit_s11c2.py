@@ -34,6 +34,11 @@ both findings, which reappear when the comments go. §0.3's table and go_directi
 in a tracked .go file is no directive and no fault, and no PREFILTER pattern finds it. No linter is enabled until
 S1.1c-4, so today it waives nothing; the day gosec is enabled every `#nosec` already in the tree is a live waiver
 with no metadata and no LAW Δ line.
+
+BK-B4 (Python side; the Go side is tools/archcheck/breakit_s11c2_test.go): the pin counts a driver's cases from its
+source, the proofs row runs what unittest loads. A module-level `load_tests` returning only the green control, or a
+`del Planted.test_red` after the class, keeps the static count while the shim runs and reports less — measured:
+pyshim says `passed 1 tests` for a module of three cases, two of them failing.
 """
 
 import contextlib
@@ -212,6 +217,24 @@ class NosecIsAWaiver(unittest.TestCase):
 
     def test_a_nosec_is_found_by_lawdeltas_prefilter(self):
         self.assertTrue(any(p in NOSEC for p in suppressions.PREFILTER))
+
+
+RUNS_LESS = {
+    "a load_tests hook": "\n\ndef load_tests(loader, tests, pattern):\n    return unittest.TestSuite()\n",
+    "a case deleted after the class": "\n\ndel Planted.test_a\n",
+}
+
+
+class TeethCountsWhatRuns(unittest.TestCase):
+    """BK-B4: a driver whose module keeps unittest from loading a counted case is a fault."""
+
+    def test_each_module_that_runs_less_than_it_counts_is_a_fault(self):
+        for why, tail in RUNS_LESS.items():
+            with self.subTest(why=why):
+                source = DRIVER.format(body="    def test_a(self):\n        run = self.gate()\n" + RED) + tail
+                cases, faults = teeth.python_cases(source, "d.py")
+                self.assertEqual(cases, ["Planted.test_a"])
+                self.assertTrue(faults, f"{why}: the case is counted but never runs")
 
 
 if __name__ == "__main__":
