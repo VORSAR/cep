@@ -150,6 +150,21 @@ class Shim(support.GateTest):
         body = HEAD + "    @unittest.expectedFailure\n    def test_a(self):\n        pass\n"
         self.assertBad(body, "unexpected success")
 
+    # BK-S2 (owner, 2026-11-12, S1.1c-2's review and break-it 1): the shim binds its runner and result class before
+    # the import, and the tests it ran must be the tests the module's suite holds.
+
+    def test_a_case_that_runs_nothing_is_a_mismatch(self):
+        body = HEAD + (
+            "    def run(self, result=None):\n"
+            "        if self._testMethodName == 'test_red':\n"
+            "            return result\n"
+            "        return super().run(result)\n\n"
+            "    def test_green(self):\n        pass\n\n"
+            "    def test_red(self):\n        self.fail('a real failure')\n"
+        )
+        self.assertBad(body, "ran 1 of 2 tests")
+        self.assertNotIn("passed", "\n".join(self.report_lines()))
+
     def test_a_failure(self):
         self.assertBad(HEAD + "    def test_a(self):\n        self.fail('x')\n", "failed")
 

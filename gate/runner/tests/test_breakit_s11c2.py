@@ -157,7 +157,7 @@ import unittest
 from gate.proofs.drivers import support
 
 
-class Planted(support.GateCase):
+class Planted(support.DriverTest):
 {body}
 """
 RED = '        self.assertRed(run, "lint", "suppressions", "exit 1: failed: x")\n'
@@ -265,7 +265,7 @@ class TeethCountsWhatRuns(unittest.TestCase):
 
     def test_a_case_in_a_class_unittest_does_not_load_is_a_fault(self):
         source = DRIVER.format(body="    def test_a(self):\n        run = self.gate()\n" + RED)
-        source = source.replace("class Planted(support.GateCase):", "class Planted:")  # not a TestCase
+        source = source.replace("class Planted(support.DriverTest):", "class Planted:")  # not a TestCase
         cases, faults = teeth.python_cases(source, "d.py")
         self.assertTrue(faults, f"{cases} counted from a class unittest never loads")
 

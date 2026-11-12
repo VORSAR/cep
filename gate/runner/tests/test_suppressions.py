@@ -7,6 +7,7 @@ Go-directive and Python-marker text of §2.8 is asserted verbatim. The policy's 
 DEVELOPMENT.md when lane A lands, after which this test should read DEVELOPMENT.md's fenced examples instead.
 """
 
+import contextlib
 import os
 import re
 import sys
@@ -14,6 +15,7 @@ import unittest
 from datetime import date
 
 from gate.runner import allowlists, anchors, sprintid, suppressions
+from gate.runner.rows import suppressions as row
 from gate.runner.tests import support
 
 TODAY = date(2026, 11, 12)
@@ -26,13 +28,17 @@ ORDER = sprintid.Order(
         sprintid.Row("S4.1", False),
     )
 )
-META = 'PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/a.md#title sprint=S1.1c-2'
+META = (
+    'PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/sprints/decisions.md#title'
+    " sprint=S1.1c-2"
+)
 WRITE = re.compile(r"^p\.go:(\d+): write //nolint:(<linter>|\S*) \(two slashes, no space\)$")
 METADATA = 'a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=…'
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 NO_REASON = "write its reason as another comment: # fmt: skip  # <reason, 12+ characters>"
 ON_STATEMENT = "write # fmt: skip  # <reason> on the statement"
 NOQA = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
+SPELLING = "ruff honours this spelling too; write # fmt: skip  # <reason>"
 
 
 # §2.7's examples, read from DEVELOPMENT.md's suppression policy itself, so the policy and the checker cannot drift
@@ -87,6 +93,50 @@ RUFF = (
     # design ambiguity: a noqa segment is both a fault of its own and "not a reason", so the skip beside it is the
     # missing-reason fault too.
     ("# noqa # fmt: skip", (NOQA, NO_REASON)),
+    # BK-B1 (S1.1c-2's fix round), measured with the pinned ruff 0.17.3 (`ruff format --isolated`, stdin; the
+    # statement's layout kept or not): ruff strips the "#", trims the whitespace, and reads `fmt:` + any run of
+    # spaces, tabs or form feeds + `skip`/`off`/`on` (`yapf:` likewise + `disable`/`enable`). Each spelling below
+    # keeps the layout (`fmt: on`/`yapf: enable` close a region), so each is red; `# fmt: skip` and `# fmt:skip`
+    # stay the accepted skips (design §2.3).
+    (f"# fmt:  skip  # {REASON}", (SPELLING,)),
+    (f"# fmt:\tskip  # {REASON}", (SPELLING,)),
+    (f"#  fmt:   skip  # {REASON}", (SPELLING,)),
+    (f"# fmt: \tskip  # {REASON}", (SPELLING,)),
+    (f"#fmt:  skip  # {REASON}", (SPELLING,)),
+    (f"# {REASON}  # fmt:  skip", (SPELLING,)),
+    ("# fmt:  skip", (SPELLING,)),
+    (f"# FMT:  SKIP  # {REASON}", (RUFF_IGNORES,)),
+    ("# fmt:  skip -- because of a long reason", (RUFF_IGNORES,)),
+    ("# fmt:  off", (ON_STATEMENT,)),
+    ("# fmt:\toff", (ON_STATEMENT,)),
+    ("# fmt:  on", (ON_STATEMENT,)),
+    ("# yapf:  disable", (ON_STATEMENT,)),
+    ("# yapf:\tdisable", (ON_STATEMENT,)),
+    ("# yapf:  enable", (ON_STATEMENT,)),
+)
+
+# W1-F3: the waivers the pinned tools honour, valid or not, each read as one exemption (the LAW Δ count); measured
+# with the pinned ruff 0.17.3: the skip and region forms above by `ruff format`, the isort forms by `ruff check
+# --select I --ignore-noqa` (`isort: skip_file`, `ruff: isort: skip_file`, `isort: off` at the head of a file and a
+# trailing `isort: skip` waive I001; `isort: split` and `isort: on` waive nothing). (comment, waivers read)
+HONOURED = (
+    (f"# fmt: skip  # {REASON}", 1),
+    ("# fmt: skip", 1),
+    ("# fmt:skip", 1),
+    ("# fmt:  skip", 1),
+    (f"# fmt:\tskip  # {REASON}", 1),
+    ("# fmt: off", 1),
+    ("# fmt:  off", 1),
+    ("# fmt: on", 0),
+    ("# yapf: disable", 1),
+    ("# yapf:\tdisable", 1),
+    ("# yapf: enable", 0),
+    ("# isort: skip", 1),
+    ("# isort: skip_file", 1),
+    ("# ruff: isort: skip_file", 1),
+    ("# noqa", 0),
+    (f"# FMT: SKIP  # {REASON}", 0),
+    ("# fmt: skip -- because of a long reason", 0),
 )
 
 
@@ -114,14 +164,14 @@ def read_repo(path: str) -> str | None:
 
 
 def fixture_ctx() -> allowlists.Ctx:
-    """The META ref resolves through a fake: docs/a.md#title only."""
+    """The META ref resolves through a fake: docs/sprints/decisions.md#title only."""
     return allowlists.Ctx(
         today=TODAY,
         tier="T2",
         order=ORDER,
         current=sprintid.parse("S1.1c-2"),
         issues=frozenset({"S3.3-2-1"}),
-        resolve=lambda ref: "" if ref == "docs/a.md#title" else f"{ref} does not resolve",
+        resolve=lambda ref: "" if ref == "docs/sprints/decisions.md#title" else f"{ref} does not resolve",
     )
 
 
@@ -196,7 +246,7 @@ class GoDirectives(unittest.TestCase):
                     "PERMANENT",
                     {
                         "reason": "fixture generator; output is never security-relevant",
-                        "ref": "docs/a.md#title",
+                        "ref": "docs/sprints/decisions.md#title",
                         "sprint": "S1.1c-2",
                     },
                 )
@@ -205,7 +255,8 @@ class GoDirectives(unittest.TestCase):
 
     def test_an_escaped_quote_in_the_reason_is_allowed(self):
         comment = (
-            '//nolint:errcheck // PERMANENT reason="the \\"x\\" fixture generator" ref=docs/a.md#title sprint=S1.1c-2'
+            '//nolint:errcheck // PERMANENT reason="the \\"x\\" fixture generator" ref=docs/sprints/decisions.md#title'
+            " sprint=S1.1c-2"
         )
         directives, faults = suppressions.go_directives("p.go", go_line(comment))
         self.assertEqual((len(directives), faults), (1, []))
@@ -235,7 +286,7 @@ class GoDirectives(unittest.TestCase):
 
     def test_unterminated_quote(self):
         self.assertFault(
-            '//nolint:errcheck // PERMANENT reason="never closed ref=docs/a.md#title sprint=S1.1c-2',
+            '//nolint:errcheck // PERMANENT reason="never closed ref=docs/sprints/decisions.md#title sprint=S1.1c-2',
             "unterminated quote",
         )
 
@@ -270,7 +321,7 @@ class Check(unittest.TestCase):
         self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled (none is until S1.1c-4)"])
 
     def test_the_field_rules_apply(self):
-        comment = '//nolint:errcheck // PERMANENT reason="short" ref=docs/a.md#title sprint=S1.1c-2'
+        comment = '//nolint:errcheck // PERMANENT reason="short" ref=docs/sprints/decisions.md#title sprint=S1.1c-2'
         got = suppressions.check(self.directives(comment), fixture_ctx(), frozenset({"errcheck"}))
         self.assertEqual(got, ["p.go:3: reason must be at least 12 characters"])
 
@@ -338,6 +389,104 @@ class Prefilter(unittest.TestCase):
                 self.assertTrue(any(p in form for p in suppressions.PREFILTER), form)
 
 
+class EveryHonouredWaiverIsRead(unittest.TestCase):
+    """W1-F3: the readers return every waiver the pinned tools honour, valid or not, so the LAW Δ count holds a
+    faulted one too; the fault is the reader's, and `check` adds nothing for it."""
+
+    def test_the_python_waivers(self):
+        for comment, n in HONOURED:
+            with self.subTest(comment=comment):
+                self.assertEqual(suppressions.count("gate/x.py", f"import os\nx = 1  {comment}\n"), n)
+
+    def test_the_go_directives_golangci_honours(self):
+        for comment, honoured, _ in GOLANGCI:
+            with self.subTest(comment=comment):
+                self.assertEqual(suppressions.count("p.go", go_line(comment)), 1 if honoured else 0)
+
+    def test_a_reasonless_skip_is_read_with_an_empty_reason_and_not_valid(self):
+        markers, faults = suppressions.py_markers("gate/x.py", "x = 1  # fmt: skip\n")
+        self.assertEqual(faults, [f"gate/x.py:1: {NO_REASON}"])
+        want = suppressions.Directive("gate/x.py", 1, ("fmt",), "MARKER", {"reason": ""}, valid=False)
+        self.assertEqual(markers, [want])
+
+    def test_check_adds_nothing_for_a_directive_its_reader_faulted(self):
+        directives, faults = suppressions.go_directives("p.go", go_line(f"// nolint:errcheck // {META}"))
+        self.assertEqual((len(directives), len(faults)), (1, 1), faults)
+        self.assertFalse(directives[0].valid)
+        self.assertEqual(suppressions.check(directives, fixture_ctx(), frozenset()), [])
+
+
+GENERATED_HEADER = "// Code generated by hand. DO NOT EDIT.\n"
+
+
+class GeneratedMarker(unittest.TestCase):
+    """BK-S6 (owner, 2026-11-12, S1.1c-2's review and break-it 3): the generated-code marker is Go's own rule
+    (`go/ast.IsGenerated`): a line `// Code generated <generator> DO NOT EDIT.` in a comment before the package
+    clause. It is read as an in-code exemption of kind GENERATED, line numbered; the row requires it listed."""
+
+    def generated(self, source: str) -> list[suppressions.Directive]:
+        return [d for d in suppressions.read("internal/x/x.go", source)[0] if d.kind == "GENERATED"]
+
+    def test_before_the_package_clause_it_is_read(self):
+        cases = {
+            "the first line": (GENERATED_HEADER + "\npackage x\n", 1),
+            "after another comment": ("// Package x is x.\n" + GENERATED_HEADER + "package x\n", 2),
+            "a carriage return before the newline (Go strips it)": (
+                GENERATED_HEADER.replace("\n", "\r\n") + "package x\n",
+                1,
+            ),
+            "a line of a block comment": ("/*\n" + GENERATED_HEADER + "*/\npackage x\n", 1),
+        }
+        for why, (source, line) in cases.items():
+            with self.subTest(why=why):
+                want = suppressions.Directive("internal/x/x.go", line, ("generated",), "GENERATED", {})
+                self.assertEqual(self.generated(source), [want])
+
+    def test_anything_else_is_no_marker(self):
+        cases = {
+            "after the package clause": "package x\n\n" + GENERATED_HEADER,
+            "no generator named": "// Code generated DO NOT EDIT.\npackage x\n",
+            "no final period": "// Code generated by hand. DO NOT EDIT\npackage x\n",
+            "a block comment's own text": "/* Code generated by hand. DO NOT EDIT. */\npackage x\n",
+            "in a string": 'package x\n\nvar s = "// Code generated by hand. DO NOT EDIT."\n',
+        }
+        for why, source in cases.items():
+            with self.subTest(why=why):
+                self.assertEqual(self.generated(source), [])
+
+    def test_the_prefilter_finds_it(self):
+        self.assertTrue(any(p in GENERATED_HEADER for p in suppressions.PREFILTER))
+
+
+class RuffPinRefuses(support.GateTest):
+    """BK-B2: ruff.toml settings the pin does not read are red (the pin reads only [lint]'s per-file tables)."""
+
+    def pin(self, ruff_toml: str) -> list[str]:
+        self.write("ruff.toml", ruff_toml)
+        self.write("docs/base.toml", "")
+        with contextlib.chdir(self.repo):
+            return row.ruff_pin({})
+
+    def test_extend_is_refused_even_naming_an_empty_file(self):
+        self.assertEqual(
+            self.pin('extend = "docs/base.toml"\n[lint]\nselect = ["E"]\n'),
+            ["ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there"],
+        )
+
+    def test_top_level_waivers_are_refused(self):
+        for key, value in (
+            ("ignore", '["TID251"]'),
+            ("extend-ignore", '["TID251"]'),
+            ("per-file-ignores", '{"gate/x.py" = ["TID251"]}'),
+            ("extend-per-file-ignores", '{"gate/x.py" = ["TID251"]}'),
+        ):
+            with self.subTest(key=key):
+                self.assertEqual(
+                    self.pin(f'{key} = {value}\n[lint]\nselect = ["E"]\n'),
+                    [f"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)"],
+                )
+
+
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
 ROW = os.path.join(support.REPO, "gate", "runner", "rows", "suppressions.py")
 SPRINTS = '{"schema": 1, "note": "n", "rows": [{"id": "S3.1", "closed": true}, {"id": "S1.1c", "closed": false}]}\n'
@@ -354,8 +503,8 @@ class Row(support.GateTest):
         self.track("gate/current-sprint", "S1.1c-2\n")
         self.track("gate/known-issues.json", KNOWN)
         self.track("ruff.toml", '[lint]\nselect = ["E"]\n')
-        self.track("docs/a.md", "# Title\n")
-        self.write("docs/untracked.md", "# Title\n")
+        self.track("docs/sprints/decisions.md", "# Title\n")
+        self.write("docs/architecture/adr/untracked.md", "# Title\n")
         entry = (
             '{"target": "internal/table: sync.Mutex", "kind": "PERMANENT", "reason": "the one write mutex here",'
             f' "ref": "{purity_ref}", "sprint": "S3.1-2"}}'
@@ -377,23 +526,70 @@ class Row(support.GateTest):
         return code, out.decode("utf-8", errors="replace") + err.decode("utf-8", errors="replace")
 
     def test_a_clean_world_is_green(self):
-        self.world("docs/a.md#title")
+        self.world("docs/sprints/decisions.md#title")
         code, out = self.run_row(["tools/allowlists/purity.json"])
         self.assertEqual(code, 0, out)
 
     def test_an_untracked_doc_never_satisfies_a_ref(self):
         # DA-L5: `read` gives None for a file git does not track, though it is on the disk.
-        self.world("docs/untracked.md#title")
+        self.world("docs/architecture/adr/untracked.md#title")
         code, out = self.run_row(["tools/allowlists/purity.json"])
         self.assertEqual(code, 1, out)
-        self.assertIn("docs/untracked.md is not a tracked Markdown file", out)
+        self.assertIn("docs/architecture/adr/untracked.md is not a tracked Markdown file", out)
 
     def test_the_hooks_are_in_scope(self):
-        self.world("docs/a.md#title")
+        self.world("docs/sprints/decisions.md#title")
         self.track(".githooks/pre-commit", "#!/usr/bin/env python3\nimport os  # noqa\n")
         code, out = self.run_row(["tools/allowlists/purity.json", ".githooks/pre-commit"])
         self.assertEqual(code, 1, out)
         self.assertIn(f".githooks/pre-commit:2: {NOQA}", out)
+
+    # BK-S6: a generated file is listed by path in tools/allowlists/generated.json (rule `generated`).
+
+    def generated_list(self, *targets: str) -> None:
+        entries = ", ".join(
+            f'{{"target": "{t}", "kind": "PERMANENT", "reason": "written by the fixture generator",'
+            ' "ref": "docs/sprints/decisions.md#title", "sprint": "S1.1c-2"}'
+            for t in targets
+        )
+        self.track(
+            "tools/allowlists/generated.json",
+            f'{{"schema": 1, "note": "n", "rule": "generated", "entries": [{entries}]}}\n',
+        )
+
+    def test_a_generated_marker_not_listed_is_red(self):
+        self.world("docs/sprints/decisions.md#title")
+        self.generated_list()
+        self.track("internal/x/gen.go", GENERATED_HEADER + "\npackage x\n")
+        code, out = self.run_row(["tools/allowlists/purity.json", "internal/x/gen.go"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("internal/x/gen.go:1: a generated file is listed by path in tools/allowlists/generated.json", out)
+
+    def test_a_listed_generated_file_is_green(self):
+        self.world("docs/sprints/decisions.md#title")
+        self.generated_list("internal/x/gen.go")
+        self.track("internal/x/gen.go", GENERATED_HEADER + "\npackage x\n")
+        code, out = self.run_row(["tools/allowlists/purity.json", "internal/x/gen.go"])
+        self.assertEqual(code, 0, out)
+
+    def test_a_listed_file_without_the_marker_is_a_stale_target(self):
+        self.world("docs/sprints/decisions.md#title")
+        self.generated_list("internal/x/gen.go")
+        self.track("internal/x/gen.go", "package x\n\n" + GENERATED_HEADER)
+        code, out = self.run_row(["tools/allowlists/purity.json", "internal/x/gen.go"])
+        self.assertEqual(code, 1, out)
+        self.assertIn(
+            "tools/allowlists/generated.json: internal/x/gen.go: carries no generated marker before its package"
+            " clause (a stale target)",
+            out,
+        )
+
+    def test_a_listed_file_that_does_not_exist_is_a_stale_target(self):
+        self.world("docs/sprints/decisions.md#title")
+        self.generated_list("internal/x/gone.go")
+        code, out = self.run_row(["tools/allowlists/purity.json"])
+        self.assertEqual(code, 1, out)
+        self.assertIn("tools/allowlists/generated.json: internal/x/gone.go: does not exist (a stale target)", out)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ import os
 from datetime import date, timedelta
 from unittest import mock
 
-from gate.runner import git
+from gate.runner import git, suppressions
 from gate.runner.rows import lawdelta
 from gate.runner.tests import support
 
@@ -189,6 +189,71 @@ class Exemptions(support.GateTest):
         self.assertTrue(all(s.startswith("  +internal/x/f") for s in got[1:7]), got)
         self.assertEqual(got[7], "  (and 2 more)")
 
+    # W1-F3 and CA-L1 (S1.1c-2's fix round): every waiver the tools honour counts, valid or not; a reason or other
+    # metadata changed in place is `~` changed, never `+` added; an unreadable file or list is said on the line.
+
+    def test_a_reason_given_to_a_reasonless_marker_is_a_changed_reason(self):
+        self.main_world({"gate/runner/z.py": "import os\nx = 1  # fmt: skip\n"})
+        self.change({"gate/runner/z.py": "import os\n" + PY_MARK})
+        code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        want = ["exemptions: 1 in code, 0 listed (+0 this diff)", "  ~gate/runner/z.py:2 # fmt: skip: reason changed"]
+        self.assertEqual(self.section(lines), want)
+
+    def test_a_reasonless_marker_and_a_non_canonical_spelling_count(self):
+        self.main_world()
+        self.change(
+            {"gate/runner/z.py": "import os\nx = 1  # fmt: skip\ny = 2  # fmt:  skip  # a reason long enough\n"}
+        )
+        code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        want = [
+            "exemptions: 2 in code, 0 listed (+2 this diff)",
+            "  +gate/runner/z.py:2 # fmt: skip",
+            "  +gate/runner/z.py:3 # fmt: skip",
+        ]
+        self.assertEqual(self.section(lines), want)
+
+    def test_a_directives_changed_reason_is_named_as_changed(self):
+        self.main_world({"internal/x/y.go": go_file(GO_META)})
+        self.change({"internal/x/y.go": go_file(GO_META.replace("fixture generator;", "the fixture generator;"))})
+        code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        want = [
+            "exemptions: 1 in code, 0 listed (+0 this diff)",
+            "  ~internal/x/y.go:3 //nolint:gosec PERMANENT S1.1c-2 ref=docs/a.md#title: reason changed",
+        ]
+        self.assertEqual(self.section(lines), want)
+
+    def test_a_directives_changed_sprint_is_named_as_changed(self):
+        self.main_world({"internal/x/y.go": go_file(GO_META.replace("S1.1c-2", "S1.1c-1"))})
+        self.change({"internal/x/y.go": go_file(GO_META)})
+        code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        want = [
+            "exemptions: 1 in code, 0 listed (+0 this diff)",
+            "  ~internal/x/y.go:3 //nolint:gosec PERMANENT S1.1c-2 ref=docs/a.md#title: sprint S1.1c-1 → S1.1c-2",
+        ]
+        self.assertEqual(self.section(lines), want)
+
+    def test_an_unreadable_list_is_said_on_the_line(self):
+        self.main_world({"tools/allowlists/purity.json": allowlist("purity", entry("internal/a: sync.Pool"))})
+        self.change({"tools/allowlists/purity.json": "{not json\n"})
+        code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(self.section(lines), ["exemptions: 0 in code, 0 listed (−1 this diff) (1 list unreadable)"])
+
+    def test_an_unreadable_file_is_said_on_the_line(self):
+        self.main_world({"gate/runner/z.py": "import os\n" + PY_MARK})
+        self.change({"gate/runner/z.py": "import os\n" + PY_MARK + "y = (\n"})
+        code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        want = [
+            "exemptions: 0 in code, 0 listed (−1 this diff) (1 file unreadable)",
+            "  −gate/runner/z.py:2 # fmt: skip",
+        ]
+        self.assertEqual(self.section(lines), want)
+
     def test_a_git_error_is_a_failure(self):
         # design ambiguity: §2.6 says lawdelta turns GitError into FAIL; the failure's wording is not given.
         self.main_world()
@@ -277,6 +342,35 @@ class Exemptions(support.GateTest):
         self.assertEqual(code, 0, lines)
         i = next(n for n, s in enumerate(lines) if s.startswith("gate/known-issues.json +"))
         self.assertEqual(lines[i + 1], "  BA9: forward S1.1c-3 → S1.1c-4")
+
+
+class InCodeScope(support.GateTest):
+    """CA-L4 (S1.1c-2's fix round): lawdelta's git pathspecs select exactly the files suppressions.scoped reads."""
+
+    def test_the_pathspecs_select_what_scoped_accepts(self):
+        paths = [
+            "a.go",
+            "internal/x/y.go",
+            "internal/x/y_test.go",
+            "a.go.txt",
+            "a.py",
+            "gate/a.py",
+            "gate/x/y/z.py",
+            "gate/a.pyc",
+            "gate/a.py.txt",
+            "gategate/a.py",
+            "x/gate/a.py",
+            ".githooks/pre-commit",
+            ".githooks/a.py",
+            ".githooks/x/y",
+            "x/.githooks/pre-commit",
+            "docs/a.md",
+        ]
+        for path in paths:
+            self.track(path, "x\n")
+        out = self.git("ls-files", "-z", "--", *lawdelta.IN_CODE)
+        selected = sorted(p.decode() for p in out.split(b"\0") if p)
+        self.assertEqual(selected, sorted(p for p in paths if suppressions.scoped(p)))
 
 
 if __name__ == "__main__":
