@@ -571,9 +571,10 @@ class DocLine(unittest.TestCase):
             "Decision — an ADR changed — owner decision required",
         )
 
-    def test_two_hunks_name_the_first_and_count_them(self):
+    def test_two_hunks_under_two_headings_name_both(self):
+        # S1.1c-2 design §4.5, §11.13: the first three distinct headings replace v1's "(first of <n> hunks)".
         new = self.SPEC.replace("text", "text changed").replace("more", "more changed")
-        self.assertEqual(law.doc_line(self.SPEC, new, self.FLAG), "§8 — " + self.FLAG + " (first of 2 hunks)")
+        self.assertEqual(law.doc_line(self.SPEC, new, self.FLAG), "§8, §9 — " + self.FLAG)
 
     def test_no_heading_above_the_change(self):
         self.assertEqual(law.doc_line("a\nb\n", "a\nc\n", self.FLAG), self.FLAG)
