@@ -765,11 +765,13 @@ def _listed(old: dict | None, new: dict | None, key: str, added, changed) -> lis
     for name in sorted(set(after) & set(before)):
         subs += changed(name, before[name], after[name])
     subs += [f"−{name}" for name in sorted(set(before) - set(after))]
+    raw_before = len(old["entries"]) if old is not None else 0
+    raw_after = len(new["entries"]) if new is not None else 0  # raw: an id listed twice counts twice (BK-S5)
     if old is None:
-        return [f"file added: {len(after)} entries", *subs]
+        return [f"file added: {raw_after} entries", *subs]
     if new is None:
-        return [f"file removed: {len(before)} entries", *subs]
-    return [f"({len(after)} entries)", *subs]
+        return [f"file removed: {raw_before} entries", *subs]
+    return [f"({raw_after} entries)", *subs]
 
 
 def _allowlist_added(target: str, e: dict) -> str:
