@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
 
-from gate.runner import sprintid
+from gate.runner import anchors, sprintid
 
 RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated"})  # S1.1c-3 adds "govulncheck"
 KINDS = ("PERMANENT", "TEMP")
@@ -154,8 +154,20 @@ def sprint_fault(sprint: str, ctx: Ctx) -> str:
     return ""
 
 
+# Where a PERMANENT exemption's ref may point (owner, 2026-11-12, S1.1c-2's review and break-it 2): a recorded decision.
+DECISION_DIR = "docs/architecture/adr/"
+DECISIONS = "docs/sprints/decisions.md"
+
+
 def ref_fault(ref: str, ctx: Ctx) -> str:
-    """ "" when the ref resolves; else the resolver's why, verbatim (design §10.6)."""
+    """ "" when the ref names a recorded decision — a heading of an ADR or of docs/sprints/decisions.md (CA-S3) —
+    that resolves; else why not: the path rule's text, or the resolver's why, verbatim (design §10.6)."""
+    try:
+        path, _ = anchors.split_ref(ref)
+    except ValueError:
+        return ctx.resolve(ref)  # the resolver names the form's fault
+    if not (path.startswith(DECISION_DIR) or path == DECISIONS):
+        return f"ref {path} is not a recorded decision: cite {DECISION_DIR}… or {DECISIONS}#…"
     return ctx.resolve(ref)
 
 
