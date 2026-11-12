@@ -45,3 +45,23 @@ func TestBreakitUnusedTestHygieneTarget(t *testing.T) {
 		t.Fatalf("-tests: exit %d, output %q: an entry that waives nothing is not reported", code, out)
 	}
 }
+
+// BK-B4: -cases parses a file go test never compiles. A pinned Go proof hollowed by a build constraint keeps its
+// path, its cases and its verdict calls, so the instrument pin is green while the unit row never runs it (no
+// event, nothing red). Checked on the real tree: `//go:build ignore` atop internal/parser/errorcounts_test.go
+// left test_instruments_pin.RealTree green and dropped TestErrorCountsMatchTheCatalogue from `go test -list`.
+func TestBreakitCasesBuildConstrainedFile(t *testing.T) {
+	t.Parallel()
+	const body = "package x\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) { t.Fatal(\"x\") }\n"
+	for name, constraint := range map[string]string{
+		"go:build ignore": "//go:build ignore\n\n",
+		"+build never":    "// +build never\n\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, faults := Cases("x_test.go", constraint+body)
+			if len(faults) == 0 {
+				t.Errorf("no fault: a proof file go test never compiles is counted")
+			}
+		})
+	}
+}
