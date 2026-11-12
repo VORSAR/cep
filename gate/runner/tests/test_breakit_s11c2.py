@@ -36,9 +36,10 @@ S1.1c-4, so today it waives nothing; the day gosec is enabled every `#nosec` alr
 with no metadata and no LAW Δ line.
 
 BK-B4 (Python side; the Go side is tools/archcheck/breakit_s11c2_test.go): the pin counts a driver's cases from its
-source, the proofs row runs what unittest loads. A module-level `load_tests` returning only the green control, or a
-`del Planted.test_red` after the class, keeps the static count while the shim runs and reports less — measured:
-pyshim says `passed 1 tests` for a module of three cases, two of them failing.
+source, the proofs row runs what unittest loads. A module-level `load_tests` returning only the green control, a
+`del Planted.test_red` after the class, or a case moved into a class that is not a TestCase keeps the static count
+while the shim runs and reports less — measured: pyshim says `passed 1 tests` for a module of three cases, two of
+them failing.
 
 BK-S5: gate/known-issues.json may list one id twice. knownissues.check keys the entries by id, so the second hides
 the first: an id re-entered with a later first_seen (and its Found cell edited to match) passes the pin, and LAW
@@ -261,6 +262,12 @@ class TeethCountsWhatRuns(unittest.TestCase):
                 cases, faults = teeth.python_cases(source, "d.py")
                 self.assertEqual(cases, ["Planted.test_a"])
                 self.assertTrue(faults, f"{why}: the case is counted but never runs")
+
+    def test_a_case_in_a_class_unittest_does_not_load_is_a_fault(self):
+        source = DRIVER.format(body="    def test_a(self):\n        run = self.gate()\n" + RED)
+        source = source.replace("class Planted(support.GateCase):", "class Planted:")  # not a TestCase
+        cases, faults = teeth.python_cases(source, "d.py")
+        self.assertTrue(faults, f"{cases} counted from a class unittest never loads")
 
 
 ISSUE = '{{"id": "S3.3-2-1", "first_seen": "{first_seen}", "forward": "", "decision": ""}}'
