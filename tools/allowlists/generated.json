@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "note": "Generated Go files (ADR-0015 §2.1): a file whose `// Code generated … DO NOT EDIT.` comment precedes its package clause is generated only if listed here by path; archcheck's globals check and the coverage floor skip a listed file only. Empty: no generated Go file exists (owner, 2026-11-12, S1.1c-2's review and break-it 3).",
+  "rule": "generated",
+  "entries": []
+}
