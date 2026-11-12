@@ -239,6 +239,7 @@ func TestTypingRules(t *testing.T) {
 		{"duration * int", ar("*", a("d"), lit(2)), "", event.TDuration},
 		{"int * duration", ar("*", lit(2), a("d")), "", event.TDuration},
 		{"duration * float is not defined", ar("*", a("d"), a("f")), "E-TYPE-001", 0},
+		{"duration / duration is not defined", ar("/", a("d"), dur(1)), "E-TYPE-001", 0}, // SPEC §5.10 (S1.1c-3, DQ-L7)
 		{"string + string is not defined", ar("+", a("s"), a("s")), "E-TYPE-001", 0},
 		{"unary minus on a string", neg(a("s")), "E-TYPE-001", 0},
 		{"unary minus on a duration", neg(a("d")), "", event.TDuration},
