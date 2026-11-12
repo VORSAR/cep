@@ -436,7 +436,8 @@
         "T1",
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 60,
@@ -454,7 +455,8 @@
         ":(glob)**/*.go",
         ":(glob)tools/allowlists/*.json",
         "ruff.toml",
-        ":(glob)gate/**/*.py"
+        ":(glob)gate/**/*.py",
+        ":(glob).githooks/*"
       ],
       "min_wants": 1,
       "lands_in": "S1.1c-2",
@@ -494,12 +496,10 @@
       "lands_in": "S1.1c-2",
       "exclusive": false,
       "command": [
-        "python3.15",
-        "-I",
-        "-B",
-        "-X",
-        "utf8",
-        "gate/runner/rows/testhygiene.py",
+        "go",
+        "run",
+        "./tools/archcheck",
+        "-tests",
         "{files}"
       ]
     },

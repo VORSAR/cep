@@ -409,7 +409,18 @@ def copy_hooks(world: World) -> list[str]:
         with open(os.path.join(REPO, rel), "rb") as a, open(copied[-1], "rb") as b:
             if a.read() != b.read():
                 raise AssertionError(f"{rel} is not a byte-for-byte copy")
+    make_purity_targets(world)
     return copied
+
+
+def make_purity_targets(world: World) -> None:
+    """An empty directory for each package tools/allowlists/purity.json names, so archcheck's stale-target check sees
+    the lists as live in a world that holds only some packages (S1.1c-2 lane C's open item 1; design §3). Stale reads
+    the file system, so an empty directory is enough, and it adds no file to any row's scope."""
+    with open(os.path.join(world.repo, "tools", "allowlists", "purity.json"), encoding="utf-8") as f:
+        targets = [entry["target"] for entry in json.load(f)["entries"]]
+    for target in targets:
+        os.makedirs(os.path.join(world.repo, target.split(": ", 1)[0]), exist_ok=True)
 
 
 def isolated_git_env(world: World) -> dict[str, str]:

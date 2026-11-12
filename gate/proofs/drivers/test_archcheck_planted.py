@@ -36,6 +36,7 @@ class ArchcheckPlanted(support.DriverTest):
                 self.world.copy(rel)
         for rel in ("tools/importcheck/rules.json", "go.mod", "go.sum"):
             self.world.copy(rel)
+        support.make_purity_targets(self.world)  # the lists' packages exist, so no stale target joins the plant's line
         self.world.track(CLEAN, CLEAN_SOURCE)
         self.world.track(PLANTED, SOURCE)
         self.world.commit()

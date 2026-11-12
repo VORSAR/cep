@@ -189,5 +189,8 @@ class LawDeltaPlanted(support.DriverTest):
         run = self.run_committed()
         self.assertRow(run, "lint", "lawdelta", True, "covered 1")
         block = self.assertBlockFirst(run)
-        self.assertEqual(block[:2], [NONE, f"{BLOCK}: 1 law files have uncommitted edits (not shown)"], run.stdout)
+        # Relations, not counts (design DQ-S10): none, the always-printed exemption line (design §2.6), then the edits.
+        self.assertEqual(block[0], NONE, run.stdout)
+        self.assertRegex(block[1], r"^exemptions: \d+ in code, \d+ listed \(\+0 this diff\)$")
+        self.assertEqual(block[2], f"{BLOCK}: 1 law files have uncommitted edits (not shown)", run.stdout)
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
