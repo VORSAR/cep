@@ -55,6 +55,9 @@ os.rename(sys.argv[1] + ".tmp", sys.argv[1])
 threading.Event().wait()
 """
 
+# C6 (DA-S14): the same child, deaf to the stop's TERM.
+IGNORES_TERM = "import signal\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n" + PLANTED
+
 
 def pid_gone(pid: int) -> bool:
     try:
@@ -105,14 +108,16 @@ class ParityStop(support.GateTest):
             "version_line": "demo 1.0",
         }
 
-    def test_a_stop_during_the_tree_hash_kills_the_tree_child_and_records_the_interrupt(self):
+    def interrupt_during_the_tree_hash(self, planted_body: str) -> tuple[int, str]:
+        """Run the harness until the planted tree child holds the hash, SIGINT it, wait for it to exit and check the
+        records; return the planted child's pid and the run directory."""
         cache = os.path.join(self.root, "cache")
         with open(os.path.join(self.repo, "tools.json"), "w", encoding="utf-8") as f:
             json.dump({"schema": 1, "tools": [self.fake_tool(cache)]}, f)
         marker = os.path.join(self.root, "tree-child.pid")
         planted = os.path.join(self.root, "planted.py")
         with open(planted, "w", encoding="utf-8") as f:
-            f.write(PLANTED)
+            f.write(planted_body)
         harness = os.path.join(self.root, "harness.py")
         with open(harness, "w", encoding="utf-8") as f:
             f.write(HARNESS)
@@ -165,7 +170,6 @@ class ParityStop(support.GateTest):
 
         proc.send_signal(signal.SIGINT)
         wait.until("the harness to exit after SIGINT", lambda: proc.poll() is not None)
-        wait.until(f"the planted tree child {pid} to be gone after the harness exited", lambda: pid_gone(pid))
 
         self.assertEqual(proc.returncode, 1)
         self.assertEqual(lines()[-2:], ["GATE FAILED", "exit: 1"])
@@ -177,3 +181,19 @@ class ParityStop(support.GateTest):
         )
         with open(os.path.join(run_dir, "records", "lint", "x.json"), "rb") as f:
             self.assertEqual(json.loads(f.read())["reason"], scheduler.INTERRUPTED)
+        return pid, run_dir
+
+    def test_a_stop_during_the_tree_hash_kills_the_tree_child_and_records_the_interrupt(self):
+        pid, _ = self.interrupt_during_the_tree_hash(PLANTED)
+        wait.until(f"the planted tree child {pid} to be gone after the harness exited", lambda: pid_gone(pid))
+
+    def test_a_tree_child_deaf_to_term_is_named_left_running_and_killed(self):
+        # C6 (DA-S14): the stop ends the run's loop at once, so the parity group is probed and KILLed in run's
+        # finally; the S1.1c-1-1 probe names what the TERM left, in the parity scratch's left_running.txt.
+        pid, run_dir = self.interrupt_during_the_tree_hash(IGNORES_TERM)
+        left = os.path.join(run_dir, "parity", "left_running.txt")
+        self.assertTrue(os.path.exists(left), "the parity group's probe named nothing left running")
+        with open(left, encoding="utf-8") as f:
+            named = f.read()
+        self.assertIn(str(pid), named)
+        wait.until(f"the TERM-deaf tree child {pid} to be gone after the harness exited", lambda: pid_gone(pid))
