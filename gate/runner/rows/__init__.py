@@ -8,6 +8,7 @@ counted from the tool's own work and never from its input list.
 """
 
 import concurrent.futures
+import contextlib
 import os
 import signal
 import subprocess
@@ -57,15 +58,27 @@ def _module_name(path: str) -> str:
     return path.removesuffix(".py").replace("/", ".")
 
 
+def _report_lines(path: str) -> list[str]:
+    try:
+        return read_text(path).splitlines()
+    except FileNotFoundError:
+        return []
+
+
 def _run_module(python: str, path: str, out_dir: str) -> str:
     """Run one test module in its own process through the shim; give the problem, or "" if it passed.
 
     A pass needs the shim's own report as well as exit 0: a module can end the process with exit 0 before any test.
+    The report is read only from the file the shim is given (`<name>.report`, removed first), never from the
+    module's stdout, which the module can write to (S1.1c-2 design §4.3, BA13).
     """
     name = _module_name(path)
-    out = os.path.join(out_dir, f"{name}.stdout")
-    code = run_tool([python, *SHIM_FLAGS, SHIM, os.getcwd(), name], out, os.path.join(out_dir, f"{name}.stderr"))
-    said = [line for line in read_text(out).splitlines() if line.startswith(f"pyshim: {name}: ")]
+    out, report = os.path.join(out_dir, f"{name}.stdout"), os.path.join(out_dir, f"{name}.report")
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(report)
+    argv = [python, *SHIM_FLAGS, SHIM, os.getcwd(), name, report]
+    code = run_tool(argv, out, os.path.join(out_dir, f"{name}.stderr"))
+    said = [line for line in _report_lines(report) if line.startswith(f"pyshim: {name}: ")]
     if code == 0 and said and said[-1].startswith(f"pyshim: {name}: passed "):
         return ""
     return said[-1] if said else f"exit {code}, and the shim made no report"
