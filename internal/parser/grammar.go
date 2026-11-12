@@ -115,9 +115,17 @@ type SelectClause struct {
 }
 
 type Partition struct {
-	Pos  Position
-	Keys []*PartKey       `parser:"'partition' 'by' @@ (',' @@)*"`
-	TTL  *DurationOrParam `parser:"'ttl' @@"`
+	Pos Position
+	PartitionKeys
+	TTL *DurationOrParam `parser:"'ttl' @@"`
+}
+
+// PartitionKeys is the partition clause's head: `partition by` and its keys. Its leading literals capture nothing,
+// so they sit in a field of their own that holds no value (participle matches a tag with no capture and assigns
+// nothing); embedded, its fields are Partition's and participle names no production for it.
+type PartitionKeys struct {
+	By   struct{}   `parser:"'partition' 'by'"`
+	Keys []*PartKey `parser:"@@ (',' @@)*"`
 }
 
 // PartKey is `k of S` or `(k, j, …) of S` (SPEC §4.4, rev 5). The grammar accepts a one-attribute group, which the
