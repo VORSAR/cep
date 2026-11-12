@@ -255,7 +255,7 @@ var fragBindings = []struct {
 	{"from every <step>…", kindFrom},
 	{"sort(<n>, <attr>, <dir>)", kindWindowKind},
 	{"cron('0 0 * * *', <tz>)", kindWindowKind},
-	{"cron(<expr>, <tz>)", kindWindowKind}, // a string-taking argument binds to a string
+	{"cron(<cron>, <tz>)", kindWindowKind}, // SPEC:170's corrected form (§5): <cron> binds to a cron string (DQ-S2)
 	{"rule <Name>", kindRuleHead},
 	{"intent '<one sentence>'", kindIntent}, // inside quotes a placeholder stays a string
 	{"ttl <duration>", kindTTL},
