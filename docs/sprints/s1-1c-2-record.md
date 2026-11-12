@@ -42,6 +42,7 @@ At most two agents at once (plan check §1, §4, §9).
 - **W2, lanes D1 and D2 (2026-11-12; QA's reds 653fb85, the coordinator's data acb7122, D1 bbeb19f…184d306, D2 4b7af3c, bf4983a; cherry-picked):** re-run by the coordinator — archcheck's tests and `vet`, the real Go proofs' `-cases` counts; D1's T2 in a clean copy every row PASS. The coordinator wrote the measured instruments (32 row, 5 Go-test) into `gate/law.json`, the exact law entries and the `gomod` kinds; **the pin over the real tree: 0 faults** (red first on a lowered `min_wants`); `proofs` `min_wants` 36, `pytests` 82.
 - **T3 (`make combine-check`) on the integration branch at 707bbb7 (run 20261112T063928Z-f7bb34): GATE PASSED, exit 0 — 22 rows PASS** (G2).
 - **The review, the break-it and the fix round (2026-11-12):** the architect's blind review (0 blockers, 5 should-fix, 4 later) and QA's break-it (4 blockers, 7 should-fix, 2 later, each a committed red test) on e7b5d89; the owner's four decisions; then one batched round in two lanes. The Go lane (396aa97…af46144): its reds, then BK-B4, BK-S1, BK-S3, BK-S6 and W1-F2, re-run by the coordinator (archcheck's and `io/inmemory`'s tests, `vet`, the real tree's normal mode and `-tests` exit 0). The Python lane (cfdac6e…3f24ab9): its one red run `ran 286, failures 157, errors 31` over 12 modules (the saved output read by the coordinator), each red quoted for its finding; green after the fixes in the T4 run below. Both lanes cherry-picked onto the branch rebased on main 2b90da7 (#34). The proofs row alone at T4 (run 20261112T095036Z-3421eb) was red on two drivers only — FX-2, fixed in 317f235, both re-run green (6 and 2 cases).
+- **T4 (`make strict-gate`) on the integration branch:** at d669aad (run 20261112T100942Z-c63f8a) every row PASS but `proofs` — `test_lawdelta_planted`'s world `lawdelta` row `timeout after 60s`, the real tree's 46.8 s (FX-4); **at a2827c8 (run 20261112T104855Z-f790ce): GATE PASSED, exit 0 — 30 rows PASS**, `lawdelta` 3.2 s, `pytests` covered 83, `proofs` covered 36, `race` covered 20; the block `LAW Δ (113 files, vs 2b90da7)`, `exemptions: 40 in code, 8 listed (+8 this diff)` (G4's gate).
 
 ## Test material
 
@@ -103,7 +104,7 @@ Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (707bbb7)
              ☑ tests on the real code ☑ every breaker's red test committed
 Review (G3)  ☑ architecture review of the combined diff: no drift (0 blockers; its findings fixed or placed)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 strict-gate / CI exit 0, run complete ☐ owner's check passed
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (a2827c8; CI on the PR) ☐ owner's check passed
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main CI green on the merge commit
