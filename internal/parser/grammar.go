@@ -170,11 +170,16 @@ type KeyGroup struct {
 
 type Body struct {
 	Pos     Position
-	Pattern *PatternBody `parser:"  @@"`
-	Source  *Source      `parser:"| 'from' @@"`
-	Window  *WindowKind  `parser:"  ( 'window' @@"`
-	Emit    *EmitTok     `parser:"    'emit' 'on' @@"`
-	Late    *LateClause  `parser:"    'late' 'events' @@ )?"`
+	Pattern *PatternBody  `parser:"  @@"`
+	Source  *Source       `parser:"| 'from' @@"`
+	Window  *WindowClause `parser:"  ( @@"`
+	Emit    *EmitTok      `parser:"    'emit' 'on' @@"`
+	Late    *LateClause   `parser:"    'late' 'events' @@ )?"`
+}
+
+// WindowClause is a window rule's window: `window <kind>`. A named pointer: it opens Body's optional window group.
+type WindowClause struct {
+	Kind *WindowKind `parser:"'window' @@"`
 }
 
 type EmitTok struct {

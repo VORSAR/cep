@@ -185,7 +185,7 @@ func (l *lowerer) body(b *Body) model.Body {
 		return model.Body{Kind: model.BodyPattern, Pattern: l.pattern(b.Pattern), Pos: pos(b.Pos)}
 	case b.Window != nil:
 		w := model.Window{Source: l.source(b.Source), LateEvents: l.late(b.Late), EmitPos: pos(b.Emit.Pos)}
-		switch k := b.Window; {
+		switch k := b.Window.Kind; {
 		case k.Batch:
 			w.Kind = model.WindowBatch
 		case k.Delay != nil:
