@@ -5,14 +5,19 @@ or missing key, a flag on a non-doc, an unsafe path are each a ManifestError nam
 changed law file's one-line semantic delta and never raises: a side its parser cannot read says so; the list kinds
 (`allowlist`, `known-issues`) give a summary and one sub-line per changed entry instead (S1.1c-2 design §2.5).
 `block` renders the LAW Δ block: the data files and documents one line each (a list kind's sub-lines indented under
-it, at most 6), then the code and workflow entries grouped (owner, 2026-11-11, decision 4).
+it, at most 6), then the code and workflow entries grouped (owner, 2026-11-11, decision 4). A document's line names the
+first three distinct headings its changed hunks sit under, and counts the hunks that only add or remove a marker
+comment (S1.1c-2 design §4.5).
 """
 
 import difflib
 import json
 import re
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+
+from gate.runner import anchors
 
 KINDS = frozenset(
     {
@@ -32,6 +37,7 @@ KINDS = frozenset(
         "doc",
         "allowlist",
         "known-issues",
+        "gomod",
     }
 )
 LISTED = frozenset({"allowlist", "known-issues"})  # kinds whose delta is [summary, *sub-lines] (design §2.5)
@@ -41,8 +47,10 @@ TOP_KEYS = frozenset({"schema", "note", "paths", "instruments"})
 INSTRUMENT_REQUIRED = ("id", "row", "lands_in", "code", "proofs")
 INSTRUMENT_OPTIONAL = ("tiers", "min_wants", "expected_scope", "go_test", "exempt")
 PROOF_REQUIRED = ("path", "cases")
-HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*\s*$")
 NUMBERED = re.compile(r"^(\d+)\. ")
+HEADINGS_SHOWN = 3
+# A rule's marker comment (<!--cep…-->, <!--text-->); S1.1c-3's rule markers share this one constant (DA-L8).
+MARKER_COMMENT = re.compile(r"<!--(?:cep[^<>]*?|text)-->")
 NONE = "LAW Δ: none"
 
 
@@ -274,43 +282,83 @@ def block(
     return [f"LAW Δ ({n} file{'s' if n != 1 else ''}, vs {base_short})", *rendered, *grouped_lines]
 
 
-def _heading_in(lines: Sequence[str], start: int, end: int) -> str:
-    """The first heading within lines[start:end] (the break-it's finding 1: a new section appended at the end)."""
-    for text in lines[start:end]:
-        found = HEADING.match(text)
-        if found:
-            numbered = NUMBERED.match(found.group(1))
-            return f"§{numbered.group(1)}" if numbered else found.group(1)
-    return ""
+def _section(text: str) -> str:
+    """A heading's name in a line: "§<n>" for a top-level numbered one (`5. …`), else its text (`5.2 …` stays its
+    text, §11.14)."""
+    numbered = NUMBERED.match(text)
+    return f"§{numbered.group(1)}" if numbered else text
 
 
-def _heading_above(lines: Sequence[str], index: int) -> str:
-    """The nearest heading at or before `index` (a changed line that is itself a heading names its own section —
-    the break-it's finding 1): "§<n>" for a numbered one, else its text; "" when none."""
-    for text in reversed(lines[: index + 1]):
-        found = HEADING.match(text)
-        if found:
-            numbered = NUMBERED.match(found.group(1))
-            return f"§{numbered.group(1)}" if numbered else found.group(1)
-    return ""
+def _headings(lines: Sequence[str]) -> tuple[dict[int, str], list[str]]:
+    """The heading lines read outside fences (DA-L11) by index, and per line the section it sits in: the nearest
+    heading at or above it ("" above the first)."""
+    found = {}
+    for number, text in anchors.prose(list(lines)):
+        m = anchors.HEADING.match(text)
+        if m and m.group(1):
+            found[number - 1] = _section(m.group(1))
+    heads, current = [], ""
+    for i in range(len(lines)):
+        current = found.get(i, current)
+        heads.append(current)
+    return found, heads
+
+
+def _own_heading(found: Mapping[int, str], heads: Sequence[str], start: int, end: int) -> str:
+    """A heading inside the hunk names its own section (an added or renamed one; the break-it's finding 1); else
+    the section the hunk's first line sits in."""
+    for i in range(start, end):
+        if i in found:
+            return found[i]
+    return heads[start] if start < len(heads) else (heads[-1] if heads else "")
+
+
+def _unmarked(lines: Sequence[str]) -> list[str]:
+    """The lines with their marker comments removed; a line that held only markers drops out."""
+    out = []
+    for text in lines:
+        bare = MARKER_COMMENT.sub("", text).rstrip()
+        if bare or not MARKER_COMMENT.search(text):
+            out.append(bare)
+    return out
+
+
+def _markers(old: Sequence[str], new: Sequence[str]) -> int:
+    """The marker comments a marker-only hunk adds or removes."""
+    a = Counter(m for text in old for m in MARKER_COMMENT.findall(text))
+    b = Counter(m for text in new for m in MARKER_COMMENT.findall(text))
+    return sum(((a - b) + (b - a)).values())
 
 
 def doc_line(old: str | None, new: str | None, flag: str) -> str:
-    """The heading above the first changed line, the flag, and the hunk count (owner, 2026-11-11, decision 3)."""
+    """`<headings>[ (and <k> more)] — <flag>[; +<n> markers]` (S1.1c-2 design §4.5, §11.13): the first three distinct
+    headings of the hunks that change text, and the marker comments that the marker-only hunks add or remove."""
     if old is None or new is None:
         heading = "(file added)" if old is None else "(file removed)"
         return " — ".join(x for x in (heading, flag) if x)
     old_lines, new_lines = old.splitlines(), new.splitlines()
+    (old_found, old_heads), (new_found, new_heads) = _headings(old_lines), _headings(new_lines)
     matcher = difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False)
-    hunks = [op for op in matcher.get_opcodes() if op[0] != "equal"]
-    heading = ""
-    if hunks:
-        tag, i1, i2, j1, j2 = hunks[0]
-        lines, start, end = (old_lines, i1, i2) if tag == "delete" else (new_lines, j1, j2)
-        # a heading inside the first hunk (an added or renamed section) names its own section; else the one above
-        heading = _heading_in(lines, start, end) or _heading_above(lines, start)
-    count = f" (first of {len(hunks)} hunks)" if len(hunks) > 1 else ""
-    return " — ".join(x for x in (heading, flag) if x) + count
+    names: list[str] = []
+    markers = 0
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        before, after = old_lines[i1:i2], new_lines[j1:j2]
+        if _unmarked(before) == _unmarked(after) and _markers(before, after):
+            markers += _markers(before, after)
+            continue
+        if tag == "delete":
+            heading = _own_heading(old_found, old_heads, i1, i2)
+        else:
+            heading = _own_heading(new_found, new_heads, j1, j2)
+        if heading and heading not in names:
+            names.append(heading)
+    shown = ", ".join(names[:HEADINGS_SHOWN])
+    if len(names) > HEADINGS_SHOWN:
+        shown += f" (and {len(names) - HEADINGS_SHOWN} more)"
+    text = " — ".join(x for x in (shown, flag) if x)
+    return text + (f"; +{markers} markers" if markers else "")
 
 
 # ------------------------------------------------------------------------------------------------------- the parsers
@@ -558,6 +606,84 @@ def _delta_tools(old: dict, new: dict) -> str:
     return "; ".join(items)
 
 
+GOMOD_BLOCKS = frozenset({"require", "replace", "tool", "exclude", "retract", "godebug", "ignore"})
+
+
+@dataclass
+class GoMod:
+    """What a go.mod says that the gomod kind names: the scalars, the requires (module → version), the replaces
+    (the left side → the target) and the tools; `// indirect` and every other comment are dropped."""
+
+    scalars: dict[str, str]
+    requires: dict[str, str]
+    replaces: dict[str, str]
+    tools: set[str]
+
+
+def _gomod(text: str) -> GoMod:
+    mod = GoMod({}, {}, {}, set())
+    block = ""
+    for raw in text.splitlines():
+        words = raw.split("//", 1)[0].split()
+        if not words:
+            continue
+        if block:
+            if words == [")"]:
+                block = ""
+                continue
+            verb, args = block, words
+        elif len(words) == 2 and words[0] in GOMOD_BLOCKS and words[1] == "(":
+            block = words[0]
+            continue
+        else:
+            verb, args = words[0], words[1:]
+        if verb in ("module", "go", "toolchain"):
+            if len(args) != 1:
+                raise ValueError(f"{verb}: {' '.join(args)}")
+            mod.scalars[verb] = args[0]
+        elif verb == "require":
+            if len(args) != 2:
+                raise ValueError(f"require: {' '.join(args)}")
+            mod.requires[args[0]] = args[1]
+        elif verb == "replace":
+            if "=>" not in args:
+                raise ValueError(f"replace: {' '.join(args)}")
+            at = args.index("=>")
+            mod.replaces[" ".join(args[:at])] = " ".join(args[at + 1 :])
+        elif verb == "tool":
+            if len(args) != 1:
+                raise ValueError(f"tool: {' '.join(args)}")
+            mod.tools.add(args[0])
+    if block:
+        raise ValueError(f"an unclosed {block} block")
+    return mod
+
+
+def _delta_gomod(old: GoMod, new: GoMod) -> str:
+    items = []
+    for key in ("module", "go", "toolchain"):
+        a, b = old.scalars.get(key, "none"), new.scalars.get(key, "none")
+        if a != b:
+            items.append(f"{key} {a} → {b}")
+    items += [f"+require {m} {new.requires[m]}" for m in sorted(set(new.requires) - set(old.requires))]
+    items += [
+        f"{m} {old.requires[m]} → {new.requires[m]}"
+        for m in sorted(set(new.requires) & set(old.requires))
+        if old.requires[m] != new.requires[m]
+    ]
+    items += [f"−require {m}" for m in sorted(set(old.requires) - set(new.requires))]
+    items += [f"+replace {m} => {new.replaces[m]}" for m in sorted(set(new.replaces) - set(old.replaces))]
+    items += [
+        f"replace {m} => {old.replaces[m]} → {new.replaces[m]}"
+        for m in sorted(set(new.replaces) & set(old.replaces))
+        if old.replaces[m] != new.replaces[m]
+    ]
+    items += [f"−replace {m}" for m in sorted(set(old.replaces) - set(new.replaces))]
+    items += [f"+tool {t}" for t in sorted(new.tools - old.tools)]
+    items += [f"−tool {t}" for t in sorted(old.tools - new.tools)]
+    return "; ".join(items)
+
+
 def _delta_marker(old: str, new: str) -> str:
     a, b = old.strip(), new.strip()
     return f"marker {a} → {b}" if a != b else ""
@@ -715,6 +841,7 @@ PARSERS: dict[str, tuple] = {
     "marker": (str, _delta_marker),
     "sprints": (loads, _delta_sprints),
     "law": (loads, _delta_law),
+    "gomod": (_gomod, _delta_gomod),
 }
 
 
