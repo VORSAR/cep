@@ -85,6 +85,8 @@ def _identity(d: suppressions.Directive) -> tuple:
 def _named(sign: str, d: suppressions.Directive) -> str:
     if d.kind == "MARKER":
         return f"{sign}{d.path}:{d.line} # fmt: skip"
+    if d.kind == "GENERATED":
+        return f"{sign}{d.path}:{d.line} // Code generated … DO NOT EDIT."
     if d.kind == "REGION":
         return f"{sign}{d.path}:{d.line} # {d.linters[0]}: {d.meta.get('command', '')}"
     fields = [f"{k}={d.meta[k]}" for k in ("ref", "expiry", "issue") if d.meta.get(k)]

@@ -1,4 +1,5 @@
-"""The in-code exemptions: Go's //nolint directives and Python's # fmt: skip markers (S1.1c-2 design §2.3, §2.8).
+"""The in-code exemptions: Go's //nolint directives and generated-code markers, and Python's # fmt: skip markers
+(S1.1c-2 design §2.3, §2.8; BK-S6).
 
 Each recogniser follows what the pinned tool honours, as measured (design §0.2 for ruff 0.17.3, §0.3 for
 golangci-lint v2.15.0), never what its documentation suggests; test_suppressions.py holds both tables as data. A Go
@@ -20,9 +21,12 @@ from gate.runner import allowlists
 ENABLED: frozenset[str] = frozenset()  # S1.1c-4 sets it from its golangci config (DA-L4)
 # git grep -e patterns, case-sensitive as git grep is (design §10.12); every recognised form contains one. "fmt:"
 # covers every spelling ruff reads after it (BK-B1).
-PREFILTER = ("nolint", "fmt:", "noqa", "yapf:", "isort:")
+PREFILTER = ("nolint", "fmt:", "noqa", "yapf:", "isort:", "Code generated")
 KEYS = frozenset({"reason", "ref", "expiry", "issue", "sprint"})
-PY_KINDS = frozenset({"MARKER", "REGION"})
+SELF_JUDGED = frozenset({"MARKER", "REGION", "GENERATED"})  # judged when read (Python) or by the row (GENERATED)
+# Go's generated-code rule (go/ast.IsGenerated): a comment line before the package clause, this prefix, then this
+# suffix ending the line (BK-S6; owner, 2026-11-12, S1.1c-2's review and break-it 3).
+GENERATED = ("// Code generated ", " DO NOT EDIT.")
 
 HONOURED = re.compile(r"nolint(?: |:|$)")
 CANONICAL = re.compile(r"nolint:([\w-]+(?:,[\w-]+)*)(?=\s|$)", re.ASCII)
@@ -173,6 +177,42 @@ def go_directives(path: str, source: str) -> tuple[list[Directive], list[str]]:
     return directives, faults
 
 
+def _generator_line(text: str) -> bool:
+    prefix, suffix = GENERATED
+    return text.startswith(prefix) and text.removeprefix(prefix).endswith(suffix)
+
+
+def go_generated(path: str, source: str) -> list[Directive]:
+    """The generated-code marker as Go reads it (go/ast.IsGenerated): a line `// Code generated <generator> DO NOT
+    EDIT.` in a comment before the package clause — a line comment (its trailing carriage return stripped, as the Go
+    scanner does) or a line of a block comment. One directive of kind GENERATED, or none; the row requires the file
+    listed in tools/allowlists/generated.json (BK-S6)."""
+    i, n, line = 0, len(source), 1
+    while i < n:
+        if source[i] == "\n":
+            line += 1
+            i += 1
+        elif source[i] in " \t\r\f":
+            i += 1
+        elif source.startswith("//", i):
+            end = source.find("\n", i)
+            end = n if end < 0 else end
+            if _generator_line(source[i:end].removesuffix("\r")):
+                return [Directive(path, line, ("generated",), "GENERATED", {})]
+            i = end
+        elif source.startswith("/*", i):
+            end = source.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            for k, text in enumerate(source[i:end].split("\n")):
+                if _generator_line(text.replace("\r", "")):
+                    return [Directive(path, line + k, ("generated",), "GENERATED", {})]
+            line += source.count("\n", i, end)
+            i = end
+        else:
+            return []  # the package clause (or anything else): a marker after it is no marker
+    return []
+
+
 # --------------------------------------------------------------------------------------------------------- Python
 
 
@@ -258,7 +298,7 @@ def check(directives: Iterable[Directive], ctx: allowlists.Ctx, enabled: frozens
     directive whose reader faulted it, were judged when they were read."""
     out: list[str] = []
     for d in directives:
-        if d.kind in PY_KINDS or not d.valid:
+        if d.kind in SELF_JUDGED or not d.valid:
             continue
         where = f"{d.path}:{d.line}"
         got = d.meta.get
@@ -288,7 +328,8 @@ def read(path: str, source: str) -> tuple[list[Directive], list[str]]:
     """The file's directives or markers, and its faults, by `scoped`; ([], []) for a file out of scope."""
     match scoped(path):
         case "go":
-            return go_directives(path, source)
+            directives, faults = go_directives(path, source)
+            return [*go_generated(path, source), *directives], faults
         case "py":
             return py_markers(path, source)
         case _:

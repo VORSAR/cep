@@ -3,7 +3,8 @@ policy; ADR-0015 §3.10).
 
 It reads the context once — gate/sprints.json, gate/current-sprint, gate/known-issues.json's ids, the run's date,
 GATE_TIER, and the tracked Markdown a ref may name — then loads and checks every tools/allowlists/*.json, and reads
-each listed file: a .go file's //nolint directives, a gate/**/*.py or .githooks/* file's # fmt: skip markers.
+each listed file: a .go file's //nolint directives and generated-code marker (listed by path in
+tools/allowlists/generated.json, BK-S6), a gate/**/*.py or .githooks/* file's # fmt: skip markers.
 ruff.toml's per-file waivers and tools/allowlists/ruff.json must name the same (file, code) pairs both ways; a
 ruff.json file or a teeth.json row id that no longer exists is a stale target. GATE_COVERED is the number of listed
 files processed, the ones without exemptions to read included; the side inputs are never counted (DA-S9). No
@@ -26,6 +27,7 @@ RUFF_WAIVERS = ("per-file-ignores", "extend-per-file-ignores")
 RUFF_GLOBAL = ("ignore", "extend-ignore")
 REGISTRY = "gate/registry.json"
 KNOWN_ISSUES = "gate/known-issues.json"
+GENERATED_LIST = "tools/allowlists/generated.json"
 SIDE_FAULTS = (OSError, ValueError, KeyError, TypeError)
 
 
@@ -111,8 +113,27 @@ def ruff_pin(lists: dict[str, allowlists.AllowList]) -> list[str]:
     return faults
 
 
+def _marked(path: str) -> bool:
+    """Whether the file carries the generated-code marker before its package clause; False if it cannot be read."""
+    try:
+        return bool(suppressions.go_generated(path, rows.read_text(path)))
+    except OSError:
+        return False
+
+
+def generated(directives: list[suppressions.Directive], lists: dict[str, allowlists.AllowList]) -> list[str]:
+    """A generated-code marker on a file tools/allowlists/generated.json does not list (BK-S6)."""
+    listed = {e.target for e in lists["generated"].entries} if "generated" in lists else set()
+    return [
+        f"{d.path}:{d.line}: a generated file is listed by path in {GENERATED_LIST}"
+        for d in directives
+        if d.kind == "GENERATED" and d.path not in listed
+    ]
+
+
 def stale(lists: dict[str, allowlists.AllowList], tracked: set[str]) -> list[str]:
-    """ruff.json targets naming a file git does not track; teeth.json targets naming a row the registry lacks."""
+    """ruff.json targets naming a file git does not track; generated.json targets naming a file git does not track
+    or one without the marker; teeth.json targets naming a row the registry lacks."""
     faults = []
     if "ruff" in lists:
         faults += [
@@ -120,6 +141,13 @@ def stale(lists: dict[str, allowlists.AllowList], tracked: set[str]) -> list[str
             for e in lists["ruff"].entries
             if _pair(e.target)[0] not in tracked
         ]
+    for e in lists["generated"].entries if "generated" in lists else ():
+        if e.target not in tracked:
+            faults.append(f"{GENERATED_LIST}: {e.target}: does not exist (a stale target)")
+        elif not _marked(e.target):
+            faults.append(
+                f"{GENERATED_LIST}: {e.target}: carries no generated marker before its package clause (a stale target)"
+            )
     if "teeth" in lists and lists["teeth"].entries:
         try:
             ids = {str(row["id"]) for row in json.loads(rows.read_text(REGISTRY))["rows"]}
@@ -168,6 +196,7 @@ def main(argv: list[str]) -> int:
         faults += allowlists.check(lists[name], ctx)
     faults += ruff_pin(lists)
     faults += stale(lists, set(tracked))
+    faults += generated(directives, lists)
     faults += file_faults
     faults += suppressions.check(directives, ctx, suppressions.ENABLED)
     return rows.finish([f"suppressions: {fault}" for fault in faults])

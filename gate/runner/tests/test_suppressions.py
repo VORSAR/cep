@@ -435,7 +435,7 @@ class GeneratedMarker(unittest.TestCase):
                 GENERATED_HEADER.replace("\n", "\r\n") + "package x\n",
                 1,
             ),
-            "a line of a block comment": ("/*\n" + GENERATED_HEADER + "*/\npackage x\n", 1),
+            "a line of a block comment": ("/*\n" + GENERATED_HEADER + "*/\npackage x\n", 2),
         }
         for why, (source, line) in cases.items():
             with self.subTest(why=why):
