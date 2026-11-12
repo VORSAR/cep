@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "note": "A fixture for test_instruments_pin.py: the teeth list naming the one exempt instrument.",
+  "rule": "teeth",
+  "entries": [
+    {
+      "target": "unit",
+      "kind": "PERMANENT",
+      "reason": "a fixture: the unit row's teeth are the Go tests themselves",
+      "ref": "docs/a.md#a",
+      "sprint": "S1.1c-2"
+    }
+  ]
+}

@@ -33,8 +33,13 @@ class Command(support.CoverageTest):
     def artifacts(self, profile: str | bytes = PROFILE_A, events: str | bytes = EVENTS_A) -> list[str]:
         return ["--profile", self.write("cover.prof", profile), "--events", self.write("test.json", events)]
 
-    def main(self, *args: str, module_dir: str | None = None, **env: str) -> tuple[int, list[str]]:
+    def main(
+        self, *args: str, module_dir: str | None = None, floor: str | None = "90", **env: str
+    ) -> tuple[int, list[str]]:
+        # --floor is required (S1.1c-2 design §4.4): the registry passes --floor 90; floor=None leaves it out.
         argv = [sys.executable, "-I", "-B", "-X", "utf8", support.MAIN, *args]
+        if floor is not None and "--floor" not in args:
+            argv += ["--floor", floor]
         if module_dir is not None or "--module-dir" not in args:
             argv += ["--module-dir", module_dir or self.module]
         code, out, _ = support.run(argv, self.root, support.go_env(**env), self.root, "main")
@@ -85,14 +90,17 @@ class Defaults(Command):
             self.main(GATE_ROW_DIR=mine), (0, ["PASS ex.com/m/internal/a 100.00% (1/1) >= 90%", "GATE_COVERED 1"])
         )
 
-    def test_the_floor_is_90_by_default(self):
+    def test_a_missing_floor_is_the_usage_error(self):
+        # S1.1c-2 design §4.4: no default floor; a missing --floor is the module's usage error, exit 2.
         unit, mine = self.row_dirs()
-        profile = "mode: set\nex.com/m/internal/a/a.go:1.1,1.2 8 1\nex.com/m/internal/a/a.go:2.1,2.2 1 0\n"
-        self.write(os.path.join(unit, "cover.prof"), profile)
+        self.write(os.path.join(unit, "cover.prof"), PROFILE_A)
         self.write(os.path.join(unit, "test.json"), EVENTS_A)
         os.makedirs(mine)
         self.package("internal/a")
-        self.assertEqual(self.main(GATE_ROW_DIR=mine)[1][0], "FAIL ex.com/m/internal/a 88.88% (8/9) < 90%")
+        code, out = self.main(floor=None, GATE_ROW_DIR=mine)
+        self.assertEqual(code, 2, out)
+        self.assertEqual(out[0], "the following arguments are required: --floor")
+        self.assertEqual(out[-2:], ["GATE FAILED", "exit: 2"])
 
     def test_a_missing_artifact_fails_naming_unit(self):
         # design-QA counter-example 34: unit died before writing cover.prof; this row still runs, and names unit.
