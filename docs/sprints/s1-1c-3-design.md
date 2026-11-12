@@ -146,8 +146,8 @@ QA's tables: lane B's branch (`TestParseErrorContract` 63 rows green ×20; 14 re
 - **W0-3 (a part-less marker):** `Order.passed(part, "S1.1c")` is `False`; `aged` then gives one line naming the entry — `aging: <id> was forwarded to <part>; the marker names no part` — so the forward never stands silently (QA's pin). A marker in a later row counts as past.
 - **W0-4 ("S1.1c-99 is above the plan"):** dropped — `gate/sprints.json` names rows only and the row does not read the plan's Markdown (decision 8 of 2026-11-10); a forward to an unplanned part expires at the row's close (rule 2). Named in ADR-0015 §3.6's residue; QA's pinned case is removed by lane E2 citing this line.
 - **W0-5 (a sentence-final id):** `names` counts `.` only when an id character follows (§3.2); `test_known_issues_pin.py`'s fixture "QB10X is not QB10." becomes "QB10X is not the id" in the same commit.
-- **W0-6 (the table side of the fields):** no new columns (§3.3): `**Correctness.**` opens a correctness issue's Issue cell, and a Found cell's `(YYYY-MM-DD)`, when present, equals `opened`; both pinned both ways.
-- **W0-7:** `knownissues.check(..., today: date | None = None)` — the future-date refusal runs when `today` is given; the pin's real-tree test and the row pass `rows.today()`.
+- **W0-6 (the table side of the fields):** no new columns (§3.3): `**Correctness.**` opens a correctness issue's Issue cell, and a Found cell's `(YYYY-MM-DD)`, when present, is on or after `opened` (§3.3 — superseded "equals", DQ-S5); both pinned both ways.
+- **W0-7:** `knownissues.check(..., *, today: date)` — a **required** keyword (§3.3, DQ-S14; superseded `None`); the pin's real-tree test and the row pass `rows.today()`.
 - **W0-8:** a forward does not stop rule 1: an entry forwarded to an open row with no naming decision ages like any other (every known issue ages, decision 5 of 2026-11-12's plan check). One line per fault, each naming the id.
 - **W0-9 (F2):** plan §6 [3] (11)'s example `every a = A within 5 min` cannot be green at `chain` (`within` is the next clause); the table uses `every a = A -> b = B`.
 - **W0-10 (F6):** `k of S, j of S` parses at `keylist` and fails only in the validator: its register entry is stage `validator: internal/validate.TestGroupedKeyFindings`, marked `cep-invalid:keylist`.
@@ -214,3 +214,20 @@ QA's tables: lane B's branch (`TestParseErrorContract` 63 rows green ×20; 14 re
 | the-fool | — | a passing mention in a decision section stops aging for good | recorded; the decided rule (confirm (c)); each new decisions entry is read for it at close-out |
 
 **Size after the reviews:** lane B ≈ 6, lane E2 ≈ 3.25 → ≈ 9.25 items; at the recent growth that builds near the 13 cap, with no further reserve.
+
+## 10. Clarifications after QA's W0b (the coordinator, 2026-11-12; the W0b tables at the lane branches' heads follow them)
+
+W0b at lane B's branch (8 commits over 18b76a9; the 9 failing top-level tests are the stubs' and today's parser's, `TestParseErrorContract` 58 rows green ×20, `internal/expr` green with the new `duration / duration` case, its planted `DurDiv` proof red) and lane E2's (4 commits; 8 modules red on the stubs, on signatures or on behaviour) — the coordinator re-ran both.
+
+- **C1 (the incident shape vs the register):** a listed `cep-invalid` span with the incident's shape stands; the prose-line check runs on each line with its code spans removed (they are judged as spans).
+- **C2 (one fault per line):** precedence `-> before and/not`, then parse faults, then marker faults.
+- **C3:** lane B declares the incident shape once in `fragment_test.go`; QA's `incidentRe` becomes a reference to it.
+- **C4 (F7):** the message at the `]` names `"]"`, not `<EOF>` (QA's pin).
+- **C5:** `unknown stage <s>` names the file and the entry's span (`<file>: unknown stage <s> (<span>)`).
+- **C6 (DA-S14, QA-E2):** a stop during parity ends `run`'s loop at once (`_on_stop` settles parity and clears `_pending`), so `_kill_all` never runs; the parity group is KILLed and probed in `run`'s `finally` instead, and lane E2 writes the red test first — a planted child that ignores TERM is named as left running and is gone after.
+- **C7:** §7 W0-6 and W0-7 corrected to §3.3 (on or before; `today` required).
+- **C8 (the spawn's keywords):** `parity.check(..., *, spawn, scratch)`; `tree_digest` calls `spawn([*argv, home], cwd=<repo root>, env=<the run's clean env>, stdout=<scratch>/tree-<tool>.out, stderr=<scratch>/tree-<tool>.err)` and reads the digest from the stdout file; the runner's `scratch` is its run directory's `parity/`.
+- **C9 (reason texts, as QA pinned):** `<tool>: stopped before the tree hash`; `<tool>: tree hash exceeded its cap of <n> s` (`<n>` as `str(cap)`).
+- **C10:** §3.6's test (3) (a hash held, a stop, then released) is rejected as covered by (1) — a stop during a held hash — and (2) — the cap.
+- **C11:** QA's W0b items 4 and 5 (QB10's two call sites; `test_law_markers.py` with DQ-S16's forms, `<!--cep-frob:x-->`, `<!--cep:-->`, `<!--cepx-->` among them) are written by lane E2 **red first**, each red quoted before its fix.
+- **C12 (the lanes, sized to one usage window each):** lane B splits into **B1** (§2.1 productions, §2.2 contract — `expectsName`, `ruleWords` and its two tests, decision 19's branch and the two messages, F3, F5, F7, E-PAT-005's text, the invalid file and the swap pin) and **B2** (§2.3 the fragment test — binding, detector, fences, markers, `checkMarkdown`, the register reader and the validator test, `fixtext_test.go`'s strip, the classification list, the real-document test last); lane E2 into **E2a** (§3.1–3.4: `Order.passed`, `aging` and its row, the fields with the data commit, `names`, `rows.today()`, the LAW Δ kind) and **E2b** (§3.5 QB10, §3.6 BA10 with C6, C8, C9, the marker pin). **W1 = B1 ‖ E2a; W2 = B2 ‖ E2b**, each on its lane's branch.
