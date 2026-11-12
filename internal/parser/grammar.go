@@ -145,7 +145,7 @@ type KeyGroup struct {
 
 type Body struct {
 	Pos     Position
-	Pattern *PatternBody `parser:"  'from' @@"`
+	Pattern *PatternBody `parser:"  @@"`
 	Source  *Source      `parser:"| 'from' @@"`
 	Window  *WindowKind  `parser:"  ( 'window' @@"`
 	Emit    *EmitTok     `parser:"    'emit' 'on' @@"`
@@ -158,10 +158,17 @@ type EmitTok struct {
 }
 
 type PatternBody struct {
-	PatternChain
+	PatternHead
 	WithinClause
 	AfterMatchClause
 	LateEventsClause
+}
+
+// PatternHead is a pattern body's head: `from`, then the chain. Lookahead 2 tells `from every|once` (a pattern)
+// from `from <stream>` (a window). The `from` captures nothing, so it sits in a field that holds no value.
+type PatternHead struct {
+	From struct{} `parser:"'from'"`
+	PatternChain
 }
 
 // PatternChain is a pattern's restart marker and its steps: the first positive step, then each `-> step` or
