@@ -132,7 +132,10 @@ demo/                                     the kill-switch demo kit: compose file
 docs/language/                            the frozen spec (already exists; grammar.lark is normative)
 gate/                                     registry.json, run.sh, summary logic, law.json, regen-baseline (ADR-0015) — annotated 2026-11-02 (owner, S1.1a plan check): the gate's code is stdlib Python run by a pinned CPython — bootstrap.py, run.py, runner/, toolchain/, coverage/, ci/ — not shell
 gate/proofs/                              planted-defect proof fixtures — a SEPARATE Go module, never imported (ADR-0015 §3.4) — annotated 2026-11-03 (S1.1a-1 as built): also holds Python outside that module, the drivers (proofs/drivers/) and the proofs row (proofs/row.py); its packages under gate/proofs/internal/ belong to the nested module, not to this table. Beside them: gate/wait.py and gate/term.py (shared helpers), ruff.toml beside tools.json at the root, and .gate/ (run output, git-ignored)
-tools/analyzers/                          the gate's go/analysis analyzers + testdata fixtures + teeth_test.go (ADR-0015 §2)
+tools/analyzers/                          the gate's go/analysis analyzers + testdata fixtures + teeth_test.go (ADR-0015 §2) *(annotated 2026-11-12: not built — the analyzer is `tools/archcheck/`, below)*
+tools/archcheck/                          the architecture analyzer: imports, clock, purity, globals; -tests (the sleep fence); its named exceptions in tools/allowlists/ (ADR-0015 §2 as built)
+tools/apipartition/                       the public-API partition and export golden (ADR-0015 §2 apipartition)
+tools/shape/                              the grammar differential's engine side (tools/grammar-diff.md)
 tools/importcheck/rules.json              the layer law, diffed against this §3 as parsed edges (ADR-0015)
 tools/allowlists/, tools/deps-allowlist.json  the one allowlist grammar (ADR-0015 §3.10)
 tools/kwgen/                              keyword-table generator (ADR-0002) *(annotated 2026-11-04: not built; the keyword table is pinned equal to `grammar.lark` by a test in `internal/parser` instead)*
