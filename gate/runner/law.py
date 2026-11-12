@@ -786,16 +786,25 @@ def _allowlist_changed(target: str, old: dict, new: dict) -> list[str]:
     return subs + ([f"{target}: reason changed"] if old.get("reason") != new.get("reason") else [])
 
 
+def _issue_field(e: dict, key: str) -> str:
+    """A field as the file spells it: a bool as true or false (correctness), else its text; "" when absent."""
+    value = e.get(key, "")
+    return json.dumps(value) if type(value) is bool else str(value)
+
+
 def _issue_added(id: str, e: dict) -> str:
-    return f"+{id} first seen {e.get('first_seen', '')}"
+    """S1.1c-3 design §3.3 (DA-S11): both clock fields visible, so a correctness issue's 30 days are seen opening."""
+    fields = ", ".join(f"{key} {_issue_field(e, key)}" for key in ("correctness", "opened"))
+    return f"+{id} first seen {e.get('first_seen', '')}, {fields}"
 
 
 def _issue_changed(id: str, old: dict, new: dict) -> list[str]:
     subs = []
     if old.get("first_seen") != new.get("first_seen"):
         subs.append(f"{id}: first seen {old.get('first_seen', '')} → {new.get('first_seen', '')}")
-    if old.get("forward") != new.get("forward"):
-        subs.append(f"{id}: forward {old.get('forward', '')} → {new.get('forward', '')}")
+    for key in ("forward", "correctness", "opened"):
+        if old.get(key) != new.get(key):
+            subs.append(f"{id}: {key} {_issue_field(old, key)} → {_issue_field(new, key)}")
     a, b = old.get("decision", ""), new.get("decision", "")
     if a != b:
         subs.append(f"{id}: decision {'set' if not a else 'cleared' if not b else 'changed'}")
