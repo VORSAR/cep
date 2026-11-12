@@ -33,7 +33,9 @@ BK-S4: golangci-lint v2.15.0 honours gosec's own `#nosec` waiver — measured wi
 both findings, which reappear when the comments go. §0.3's table and go_directives know only `nolint`: a `#nosec`
 in a tracked .go file is no directive and no fault, and no PREFILTER pattern finds it. No linter is enabled until
 S1.1c-4, so today it waives nothing; the day gosec is enabled every `#nosec` already in the tree is a live waiver
-with no metadata and no LAW Δ line.
+with no metadata and no LAW Δ line. Forwarded to S1.1c-4's plan check (owner, 2026-11-12, S1.1c-2's review and
+break-it 4): its two red tests (`NosecIsAWaiver`, commit fc944ef) left this module at the fix round, to be restored
+there.
 
 BK-B4 (Python side; the Go side is tools/archcheck/breakit_s11c2_test.go): the pin counts a driver's cases from its
 source, the proofs row runs what unittest loads. A module-level `load_tests` returning only the green control, a
@@ -231,19 +233,6 @@ class ShimRunnerPatchForge(support.GateTest):
             said = f.read()
         self.assertEqual(code, 1, (said, out, err))
         self.assertNotIn("passed", said)
-
-
-NOSEC = 'package x\n\nimport (\n\t"crypto/md5" // #nosec G501\n)\n\nvar _ = md5.Sum(nil) // #nosec G401 -- reason\n'
-
-
-class NosecIsAWaiver(unittest.TestCase):
-    """BK-S4: a linter-native waiver golangci honours is read like //nolint."""
-
-    def test_a_nosec_is_read(self):
-        self.assertNotEqual(suppressions.go_directives("x.go", NOSEC), ([], []), "a #nosec passes unseen")
-
-    def test_a_nosec_is_found_by_lawdeltas_prefilter(self):
-        self.assertTrue(any(p in NOSEC for p in suppressions.PREFILTER))
 
 
 RUNS_LESS = {
