@@ -48,5 +48,5 @@ class ShimForgedPass(support.DriverTest):
         # ADR-0015 §3.6's residue (owner, 2026-11-12, design 2): a module that writes the report path from
         # sys.argv[3] itself passes; review catches it, since every test module is a law path (a LAW Δ line).
         run = self.run_row(FILE_FORGE)
-        self.assertRow(run, JOB, ROW, True, "covered 1")
+        self.assertRow(run, "test", "pytests", True, "covered 1")
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
