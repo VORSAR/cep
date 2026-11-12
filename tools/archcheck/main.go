@@ -241,7 +241,8 @@ func Stale(lists *Lists, root string) []string {
 
 // Unused gives one finding per target whose package directory or file exists under root but which waives nothing
 // (BK-S3), sorted: "tools/allowlists/<name>.json: <target>: waives nothing (an unused target)". A purity target is
-// used when a non-test Go file of its package selects <identifier> on a name the file gives <import path>; a clock
+// used when a non-test Go file of its package selects <identifier> on a name the file gives <import path> (a package
+// directory with no Go file at all is not judged: see holdsGo); a clock
 // target when its file is in an operator package and imports time; a testhygiene target when the sleep fence would
 // report its file unlisted; a generated target when its file is marked generated (generated). A target that does not
 // exist is Stale's.
@@ -251,7 +252,7 @@ func Unused(lists *Lists, root string) ([]string, error) {
 		out = append(out, fmt.Sprintf("%s/%s.json: %s: waives nothing (an unused target)", AllowlistsDir, name, target))
 	}
 	for pkg, imports := range lists.Purity {
-		if !exists(root, pkg, true) {
+		if !exists(root, pkg, true) || !holdsGo(root, pkg) {
 			continue
 		}
 		used, err := selected(root, pkg)
@@ -314,6 +315,14 @@ func Unused(lists *Lists, root string) ([]string, error) {
 	}
 	slices.Sort(out)
 	return out, nil
+}
+
+// holdsGo reports whether root-relative directory dir holds a Go file. git holds no empty directory, so one without a
+// Go file is a proof world's placeholder (support.make_purity_targets gives each purity package one, for Stale), and
+// Unused does not judge its targets.
+func holdsGo(root, dir string) bool {
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
+	return err == nil && slices.ContainsFunc(entries, func(e os.DirEntry) bool { return strings.HasSuffix(e.Name(), ".go") })
 }
 
 // selected gives every "<import path>.<identifier>" a non-test Go file of package directory pkg selects.
