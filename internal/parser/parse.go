@@ -187,7 +187,7 @@ func parseError(name string, toks []Token, err error) *Error {
 		return mk(name, "E-WIN-001", cur.Pos, "cron needs its timezone")
 	case kind == "Number" && (expects("DurationOrParam") || expects("Duration")):
 		return mk(name, "E-DUR-001", cur.Pos, cur.Value+" has no unit")
-	case expects(`"for"`):
+	case expects(`"for"`) || expects("ForBound"):
 		return mk(name, "E-PAT-004", cur.Pos, "the absence has no bound")
 	}
 	for word, code := range clauseStart {

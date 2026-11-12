@@ -239,7 +239,7 @@ func (l *lowerer) pattern(p *PatternBody) model.Pattern {
 			out.Elements = append(out.Elements, l.posElem(c.Followed))
 		} else {
 			out.Elements = append(out.Elements, model.PatternElement{
-				Kind: model.ElemAbsence, Steps: []model.Step{}, Absence: l.source(c.Absence), For: l.durationOrParam(c.For),
+				Kind: model.ElemAbsence, Steps: []model.Step{}, Absence: l.source(c.Absence), For: l.durationOrParam(c.For.D),
 			})
 		}
 	}
