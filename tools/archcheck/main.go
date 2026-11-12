@@ -2,6 +2,7 @@
 //
 //	go run ./tools/archcheck <files.nul>
 //	go run ./tools/archcheck -tests <files.nul>
+//	go run ./tools/archcheck -cases <file>...
 //
 // The named exceptions are read from tools/allowlists/ (purity.json, clock.json, testhygiene.json; S1.1c-2), the
 // one allowlist grammar's files: archcheck reads each entry's target, and the suppressions row validates the rest.
@@ -25,7 +26,11 @@
 // time.Sleep, After, AfterFunc, Tick, NewTimer or NewTicker, and no dot-import of time, outside the files
 // testhygiene.json lists.
 //
-// Either way it prints one "failed: <file>:<line>: <check>: <message>" line per finding, then one
+// With -cases it lists, for the teeth (S1.1c-2 design §4.2, §11), each named _test.go file's planted cases and the
+// cases that assert nothing, as Cases reads them: "<path>: case <name>" and "<path>: fault <name>: <why>" lines, file by
+// file in argument order, and exits 0; the gate's Python pin judges the listing.
+//
+// The first two modes print one "failed: <file>:<line>: <check>: <message>" line per finding, then one
 // "failed: tools/allowlists/<name>.json: <target>: does not exist (a stale target)" line per target of the lists
 // that mode reads whose package directory or file is gone, then GATE_COVERED with the number of files read, and
 // exits 1 if anything failed, 2 on an internal error.
@@ -1230,12 +1235,38 @@ func staleIn(lists *Lists, root string, names ...string) []string {
 	})
 }
 
-// cli is archcheck run at root with args (the files list, after "-tests" for the sleep fence); it writes the report
-// to out and gives the exit code: 0 clean, 1 a finding, 2 a usage or internal error.
+// listCases is -cases: per file in argument order, Cases' cases then its faults, one line each as
+// "<path>: case <name>" and "<path>: fault <name>: <why>"; a file that cannot be read is one "<path>: fault : <error>"
+// line, as one that does not parse is (S1.1c-2 design §11). It judges nothing: the teeth pin reads the listing.
+func listCases(root string, files []string, out io.Writer) {
+	for _, path := range files {
+		var cases, faults []string
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			faults = []string{": " + err.Error()}
+		} else {
+			cases, faults = Cases(path, string(src))
+		}
+		for _, c := range cases {
+			fmt.Fprintf(out, "%s: case %s\n", path, c)
+		}
+		for _, f := range faults {
+			fmt.Fprintf(out, "%s: fault %s\n", path, f)
+		}
+	}
+}
+
+// cli is archcheck run at root with args (the files list, after "-tests" for the sleep fence; or "-cases" and the
+// _test.go files to list); it writes the report to out and gives the exit code: 0 clean (always, for -cases), 1 a
+// finding, 2 a usage or internal error.
 func cli(root string, args []string, out io.Writer) int {
+	if len(args) > 1 && args[0] == "-cases" {
+		listCases(root, args[1:], out)
+		return 0
+	}
 	tests := len(args) == 2 && args[0] == "-tests"
 	if !tests && (len(args) != 1 || strings.HasPrefix(args[0], "-")) {
-		fmt.Fprintln(out, "usage: go run ./tools/archcheck [-tests] <files.nul>")
+		fmt.Fprintln(out, "usage: go run ./tools/archcheck [-tests] <files.nul> | -cases <file>...")
 		return 2
 	}
 	lists, err := LoadLists(root)

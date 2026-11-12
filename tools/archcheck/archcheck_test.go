@@ -742,9 +742,9 @@ func TestCLI(t *testing.T) {
 	}
 	t.Run("usage", func(t *testing.T) {
 		t.Parallel()
-		for _, args := range [][]string{nil, {"-tests"}, {"-x", "files.nul"}, {"a", "b"}} {
+		for _, args := range [][]string{nil, {"-tests"}, {"-x", "files.nul"}, {"a", "b"}, {"-cases"}} {
 			var out strings.Builder
-			if code := cli(t.TempDir(), args, &out); code != 2 || out.String() != "usage: go run ./tools/archcheck [-tests] <files.nul>\n" {
+			if code := cli(t.TempDir(), args, &out); code != 2 || out.String() != usage+"\n" {
 				t.Fatalf("cli %q: exit %d, output %q; want exit 2 and the usage line", args, code, out.String())
 			}
 		}
@@ -863,6 +863,9 @@ func TestNoVerdict(t *testing.T) {
 }
 
 // ---- S1.1c-2 lane D2's own cases: Cases' names, its scope rules and its helper depth; the -cases listing.
+
+// usage is the one usage line every mode shares (lane D2 adds -cases).
+const usage = "usage: go run ./tools/archcheck [-tests] <files.nul> | -cases <file>..."
 
 // TestCasesNames pins Cases' exact output (design §11's seam): a range-counted table's elements are named
 // <ident>[<i>], <ident> being the table's identifier, or for an inline literal the loop's first named variable.
@@ -1143,4 +1146,66 @@ func TestNamed(t *testing.T) {
 			t.Fatalf("Cases = %q, %q; want no case and the fault %q", cases, faults, ": "+want.Error())
 		}
 	})
+}
+
+// TestCLICases is -cases end to end in-process: per file in argument order, its cases then its faults, each line
+// "<path>: case <name>" or "<path>: fault <name>: <why>"; a file that does not parse or cannot be read is one
+// "<path>: fault : <error>" line; the exit is 0 whatever the listing holds (design §11; the Python side decides).
+func TestCLICases(t *testing.T) {
+	t.Parallel()
+	const (
+		a    = "internal/x/a_test.go"
+		b    = "internal/x/b_test.go"
+		gone = "internal/x/gone_test.go"
+	)
+	const bSrc = "package x\n\nfunc (\n"
+	root := t.TempDir()
+	for rel, src := range map[string]string{
+		a: `package x
+
+import "testing"
+
+func TestA(t *testing.T) {
+	t.Run("quiet", func(t *testing.T) { t.Log("x") })
+	for _, n := range []string{"p", "q"} {
+		t.Run(n, func(t *testing.T) { t.Error(n) })
+	}
+}
+
+func TestB(t *testing.T) {
+	for _, n := range names() {
+		t.Run(n, func(t *testing.T) { t.Error(n) })
+	}
+}
+
+func names() []string { return nil }
+`,
+		b: bSrc,
+	} {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, parseErr := parser.ParseFile(token.NewFileSet(), b, bSrc, parser.SkipObjectResolution)
+	_, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(gone)))
+	if parseErr == nil || readErr == nil {
+		t.Fatalf("fixture: want a parse error and a read error, got %v, %v", parseErr, readErr)
+	}
+	want := a + ": case TestA\n" +
+		a + ": case TestA/quiet\n" +
+		a + ": case TestA/n[0]\n" +
+		a + ": case TestA/n[1]\n" +
+		a + ": case TestB\n" +
+		a + ": fault TestA/quiet: calls no Fatal, Fatalf, Error, Errorf or FailNow\n" +
+		a + ": fault TestB: t.Run over a table -cases cannot count\n" +
+		gone + ": fault : " + readErr.Error() + "\n" +
+		b + ": fault : " + parseErr.Error() + "\n"
+	var out strings.Builder
+	if code := cli(root, []string{"-cases", a, gone, b}, &out); code != 0 || out.String() != want {
+		t.Fatalf("cli -cases: exit %d, output\n%s\nwant exit 0, output\n%s", code, out.String(), want)
+	}
 }
