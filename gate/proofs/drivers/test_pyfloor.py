@@ -50,11 +50,12 @@ class Pyfloor(support.DriverTest):
         cache = support.real_cache()
         env = runner_env.clean_env(self.world.env, manifest.path_dirs(cache, list(support.tools())))
         shim = os.path.join(self.world.repo, "gate", "runner", "pyshim.py")
-        argv = [support.pinned_python(), "-I", "-B", "-X", "dev", "-W", "error", shim, self.world.repo, MODULE]
+        report = os.path.join(self.world.root, "w.report")
+        argv = [support.pinned_python(), "-I", "-B", "-X", "dev", "-W", "error", shim, self.world.repo, MODULE, report]
         out_path, err_path = os.path.join(self.world.root, "w.stdout"), os.path.join(self.world.root, "w.stderr")
         code = support.run_process(argv, cwd=self.world.repo, env=env, out=out_path, err=err_path, cap_s=600)
         self.assertEqual(code, 0, support.read_text(err_path)[-2000:])
-        self.assertIn(f"pyshim: {MODULE}: passed ", support.read_text(out_path))
+        self.assertIn(f"pyshim: {MODULE}: passed ", support.read_text(report))
 
     def test_3_14_syntax_is_red(self):
         self.plant(append=SYNTAX)
