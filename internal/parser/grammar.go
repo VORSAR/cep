@@ -200,9 +200,15 @@ type LateEventsClause struct {
 }
 
 type ChainElem struct {
-	Followed *PosElem         `parser:"  '->' @@"`
-	Absence  *Source          `parser:"| 'and' 'not' @@"`
-	For      *DurationOrParam `parser:"  'for' @@"`
+	Followed *PosElem  `parser:"  '->' @@"`
+	Absence  *Source   `parser:"| 'and' 'not' @@"`
+	For      *ForBound `parser:"  @@"`
+}
+
+// ForBound is an absence's bound: `for D`. A named pointer: it closes the absence branch of ChainElem's
+// alternation.
+type ForBound struct {
+	D *DurationOrParam `parser:"'for' @@"`
 }
 
 type PosElem struct {
