@@ -1,6 +1,11 @@
 package main
 
 import (
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -21,7 +26,22 @@ func check(t *testing.T, path, src string, other ...string) []string {
 	for i := 0; i+1 < len(other); i += 2 {
 		files[other[i]] = other[i+1]
 	}
-	got, err := CheckSources(testRules(t), path, files)
+	return checkWith(t, testLists(t), path, files)
+}
+
+// testLists is the repository's own tools/allowlists/ (design §3: tests pass filepath.Join("..", "..")).
+func testLists(t *testing.T) *Lists {
+	t.Helper()
+	l, err := LoadLists(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+func checkWith(t *testing.T, lists *Lists, path string, files map[string]string) []string {
+	t.Helper()
+	got, err := CheckSources(testRules(t), lists, path, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +161,7 @@ func TestClock(t *testing.T) {
 	})
 	t.Run("an operator package may not import time, except window/cron.go", func(t *testing.T) {
 		wantOne(t, check(t, "internal/table/x.go", "package table\nimport \"time\"\nfunc f(d time.Duration) time.Duration { return d }\n"), "clock: internal/table may not import time")
-		wantNone(t, check(t, "internal/window/cron.go", "package window\nimport \"time\"\nfunc f() (*time.Location, error) { return time.LoadLocation(\"UTC\") }\n"))
+		// cron.go's exception now comes from tools/allowlists/clock.json: see TestListsClockMembership (S1.1c-2).
 	})
 	t.Run("time types and arithmetic are fine elsewhere", func(t *testing.T) {
 		wantNone(t, check(t, "internal/clock/x.go", "package clock\nimport \"time\"\nfunc f(d time.Duration) time.Duration { return 2 * d }\n"))
@@ -306,4 +326,211 @@ func TestExprTableFence(t *testing.T) {
 	t.Run("table.Table is red", func(t *testing.T) {
 		wantOne(t, check(t, "internal/expr/x.go", "package expr\n"+imp+"func f(t *table.Table) error { return t.Upsert(nil) }\n"), "fence: internal/expr may use table.Version")
 	})
+}
+
+// ---- S1.1c-2 lane C (design §3): archcheck reads tools/allowlists/; the -tests fence; Stale.
+
+const (
+	cronSrc = "package window\nimport \"time\"\nfunc f() (*time.Location, error) { return time.LoadLocation(\"UTC\") }\n"
+	fence   = ": wait for a state, cap it with a context, yield on every pass of a poll (testing.md rule 1)"
+)
+
+// listRoot writes a fixture root holding tools/allowlists/{purity,clock,testhygiene}.json, each a list of targets
+// in the grammar's shape (the extra fields are read by the Python row, not by archcheck — A-L2).
+func listRoot(t *testing.T, purity, clock, tests []string) string {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "tools", "allowlists")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, targets := range map[string][]string{"purity": purity, "clock": clock, "testhygiene": tests} {
+		writeList(t, root, name, name, targets)
+	}
+	return root
+}
+
+func writeList(t *testing.T, root, name, rule string, targets []string) {
+	t.Helper()
+	entries := make([]string, len(targets))
+	for i, target := range targets {
+		entries[i] = `{"target": "` + target + `", "kind": "PERMANENT", "reason": "a reason long enough", "ref": "docs/a.md#b", "sprint": "S1.1c-2"}`
+	}
+	text := `{"schema": 1, "note": "n", "rule": "` + rule + `", "entries": [` + strings.Join(entries, ", ") + "]}\n"
+	if err := os.WriteFile(filepath.Join(root, "tools", "allowlists", name+".json"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func loadAt(t *testing.T, root string) *Lists {
+	t.Helper()
+	l, err := LoadLists(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+func touch(t *testing.T, root, rel string) {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestListsPurity(t *testing.T) {
+	t.Run("the targets are read into the purity map", func(t *testing.T) {
+		l := loadAt(t, listRoot(t, []string{"internal/event: sync.Pool", "internal/table: sync.Mutex", "internal/table: sync/atomic.Pointer"}, nil, nil))
+		want := map[string]map[string][]string{
+			"internal/event": {"sync": {"Pool"}},
+			"internal/table": {"sync": {"Mutex"}, "sync/atomic": {"Pointer"}},
+		}
+		if len(l.Purity) != len(want) {
+			t.Fatalf("purity %v, want %v", l.Purity, want)
+		}
+		for pkg, imports := range want {
+			for imp, idents := range imports {
+				if !slices.Equal(l.Purity[pkg][imp], idents) {
+					t.Fatalf("purity[%s][%s] = %v, want %v", pkg, imp, l.Purity[pkg][imp], idents)
+				}
+			}
+		}
+	})
+	t.Run("a list without internal/table: sync.Mutex makes table's mutex red", func(t *testing.T) {
+		src := "package table\nimport \"sync\"\nvar mu sync.Mutex\nfunc f() { mu.Lock() }\n"
+		with := loadAt(t, listRoot(t, []string{"internal/table: sync.Mutex"}, nil, nil))
+		wantNone(t, checkWith(t, with, "internal/table/x.go", map[string]string{"internal/table/x.go": src}))
+		without := loadAt(t, listRoot(t, []string{"internal/event: sync.Pool"}, nil, nil))
+		wantOne(t, checkWith(t, without, "internal/table/x.go", map[string]string{"internal/table/x.go": src}), "purity: internal/table may not import sync")
+	})
+	t.Run("a purity target that does not split is an error", func(t *testing.T) {
+		for _, bad := range []string{"internal/table sync.Mutex", "internal/table: syncMutex", "internal/table: sync.", ": sync.Mutex"} {
+			root := listRoot(t, []string{bad}, nil, nil)
+			if _, err := LoadLists(root); err == nil {
+				t.Fatalf("target %q: want an error, got none", bad)
+			}
+		}
+	})
+	t.Run("a list whose rule does not match its file is an error", func(t *testing.T) {
+		root := listRoot(t, nil, nil, nil)
+		writeList(t, root, "clock", "purity", nil)
+		if _, err := LoadLists(root); err == nil {
+			t.Fatal("clock.json with rule purity: want an error, got none")
+		}
+	})
+	t.Run("the repository's own lists load", func(t *testing.T) {
+		l := testLists(t)
+		if !slices.Equal(l.Purity["internal/table"]["sync"], []string{"Mutex"}) {
+			t.Fatalf("purity[internal/table][sync] = %v, want [Mutex]", l.Purity["internal/table"]["sync"])
+		}
+	})
+}
+
+func TestListsClockMembership(t *testing.T) {
+	files := map[string]string{"internal/window/cron.go": cronSrc}
+	t.Run("cron.go importing time is red with an empty clock.json", func(t *testing.T) {
+		got := checkWith(t, loadAt(t, listRoot(t, nil, nil, nil)), "internal/window/cron.go", files)
+		wantOne(t, got, "clock: internal/window may not import time")
+	})
+	t.Run("and green with the entry internal/window/cron.go: time", func(t *testing.T) {
+		got := checkWith(t, loadAt(t, listRoot(t, nil, []string{"internal/window/cron.go: time"}, nil)), "internal/window/cron.go", files)
+		wantNone(t, got)
+	})
+	t.Run("the entry covers its file only", func(t *testing.T) {
+		l := loadAt(t, listRoot(t, nil, []string{"internal/window/cron.go: time"}, nil))
+		got := checkWith(t, l, "internal/window/other.go", map[string]string{"internal/window/other.go": strings.Replace(cronSrc, "cron", "other", 1)})
+		wantOne(t, got, "clock: internal/window may not import time")
+	})
+}
+
+func TestStale(t *testing.T) {
+	t.Run("purity, clock and testhygiene targets that do not exist", func(t *testing.T) {
+		root := listRoot(t,
+			[]string{"internal/event: sync.Pool", "internal/gone: sync.Mutex"},
+			[]string{"internal/window/cron.go: time"},
+			[]string{"io/inmemory/x_test.go", "io/gone_test.go"})
+		touch(t, root, "internal/event/x.go")
+		touch(t, root, "io/inmemory/x_test.go")
+		got := Stale(loadAt(t, root), root)
+		want := []string{
+			"tools/allowlists/clock.json: internal/window/cron.go: time: does not exist (a stale target)",
+			"tools/allowlists/purity.json: internal/gone: sync.Mutex: does not exist (a stale target)",
+			"tools/allowlists/testhygiene.json: io/gone_test.go: does not exist (a stale target)",
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Fatalf("Stale = %q, want %q", got, want)
+		}
+	})
+	t.Run("the repository's own lists have no stale target", func(t *testing.T) {
+		if got := Stale(testLists(t), filepath.Join("..", "..")); len(got) != 0 {
+			t.Fatalf("Stale = %q, want none", got)
+		}
+	})
+}
+
+func TestCheckTest(t *testing.T) {
+	empty := func(t *testing.T) *Lists { return loadAt(t, listRoot(t, nil, nil, nil)) }
+	const path = "internal/x/x_test.go"
+	for _, banned := range []string{"Sleep", "After", "AfterFunc", "Tick", "NewTimer", "NewTicker"} {
+		t.Run("time."+banned+" is red", func(t *testing.T) {
+			src := "package x\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestX(t *testing.T) {\n\t_ = time." + banned + "\n}\n"
+			got := CheckTest(empty(t), path, src)
+			// design ambiguity: §3 prints "failed: " before each finding; CheckTest's items are taken without it,
+			// as CheckSources' are (main adds the prefix).
+			want := []string{path + ":9: testhygiene: time." + banned + " in a test" + fence}
+			if !slices.Equal(got, want) {
+				t.Fatalf("CheckTest = %q, want %q", got, want)
+			}
+		})
+	}
+	t.Run("an aliased import is still caught", func(t *testing.T) {
+		src := "package x\n\nimport tm \"time\"\n\nfunc f() { tm.Sleep(1) }\n"
+		want := []string{path + ":5: testhygiene: time.Sleep in a test" + fence}
+		if got := CheckTest(empty(t), path, src); !slices.Equal(got, want) {
+			t.Fatalf("CheckTest = %q, want %q", got, want)
+		}
+	})
+	t.Run("a dot-import of time is red", func(t *testing.T) {
+		src := "package x\n\nimport . \"time\"\n\nfunc f() { Sleep(1) }\n"
+		want := []string{path + ":3: testhygiene: a dot-import of time hides the calls the fence reads"}
+		if got := CheckTest(empty(t), path, src); !slices.Equal(got, want) {
+			t.Fatalf("CheckTest = %q, want %q", got, want)
+		}
+	})
+	t.Run("time.Duration and context.WithTimeout are fine", func(t *testing.T) {
+		src := "package x\n\nimport (\n\t\"context\"\n\t\"time\"\n)\n\nfunc f() {\n\tctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)\n\tdefer cancel()\n\tvar d time.Duration\n\t_, _ = ctx, d\n}\n"
+		if got := CheckTest(empty(t), path, src); len(got) != 0 {
+			t.Fatalf("CheckTest = %q, want none", got)
+		}
+	})
+	t.Run("a file listed in testhygiene.json is skipped", func(t *testing.T) {
+		l := loadAt(t, listRoot(t, nil, nil, []string{path}))
+		src := "package x\n\nimport \"time\"\n\nfunc f() { time.Sleep(1) }\n"
+		if got := CheckTest(l, path, src); len(got) != 0 {
+			t.Fatalf("CheckTest on a listed file = %q, want none", got)
+		}
+	})
+}
+
+func TestTestsModeRefusesANonTestFile(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "archcheck")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	list := filepath.Join(t.TempDir(), "files.nul")
+	if err := os.WriteFile(list, []byte("tools/archcheck/main.go\x00"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "-tests", list)
+	cmd.Dir = filepath.Join("..", "..")
+	out, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+		t.Fatalf("-tests on a non-test file: want exit 2, got %v\n%s", err, out)
+	}
 }
