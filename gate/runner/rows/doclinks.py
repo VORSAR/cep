@@ -13,63 +13,21 @@ why; GATE_COVERED counts the files read.
 import os
 import re
 import sys
-import unicodedata
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from gate.runner import rows
+from gate.runner.anchors import anchors, prose
+from gate.runner.anchors import slug as slug  # re-exported: the anchor rule is read as doclinks.slug too
 
 TEMPLATES = "docs/sprints/templates/"
-FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-HEADING = re.compile(r"^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
 CODE_SPAN = re.compile(r"(`+).+?\1")
 INLINE = re.compile(
     r"\[(?:[^\[\]\\]|\\.|\[[^\]]*\])*\]\(\s*(<[^>]*>|[^)\s]+)(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)"
 )
 REFERENCE = re.compile(r"^ {0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)")
-HTML_ANCHOR = re.compile(r"<[A-Za-z][^>]*?\s(?:id|name)=\"([^\"]+)\"")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:|^//")
-
-
-def slug(heading: str) -> str:
-    """GitHub's anchor for a heading's text."""
-    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", heading)  # a link or an image keeps its text
-    text = re.sub(r"<[^>]*>", "", text)  # inline HTML
-    text = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"\1", text)  # _emphasis_; an intraword underscore stays
-    out = []
-    for ch in text.strip().lower():
-        if ch == " ":
-            out.append("-")
-        elif ch in "-_" or unicodedata.category(ch)[0] in "LNM":
-            out.append(ch)
-    return "".join(out)
-
-
-def prose(lines: list[str]):
-    """(line number, line) outside fenced blocks. A heading's code span is part of its anchor, so spans stay."""
-    fence = ""
-    for number, line in enumerate(lines, 1):
-        m = FENCE.match(line)
-        if m and (not fence or (m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence))):
-            fence = "" if fence else m.group(1)
-            continue
-        if not fence:
-            yield number, line
-
-
-def anchors(text: str) -> set[str]:
-    found: set[str] = set()
-    seen: dict[str, int] = {}
-    for _, line in prose(text.splitlines()):
-        m = HEADING.match(line)
-        if m and m.group(1):
-            base = slug(m.group(1))
-            n = seen.get(base, 0)
-            seen[base] = n + 1
-            found.add(base if n == 0 else f"{base}-{n}")
-        found.update(HTML_ANCHOR.findall(line))
-    return found
 
 
 class Checker:
