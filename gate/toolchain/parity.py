@@ -93,7 +93,10 @@ def tree_digest(
         try:
             code = proc.wait(timeout=cap)
         except subprocess.TimeoutExpired:
-            _signal_group(proc.pid, signal.SIGKILL)  # the leader is not reaped yet, so its group id is still its own
+            # The leader is not reaped yet, so its group id is still its own; a group left with only a zombie answers
+            # EPERM on macOS, which means there is nothing left to kill.
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(proc.pid, signal.SIGKILL)
             with contextlib.suppress(subprocess.TimeoutExpired):
                 proc.wait(timeout=TREE_GRACE_S)
             raise TreeCapExceeded(cap) from None

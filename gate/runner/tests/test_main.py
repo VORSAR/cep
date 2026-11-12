@@ -289,9 +289,12 @@ class RealParts(support.GateTest):
         # The seam of gate.toolchain, faked at its own boundary: the names and arguments Lane B's code must honour.
         calls = {}
 
-        def check(tools, cache, env, *, full_tree):
-            calls["check"] = (tools, cache, env, full_tree)
+        def check(tools, cache, env, *, full_tree, spawn, scratch):
+            calls["check"] = (tools, cache, env, full_tree, spawn, scratch)
             return ["go: x"]
+
+        def spawn(argv, **kw):  # the runner's parity group's spawn, passed through untouched (S1.1c-3 C8)
+            return None
 
         with (
             mock.patch.object(main.manifest, "platform_key", return_value="p"),
@@ -303,10 +306,10 @@ class RealParts(support.GateTest):
             real = main.RealToolchain("/repo", {"A": "1"})
             self.assertEqual(real.path_dirs(), ["/c/t1/bin"])
             self.assertEqual(real.tool_count(), 2)
-            self.assertEqual(real.parity({"E": "1"}, full_tree=True), ["go: x"])
+            self.assertEqual(real.parity({"E": "1"}, full_tree=True, spawn=spawn, scratch="/run/parity"), ["go: x"])
         load.assert_called_once_with(os.path.join("/repo", "tools.json"), "p")
         path_dirs.assert_called_once_with("/c", ["t1", "t2"])
-        self.assertEqual(calls["check"], (["t1", "t2"], "/c", {"E": "1"}, True))
+        self.assertEqual(calls["check"], (["t1", "t2"], "/c", {"E": "1"}, True, spawn, "/run/parity"))
 
     def test_a_manifest_error_is_exit_2(self):
         out = io.StringIO()
