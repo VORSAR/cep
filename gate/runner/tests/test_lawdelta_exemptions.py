@@ -19,7 +19,7 @@ from gate.runner.tests import support
 
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
 TODAY = date(2026, 11, 12)
-LAW_ONLY = {"schema": 1, "note": "n", "paths": [{"path": "gate/law.json", "kind": "law"}]}
+LAW_ONLY = {"schema": 1, "note": "n", "paths": [{"path": "gate/law.json", "kind": "law"}], "instruments": []}
 WITH_LISTS = {
     "schema": 1,
     "note": "n",
@@ -28,6 +28,7 @@ WITH_LISTS = {
         {"path": "tools/allowlists/", "kind": "allowlist"},
         {"path": "gate/known-issues.json", "kind": "known-issues"},
     ],
+    "instruments": [],
 }
 GO_META = 'PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/a.md#title sprint=S1.1c-2'
 PY_MARK = "x = 1  # fmt: skip  # a reason that is long enough\n"

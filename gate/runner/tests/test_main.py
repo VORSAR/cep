@@ -203,7 +203,9 @@ class FirstLine(support.GateTest):
         super().setUp()
         self.git("checkout", "-q", "-b", "main")
         self.track(
-            self.LAW, '{"schema": 1, "note": "a fixture", "paths": [{"path": "gate/law.json", "kind": "law"}]}\n'
+            self.LAW,
+            '{"schema": 1, "note": "a fixture", "paths": [{"path": "gate/law.json", "kind": "law"}],'
+            ' "instruments": []}\n',
         )
         self.git(*self.IDENTITY, "commit", "-q", "-m", "main")
 

@@ -40,7 +40,7 @@ class LawDeltaRow(support.GateTest):
         self.git(*IDENTITY, "commit", "-q", "-m", message)
 
     def manifest(self, *paths: dict) -> str:
-        return json.dumps({"schema": 1, "note": "", "paths": list(paths)})
+        return json.dumps({"schema": 1, "note": "", "paths": list(paths), "instruments": []})
 
     def in_process(self) -> tuple[int, str]:
         self.counter += 1

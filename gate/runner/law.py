@@ -37,7 +37,10 @@ KINDS = frozenset(
 LISTED = frozenset({"allowlist", "known-issues"})  # kinds whose delta is [summary, *sub-lines] (design §2.5)
 SUB_LINES_MAX = 6
 GROUPED = frozenset({"code", "workflow"})
-TOP_KEYS = frozenset({"schema", "note", "paths"})
+TOP_KEYS = frozenset({"schema", "note", "paths", "instruments"})
+INSTRUMENT_REQUIRED = ("id", "row", "lands_in", "code", "proofs")
+INSTRUMENT_OPTIONAL = ("tiers", "min_wants", "expected_scope", "go_test", "exempt")
+PROOF_REQUIRED = ("path", "cases")
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*\s*$")
 NUMBERED = re.compile(r"^(\d+)\. ")
 NONE = "LAW Δ: none"
@@ -51,8 +54,37 @@ class Path:
 
 
 @dataclass(frozen=True)
+class Proof:
+    """A proof file and the cases the teeth count in it; `test` counts only that Go test function and its subtests."""
+
+    path: str
+    cases: int
+    test: str = ""
+
+
+@dataclass(frozen=True)
+class Instrument:
+    """What gives a row or a Go test its teeth (S1.1c-2 design §4.2): its code, its proofs and their counted cases.
+
+    A row instrument pins its row's tiers, min_wants and expected_scope; a Go-test instrument names its go_test;
+    `exempt` names a tools/allowlists/teeth.json entry in place of proofs."""
+
+    id: str
+    row: str
+    lands_in: str
+    code: tuple[str, ...]
+    proofs: tuple[Proof, ...]
+    tiers: tuple[str, ...] = ()
+    min_wants: int = -1
+    expected_scope: tuple[str, ...] = ()
+    go_test: str = ""
+    exempt: str = ""
+
+
+@dataclass(frozen=True)
 class Manifest:
     paths: tuple[Path, ...]
+    instruments: tuple[Instrument, ...] = ()
 
 
 class ManifestError(ValueError):
@@ -100,6 +132,73 @@ def _entry(i: int, item: object, seen: set[str]) -> Path:
     return Path(path, kind, flag)
 
 
+def _safe(path: object) -> bool:
+    return type(path) is str and bool(path) and not path.startswith("/") and ".." not in path.split("/")
+
+
+def _strings(value: object) -> bool:
+    return type(value) is list and all(type(v) is str and v for v in value)
+
+
+def _proof(item: object, fault) -> Proof:
+    if type(item) is not dict:
+        raise fault("a proof is not an object")
+    keys = set(item)
+    if keys not in (set(PROOF_REQUIRED), {*PROOF_REQUIRED, "test"}):
+        raise fault(f"a proof's keys {', '.join(sorted(keys))}: want path, cases and, for a Go test, test")
+    if not _safe(item["path"]):
+        raise fault(f"proof path {item['path']!r} must be a non-empty repository path, without ..")
+    if type(item["cases"]) is not int or item["cases"] < 0:
+        raise fault(f"proof {item['path']}: cases is not a whole number")
+    if "test" in item and (type(item["test"]) is not str or not item["test"]):
+        raise fault(f"proof {item['path']}: test is not a non-empty string")
+    return Proof(item["path"], item["cases"], item.get("test", ""))
+
+
+def _instrument(i: int, item: object, seen: set[str]) -> Instrument:
+    def fault(what: str) -> ManifestError:
+        return ManifestError(f"gate/law.json: instruments[{i}]: {what}")
+
+    if type(item) is not dict:
+        raise fault("not an object")
+    for key in sorted(item):
+        if key not in INSTRUMENT_REQUIRED and key not in INSTRUMENT_OPTIONAL:
+            raise fault(f"unknown key {key!r}")
+    for key in INSTRUMENT_REQUIRED:
+        if key not in item:
+            raise fault(f"missing key {key!r}")
+    for key in ("id", "row", "lands_in", "go_test", "exempt"):
+        if key in item and (type(item[key]) is not str or not item[key]):
+            raise fault(f"{key} is not a non-empty string")
+    if item["id"] in seen:
+        raise fault(f"id {item['id']!r} is listed twice")
+    for key in ("code", "tiers", "expected_scope"):
+        if key in item and not _strings(item[key]):
+            raise fault(f"{key} is not a list of non-empty strings")
+    for path in item["code"]:
+        if not _safe(path):
+            raise fault(f"code path {path!r} must be relative to the repository, without ..")
+    if "min_wants" in item and (type(item["min_wants"]) is not int or item["min_wants"] < 0):
+        raise fault("min_wants is not a whole number")
+    if type(item["proofs"]) is not list:
+        raise fault("proofs is not a list")
+    if item["proofs"] and "exempt" in item:
+        raise fault("proofs and exempt together")
+    seen.add(item["id"])
+    return Instrument(
+        item["id"],
+        item["row"],
+        item["lands_in"],
+        tuple(item["code"]),
+        tuple(_proof(p, fault) for p in item["proofs"]),
+        tiers=tuple(item.get("tiers", ())),
+        min_wants=item.get("min_wants", -1),
+        expected_scope=tuple(item.get("expected_scope", ())),
+        go_test=item.get("go_test", ""),
+        exempt=item.get("exempt", ""),
+    )
+
+
 def load_manifest(text: str) -> Manifest:
     try:
         data = loads(text)
@@ -119,7 +218,11 @@ def load_manifest(text: str) -> Manifest:
     if type(paths) is not list or not paths:
         raise ManifestError("gate/law.json: paths is not a non-empty list")
     seen: set[str] = set()
-    return Manifest(tuple(_entry(i, item, seen) for i, item in enumerate(paths)))
+    entries = tuple(_entry(i, item, seen) for i, item in enumerate(paths))
+    if type(data["instruments"]) is not list:
+        raise ManifestError("gate/law.json: instruments is not a list")
+    ids: set[str] = set()
+    return Manifest(entries, tuple(_instrument(i, item, ids) for i, item in enumerate(data["instruments"])))
 
 
 def entry_for(m: Manifest, file: str) -> Path | None:
@@ -490,7 +593,33 @@ def _delta_law(old: dict, new: dict) -> str:
         elif before.get("flag") != entry.get("flag"):
             items.append(f"{path}: flag changed")
     items += [f"−1 path {path}" for path in old_p if path not in new_p]
+    old_i, new_i = _by(old.get("instruments", []), "id"), _by(new.get("instruments", []), "id")
+    items += [f"+instrument {id}" for id in new_i if id not in old_i]
+    items += [f"−instrument {id}" for id in old_i if id not in new_i]
+    for id, after in new_i.items():
+        before = old_i.get(id)
+        if before is None:
+            continue
+        changed = [
+            f"{f} {_instrument_field(before, f)} → {_instrument_field(after, f)}"
+            for f in INSTRUMENT_FIELDS
+            if _instrument_field(before, f) != _instrument_field(after, f)
+        ]
+        if changed:
+            items.append(f"instrument {id}: {'; '.join(changed)}")
     return "; ".join(items)
+
+
+INSTRUMENT_FIELDS = ("row", "lands_in", "code", "proofs", "tiers", "min_wants", "expected_scope", "go_test", "exempt")
+INSTRUMENT_DEFAULTS: dict[str, object] = {"min_wants": -1, "go_test": "", "exempt": ""}
+
+
+def _instrument_field(entry: dict, field: str) -> str:
+    """A field as a LAW Δ line shows it: a list comma-joined (§11.16), a proof as <path>[ <test>]: <cases>."""
+    value = entry.get(field, INSTRUMENT_DEFAULTS.get(field, []))
+    if field == "proofs":
+        return ", ".join(f"{p['path']}{' ' + p['test'] if p.get('test') else ''}: {p['cases']}" for p in value)
+    return _show(value)
 
 
 LIST_FIELDS = ("kind", "sprint", "ref", "expiry", "issue")
