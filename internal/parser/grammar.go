@@ -159,9 +159,9 @@ type EmitTok struct {
 
 type PatternBody struct {
 	PatternChain
-	Within     *DurationOrParam `parser:"'within' @@"`
-	AfterMatch bool             `parser:"@('after' 'match' 'skip' 'past' 'last')"`
-	Late       *LateClause      `parser:"'late' 'events' @@"`
+	WithinClause
+	AfterMatch bool        `parser:"@('after' 'match' 'skip' 'past' 'last')"`
+	Late       *LateClause `parser:"'late' 'events' @@"`
 }
 
 // PatternChain is a pattern's restart marker and its steps: the first positive step, then each `-> step` or
@@ -170,6 +170,11 @@ type PatternChain struct {
 	Restart string       `parser:"@('every'|'once')"`
 	First   *PosElem     `parser:"@@"`
 	Chain   []*ChainElem `parser:"@@*"`
+}
+
+// WithinClause is a pattern's bound: `within D`.
+type WithinClause struct {
+	Within *DurationOrParam `parser:"'within' @@"`
 }
 
 type ChainElem struct {
