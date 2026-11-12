@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "note": "archcheck's named purity exceptions (ADR-0015 §2 puritycheck; §3.10): the only packages outside internal/runtime, io and cmd that may import sync or sync/atomic, each limited to the identifiers named. A target is '<package>: <import path>.<identifier>'. archcheck reads the targets; the suppressions row validates the grammar. Moved here from tools/archcheck/main.go's syncNamed (S1.1c-2, lane C).",
+  "rule": "purity",
+  "entries": [
+    {
+      "target": "internal/event: sync.Pool",
+      "kind": "PERMANENT",
+      "reason": "the event pool keeps the decode path allocation-free in the steady state",
+      "ref": "docs/architecture/adr/ADR-0010-performance-model.md#decision",
+      "sprint": "S3.1-2"
+    },
+    {
+      "target": "internal/table: sync.Mutex",
+      "kind": "PERMANENT",
+      "reason": "the one write mutex that serialises a table's snapshot swaps",
+      "ref": "docs/architecture/adr/ADR-0012-streamnode-and-app-lifecycle.md#decision",
+      "sprint": "S3.1-2"
+    },
+    {
+      "target": "internal/table: sync/atomic.Pointer",
+      "kind": "PERMANENT",
+      "reason": "the snapshot pointer each event reads without a lock",
+      "ref": "docs/architecture/adr/ADR-0012-streamnode-and-app-lifecycle.md#decision",
+      "sprint": "S3.1-2"
+    }
+  ]
+}

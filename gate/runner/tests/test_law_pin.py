@@ -1,5 +1,5 @@
 """The law manifest's pin (S1.1c-1 design §2.6; plan check §2 S1): every path ADR-0015 §1.3 names that git tracks is
-listed in gate/law.json, and the two it names that do not exist yet (S1.1c-2's) are still untracked. Reads the
+listed in gate/law.json, and the one it names that does not exist (tools/analyzers/) is still untracked. Reads the
 real files, so a law path dropped from the manifest is red at T2."""
 
 import os
@@ -38,9 +38,20 @@ ADR_0015_1_3 = (
     "ruff.toml",
     "go.mod",
     "gate/proofs/go.mod",
+    # §1.3 names gate/ whole: the catch-alls, beside the specific entries above (owner, 2026-11-12, S1.1c-2's plan
+    # check, carried): the rest of the gate, the tools, the hooks, the Makefile, the language corpus; the one allowlist
+    # grammar's files (§3.10) and the known-issues data (decision 13).
+    "gate/",
+    "tools/",
+    ".githooks/",
+    "Makefile",
+    "docs/language/examples/",
+    "docs/language/invalid/",
+    "tools/allowlists/",
+    "gate/known-issues.json",
 )
-# Named by §1.3, not built: they land with S1.1c-2's allowlist checker and analyzers (owner, 2026-11-04).
-NOT_YET = ("tools/allowlists/", "tools/analyzers/")
+# Named by §1.3, not built: the go/analysis analyzers (the as-built analyzer is tools/archcheck/, owner 2026-11-04).
+NOT_YET = ("tools/analyzers/",)
 
 
 class LawPin(unittest.TestCase):
@@ -50,7 +61,7 @@ class LawPin(unittest.TestCase):
         missing = [path for path in ADR_0015_1_3 if path not in listed]
         self.assertEqual(missing, [], f"ADR-0015 §1.3 names {missing} and gate/law.json does not list them")
 
-    def test_the_two_unbuilt_paths_are_still_untracked(self):
+    def test_the_unbuilt_path_is_still_untracked(self):
         for path in NOT_YET:
             with self.subTest(path):
                 code, out, _ = support.run_tool(["git", "ls-files", "-z", "--", path], support.REPO)

@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "note": "archcheck's clock exceptions (ADR-0015 §2 clockcheck): files in an operator package that may import time. Empty: internal/window/cron.go's exception is dropped until S9.1 builds the file, by ADR-0015 §2.2's lands-with-its-subject rule (owner, 2026-11-12, S1.1c-2's plan check, carried).",
+  "rule": "clock",
+  "entries": []
+}
