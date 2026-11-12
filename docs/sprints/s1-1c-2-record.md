@@ -33,6 +33,7 @@ At most two agents at once (plan check §1, §4, §9).
 ## Measured results
 
 - **T2 on the G0 commit (bacb2e6, run 20261112T033210Z-c84596):** every row PASS but the three stubs, each red by its own name — `suppressions: not built yet (lane A)`, `testhygiene: not built yet (lane C)`, `docsync: not built yet (lane D)`; exit 1 as designed. The LAW Δ block named the sprint's law edits: the marker `S1.1c-1 → S1.1c-2`, `law.json` +8 paths, `registry.json` +3 rows and the floor argument, `gate/runner/` 5 files, `tools/allowlists/` 5 files, `gate/known-issues.json`. This is the baseline for plan check §7's "done" rule: a lane is done when its T2's failed rows are exactly the stubs not yet replaced.
+- **W0, the eight row proofs (QA, 2026-11-12; dcfb3ee, 061a5c4):** a planted-defect driver for `vet`, `archcheck`, `ci-fresh`, `determinism-macos`, `proofs`, `fuzz-parser`, `fuzz-decoder`, `race-stress` (owner decision 10), each green with its plant and red without it (QA quoted all eight; the coordinator re-ran one: `vet` with its Printf verb matched → the row PASS, the driver FAILED). **The proofs row alone at T4 on f535754: PASS, covered 32** (run in the scratchpad, 57.7 s), after two fixes to older drivers that the run exposed (findings W0-F1, W0-F2); `min_wants` 24 → 32.
 
 ## Test material
 
@@ -46,6 +47,8 @@ None since G0.
 
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
+| W0-F1 | QA W0 | blocker | the T4 `proofs` row red on the integration branch: `test_lawdelta_planted.py` hard-coded the marker `S1.1c-1`, which this sprint's G0 moved; G0 ran T2 only, so it went unseen | fixed (f535754): the driver reads the marker from its world; the lesson for the retro — a G0 that moves the marker also runs the `proofs` row |
+| W0-F2 | QA W0 | should-fix | the determinism case of `test_tripwire_planted.py` was red without its plant (no SPEC.md or baseline in its world, so TestBaseline failed) and asserted only `fail` | fixed (f535754): the world gains both; the exact reason `TestDeterminismGolden` asserted, red first |
 
 ## Done-done
 
