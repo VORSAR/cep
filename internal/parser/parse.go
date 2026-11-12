@@ -7,6 +7,7 @@ package parser
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -109,7 +110,7 @@ func lexError(name, src string, err error) *Error {
 			}
 		}
 	}
-	return mk(name, "E-SYN-001", pos, perr.Message())
+	return mk(name, "E-SYN-001", pos, ruleWords(perr))
 }
 
 // parseError is the catalogue mapping (ADR-0002 §4): from participle's error, which names the unexpected token
@@ -146,9 +147,7 @@ func parseError(name string, toks []Token, err error) *Error {
 		}
 	}
 	kind := typeName(cur.Type)
-	expects := func(what string) bool {
-		return strings.Contains(msg, "expected "+what) || strings.Contains(msg, "expected ("+what)
-	}
+	expects := func(what string) bool { return expectsName(msg, what) }
 	// Does a keyword appear later in this statement? Then a clause is out of order, not missing.
 	later := func(word string) bool {
 		for i := at; i < len(toks) && toks[i].Value != ";"; i++ {
@@ -190,15 +189,92 @@ func parseError(name string, toks []Token, err error) *Error {
 	case expects(`"for"`) || expects("ForBound"):
 		return mk(name, "E-PAT-004", cur.Pos, "the absence has no bound")
 	}
-	for word, code := range clauseStart {
-		if expects(`"` + word + `"`) {
-			if later(word) {
-				return mk(name, "E-ORD-001", cur.Pos, "clauses are out of order: "+word+" comes before "+cur.Value)
+	for _, c := range clauseStart {
+		if expects(`"` + c.word + `"`) {
+			if later(c.word) {
+				return mk(name, "E-ORD-001", cur.Pos, "clauses are out of order: "+c.word+" comes before "+cur.Value)
 			}
-			return mk(name, code, cur.Pos, "the "+word+" clause is missing")
+			return mk(name, c.code, cur.Pos, "the "+c.word+" clause is missing")
 		}
 	}
-	return mk(name, "E-SYN-001", cur.Pos, perr.Message())
+	return mk(name, "E-SYN-001", cur.Pos, ruleWords(perr))
+}
+
+// expectsName reports whether participle's message msg expects what first ("expected <what>" or
+// "expected (<what>"), what being a whole name: the character after it cannot continue a name, so Duration is not
+// DurationOrParam and "for" is not "forx".
+func expectsName(msg, what string) bool {
+	for _, lead := range []string{"expected ", "expected ("} {
+		for rest := msg; ; {
+			_, after, ok := strings.Cut(rest, lead+what)
+			if !ok {
+				break
+			}
+			if after == "" || !isNameChar(after[0]) {
+				return true
+			}
+			rest = after
+		}
+	}
+	return false
+}
+
+func isNameChar(c byte) bool {
+	return c == '_' || '0' <= c && c <= '9' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
+}
+
+// ruleWords is err's message in rule words: in what participle expected, each production's name, as a whole
+// unquoted name, becomes its productionWords entry; the token found is kept exactly as written (a stream may be named
+// like a type). Any other error's message gets the same rewrite outside its quoted runs.
+func ruleWords(err error) string {
+	if ute, ok := errors.AsType[*participle.UnexpectedTokenError](err); ok {
+		msg := ute.Message()
+		found := fmt.Sprintf("unexpected token %q", ute.Unexpected)
+		if expected, ok := strings.CutPrefix(msg, found); ok {
+			return found + wordsFor(expected)
+		}
+		return msg
+	}
+	if perr, ok := errors.AsType[participle.Error](err); ok {
+		return wordsFor(perr.Message())
+	}
+	return wordsFor(err.Error())
+}
+
+// wordsFor replaces each whole unquoted production name in s by its rule words; a double-quoted run is copied as
+// it is. A name is read whole (the longest run of name characters), so the longest name always wins.
+func wordsFor(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		switch c := s[i]; {
+		case c == '"':
+			j := i + 1
+			for j < len(s) && s[j] != '"' {
+				if s[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			j = min(j+1, len(s))
+			b.WriteString(s[i:j])
+			i = j
+		case isNameChar(c):
+			j := i
+			for j < len(s) && isNameChar(s[j]) {
+				j++
+			}
+			if words, ok := productionWords[s[i:j]]; ok {
+				b.WriteString(words)
+			} else {
+				b.WriteString(s[i:j])
+			}
+			i = j
+		default:
+			b.WriteByte(c)
+			i++
+		}
+	}
+	return b.String()
 }
 
 // closingBracket finds the `]` matching the `[` at index open, or -1.
