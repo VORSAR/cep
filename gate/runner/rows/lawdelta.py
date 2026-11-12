@@ -44,10 +44,10 @@ def in_code(rev: str) -> tuple[list[suppressions.Directive], list[str]]:
     files that could not be read there, said on the line (CA-L1)."""
     found: list[suppressions.Directive] = []
     unreadable: list[str] = []
-    for path in sorted(git.grep_files(rev, suppressions.PREFILTER, IN_CODE)):
-        if not suppressions.scoped(path):
-            continue
-        text = git.show(rev, path)
+    paths = sorted(p for p in git.grep_files(rev, suppressions.PREFILTER, IN_CODE) if suppressions.scoped(p))
+    texts = git.read_blobs(rev, paths)  # one process for every file (FX-4)
+    for path in paths:
+        text = texts[path]
         if text is None:
             unreadable.append(path)
             continue
@@ -63,11 +63,11 @@ def listed(rev: str) -> tuple[list[tuple[str, dict]], list[str]]:
     read there, said on the line (CA-L1; the suppressions row names the fault)."""
     entries: list[tuple[str, dict]] = []
     unreadable: list[str] = []
-    for path in sorted(git.ls_tree(rev, LISTS)):
-        if not path.endswith(".json") or "/" in path.removeprefix(LISTS):
-            continue
+    paths = sorted(p for p in git.ls_tree(rev, LISTS) if p.endswith(".json") and "/" not in p.removeprefix(LISTS))
+    texts = git.read_blobs(rev, paths)  # one process for every list (FX-4)
+    for path in paths:
         try:
-            data = json.loads(git.show(rev, path) or "")
+            data = json.loads(texts[path] or "")
         except ValueError:
             data = None
         items = data.get("entries") if type(data) is dict else None
@@ -182,15 +182,20 @@ def _block(manifest: law.Manifest, base: str, head: str) -> tuple[list[str], str
     paths = [e.path for e in manifest.paths]
     data: list[str | list[str]] = []
     grouped: dict[str, tuple[int, int, int]] = {}
+    matched: list[tuple[str, int, int, law.Path]] = []
     for file, added, removed in git.numstat(base, head, paths):
         entry = law.entry_for(manifest, file)
         if entry is None:
             return [], f"lawdelta: {file} changed under a listed prefix but matches no entry"
+        matched.append((file, added, removed, entry))
+    read = [file for file, _, _, entry in matched if entry.kind not in law.GROUPED]
+    olds, news = git.read_blobs(base, read), git.read_blobs(head, read)  # one process a revision (FX-4)
+    for file, added, removed, entry in matched:
         if entry.kind in law.GROUPED:
             files, a, r = grouped.get(entry.path, (0, 0, 0))
             grouped[entry.path] = (files + 1, a + added, r + removed)
             continue
-        old, new = git.show(base, file), git.show(head, file)
+        old, new = olds[file], news[file]
         try:
             one = law.doc_line(old, new, entry.flag) if entry.kind == "doc" else law.delta(entry.kind, old, new)
         except PARSER_CRASHES as e:
@@ -212,8 +217,9 @@ def main(argv: list[str]) -> int:
     except OSError as e:
         return rows.finish([f"lawdelta: gate/law.json: {e}"])
     faults: list[str] = []
+    every = git.ls_files([e.path for e in manifest.paths])  # one process for every law path (FX-4)
     for e in manifest.paths:
-        tracked = git.ls_files([e.path])
+        tracked = [f for f in every if f == e.path or f.startswith(e.path if e.path.endswith("/") else f"{e.path}/")]
         if not tracked:
             faults.append(f"lawdelta: {e.path} is listed in gate/law.json but git tracks nothing there")
         elif not e.path.endswith("/") and tracked != [e.path]:  # a directory listed without its slash (break-it 2)
@@ -231,7 +237,10 @@ def main(argv: list[str]) -> int:
     if base == head:
         lines = [HEAD_IS_MAIN]
     else:
-        lines, failure = _block(manifest, base, head)
+        try:
+            lines, failure = _block(manifest, base, head)
+        except git.GitError as e:
+            return rows.finish([f"lawdelta: {e}"])
         if failure:
             return rows.finish([failure])
     try:
