@@ -313,7 +313,7 @@ class RealParts(support.GateTest):
 
         with contextlib.redirect_stdout(out):
             code = main.main(["--tier", "T2", "--registry", self.registry_file([self.row("x")])],
-                             deps=self.deps(toolchain=bad))  # fmt: skip
+                             deps=self.deps(toolchain=bad))  # fmt: skip  # aligned arguments
         self.assertEqual(code, 2)
         self.assertIn("no entry for this platform", out.getvalue())
         self.assertNotIn("internal error", out.getvalue())
@@ -321,6 +321,6 @@ class RealParts(support.GateTest):
     def test_the_run_json_is_valid(self):
         with contextlib.redirect_stdout(io.StringIO()):
             main.main(["--tier", "T2", "--registry", self.registry_file([self.row("x")]), "--run-dir", self.run_dir],
-                      deps=self.deps())  # fmt: skip
+                      deps=self.deps())  # fmt: skip  # aligned arguments
         with open(os.path.join(self.run_dir, "run.json"), "rb") as f:
             self.assertEqual(json.loads(f.read())["run_id"], support.RUN_ID)

@@ -139,7 +139,7 @@ class Slots(support.GateTest):
             (("PASS ex.com/m/a 100.00% (2/2)", "FAIL ex.com/m/b 50.00% (1/2) < 90%"), "ex.com/m/b 50.00% (1/2) < 90%"),
             (("internal error: KeyError: 'x'", "GATE FAILED"), "internal error: KeyError: 'x'"),
             (("failed:no space", "FAILED", "fail: lower case"), ""),
-        )):  # fmt: skip
+        )):  # fmt: skip  # cases as a table
             with self.subTest(printed):
                 self.run_dir = os.path.join(self.root, f"run-{i}")
                 os.mkdir(self.run_dir)
@@ -249,7 +249,8 @@ class Environment(support.GateTest):
 
     def test_the_row_variables(self):
         for name, want in (("GATE_TIER", "T2"), ("GATE_ROW", "x"), ("GATE_RUN_DIR", self.run_dir),
-                           ("GATE_ROW_DIR", os.path.join(self.run_dir, "rows", "lint", "x"))):  # fmt: skip
+                           ("GATE_ROW_DIR",
+                            os.path.join(self.run_dir, "rows", "lint", "x"))):  # fmt: skip  # cases as a table
             with self.subTest(name):
                 self.assertEqual(self.seen(name), want)
                 self.reset_run()
@@ -260,7 +261,7 @@ class Environment(support.GateTest):
 
     def test_the_pinned_go_settings_win_over_the_caller(self):
         env = dict(support.base_env(), GOFLAGS="-mod=mod", GOTOOLCHAIN="go1.27.2", CGO_ENABLED="1", GOROOT="/nope",
-                   PYTHONPATH="/evil", GIT_LITERAL_PATHSPECS="1")  # fmt: skip
+                   PYTHONPATH="/evil", GIT_LITERAL_PATHSPECS="1")  # fmt: skip  # aligned keywords
         self.assertEqual(self.seen("GOFLAGS", env), "")
         self.reset_run()
         self.assertEqual(self.seen("GOTOOLCHAIN", env), "local")
@@ -317,7 +318,8 @@ class RunFiles(support.GateTest):
         with open(os.path.join(self.run_dir, "run.json"), "rb") as f:
             run = json.loads(f.read())
         self.assertEqual([(r["job"], r["id"]) for r in run["records"]],
-                         [("test", "parity"), ("lint", "parity"), ("test", "b"), ("lint", "a")])  # fmt: skip
+                         [("test", "parity"), ("lint", "parity"),
+                          ("test", "b"), ("lint", "a")])  # fmt: skip  # aligned arguments
         self.assertEqual((run["wall_ms"], run["summed_ms"]), (0, 0))
         self.assertEqual((run["schema"], run["run_id"], run["tier"]), (2, support.RUN_ID, "T2"))
 

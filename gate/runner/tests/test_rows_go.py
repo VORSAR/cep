@@ -61,7 +61,7 @@ class Gofmt(GoRows):
         self.assertEqual(self.gofmt(), "covered 257")
         names = os.listdir(os.path.join(self.run_dir, "rows", "lint", "gofmt"))
         self.assertEqual(sorted(n for n in names if n.startswith("gofmt.") and n.endswith(".stdout")),
-                         ["gofmt.0.stdout", "gofmt.1.stdout"])  # fmt: skip
+                         ["gofmt.0.stdout", "gofmt.1.stdout"])  # fmt: skip  # aligned arguments
 
     def test_dropping_the_last_batch_is_red(self):
         # design-QA counter-example 33: 257 expected, and the wrapper handed only the first 256.

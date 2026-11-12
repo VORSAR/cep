@@ -72,7 +72,7 @@ class Needs(support.GateTest):
         )
         python = sys.executable
         rows = [self.row("x", command=(python, "-I", "-c", code)),
-                self.row("y", command=(python, "-I", "-c", reader), needs=("x",))]  # fmt: skip
+                self.row("y", command=(python, "-I", "-c", reader), needs=("x",))]  # fmt: skip  # aligned list of rows
         self.assertEqual(self.run_rows(rows).exit_code, 0)
 
 
@@ -339,7 +339,8 @@ class Trace(support.GateTest):
             trace = json.loads(f.read())
         self.assertEqual([e["seq"] for e in trace], list(range(len(trace))))
         self.assertEqual([(e["event"], e["id"]) for e in trace],
-                         [("start", "parity"), ("end", "parity"), ("start", "a"), ("end", "a")])  # fmt: skip
+                         [("start", "parity"), ("end", "parity"),
+                          ("start", "a"), ("end", "a")])  # fmt: skip  # aligned arguments
 
     def test_a_parity_failure_leaves_only_parity_started(self):
         self.toolchain.reasons = ["go: version: want a, got b"]

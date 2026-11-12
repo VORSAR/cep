@@ -21,7 +21,7 @@ class Git(Base):
     def setUp(self):
         super().setUp()
         for rel in ("top.go", "a/nested.go", "a/b/deep.go", "gate/test_top.py", "gate/x/test_n.py", "gate/x/mod.py",
-                    "gate/proofs/drivers/test_d.py", "gate/proofs/planted.go"):  # fmt: skip
+                    "gate/proofs/drivers/test_d.py", "gate/proofs/planted.go"):  # fmt: skip  # paths as a table
             self.track(rel, "x\n")
         self.write("untracked.go", "x\n")
 

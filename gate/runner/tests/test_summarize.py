@@ -61,7 +61,7 @@ class Summarize(support.GateTest):
             "blocking": self.blocking.get(row_id, True), "verdict": "pass", "reason": "covered 1", "exit_code": 0,
             "covered": 1, "expected": 1, "started_ms": self.clock, "ended_ms": self.clock + 400, "duration_ms": 400,
             "scope_sha256": "ab",
-        }  # fmt: skip
+        }  # fmt: skip  # keys packed several per line
         fields.update(over)
         return records.make(**fields)
 
@@ -87,7 +87,7 @@ class Summarize(support.GateTest):
             run = {
                 "schema": 1, "run_id": RUN, "tier": "T4", "registry_sha256": art["registry_sha256"],
                 "records": judged, "wall_ms": 0, "summed_ms": 0,
-            }  # fmt: skip
+            }  # fmt: skip  # keys packed several per line
             os.makedirs(base, exist_ok=True)
             with open(os.path.join(base, "run.json"), "wb") as f:
                 f.write(records.json_bytes(run))

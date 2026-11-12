@@ -119,7 +119,7 @@ class Points(support.GateTest):
         hold = self.fifo("hold")
         w = self.witness("start")
         h = self.start([self.row("a"), self.row("b", "start", w.path, "wait", hold, needs=("a",)),
-                        self.row("c", needs=("b",))], workers=1)  # fmt: skip
+                        self.row("c", needs=("b",))], workers=1)  # fmt: skip  # aligned arguments
         w.started(1)
         h.runner.post_signal(signal.SIGINT)
         h.join()
@@ -168,7 +168,7 @@ class RealSignals(support.GateTest):
     def run_on_main_thread(self, signum):
         w = self.witness("start")
         runner = self.runner([self.row("x", "spawn", 3, "start", w.path, "block", "start", w.path, "block")],
-                             install_signals=True)  # fmt: skip
+                             install_signals=True)  # fmt: skip  # aligned arguments
         before = signal.getsignal(signum)
 
         def driver():

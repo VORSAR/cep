@@ -30,7 +30,7 @@ class LocalRecordsAsCi(support.GateTest):
             shutil.copytree(os.path.join(self.run_dir, "records", job), os.path.join(dest, "records", job))
             shutil.copy(os.path.join(self.run_dir, "run.json"), os.path.join(dest, "run.json"))
         argv = ["--registry", reg, "--tier", "T4", "--artifacts", artifacts, "--run-id", support.RUN_ID,
-                "--commit", support.COMMIT, "--attempt", "1", "--image", "local"]  # fmt: skip
+                "--commit", support.COMMIT, "--attempt", "1", "--image", "local"]  # fmt: skip  # argv grouped by flag
         with contextlib.redirect_stdout(io.StringIO()) as out:
             code = summarize.main(argv)
         self.assertEqual(code, 0, out.getvalue())

@@ -68,7 +68,7 @@ class Record(unittest.TestCase):
             run_id="r", commit="c", tier="T2", job="lint", row_id="gofmt", blocking=True, verdict="pass",
             reason="covered 1", exit_code=0, covered=1, expected=1, started_ms=5, ended_ms=9, duration_ms=4,
             scope_sha256="ab",
-        )  # fmt: skip
+        )  # fmt: skip  # keywords packed several per line
         self.assertEqual(
             rec,
             {
@@ -99,7 +99,7 @@ class Record(unittest.TestCase):
             run_id="r", commit="c", tier="T2", job="lint", row_id="lawdelta", blocking=True, verdict="pass",
             reason="covered 1", exit_code=0, covered=1, expected=1, started_ms=5, ended_ms=9, duration_ms=4,
             scope_sha256="ab", law=["LAW Δ (1 files, vs abc1234)", "gate/current-sprint +1/−1\n"],
-        )  # fmt: skip
+        )  # fmt: skip  # keywords packed several per line
         self.assertEqual(rec["schema"], 2)
         self.assertEqual(rec["law"], ["LAW Δ (1 files, vs abc1234)", "gate/current-sprint +1/−1 "])
 
@@ -107,7 +107,7 @@ class Record(unittest.TestCase):
         rec = records.make(
             run_id="r", commit="c", tier="T2", job="j", row_id="i", blocking=True, verdict="fail", reason="a\nb",
             exit_code=1, covered=0, expected=0, started_ms=0, ended_ms=0, duration_ms=0, scope_sha256="",
-        )  # fmt: skip
+        )  # fmt: skip  # keywords packed several per line
         self.assertEqual(rec["reason"], "a b")
 
     def test_a_record_may_keep_a_long_reason_whole(self):
@@ -116,7 +116,7 @@ class Record(unittest.TestCase):
             run_id="r", commit="c", tier="T2", job="j", row_id="parity", blocking=True, verdict="fail",
             reason="z" * 900, exit_code=1, covered=0, expected=0, started_ms=0, ended_ms=0, duration_ms=0,
             scope_sha256="", reason_max=None,
-        )  # fmt: skip
+        )  # fmt: skip  # keywords packed several per line
         self.assertEqual(rec["reason"], "z" * 900)
 
 
