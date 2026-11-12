@@ -9,15 +9,11 @@ Red today on behaviour: `knownissues.ENTRY_KEYS` holds four keys, so every entry
 the generic "want the keys id, first_seen, forward, decision". Each refusal case asserts the field's own name and
 NOT that generic text, so a pin that only learns the two keys stays red here.
 
-design question (the date): "in the future" needs a date the pure pin does not have today. These cases pass it as a
-keyword, `check(..., today=<date>)`, only in the cases that need it; the other cases keep today's four-argument call.
-If the design makes `today` required, the helper passes TODAY always (one line); the real-tree pin passes the UTC
-date from the one `today()`.
-design question (the table side): the plan asks the Markdown table to gain the matching cells, pinned both ways
-(A-L8). These cases pin the JSON side only: their table has the five columns of today, and the fixture's table is
-inline below so the lane adds the two cells (how a bool and a day are written in a cell is the design's) in the same
-commit that pins them. What the table side needs: a cell each for correctness and opened, each compared with the
-JSON value, a mismatch named with the id, and a row missing either cell refused.
+The date (design §3.3; DQ-S14): `knownissues.check(..., *, today)` takes `today` as a required keyword, so every
+case here passes it; the real-tree pin and the row pass `rows.today()`.
+The table side (design §3.3, §7 W0-6; DQ-S15): no new columns; a correctness issue's Issue cell begins
+`**Correctness.**` (test_known_issues_pin.py's TableSide pins it both ways); `opened` is on or before a Found cell's
+`(YYYY-MM-DD)` (DQ-S5).
 """
 
 import copy
@@ -77,15 +73,13 @@ QB10 goes to S1.1c-3; S3.3-1-3 stays forwarded to S8.
 class Fields(unittest.TestCase):
     def setUp(self):
         self.data = copy.deepcopy(DATA)
+        self.table = TABLE
 
     def entry(self, id: str) -> dict:
         return next(e for e in self.data["entries"] if e["id"] == id)
 
-    def check(self, today: date | None = None) -> list[str]:
-        args = (json.dumps(self.data), TABLE, ORDER, {DECISIONS: MARKDOWN}.get)
-        if today is None:
-            return knownissues.check(*args)
-        return knownissues.check(*args, today=today)
+    def check(self, today: date = TODAY) -> list[str]:
+        return knownissues.check(json.dumps(self.data), self.table, ORDER, {DECISIONS: MARKDOWN}.get, today=today)
 
     def assertRefused(self, field: str, faults: list[str]) -> None:
         """Refused, the field named, and not by the generic keys refusal."""
@@ -98,6 +92,7 @@ class Fields(unittest.TestCase):
 
     def test_a_correctness_bug_passes(self):
         self.entry("QB10")["correctness"] = True
+        self.table = TABLE.replace("| Two contrived", "| **Correctness.** Two contrived")  # design §3.3
         self.assertEqual(self.check(), [])
 
     def test_correctness_not_a_bool_is_refused_naming_the_field(self):

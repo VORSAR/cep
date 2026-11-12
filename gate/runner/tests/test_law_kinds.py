@@ -28,8 +28,15 @@ def issues(*entries: dict) -> str:
     return json.dumps({"schema": 1, "note": "n", "entries": list(entries)})
 
 
-def issue(id: str, **over: str) -> dict[str, str]:
-    e = {"id": id, "first_seen": "S1.1a-1", "forward": "S1.1c-3", "decision": "docs/d.md#x"}
+def issue(id: str, **over: object) -> dict[str, object]:
+    e = {
+        "id": id,
+        "first_seen": "S1.1a-1",
+        "forward": "S1.1c-3",
+        "decision": "docs/d.md#x",
+        "correctness": False,
+        "opened": "2026-11-01",
+    }
     e.update(over)
     return e
 
@@ -107,9 +114,18 @@ class Allowlist(unittest.TestCase):
 
 
 class KnownIssues(unittest.TestCase):
+    def added(self, **over: object) -> str:
+        (line,) = subs(law.delta("known-issues", issues(issue("BA9")), issues(issue("BA9"), issue("QB10", **over))))
+        return line
+
     def test_added(self):
-        got = law.delta("known-issues", issues(issue("BA9")), issues(issue("BA9"), issue("QB10", first_seen="S1.1a-2")))
-        self.assertEqual(subs(got), ["+QB10 first seen S1.1a-2"])
+        # S1.1c-3 design §3.3 (DA-S11): an added entry's line names both fields, their values visible.
+        line = self.added(first_seen="S1.1a-2")
+        self.assertTrue(line.startswith("+QB10 first seen S1.1a-2"), line)
+        self.assertIn("correctness", line)
+        self.assertIn("opened", line)
+        self.assertIn("2026-11-01", line)
+        self.assertNotEqual(self.added(correctness=True), self.added(correctness=False))
 
     def test_removed(self):
         got = law.delta("known-issues", issues(issue("BA9"), issue("QB10")), issues(issue("BA9")))
@@ -128,6 +144,23 @@ class KnownIssues(unittest.TestCase):
             with self.subTest(word=word):
                 got = law.delta("known-issues", issues(issue("BA9", decision=old)), issues(issue("BA9", decision=new)))
                 self.assertEqual(subs(got), [f"BA9: decision {word}"])
+
+    def test_correctness_changed_is_named(self):
+        # S1.1c-3 design §3.3 (DA-S11): a known issue becoming a correctness bug starts ground rule 10's clock.
+        for old, new in ((False, True), (True, False)):
+            with self.subTest(old=old, new=new):
+                got = law.delta(
+                    "known-issues", issues(issue("BA9", correctness=old)), issues(issue("BA9", correctness=new))
+                )
+                (line,) = subs(got)
+                self.assertTrue(line.startswith("BA9: correctness"), line)
+
+    def test_opened_changed_is_named(self):
+        got = law.delta("known-issues", issues(issue("BA9")), issues(issue("BA9", opened="2026-10-01")))
+        (line,) = subs(got)
+        self.assertTrue(line.startswith("BA9: opened"), line)
+        self.assertIn("2026-11-01", line)
+        self.assertIn("2026-10-01", line)
 
     def test_the_other_kinds_keep_their_one_liner(self):
         self.assertIsInstance(law.delta("marker", "S1.1c-1\n", "S1.1c-2\n"), str)
