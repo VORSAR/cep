@@ -6,10 +6,10 @@ parts' numbers compared as integers (S1.1c-10 follows S1.1c-3; a string sort say
 and the allowlists' inline part check (`allowlists.py` `sprint_fault`) move onto it. The order here is a fixture in
 gate/sprints.json's shape, so no case depends on today's closed marks; nothing reads the real tree.
 
-design question (part-less marker): the plan names "a part-less marker where a part is needed" a named red
-(§2 S2) without saying at which layer. These cases pin the pure function's conservative answer, False (S1.1c is
-read as n = 0, before every part of its row, as `allowlists.sprint_fault` reads a part-less current sprint today), and
-test_aging.py pins the named red at aging's layer. If the design makes `passed` raise instead, this case changes at G1.
+A part-less marker (design §3.1, §7 W0-3): `passed(part, "S1.1c")` is False (S1.1c read as n = 0, before every part
+of its row, as `allowlists.sprint_fault` reads a part-less current sprint today); test_aging.py pins the line aging
+then gives, "the marker names no part". A printed part-row (S1.1a-1, a row of its own in gate/sprints.json) is
+positioned by its printed id (DA-S10).
 """
 
 import unittest
@@ -21,6 +21,7 @@ ORDER = sprintid.Order(
         sprintid.Row(id, closed)
         for id, closed in (
             ("S1.1a-1", True),
+            ("S1.1a-2", True),
             ("S3.3", True),
             ("S1.1c", False),
             ("S4.1", False),
@@ -59,9 +60,16 @@ class Passed(unittest.TestCase):
         self.assertIs(ORDER.passed("S4.1-2", "S1.1c-3"), False)
 
     def test_a_part_less_marker_in_the_parts_row_has_not_passed_it(self):
-        """The conservative reading (the module docstring's design question): S1.1c is before S1.1c-1."""
+        """S1.1c is read as before S1.1c-1 (design §3.1, §7 W0-3)."""
         self.assertIs(ORDER.passed("S1.1c-1", "S1.1c"), False)
         self.assertIs(ORDER.passed("S1.1c-3", "S1.1c"), False)
+
+    def test_a_printed_part_row_is_positioned_by_its_printed_id(self):
+        # DA-S10: S1.1a is not a row here; S1.1a-1 and S1.1a-2 are.
+        self.assertIs(ORDER.passed("S1.1a-1", "S1.1a-2"), True)
+        self.assertIs(ORDER.passed("S1.1a-2", "S1.1a-1"), False)
+        self.assertIs(ORDER.passed("S1.1a-1", "S1.1c-3"), True)
+        self.assertIs(ORDER.passed("S1.1c-3", "S1.1a-2"), False)
 
     def test_a_part_whose_row_is_not_in_the_order_is_an_error_naming_it(self):
         with self.assertRaises(ValueError) as caught:
