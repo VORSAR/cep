@@ -23,7 +23,6 @@ BLOCK = "LAW Δ"
 EDGE_ANCHOR = '    "internal/event": [],\n'
 EDGE_LINE = '    "internal/planted": ["internal/event"],\n'
 EDGE_DELTA = f"{RULES} +1/−0 — +1 edge internal/planted → internal/event"
-MARKER_DELTA = f"{MARKER} +1/−1 — marker S1.1c-1 → S4.1"
 NOT_RUN = f"{BLOCK}: not run"
 NONE = f"{BLOCK}: none"
 HEAD_IS_MAIN = f"{BLOCK}: HEAD is main — read the PR run"
@@ -152,11 +151,15 @@ class LawDeltaPlanted(support.DriverTest):
         self.law_world()
         self.on_main()
         self.on_change()
-        self.plant(MARKER, "S1.1c-1\n", "S4.1\n")
+        # The marker as the sprint's G0 set it, read from the world's copy: a hard-coded "S1.1c-1" went red when
+        # S1.1c-2's G0 moved the marker (S1.1c-2 W0, QA F1).
+        old = support.read_text(os.path.join(self.world.repo, MARKER)).strip()
+        new = "S4.2" if old == "S4.1" else "S4.1"
+        self.plant(MARKER, f"{old}\n", f"{new}\n")
         run = self.run_row()
         self.assertRow(run, "lint", "lawdelta", True, "covered 1")
         block = self.assertBlockFirst(run)
-        self.assertIn(MARKER_DELTA, block, run.stdout)
+        self.assertIn(f"{MARKER} +1/−1 — marker {old} → {new}", block, run.stdout)
 
     def test_a_registry_without_the_row_says_not_run(self):
         self.law_world()
