@@ -59,10 +59,23 @@ func TestBreakitCloseUnblocksAParkedPush(t *testing.T) {
 		t.Errorf("Close with a Push parked and no Open did not return in 5 s; want it to return at once and the Push to get ErrClosed")
 		// Release both: a pump takes the parked row, Close then closes the channel and the pump returns.
 		go func() { _ = src.Open(context.Background(), bkNopEmitter{}) }()
-		<-closed
+		releaseCtx, cancelRelease := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancelRelease()
+		select {
+		case <-closed:
+		case <-releaseCtx.Done():
+			t.Fatal("Close did not return in 10 s after a pump took the parked row (state: Close returned once Open drained the source)")
+		}
 	}
-	if err := <-pushed; err != nil && !errors.Is(err, inmemory.ErrClosed) {
-		t.Errorf("the parked Push returned %v; want ErrClosed (or nil had a pump taken it)", err)
+	pushCtx, cancelPush := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancelPush()
+	select {
+	case err := <-pushed:
+		if err != nil && !errors.Is(err, inmemory.ErrClosed) {
+			t.Errorf("the parked Push returned %v; want ErrClosed (or nil had a pump taken it)", err)
+		}
+	case <-pushCtx.Done():
+		t.Fatal("the parked Push did not return in 10 s after Close (state: the Push returned ErrClosed, or nil had a pump taken it)")
 	}
 }
 
