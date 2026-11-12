@@ -12,7 +12,7 @@ from gate.proofs.drivers import support
 FAKE = """#!{python} -I
 with open({marker!r}, "w", encoding="utf-8") as f:
     f.write("the go outside the cache ran\\n")
-print("go version go1.27.3 darwin/arm64")
+print("go version go1.27.4 darwin/arm64")
 """
 
 

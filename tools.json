@@ -69,48 +69,48 @@
       "path_dir": "bin",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2",
+          "archive_sha256": "91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4",
           "exec_sha256": {
-            "bin/go": "aa355b078a81158d418079a3f8c776719eb99cc6f527e39ffa3250c66566aafb",
-            "bin/gofmt": "798718e7bde7980be3a0c3649876fea538a56b5195ad32bfb2499aab0c6e2b7c",
-            "pkg/tool/darwin_arm64/asm": "4165876f4b0a389293cd05392c09ef197f36111edf5b6146e870a05dd3c26a90",
-            "pkg/tool/darwin_arm64/cgo": "760acaf7db58f40a72482017209148a55636e62e95bc40f5df446382adf44513",
-            "pkg/tool/darwin_arm64/compile": "4d0bd4c1880e3d575827a72ac66b0f117b31da0aff1fe44f03a54c7ffb3c8ae3",
-            "pkg/tool/darwin_arm64/cover": "0ebf757bd94a933dd64a04612726d3cb2aae28ff3c6f97f9cb61537a404b5fda",
-            "pkg/tool/darwin_arm64/fix": "9d4be7410db959769d80ce8ab973b0fd6d64245312d28ee439f20ce51acbadaf",
-            "pkg/tool/darwin_arm64/link": "9674eaf9854e44afd7331046d14429f914bf9838f48e9ed77793e0686e45d4b2",
-            "pkg/tool/darwin_arm64/preprofile": "16d53ec08b996bbe7744e6085e765c6e773e65afdb6dcf208fd7ae553f3f0b8a",
-            "pkg/tool/darwin_arm64/vet": "505e339103e7bb0d2514ff39decee8647664dc593fcb8bb052e33d39b6a03cf3"
+            "bin/go": "d4f87582b3289f95d5913feeda16a0682e6ec9ac37b48a600b32b00fb58b1b81",
+            "bin/gofmt": "1257c1afa412205cda226786f047ea7a000ffe56c6a0be0b6e185e9a07e6236b",
+            "pkg/tool/darwin_arm64/asm": "9eea1d2d0054f5ee3be56592fedf386d6b91531069d37222c0a9a19bb39f63a0",
+            "pkg/tool/darwin_arm64/cgo": "67d6e7a87abcd892bb406a624b80bdff05ded2f6d6a4d13d8e41aa702be65e2e",
+            "pkg/tool/darwin_arm64/compile": "4dc5109295fda20f078270d716572c3b001362958d7a82f1f2e84ae16e1f1b70",
+            "pkg/tool/darwin_arm64/cover": "af67fc989cb36a8337ae19d7fd27e87cb4629e4055cc977792ed4a71122133b4",
+            "pkg/tool/darwin_arm64/fix": "dd6981e417f910fd50cfda82562635e18bbe6a7c7fd410a7d7fdec4cfc046c33",
+            "pkg/tool/darwin_arm64/link": "6c44665395ca98a90fd39825b3549965a2ffcc58d6699ac051571be6e26a1802",
+            "pkg/tool/darwin_arm64/preprofile": "4d35aabe7c84f2d02066a643cdf6d5be1978dced2b70275fa44f2271bbb27f59",
+            "pkg/tool/darwin_arm64/vet": "efb7a0b74a617c7544edf01d868ec0315af70d83be5ef918c0ec1f625184b8ad"
           },
           "strip": "go/",
-          "tree_sha256": "ea93207a73c43d7d5275896133611426acbbfcab249e331d93916323c56c1e86",
-          "url": "https://go.dev/dl/go1.27.3.darwin-arm64.tar.gz"
+          "tree_sha256": "376b7a824735f4d8aeb49046acac1aa7792a58d9a543ab9b9c4d849c16b64f89",
+          "url": "https://go.dev/dl/go1.27.4.darwin-arm64.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+          "archive_sha256": "7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840",
           "exec_sha256": {
-            "bin/go": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b",
-            "bin/gofmt": "fd464d1c9098a6714d06bd3fcd2a1fedcdd291e710241160ebb663bf99adf2f8",
-            "pkg/tool/linux_amd64/asm": "fdcf20e7e2d9a602979b96ced85e6ba6529551ae23a38edcd80181df4566b7a9",
-            "pkg/tool/linux_amd64/cgo": "9f67e42d7910067eb5857e5321e1d04aaaa2d22b8ff6d8e1c63bb4365b651049",
-            "pkg/tool/linux_amd64/compile": "c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283",
-            "pkg/tool/linux_amd64/cover": "02d4e5525baf6f7ab661430549dc1137321fc9e27b6ba71797123c305355b46d",
-            "pkg/tool/linux_amd64/fix": "ae0e0eafb4e2e03ff53947e4aae5b1985b197bd196fc7bb75022620c9bb629ad",
-            "pkg/tool/linux_amd64/link": "c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe",
-            "pkg/tool/linux_amd64/preprofile": "75cf4cecf37908adab3c352779bbd4b23fb85b352918711e8cf8fba95ca6d969",
-            "pkg/tool/linux_amd64/vet": "4c459358f5fc720f74fc53dd0fc032655e038e2461d8230f1667d0931661ff6c"
+            "bin/go": "de0ae3e082ce7599eae4fb69fa2ef1e43b8f31ffd3fce62cdf81930aa9005050",
+            "bin/gofmt": "96d48ae3c8754e4a10e8f5ec2472d1344767d276e0ba6e94948c00cf8558e378",
+            "pkg/tool/linux_amd64/asm": "a67997d99985e3ef3ecd30f029685d67d778a0c8f78b852396ef7738426c04b5",
+            "pkg/tool/linux_amd64/cgo": "0ac696dfbbcdd912cb833d7190c7f91388bac2d89d4dc79c8915a4e43239b675",
+            "pkg/tool/linux_amd64/compile": "40307e5f5c65a4b4220bbf35dbe014348780589ea2964003f0bf318fa14640e1",
+            "pkg/tool/linux_amd64/cover": "2b7a8781df1d9dfed7f1d394335f0834fb1059fe1d75789bcaebf090fc9f60c5",
+            "pkg/tool/linux_amd64/fix": "f4433fdcefac03c12434324a88130681e43fc0c8f4340f0a12d08a152043f71c",
+            "pkg/tool/linux_amd64/link": "e2248a29fbbf15dac1fe72c9d646776dbcd38c9813b78182fe01a4a47f3299c3",
+            "pkg/tool/linux_amd64/preprofile": "e812e1bcc739468e98a844431ff99d321c1190333ba221e46c8b033e8690b451",
+            "pkg/tool/linux_amd64/vet": "d8a579657a9222c8e69e19e3f9783d5694976b2a0bbf39cda12e90e49944ba52"
           },
           "strip": "go/",
-          "tree_sha256": "dc154e7c4b8cfe182c1bfef6f5d2d21f27d0586ffe393156e1e8777182052fd5",
-          "url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz"
+          "tree_sha256": "1bf5fbeeed16c24dfa6e80694dee6c3e248fc8e4deafc6c9fb13614f16c7e506",
+          "url": "https://go.dev/dl/go1.27.4.linux-amd64.tar.gz"
         }
       },
-      "version": "go1.27.3",
+      "version": "go1.27.4",
       "version_argv": [
         "bin/go",
         "version"
       ],
-      "version_line": "go version go1.27.3 {goos}/{goarch}"
+      "version_line": "go version go1.27.4 {goos}/{goarch}"
     },
     {
       "command": "golangci-lint",
