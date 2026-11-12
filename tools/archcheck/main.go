@@ -102,9 +102,12 @@ var (
 // that may import sync or sync/atomic); Clock is the files of an operator package that may import time; Tests is the
 // test files the sleep fence skips.
 type Lists struct {
-	Purity       map[string]map[string][]string
-	Clock, Tests map[string]bool
+	Purity                  map[string]map[string][]string
+	Clock, Tests, Generated map[string]bool
 }
+
+// Unused is the fix round's stub (BK-S3), so its red tests compile; the fix replaces it.
+func Unused(lists *Lists, root string) ([]string, error) { return nil, nil }
 
 // listFile is one allowlist as archcheck reads it: its rule and each entry's target. The grammar's other fields are
 // the suppressions row's to validate, so they are ignored here (design S1.1c-2 §3, A-L2).
