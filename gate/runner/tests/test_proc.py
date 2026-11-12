@@ -1,7 +1,9 @@
 """Process groups: spawn rules, the group probe after the leader exits (design note §4 steps 2-4)."""
 
+import contextlib
 import os
 import signal
+import subprocess
 import sys
 from unittest import mock
 
@@ -72,7 +74,7 @@ class Group(support.GateTest):
         w.gone()
 
     def test_a_group_that_may_not_be_signalled_is_named_so(self):
-        # macOS answers EPERM for a group whose only member is caught mid-exit; it still counts, and is named.
+        # An EPERM answer with a live member still counts, and names the answer that fired.
         real = os.killpg
 
         def probe_says_eperm(pgid, sig):
@@ -80,13 +82,17 @@ class Group(support.GateTest):
                 raise PermissionError(1, "Operation not permitted")
             return real(pgid, sig)
 
+        w = self.witness("start")
         group = proc.Group()
-        p = self.spawn(group, "status", 0)
+        p = self.spawn(group, "spawn", 3, "start", w.path, "block")
+        w.started(1)
         with mock.patch.object(proc.os, "killpg", probe_says_eperm):
             self.assertEqual(group.reap(p), (0, True))
         self.assertTrue(
             group.left_detail.startswith("the group exists but may not be signalled (EPERM): "), group.left_detail
         )
+        self.assertIn("rowfix.py", group.left_detail)
+        w.gone()
 
     def test_a_clean_reap_names_nothing(self):
         group = proc.Group()
@@ -118,6 +124,103 @@ class Group(support.GateTest):
         with self.assertRaises(OSError):
             group.spawn(["no-such-command-xyz"], cwd=self.repo, env=support.base_env(),
                         stdout=os.path.join(self.root, "out"), stderr=os.path.join(self.root, "err"))  # fmt: skip
+
+
+class Probe(support.GateTest):
+    """The group probe on its own (known issue S1.1c-1-1, owner 2026-11-12): a group whose members are all zombies,
+    or that has none by the time `ps` looks, is finished; a live member is left running; a failing `ps` stays red.
+
+    macOS answers EPERM to `killpg(pgid, 0)` for a group whose only members are zombies, Linux answers that the group
+    exists; either way `ps` lists them with a state starting with Z, and that is what the rule reads."""
+
+    def state(self, pid: int) -> str:
+        """What `ps` says of one pid's state now, read without the code under test; "" once it is not listed."""
+        _, out, _ = support.run_tool(["ps", "-o", "stat=", "-p", str(pid)], self.root)
+        return out.decode("utf-8", errors="replace").strip()
+
+    def start(self, argv: list[str]) -> subprocess.Popen[bytes]:
+        """A process in its own session, which the test reaps itself (a kill first, for one still running)."""
+        child = subprocess.Popen(
+            argv,
+            cwd=self.root,
+            env=support.base_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+        def reap() -> None:
+            if child.returncode is None:
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(child.pid, signal.SIGKILL)
+            child.wait()
+
+        self.addCleanup(reap)
+        return child
+
+    def zombie(self, child: subprocess.Popen[bytes]) -> None:
+        """Wait, never reaping, until `ps` lists the child as a zombie; then its group still exists."""
+        wait.until(f"pid {child.pid} listed by ps as a zombie", lambda: self.state(child.pid).startswith("Z"), cap_s=60)
+        with contextlib.suppress(PermissionError):  # ProcessLookupError here would mean no group: no witness
+            os.killpg(child.pid, 0)
+
+    def test_a_group_whose_only_member_is_a_zombie_is_finished(self):
+        child = self.start([sys.executable, "-I", "-c", "pass"])
+        self.zombie(child)
+        self.assertEqual(proc.probe(child.pid), (False, ""))
+        self.assertTrue(self.state(child.pid).startswith("Z"))  # still unreaped: the probe saw the zombie
+        self.assertEqual(child.wait(), 0)
+
+    def test_a_live_member_is_left_running_and_named(self):
+        w = self.witness("start")
+        child = self.start(support.fix("start", w.path, "block"))
+        w.started(1)
+        left, detail = proc.probe(child.pid)
+        self.assertTrue(left, detail)
+        self.assertTrue(detail.startswith(f"the group still exists: {child.pid} "), detail)
+        self.assertIn("rowfix.py", detail)
+
+    def test_a_zombie_leader_with_a_live_member_is_left_running(self):
+        w = self.witness("start")
+        leader = self.start(support.fix("spawn", 3, "start", w.path, "block"))
+        w.started(1)
+        self.zombie(leader)
+        left, detail = proc.probe(leader.pid)
+        self.assertTrue(left, detail)
+        self.assertIn(f"{leader.pid} Z", detail)
+        self.assertIn("rowfix.py", detail)
+
+    def test_no_group_at_all_is_finished(self):
+        child = self.start([sys.executable, "-I", "-c", "pass"])
+        self.zombie(child)  # the group existed
+        self.assertEqual(child.wait(), 0)
+        self.assertEqual(self.state(child.pid), "")
+        self.assertEqual(proc.probe(child.pid), (False, ""))
+
+    def test_a_ps_that_cannot_start_stays_left_running(self):
+        child = self.start([sys.executable, "-I", "-c", "pass"])
+        self.zombie(child)
+
+        def no_ps(argv, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", argv[0])
+
+        with mock.patch.object(proc.subprocess, "run", no_ps):
+            left, detail = proc.probe(child.pid)
+        self.assertTrue(left, detail)
+        self.assertIn(": ps failed: ", detail)
+
+    def test_a_ps_that_exits_non_zero_stays_left_running(self):
+        child = self.start([sys.executable, "-I", "-c", "pass"])
+        self.zombie(child)
+
+        def ps_fails(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 1, b"", b"ps: no listing\n")
+
+        with mock.patch.object(proc.subprocess, "run", ps_fails):
+            left, detail = proc.probe(child.pid)
+        self.assertTrue(left, detail)
+        self.assertIn(": ps failed: ", detail)
 
 
 class Witnesses(support.GateTest):
