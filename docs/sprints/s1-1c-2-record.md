@@ -80,6 +80,7 @@ None since G0.
 | CA-L2 | arch | later | the `gomod` kind ignores `godebug`, `exclude`, `retract`, `ignore` | backlog (owner, review and break-it 4) |
 | CA-L3 | arch | later | `test_instruments_pin.py`'s `unittest.main()` precedes the RealTree class | fix round |
 | CA-L4 | arch | later | the context builder is written in two rows; the in-code scope three times | backlog for the builder (owner, review and break-it 4); fix round: a test that lawdelta's scope equals the row's |
+| FX-1 | the fix round's BK-S3 (Go lane) | — | the new unused-target check found `tools/allowlists/purity.json`'s `internal/event: sync.Pool` waiving nothing: no production file of `internal/event` imports `sync` | fixed (the coordinator): the entry dropped, by ADR-0015 §2.2's lands-with-its-subject rule the owner applied to `cron.go` (plan check, carried); ADR-0015's puritycheck row annotated |
 
 ## Done-done
 

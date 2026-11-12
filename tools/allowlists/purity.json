@@ -4,13 +4,6 @@
   "rule": "purity",
   "entries": [
     {
-      "target": "internal/event: sync.Pool",
-      "kind": "PERMANENT",
-      "reason": "the event pool keeps the decode path allocation-free in the steady state",
-      "ref": "docs/architecture/adr/ADR-0010-performance-model.md#decision",
-      "sprint": "S3.1-2"
-    },
-    {
       "target": "internal/table: sync.Mutex",
       "kind": "PERMANENT",
       "reason": "the one write mutex that serialises a table's snapshot swaps",
