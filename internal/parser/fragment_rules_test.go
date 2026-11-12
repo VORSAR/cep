@@ -5,8 +5,9 @@ package parser
 // through parseFragment, and the placeholder vocabulary through bindPlaceholders. The faults are asserted by the
 // contract's words: "untagged fence", "mark its kind", "unknown kind", "malformed marker", "unknown placeholder
 // <name>", "not a listed invalid example", "documented as invalid, but parses", "listed invalid example not found",
-// "-> before and/not", "fails at <stage>, listed at <stage>"; a parse failure names the kind and participle's
-// line:col. Each fault names file:line.
+// "-> before and/not", "fails at <stage>, listed at <stage>", "unknown fence tag <t>", "text marker on grammar
+// tokens: mark its kind", "unknown stage <s>"; a parse failure names the kind and participle's line:col. Each fault
+// begins file:line: (design note v2 §2.3).
 
 import (
 	"strings"
@@ -72,8 +73,23 @@ var fragCases = []fragCase{
 		want:    []fragFault{{1, "fails at lowering, listed at grammar"}}},
 	{name: "(8) listed invalid examples at their stage", md: "Wrong: `select *`<!--cep-invalid:select-->, `1.5 min`<!--cep-invalid:duration-->.\n",
 		invalid: []invalidExample{{fragDoc, "select *", "grammar"}, {fragDoc, "1.5 min", "lowering"}}},
-	{name: "(8) a validator entry is not judged here", md: "Wrong: `(k) of S`<!--cep-invalid:partkey-->.\n",
+	// a validator entry parses at its kind here; fragment_validator_test.go re-runs it through the validator
+	{name: "(8) a validator entry that parses at its kind", md: "Wrong: `(k) of S`<!--cep-invalid:partkey-->.\n",
 		invalid: []invalidExample{{fragDoc, "(k) of S", "validator"}}},
+	{name: "(8) a validator entry that fails at the grammar", md: "Wrong: `(k) of`<!--cep-invalid:partkey-->.\n",
+		invalid: []invalidExample{{fragDoc, "(k) of", "validator"}},
+		want:    []fragFault{{1, "fails at grammar, listed at validator"}}},
+	{name: "(8) an unknown stage", md: "Wrong: `select *`<!--cep-invalid:select-->.\n",
+		invalid: []invalidExample{{fragDoc, "select *", "parse"}},
+		want:    []fragFault{{0, "unknown stage parse"}}},
+	// DQ-S10: a marker on a span the detector would not select (no keyword) is honoured and judged at its kind
+	{name: "(8) a marked span the detector skips, listed", md: "Wrong: `x <> 5`<!--cep-invalid:expr-->.\n",
+		invalid: []invalidExample{{fragDoc, "x <> 5", "grammar"}}},
+	{name: "(8) a marked span the detector skips, unlisted", md: "Wrong: `x <> 5`<!--cep-invalid:expr-->.\n",
+		want: []fragFault{{1, "not a listed invalid example"}}},
+	// the register is the one way a span of the incident's shape stands: E-PAT-005's new Rule line (§2.2)
+	{name: "(8) the incident's shape listed", md: "Rule: an absence follows its step directly (`-> and not`<!--cep-invalid:chain--> is not a form).\n",
+		invalid: []invalidExample{{fragDoc, "-> and not", "grammar"}}},
 	{name: "(8) another file's entry is not this file's", md: "Right: `within 5 min`<!--cep:within-->.\n",
 		invalid: []invalidExample{{"other.md", "select *", "grammar"}}},
 	// (9) an unknown angle placeholder
@@ -110,9 +126,24 @@ var fragCases = []fragCase{
 		want: []fragFault{{1, "within"}}, notWant: []string{"E-PRAG-001"}},
 	// (19) a Fix line with markers is clean
 	{name: "(19) a Fix line with markers", md: "Fix: add `within <duration>`<!--cep-meta:within--> after the last pattern element (e.g. `within 5 min`<!--cep:within-->).\n"},
-	// (21) fences the test does not read
+	// (21) fences (DA-B1): a closed tag set; a go fence's rule text is not judged, but the incident's shape is checked
+	// in every fence; a text fence is judged line by line under the inline text rule
 	{name: "(21) a go fence is not read", md: "```go\nfrom S select * insert into T\n```\n"},
-	{name: "(21) a text fence is not read", md: "```text\nselect 'unclosed\n```\n"},
+	{name: "(21) a text fence line with a notation token", md: "```text\nselect 'unclosed\n```\n"},
+	{name: "(21) a text fence line of grammar tokens only", md: "```text\nintro\nwithin 5 min\n```\n",
+		want: []fragFault{{3, "text marker on grammar tokens: mark its kind"}}},
+	{name: "(21) the incident in a text fence", md: "```text\na -> and not B[x == 1] for 5 min\n```\n",
+		want: []fragFault{{2, "-> before and/not"}}},
+	{name: "(21) the incident in a go fence", md: "```go\na -> and not B[x == 1] for 5 min\n```\n",
+		want: []fragFault{{2, "-> before and/not"}}},
+	{name: "(21) an unknown fence tag", md: "```sql\nselect a from t\n```\n",
+		want: []fragFault{{1, "unknown fence tag sql"}}},
+	{name: "the incident in a plain prose line", md: "Intro.\nNever write a -> and not B[x == 1] for 5 min in a rule.\n",
+		want: []fragFault{{2, "-> before and/not"}}},
+	// path-like spans are not rule-like (DQ-L1)
+	{name: "a path-like span: a package", md: "See `internal/partition` for the keys.\n"},
+	{name: "a path-like span: a document", md: "See `docs/language/SPEC.md` for the language.\n"},
+	{name: "a path-like span: a module", md: "See `rows/aging.py` for the row.\n"},
 	// text is legal only for a character the grammar has no token for
 	{name: "text with a non-grammar character", md: "Types: `timestamp ± duration → timestamp`<!--text-->.\n"},
 	{name: "text on bindable tokens", md: "Bound: `for <duration>`<!--text-->.\n",
@@ -130,8 +161,8 @@ func TestFragmentRules(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			faults := checkMarkdown(fragDoc, c.md, c.invalid)
 			for _, f := range faults {
-				if !strings.Contains(f, fragDoc+":") {
-					t.Errorf("a fault does not name %s:line: %q", fragDoc, f)
+				if !strings.HasPrefix(f, fragDoc+":") {
+					t.Errorf("a fault does not begin %s:line: %q", fragDoc, f)
 				}
 				for _, nw := range c.notWant {
 					if strings.Contains(f, nw) {
@@ -145,7 +176,7 @@ func TestFragmentRules(t *testing.T) {
 			for _, w := range c.want {
 				at := fragDoc + ":"
 				if w.line > 0 {
-					at += itoa(w.line)
+					at += itoa(w.line) + ":"
 				}
 				if !hasFault(faults, at, w.sub) {
 					t.Errorf("want a fault naming %s holding %q; got %q", at, w.sub, faults)
@@ -165,7 +196,7 @@ var fragKinds = []struct {
 	{kindStatements, "stream S (a string); table T (a string) primary key (a);", "language cep/0.1;"},
 	{kindRule, "rule R intent 'x' from S select a insert into T;", "rule R from S select a insert into T;"},
 	{kindBody, "from S", "from"},
-	{kindPattern, "every a = A -> b = B within 5 min after match skip past last late events drop", "every a = A -> b = B within 5 min"},
+	{kindPattern, "from every a = A -> b = B within 5 min after match skip past last late events drop", "from every a = A -> b = B within 5 min"}, // PatternHead: from is the pattern's (DA-S4)
 	{kindChain, "every a = A -> b = B", "a = A -> b = B"},
 	{kindChainElem, "and not B[x == 1] for 5 min", "-> and not B[x == 1] for 5 min"},
 	{kindPosElem, "(a = A and b = B)", "and not B"},
