@@ -156,7 +156,13 @@ type TTLClause struct {
 // so they sit in a field of their own that holds no value (participle matches a tag with no capture and assigns
 // nothing); embedded, its fields are Partition's and participle names no production for it.
 type PartitionKeys struct {
-	By   struct{}   `parser:"'partition' 'by'"`
+	By struct{} `parser:"'partition' 'by'"`
+	KeyList
+}
+
+// KeyList is the partition keys after `partition by`: one key, or several separated by commas. Embedded, its field
+// is Partition's.
+type KeyList struct {
 	Keys []*PartKey `parser:"@@ (',' @@)*"`
 }
 
