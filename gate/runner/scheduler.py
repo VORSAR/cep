@@ -23,7 +23,7 @@ from typing import Protocol
 
 from gate.runner import env, records, step, summary, verdict
 from gate.runner.clock import NS_PER_MS, Clock, Timer, Timers
-from gate.runner.proc import Group
+from gate.runner.proc import Group, Spawn
 from gate.runner.registry import PARITY_ID, Row
 
 CEILING_MARGIN_S = 60
@@ -35,6 +35,7 @@ INTERRUPTED = "interrupted"
 DEADLOCK = "not run: dependency deadlock"
 NEVER_RAN = -1  # exit_code of a row with no process of its own
 LAWDELTA = "lawdelta"
+PARITY_SCRATCH = "parity"  # the run directory's parity/: the tree children's output, and what a stop left running
 LAW_TXT = "law.txt"
 LAW_FAILED = "LAW Δ: FAILED — see the lawdelta row"
 NO_BLOCK = "lawdelta: exit 0 but law.txt is empty or missing"
@@ -47,7 +48,10 @@ class Toolchain(Protocol):
 
     def tool_count(self) -> int: ...
 
-    def parity(self, env: Mapping[str, str], *, full_tree: bool) -> list[str]: ...
+    def parity(self, env: Mapping[str, str], *, full_tree: bool, spawn: Spawn, scratch: str) -> list[str]:
+        """`spawn` is the parity group's: a tree hash started through it ends with a stop (BA10); `scratch` is the
+        run directory's parity/ (S1.1c-3 design §3.6, C8)."""
+        ...
 
 
 @dataclass
@@ -257,7 +261,11 @@ class Runner:
     def _parity_work(self) -> None:
         try:
             full_tree = self._tier in FULL_TREE_TIERS
-            reasons = self._toolchain.parity(self._clean, full_tree=full_tree)
+            scratch = os.path.join(self._run_dir, PARITY_SCRATCH)
+            os.makedirs(scratch, exist_ok=True)
+            reasons = self._toolchain.parity(
+                self._clean, full_tree=full_tree, spawn=self._parity_group.spawn, scratch=scratch
+            )
             if not reasons and self._record_go_env:
                 self._write_go_env()
         except BaseException as e:

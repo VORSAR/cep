@@ -24,7 +24,7 @@ class StandIn:
     def tool_count(self) -> int:
         return 5
 
-    def parity(self, env: dict[str, str], *, full_tree: bool) -> list[str]:
+    def parity(self, env: dict[str, str], *, full_tree: bool, spawn: object, scratch: str) -> list[str]:
         return []
 
 

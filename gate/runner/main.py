@@ -42,8 +42,8 @@ class RealToolchain:
     def tool_count(self) -> int:
         return len(self._tools)
 
-    def parity(self, env: Mapping[str, str], *, full_tree: bool) -> list[str]:
-        return parity.check(self._tools, self._cache, env, full_tree=full_tree)
+    def parity(self, env: Mapping[str, str], *, full_tree: bool, spawn: scheduler.Spawn, scratch: str) -> list[str]:
+        return parity.check(self._tools, self._cache, env, full_tree=full_tree, spawn=spawn, scratch=scratch)
 
 
 def read_commit(repo: str, environ: Mapping[str, str], run_dir: str, tier: str) -> str:
