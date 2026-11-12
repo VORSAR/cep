@@ -15,6 +15,8 @@ The full draft is [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md), drafted read-o
 
 **Plan check — the owner, 2026-11-12** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check); nineteen questions in four batches; seventeen as recommended, two ≠ R): the split into S1.1c-2, S1.1c-3 and S1.1c-4 (1); one channel inside the LAW Δ block (2); Go 1.27.4 in its own PR before S1.1c-3 (3); the four SEMANTICS corrections approved (4); every known issue ages and the five overdue are triaged — BA13 fixed here (5); forwards expire (6); the fragment test strict, errors.md included (7); dated exemptions red at T4 and nightly, at most 90 days, naming a known issue (8); the pin reaches the gate's proof files and dedicated test files only (9); **a planted proof for all eight rows that had none (10, ≠ R)**; **no emails — the owner checks the scheduled runs by hand (11, ≠ R)**; and Q12–Q19 as recommended. Carried without a question: the sleep fence excludes `gate/proofs/`; the `cron.go` clock exception is dropped until S9.1; `gate/`, `tools/`, `.githooks/`, `Makefile` and the language corpus join the law whole; the coverage floor becomes the registry's argument.
 
+**The design — the owner, 2026-11-12** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-2s-design-after-the-reviews), after both design reviews; as recommended): (1) each added or removed in-code exemption is named in the LAW Δ block; (2) BA13 closes as fixed for the accidental forge, the deliberate forge a named residue in ADR-0015 §3.6. Design v2 measures every recogniser and strength rule first (ruff's and golangci-lint's honoured forms, the strength rule over the real drivers) and re-sizes the sprint to ≈ 10.5 of 13.
+
 **G0 — the owner, 2026-11-12:** the S1.1c-2 card approved ("lets do it"); the forecast re-annotated first ([sprint-plan §3](sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02): about 10 points a day since 2026-11-05; Phase 1 about 3–6 weeks from 2026-11-12).
 
 ## How it runs
@@ -60,8 +62,8 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-12)
              ☑ plan check reviewed (architect, QA, product) and answered by the owner (2026-11-12)
              ☑ test material exists, or making it is an item (QA's W0 is the item)
              ☑ `gate/current-sprint` set, the first commit
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
+Design (G1)  ☑ architecture + the-fool findings resolved ☑ QA testability findings resolved (design v2 §9)
+             ☑ owner decisions recorded (2026-11-12) ☐ ADRs written for lasting decisions (ADR-0015 annotations at landing, design §8)
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
              ☐ tests on the real code ☐ every breaker's red test committed
