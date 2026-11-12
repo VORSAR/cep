@@ -651,6 +651,35 @@
       ]
     },
     {
+      "id": "aging",
+      "row": "aging",
+      "lands_in": "S1.1c-3",
+      "code": [
+        "gate/runner/aging.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/aging.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_aging_planted.py",
+          "cases": 5
+        }
+      ],
+      "tiers": [
+        "T3",
+        "T4",
+        "nightly"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        "gate/known-issues.json",
+        "gate/sprints.json",
+        "gate/current-sprint",
+        "docs/sprints/decisions.md"
+      ]
+    },
+    {
       "id": "unit",
       "row": "unit",
       "lands_in": "S1.1a-1",
@@ -988,7 +1017,7 @@
       "tiers": [
         "T4"
       ],
-      "min_wants": 36,
+      "min_wants": 37,
       "expected_scope": [
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
