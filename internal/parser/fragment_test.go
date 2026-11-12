@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"sync"
+	"testing"
 	"unicode/utf8"
 
 	"github.com/alecthomas/participle/v2"
@@ -899,4 +901,91 @@ func FragmentValidatorCases(root, registerFile string) ([]FragmentValidatorCase,
 		out = append(out, FragmentValidatorCase{File: e.File, Span: e.Span, Kind: kind, Bound: bound, Code: fields[0]})
 	}
 	return out, nil
+}
+
+// ---- the real documents ----
+
+// fragmentDocs are the three documents whose quoted rule fragments the test judges (design note v2 §2.3).
+var fragmentDocs = []string{"docs/language/SPEC.md", "docs/language/SEMANTICS.md", "docs/language/errors.md"}
+
+// docCensus is one document's count: its rule-like spans (exempt mentions included) and its markers by form, a
+// fence counted by its tag.
+type docCensus struct {
+	ruleLike int
+	markers  map[string]int
+}
+
+func censusOf(md string) docCensus {
+	c := docCensus{markers: map[string]int{}}
+	prose, lineAt, _ := readBlocks(md, func(int, int, string, ...any) {})
+	for _, s := range readSpans(prose, lineAt) {
+		if detect(s.text).ruleLike {
+			c.ruleLike++
+		}
+		if s.hasMarker {
+			form, _, _ := strings.Cut(s.marker, ":")
+			c.markers[form]++
+		}
+	}
+	for l := range strings.Lines(md) {
+		if m := fenceOpen.FindStringSubmatch(strings.TrimRight(l, "\n")); m != nil && m[2] != "" {
+			c.markers["fence "+m[2]]++
+		}
+	}
+	return c
+}
+
+// TestEveryQuotedRuleFragmentParses: every rule-like span and fence in SPEC.md, SEMANTICS.md and errors.md is
+// marked and parses at its kind, or is listed in tools/allowlists/fragments.json at the stage it fails at; each
+// document's rule-like span count and markers by form are pinned, and move with each document commit.
+func TestEveryQuotedRuleFragmentParses(t *testing.T) {
+	t.Parallel()
+	var invalid []invalidExample
+	entries, err := readRegister(filepath.FromSlash(registerPath))
+	if err != nil {
+		t.Errorf("the register tools/allowlists/fragments.json: %v", err)
+	}
+	for _, e := range entries {
+		invalid = append(invalid, e.invalidExample)
+	}
+	pins := map[string]docCensus{
+		"docs/language/SPEC.md":      {ruleLike: 88, markers: map[string]int{"fence go": 1}},
+		"docs/language/SEMANTICS.md": {ruleLike: 70, markers: map[string]int{}},
+		"docs/language/errors.md":    {ruleLike: 68, markers: map[string]int{}},
+	}
+	for _, file := range fragmentDocs {
+		data, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(file)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		md := string(data)
+		got, want := censusOf(md), pins[file]
+		if got.ruleLike != want.ruleLike {
+			t.Errorf("%s: %d rule-like spans; pinned %d", file, got.ruleLike, want.ruleLike)
+		}
+		for _, form := range sortedKeys(got.markers, want.markers) {
+			if got.markers[form] != want.markers[form] {
+				t.Errorf("%s: %d markers %s; pinned %d", file, got.markers[form], form, want.markers[form])
+			}
+		}
+		if got.ruleLike == 0 {
+			t.Errorf("%s: no fragments", file)
+		}
+		for _, f := range checkMarkdown(file, md, invalid) {
+			t.Error(f)
+		}
+	}
+}
+
+func sortedKeys(a, b map[string]int) []string {
+	var out []string
+	for _, m := range []map[string]int{a, b} {
+		for k := range m {
+			if !slices.Contains(out, k) {
+				out = append(out, k)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
 }
