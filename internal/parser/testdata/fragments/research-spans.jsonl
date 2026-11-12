@@ -1,0 +1,224 @@
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 13, "span": "⟨rule-decl⟩"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "body", "kwonly": false, "line": 17, "span": "from S"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 37, "span": "ms sec min hour day week"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 37, "span": "5 min"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 37, "span": "1 hour 30 min"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 38, "span": "timestamp '<ISO-8601>'"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 38, "span": "timestamp '2026-01-01T10:00:00Z'"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 42, "span": "and or not"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 42, "span": "is [not] null"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 42, "span": "not in"}
+{"class": "cep-invalid", "file": "docs/language/SPEC.md", "kind": "select", "kwonly": false, "line": 42, "span": "select *", "stage": "grammar"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 42, "span": "not in"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 42, "span": "is [not] null"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 44, "span": "group having order limit offset join trigger aggregation sequence session tumbling hopping sliding processing route to punctuated"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "statements", "kwonly": false, "line": 75, "span": "param name type = literal;"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "statements", "kwonly": false, "line": 77, "placeholders": true, "span": "stream Name (attr type [optional], …) time-clause;"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": false, "line": 77, "span": "time <attr> watermark bounded <duration>"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": false, "line": 77, "span": "time <attr> watermark ascending"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": true, "line": 77, "span": "time arrival"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": true, "line": 77, "span": "time arrival"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 77, "placeholders": true, "span": "idle after <duration>"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 77, "span": "idle after"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "statements", "kwonly": false, "line": 79, "span": "table Name (attrs) primary key (cols);"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 79, "span": "not in"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "partkey", "kwonly": false, "line": 98, "span": "k of S"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "partkey", "kwonly": false, "line": 98, "span": "(k, j) of S"}
+{"class": "cep-invalid", "file": "docs/language/SPEC.md", "kind": "partkey", "kwonly": false, "line": 98, "span": "(k) of S", "stage": "validator"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "partkeys", "kwonly": false, "line": 98, "span": "partition by (src, dst) of Requests, (dst, src) of Responses"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "partkeys", "kwonly": false, "line": 98, "span": "partition by (tenantId, userId) of Grants"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "body", "kwonly": false, "line": 102, "span": "from Stream[filter]"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "rate", "kwonly": false, "line": 102, "span": "output first every D"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": true, "line": 115, "span": "after match skip past last"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 115, "span": "late events"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "poselem", "kwonly": false, "line": 127, "span": "(a = A[…] and b = B[…])"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "chainelem", "kwonly": false, "line": 127, "span": "and not Stream[filter] for D"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 133, "span": "has_ci has_cs"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 134, "span": "contains_ci contains_cs starts_with_* ends_with_*"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 137, "span": "raw(attr) <op> …"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 146, "span": "ttl ≥"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "windowkind", "kwonly": false, "line": 146, "span": "delay(D)"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 148, "span": "timestamp − timestamp"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 148, "span": "not in"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 148, "span": "not(… in …)"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 148, "span": "destination not in Approved"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 148, "span": "coalesce(destination, 'unknown') not in Approved"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 148, "span": "is null"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 148, "span": "not in"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 152, "span": "group by"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 154, "span": "x in T"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 156, "span": "not in"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 156, "span": "is [not] null"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 156, "span": "timestamp ± duration"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 156, "span": "timestamp − timestamp"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 156, "span": "duration ± duration"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 156, "span": "duration × int"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 156, "span": "int × duration"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 156, "span": "duration / int"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 156, "span": "timestamp + timestamp"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 156, "span": "duration × float"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 156, "span": "duration / duration"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 162, "span": "wm = max(event time seen) − d"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 166, "span": "late events allow"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "late", "kwonly": true, "line": 166, "span": "late events drop"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "windowkind", "kwonly": false, "line": 170, "span": "cron(expr, tz)"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "windowkind", "kwonly": false, "line": 171, "span": "delay(D)"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "windowkind", "kwonly": false, "line": 172, "span": "sort(n, attr, dir)"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "windowkind", "kwonly": false, "line": 173, "span": "batch()"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "windowkind", "kwonly": false, "line": 173, "span": "batch()"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "within", "kwonly": false, "line": 175, "span": "within D"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 177, "span": "wm − last activity > ttl"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 179, "span": "raw()"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "rate", "kwonly": false, "line": 181, "span": "output first every D"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "givensec", "kwonly": false, "line": 183, "placeholders": true, "span": "given table <Name> [ {row}, … ]"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 183, "span": "given table"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": true, "line": 183, "span": "time arrival"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 277, "span": "idle after"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 277, "span": "timestamp − timestamp"}
+{"class": "text", "file": "docs/language/SPEC.md", "kwonly": false, "line": 277, "span": "int × duration"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 277, "span": "duration / int"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "statements", "kwonly": false, "line": 280, "span": "stream S"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "partkey", "kwonly": false, "line": 282, "span": "(k, j) of S"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "partkey", "kwonly": false, "line": 283, "span": "(k, j) of S"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 284, "span": "late events allow"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "late", "kwonly": true, "line": 284, "span": "late events drop"}
+{"class": "cep", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": true, "line": 284, "span": "time arrival"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "timeclause", "kwonly": false, "line": 284, "placeholders": true, "span": "time <attr>"}
+{"class": "red", "file": "docs/language/SPEC.md", "kind": "givensec", "kwonly": false, "line": 285, "placeholders": true, "span": "given table <Name> [rows]"}
+{"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 287, "span": "not in"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 11, "span": "(stream, timestamp, attributes)"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 13, "span": "timestamp ± duration → timestamp"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 13, "span": "timestamp − timestamp → duration"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 13, "span": "duration ± duration"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 13, "span": "duration × int"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 13, "span": "int × duration"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 13, "span": "duration / int"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 13, "span": "timestamp − timestamp"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 15, "span": "ms, sec, min, hour, day, week"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 15, "span": "1 hour 30 min"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 21, "span": "not in"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 21, "span": "not(… in …)"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 21, "span": "coalesce(x, 'unknown') not in T"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 22, "span": "is null"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 23, "span": "not (x == 5)"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 23, "span": "is null"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 24, "span": "not …"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 24, "span": "is null"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "timeclause", "kwonly": true, "line": 35, "span": "time arrival"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "timeclause", "kwonly": false, "line": 37, "span": "time <attr> watermark bounded <duration>"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "timeclause", "kwonly": false, "line": 37, "span": "time <attr> watermark ascending"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "timeclause", "kwonly": true, "line": 37, "span": "time arrival"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 37, "placeholders": true, "span": "timestamp = <attr>"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "poselem", "kwonly": false, "line": 47, "span": "wm_construct = max(previous wm_construct, min(input wms))"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "windowkind", "kwonly": false, "line": 49, "span": "delay(D)"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 51, "span": "idle after"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 55, "span": "idle after"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 55, "placeholders": true, "span": "idle after D"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 55, "placeholders": true, "span": "idle after D"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "poselem", "kwonly": false, "line": 57, "span": "d = 2 min"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 61, "span": "(event_time, stream id, per-stream ingestion sequence)"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 69, "span": "<expr> in <Table>"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "poselem", "kwonly": false, "line": 77, "span": "text_invisibles=true"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "partkey", "kwonly": false, "line": 93, "span": "any of"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "partkey", "kwonly": false, "line": 93, "span": "all of"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "partkey", "kwonly": false, "line": 98, "span": "any of [\"ignore previous\"]"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "within", "kwonly": false, "line": 114, "span": "within D"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "for", "kwonly": false, "line": 114, "span": "for D"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "within", "kwonly": false, "line": 117, "span": "within D"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 117, "span": "for D₂ > D"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "within", "kwonly": false, "line": 120, "span": "within 5 min"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 120, "span": "t − t_first = 5 min ≤ 5 min"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "chainelem", "kwonly": false, "line": 124, "span": "and not B[pred] for D"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "chainelem", "kwonly": false, "line": 124, "span": "and not HumanApprovals[…] for ${kill_window}"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 124, "span": "→ not B for D"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 124, "span": "and not"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 126, "span": "max(last positive event's time, every absence deadline)"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 128, "span": "not HumanApprovals for 5 min"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "poselem", "kwonly": false, "line": 128, "span": "d = 2 min"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "within", "kwonly": false, "line": 130, "span": "within 5 min"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "for", "kwonly": false, "line": 130, "span": "for 5 min"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 135, "span": "(ts, stream id, seq)"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "late", "kwonly": false, "line": 136, "span": "late: drop"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 140, "span": "e1=A → e2=B within 5 min"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 144, "span": "max(last positive event's time, absence deadlines)"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "windowkind", "kwonly": false, "line": 157, "span": "cron('0 9 * * MON-FRI', 'America/New_York')"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "windowkind", "kwonly": false, "line": 159, "span": "sort(2, score, desc)"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "windowkind", "kwonly": false, "line": 161, "span": "delay(10 min)"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "rate", "kwonly": false, "line": 176, "span": "output first every D"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "chain", "kwonly": false, "line": 178, "placeholders": true, "span": "every D"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 180, "placeholders": true, "span": "first every D"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 180, "span": "first every 10 min"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "partkey", "kwonly": false, "line": 184, "span": "(k, j) of S"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "partition", "kwonly": false, "line": 184, "span": "partition by (tenantId, userId) of Grants ttl 10 min"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "rate", "kwonly": false, "line": 184, "span": "output first every 5 min"}
+{"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "windowkind", "kwonly": false, "line": 188, "span": "delay(D)"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 190, "placeholders": true, "span": "not … for 5 min"}
+{"class": "cep", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 190, "span": "3 min"}
+{"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "aftermatch", "kwonly": false, "line": 190, "span": "TTL 3 min < pattern bound 5 min"}
+{"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 210, "span": "idle after"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "program", "kwonly": false, "line": 6, "span": "language cep/0.1;"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "program", "kwonly": false, "line": 7, "span": "language cep/0.1;"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 11, "span": "intent '<one sentence>'"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "rule", "kwonly": false, "line": 11, "placeholders": true, "span": "rule <Name>"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "within", "kwonly": false, "line": 15, "span": "within <duration>"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "within", "kwonly": false, "line": 15, "span": "within 5 min"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": true, "line": 19, "span": "after match skip past last"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "body", "kwonly": false, "line": 23, "placeholders": true, "span": "from every <step>…"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "body", "kwonly": false, "line": 23, "placeholders": true, "span": "from once <step>…"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "chainelem", "kwonly": false, "line": 26, "placeholders": true, "span": "and not <Stream>[…]"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "for", "kwonly": false, "line": 26, "span": "for <duration>"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "for", "kwonly": false, "line": 27, "span": "for <duration>"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "for", "kwonly": false, "line": 27, "span": "for 5 min"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "late", "kwonly": true, "line": 31, "span": "late events drop"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 35, "span": "emit on close"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 35, "span": "emit on change"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 35, "span": "emit on due"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 35, "span": "emit on batch end"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 39, "span": "window cron('0 0 * * *', 'America/New_York')"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 43, "placeholders": true, "span": "ttl <duration>"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 47, "span": "5 min"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 47, "span": "1 hour 30 min"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 47, "span": "250 ms"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 62, "span": "followed by", "stage": "grammar"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "timeclause", "kwonly": false, "line": 75, "span": "time <attr> watermark bounded <duration>"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "timeclause", "kwonly": false, "line": 75, "span": "time <attr> watermark ascending"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "timeclause", "kwonly": true, "line": 75, "span": "time arrival"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "timeclause", "kwonly": false, "line": 83, "placeholders": true, "span": "time <attr>"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 86, "span": "idle after"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 87, "span": "idle after"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 88, "placeholders": true, "span": "idle after <duration>"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "partition", "kwonly": false, "line": 92, "placeholders": true, "span": "partition by <key> of <Stream> … ttl <duration>"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 96, "placeholders": true, "span": ", <key> of <ThatStream>"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 100, "span": "part 2 of the partition key: session of B is int, but sessionId of A is string"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 103, "span": "k of S, j of S", "stage": "grammar"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 103, "span": "(k, j) of S"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 104, "span": "to key it on both, write (k, j) of S, and give every stream the same number of parts"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 104, "span": "(k, j) of S"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 108, "span": "k of S"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 108, "span": "(k, j) of S"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 112, "span": "(k, j) of S"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 116, "span": "the partition keys of rule R have different numbers of parts: S 2, T 1"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 116, "span": "(k, j) of S, (k2, j2) of T"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "partition", "kwonly": false, "line": 119, "span": "partition.NewRule"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "chainelem", "kwonly": false, "line": 131, "placeholders": true, "span": "and not …"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 132, "span": "attr is not null"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 135, "span": "not in"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 136, "span": "is null"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 180, "span": "group by"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 188, "placeholders": true, "span": "primary key (…)"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 201, "span": "group by"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "program", "kwonly": false, "line": 206, "span": "language cep/0.1;"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 209, "span": "1 hour 30 min"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "duration", "kwonly": false, "line": 209, "span": "1.5 min", "stage": "lowering"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "duration", "kwonly": false, "line": 209, "span": "30 sec 5 min", "stage": "lowering"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "duration", "kwonly": false, "line": 209, "span": "5 min 5 min", "stage": "lowering"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 213, "span": "idle after"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 213, "span": "output first every"}
+{"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 229, "span": "late events allow"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "late", "kwonly": true, "line": 230, "span": "late events drop"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 237, "span": "timestamp + timestamp"}
+{"class": "text", "file": "docs/language/errors.md", "kwonly": false, "line": 237, "span": "duration × float"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 237, "span": "is [not] null"}
+{"class": "red", "file": "docs/language/errors.md", "kind": "windowkind", "kwonly": false, "line": 245, "placeholders": true, "span": "sort(n, …)"}
+{"class": "cep", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 272, "span": "a has_any_cs('x', 'y')"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "select", "kwonly": false, "line": 274, "span": "select *", "stage": "grammar"}
