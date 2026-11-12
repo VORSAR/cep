@@ -6,6 +6,7 @@ step's worker thread spawns and reaps, so the lock orders the two: after any sig
 """
 
 import contextlib
+import dataclasses
 import os
 import signal
 import subprocess
@@ -43,8 +44,9 @@ class Group:
     def reap(self, proc: subprocess.Popen[bytes]) -> tuple[int, bool]:
         """Wait for the leader, then probe its group: (returncode, whether anything was left running).
 
-        The leader is reaped before the probe, so it never counts itself. Whatever is left is killed.
-        Residue (design note §4): a zombie may count on Linux, and the pid-reuse window is accepted.
+        The leader is reaped before the probe, so it never counts itself; a member that has exited but awaits its
+        parent (a zombie) does not count either. Whatever live is left is killed. Residue (design note §4): the
+        pid-reuse window is accepted.
         """
         code = proc.wait()
         with self._lock:
@@ -65,35 +67,69 @@ class Group:
 
 
 def probe(pgid: int) -> tuple[bool, str]:
-    """Whether anything of the group `pgid` is left running, and what the probe saw (empty when nothing)."""
+    """Whether anything of the group `pgid` is left running, and what the probe saw ("" when nothing was).
+
+    A group with any live member is left running, and named. A group whose members are all zombies, or that has
+    none by the time `ps` looks, is finished: macOS answers EPERM for a group whose only members are zombies, Linux
+    answers that it exists (owner, 2026-11-12, known issue S1.1c-1-1). A `ps` that fails counts as left running.
+    """
     try:
         os.killpg(pgid, 0)
         answer = "the group still exists"
     except ProcessLookupError:
         return False, ""
-    except PermissionError:  # the group exists, and holds something this user may not signal (or one mid-exit)
+    except PermissionError:  # the group exists, and holds something this user may not signal (or only zombies)
         answer = "the group exists but may not be signalled (EPERM)"
-    return True, f"{answer}: {members(pgid)}"  # named before the kill (known issue S1.1c-1-1)
-
-
-def members(pgid: int) -> str:
-    """The group's members as `ps` lists them now — "pid state command", the command's program by its base name —
-    joined by "; "; a group whose members have already exited, or a `ps` that fails, says so. Only read on the
-    failure path, to name what a positive probe saw (owner, 2026-11-11, known issue S1.1c-1-1)."""
     try:
-        listing = subprocess.run(
+        found = members(pgid)
+    except PsFailed as e:
+        return True, f"{answer}: ps failed: {e}"
+    if all(m.zombie for m in found):
+        return False, ""
+    return True, f"{answer}: {'; '.join(map(str, found))}"  # named before the kill
+
+
+class PsFailed(Exception):
+    """`ps` could not list the processes: it did not start, timed out or exited non-zero."""
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Member:
+    """One process of a group as `ps` lists it: its state's first letter Z means exited, awaiting its parent."""
+
+    pid: int
+    state: str
+    program: str  # the command's program, by its base name
+    args: str
+
+    @property
+    def zombie(self) -> bool:
+        return self.state.startswith("Z")
+
+    def __str__(self) -> str:
+        return " ".join(x for x in (str(self.pid), self.state, self.program, self.args) if x)
+
+
+def members(pgid: int) -> list[Member]:
+    """The group's members as `ps` lists them now, in its order; raises PsFailed when `ps` gives no listing."""
+    try:
+        done = subprocess.run(
             ["ps", "-A", "-o", "pgid=,pid=,stat=,command="],
             stdin=subprocess.DEVNULL,
             capture_output=True,
-            text=True,
             timeout=10,
-        ).stdout
+        )
     except (OSError, subprocess.SubprocessError) as e:
-        return f"ps failed: {e}"
+        raise PsFailed(e) from e
+    if done.returncode != 0:
+        detail = done.stderr.decode("utf-8", errors="replace").strip()
+        raise PsFailed(f"exit {done.returncode}" + (f": {detail}" if detail else ""))
     found = []
-    for line in listing.splitlines():
+    for line in done.stdout.decode("utf-8", errors="replace").splitlines():
         parts = line.split(None, 3)
         if len(parts) == 4 and parts[0] == str(pgid):
+            if not parts[1].isdigit():
+                raise PsFailed(f"no pid on the line {line!r}")
             program, _, args = parts[3].partition(" ")
-            found.append(" ".join(x for x in (parts[1], parts[2], os.path.basename(program), args) if x))
-    return "; ".join(found) if found else "no member listed (gone before it could be named)"
+            found.append(Member(int(parts[1]), parts[2], os.path.basename(program), args))
+    return found

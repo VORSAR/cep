@@ -222,6 +222,18 @@ class Probe(support.GateTest):
         self.assertTrue(left, detail)
         self.assertIn(": ps failed: ", detail)
 
+    def test_a_ps_line_without_a_pid_stays_left_running(self):
+        child = self.start([sys.executable, "-I", "-c", "pass"])
+        self.zombie(child)
+
+        def ps_garbles(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 0, f"{child.pid} nopid Z sh\n".encode(), b"")
+
+        with mock.patch.object(proc.subprocess, "run", ps_garbles):
+            left, detail = proc.probe(child.pid)
+        self.assertTrue(left, detail)
+        self.assertIn(": ps failed: no pid on the line ", detail)
+
 
 class Witnesses(support.GateTest):
     def test_end_of_file_without_start_bytes_is_refused(self):
