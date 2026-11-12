@@ -37,7 +37,10 @@ class ShimForgedPass(support.DriverTest):
     def run_row(self, module: str) -> support.Run:
         self.world.write(PLANT, module)
         self.world.commit()
-        return self.world.run(registry=self.world.registry(support.registry_row(ROW)))
+        # The real row, its floor set to the world's one module: gate/registry.json's min_wants counts the real
+        # tree's modules (82 since S1.1c-2's instruments); gate/law.json's instruments pin that floor, not this proof.
+        row = dict(support.registry_row(ROW), min_wants=1)
+        return self.world.run(registry=self.world.registry(row))
 
     def test_a_pass_line_forged_on_stdout_is_red(self):
         run = self.run_row(STDOUT_FORGE)
