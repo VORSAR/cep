@@ -96,8 +96,8 @@ RUFF = (
     # BK-B1 (S1.1c-2's fix round), measured with the pinned ruff 0.17.3 (`ruff format --isolated`, stdin; the
     # statement's layout kept or not): ruff strips the "#", trims the whitespace, and reads `fmt:` + any run of
     # spaces, tabs or form feeds + `skip`/`off`/`on` (`yapf:` likewise + `disable`/`enable`). Each spelling below
-    # keeps the layout (`fmt: on`/`yapf: enable` close a region), so each is red; `# fmt: skip` and `# fmt:skip`
-    # stay the accepted skips (design §2.3).
+    # keeps the layout (`fmt: on`/`yapf: enable` close a region), so each is red; the two skips design §2.3 accepts
+    # (one space, or none) stay accepted.
     (f"# fmt:  skip  # {REASON}", (SPELLING,)),
     (f"# fmt:\tskip  # {REASON}", (SPELLING,)),
     (f"#  fmt:   skip  # {REASON}", (SPELLING,)),
