@@ -74,6 +74,13 @@ class Order:
     def reached(self, entry: str, current: str) -> bool:
         return self.index(entry) <= self.index(current)
 
+    def passed(self, part: str, marker: str) -> bool:
+        """Whether the marker is past the part: a later row, or a later part of the same row, parts compared as numbers.
+
+        W0 stub (S1.1c-3 plan check §2 S2): lane E2 builds it, and the allowlists' inline part check moves onto it.
+        """
+        raise NotImplementedError("sprintid.Order.passed: not built yet (S1.1c-3 lane E2)")
+
     def first_open(self) -> str:
         for row in self.rows:
             if not row.closed:
