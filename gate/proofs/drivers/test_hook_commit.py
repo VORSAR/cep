@@ -13,6 +13,7 @@ import stat
 
 from gate.proofs.drivers import support
 
+ROW = "gofmt"  # the row its red cases land on: teeth.red_rows ties this proof to it (BK-S7)
 # Planted in a package the import law lists, so archcheck (a T0 row since S1.1b) passes them and only gofmt judges.
 BAD = "internal/event/bad.go"
 GOOD = "internal/event/good.go"
@@ -147,7 +148,8 @@ class HookCommit(support.DriverTest):
         """N27: the refusal assertion is a real witness: with the launcher replaced by `exit 0` it must go red."""
         launcher = os.path.join(self.world.repo, ".githooks", "pre-commit")
         with open(launcher, "rb") as f, open(os.path.join(support.REPO, ".githooks", "pre-commit"), "rb") as g:
-            self.assertEqual(f.read(), g.read(), "the world's launcher is the real one before the plant")
+            real = g.read()
+            self.assertEqual(f.read(), real, "the world's launcher is the real one before the plant")
         with open(launcher, "w", encoding="utf-8") as f:
             f.write("#!/bin/sh\nexit 0\n")
         os.chmod(launcher, os.stat(launcher).st_mode | stat.S_IXUSR)
@@ -155,3 +157,9 @@ class HookCommit(support.DriverTest):
         with self.assertRaises(AssertionError):
             self.assertRefusedUnformatted()
         self.assertEqual(self.world.git("ls-tree", "--name-only", "HEAD", "--", BAD).strip(), BAD)
+        # The witness both ways: with the real launcher back, the next unformatted change is refused again. This is
+        # the case's red verdict; the one under assertRaises above never counts (S1.1c-2's fix round, BK-B3).
+        with open(launcher, "wb") as f:
+            f.write(real)
+        self.world.track(BAD, UNFORMATTED + "\n// staged again\n")
+        self.assertRefusedUnformatted()

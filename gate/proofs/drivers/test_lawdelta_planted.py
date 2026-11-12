@@ -13,6 +13,7 @@ import os
 
 from gate.proofs.drivers import support
 
+ROW = "lawdelta"  # the row its red cases land on: teeth.red_rows ties this proof to it (BK-S7)
 LAW = "gate/law.json"
 RULES = "tools/importcheck/rules.json"
 MARKER = "gate/current-sprint"

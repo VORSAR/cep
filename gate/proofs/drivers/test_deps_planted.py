@@ -24,6 +24,7 @@ import os
 
 from gate.proofs.drivers import support
 
+ROW = "deps"  # the row its red cases land on: teeth.red_rows ties this proof to it (BK-S7)
 ALLOWLIST = "tools/deps-allowlist.json"
 DECISIONS = "docs/sprints/decisions.md"
 PLANTED = "example.com/planted"
