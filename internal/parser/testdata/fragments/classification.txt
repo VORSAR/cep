@@ -1,0 +1,242 @@
+# S1.1c-3 lane B2: the classification list for the markers commit (design note v2 §2.3, §5).
+# One row per rule-like span (the detector of fragment_test.go) and per fence in SPEC.md, SEMANTICS.md, errors.md
+# at the lane branch head: <file>:<line> TAB span|fence TAB <the marker it needs> TAB <the span as quoted>.
+# Markers: cep:<kind> (parses as written), cep-meta:<kind> (parses once its placeholders bind), cep-invalid:<kind>
+# (listed in tools/allowlists/fragments.json at its stage), text (a notation token survives binding), fix (a §5
+# correction; the span is red until corrected), none (an exempt keyword-only mention). A fence row names its tag.
+# Classes from R-F3 (testdata/fragments/research-spans.jsonl) where the span is R-F3s; computed by parseFragment otherwise.
+docs/language/SPEC.md:13	span	text	⟨rule-decl⟩
+docs/language/SPEC.md:17	span	cep:body	from S
+docs/language/SPEC.md:37	span	none (exempt: keyword-only mention)	ms sec min hour day week
+docs/language/SPEC.md:37	span	cep:expr	5 min
+docs/language/SPEC.md:37	span	cep:expr	1 hour 30 min
+docs/language/SPEC.md:38	span	cep-meta:expr	timestamp '<ISO-8601>'
+docs/language/SPEC.md:38	span	cep:expr	timestamp '2026-01-01T10:00:00Z'
+docs/language/SPEC.md:42	span	none (exempt: keyword-only mention)	and or not
+docs/language/SPEC.md:42	span	fix (red; got furthest at aftermatch; see design §5)	is [not] null
+docs/language/SPEC.md:42	span	none (exempt: keyword-only mention)	not in
+docs/language/SPEC.md:42	span	cep-invalid:select (stage grammar)	select *
+docs/language/SPEC.md:42	span	none (exempt: keyword-only mention)	not in
+docs/language/SPEC.md:42	span	fix (red; got furthest at aftermatch; see design §5)	is [not] null
+docs/language/SPEC.md:44	span	none (exempt: keyword-only mention)	group having order limit offset join trigger aggregation sequence session tumbling hopping sliding processing route to punctuated
+docs/language/SPEC.md:75	span	fix (red; got furthest at statements; see design §5)	param name type = literal;
+docs/language/SPEC.md:77	span	fix (red; got furthest at statements; see design §5)	stream Name (attr type [optional], …) time-clause;
+docs/language/SPEC.md:77	span	cep-meta:timeclause	time <attr> watermark bounded <duration>
+docs/language/SPEC.md:77	span	cep-meta:timeclause	time <attr> watermark ascending
+docs/language/SPEC.md:77	span	none (exempt: keyword-only mention)	time arrival
+docs/language/SPEC.md:77	span	none (exempt: keyword-only mention)	time arrival
+docs/language/SPEC.md:77	span	cep-meta:idle (red in R-F3; a production now)	idle after <duration>
+docs/language/SPEC.md:77	span	none (exempt: keyword-only mention)	idle after
+docs/language/SPEC.md:79	span	fix (red; got furthest at statements; see design §5)	table Name (attrs) primary key (cols);
+docs/language/SPEC.md:79	span	none (exempt: keyword-only mention)	not in
+docs/language/SPEC.md:98	span	cep:partkey	k of S
+docs/language/SPEC.md:98	span	cep:partkey	(k, j) of S
+docs/language/SPEC.md:98	span	cep-invalid:partkey (stage validator E-PART-005)	(k) of S
+docs/language/SPEC.md:98	span	cep:partkeys	partition by (src, dst) of Requests, (dst, src) of Responses
+docs/language/SPEC.md:98	span	cep:partkeys	partition by (tenantId, userId) of Grants
+docs/language/SPEC.md:102	span	cep-meta:body	from Stream[filter]
+docs/language/SPEC.md:102	span	cep-meta:rate	output first every D
+docs/language/SPEC.md:115	span	none (exempt: keyword-only mention)	after match skip past last
+docs/language/SPEC.md:115	span	none (exempt: keyword-only mention)	late events
+docs/language/SPEC.md:127	span	cep-meta:poselem	(a = A[…] and b = B[…])
+docs/language/SPEC.md:127	span	cep-meta:chainelem	and not Stream[filter] for D
+docs/language/SPEC.md:133	span	none (exempt: keyword-only mention)	has_ci has_cs
+docs/language/SPEC.md:134	span	fix (red; got furthest at aftermatch; see design §5)	contains_ci contains_cs starts_with_* ends_with_*
+docs/language/SPEC.md:137	span	cep-meta:expr	raw(attr) <op> …
+docs/language/SPEC.md:146	span	text	ttl ≥
+docs/language/SPEC.md:146	span	cep-meta:windowkind	delay(D)
+docs/language/SPEC.md:148	span	text	timestamp − timestamp
+docs/language/SPEC.md:148	span	none (exempt: keyword-only mention)	not in
+docs/language/SPEC.md:148	span	cep-meta:expr	not(… in …)
+docs/language/SPEC.md:148	span	cep:expr	destination not in Approved
+docs/language/SPEC.md:148	span	cep:expr	coalesce(destination, 'unknown') not in Approved
+docs/language/SPEC.md:148	span	none (exempt: keyword-only mention)	is null
+docs/language/SPEC.md:148	span	none (exempt: keyword-only mention)	not in
+docs/language/SPEC.md:152	span	none (exempt: keyword-only mention)	group by
+docs/language/SPEC.md:154	span	cep:expr	x in T
+docs/language/SPEC.md:156	span	none (exempt: keyword-only mention)	not in
+docs/language/SPEC.md:156	span	fix (red; got furthest at aftermatch; see design §5)	is [not] null
+docs/language/SPEC.md:156	span	text	timestamp ± duration
+docs/language/SPEC.md:156	span	text	timestamp − timestamp
+docs/language/SPEC.md:156	span	text	duration ± duration
+docs/language/SPEC.md:156	span	text	duration × int
+docs/language/SPEC.md:156	span	text	int × duration
+docs/language/SPEC.md:156	span	fix (red; got furthest at aftermatch; see design §5)	duration / int
+docs/language/SPEC.md:156	span	fix then cep-invalid:expr (as <timestamp> + <timestamp>; stage validator E-TYPE-001; design §5)	timestamp + timestamp
+docs/language/SPEC.md:156	span	text	duration × float
+docs/language/SPEC.md:156	span	fix then cep-invalid:expr (as <duration> / <duration>; stage validator E-TYPE-001; design §5)	duration / duration
+docs/language/SPEC.md:162	span	text	wm = max(event time seen) − d
+docs/language/SPEC.md:166	span	none (exempt: keyword-only mention)	late events allow
+docs/language/SPEC.md:166	span	none (exempt: keyword-only mention)	late events drop
+docs/language/SPEC.md:170	span	fix (red; got furthest at windowkind; see design §5)	cron(expr, tz)
+docs/language/SPEC.md:171	span	cep-meta:windowkind	delay(D)
+docs/language/SPEC.md:172	span	fix (red; got furthest at windowkind; see design §5)	sort(n, attr, dir)
+docs/language/SPEC.md:173	span	cep:windowkind	batch()
+docs/language/SPEC.md:173	span	cep:windowkind	batch()
+docs/language/SPEC.md:175	span	cep-meta:within	within D
+docs/language/SPEC.md:177	span	text	wm − last activity > ttl
+docs/language/SPEC.md:179	span	fix (red; got furthest at expr; see design §5)	raw()
+docs/language/SPEC.md:181	span	cep-meta:rate	output first every D
+docs/language/SPEC.md:183	span	fix (red; got furthest at givensec; see design §5)	given table <Name> [ {row}, … ]
+docs/language/SPEC.md:183	span	none (exempt: keyword-only mention)	given table
+docs/language/SPEC.md:183	span	none (exempt: keyword-only mention)	time arrival
+docs/language/SPEC.md:277	span	none (exempt: keyword-only mention)	idle after
+docs/language/SPEC.md:277	span	text	timestamp − timestamp
+docs/language/SPEC.md:277	span	text	int × duration
+docs/language/SPEC.md:277	span	fix (red; got furthest at aftermatch; see design §5)	duration / int
+docs/language/SPEC.md:280	span	fix (red; got furthest at statements; see design §5)	stream S
+docs/language/SPEC.md:282	span	cep:partkey	(k, j) of S
+docs/language/SPEC.md:283	span	cep:partkey	(k, j) of S
+docs/language/SPEC.md:284	span	none (exempt: keyword-only mention)	late events allow
+docs/language/SPEC.md:284	span	none (exempt: keyword-only mention)	late events drop
+docs/language/SPEC.md:284	span	none (exempt: keyword-only mention)	time arrival
+docs/language/SPEC.md:284	span	fix (red; got furthest at timeclause; see design §5)	time <attr>
+docs/language/SPEC.md:285	span	fix (red; got furthest at givensec; see design §5)	given table <Name> [rows]
+docs/language/SPEC.md:287	span	none (exempt: keyword-only mention)	not in
+docs/language/SEMANTICS.md:11	span	fix (red; got furthest at expr; see design §5)	(stream, timestamp, attributes)
+docs/language/SEMANTICS.md:13	span	text	timestamp ± duration → timestamp
+docs/language/SEMANTICS.md:13	span	text	timestamp − timestamp → duration
+docs/language/SEMANTICS.md:13	span	text	duration ± duration
+docs/language/SEMANTICS.md:13	span	text	duration × int
+docs/language/SEMANTICS.md:13	span	text	int × duration
+docs/language/SEMANTICS.md:13	span	fix (red; got furthest at aftermatch; see design §5)	duration / int
+docs/language/SEMANTICS.md:13	span	text	timestamp − timestamp
+docs/language/SEMANTICS.md:15	span	fix (red; got furthest at aftermatch; see design §5)	ms, sec, min, hour, day, week
+docs/language/SEMANTICS.md:15	span	cep:expr	1 hour 30 min
+docs/language/SEMANTICS.md:21	span	none (exempt: keyword-only mention)	not in
+docs/language/SEMANTICS.md:21	span	cep-meta:expr	not(… in …)
+docs/language/SEMANTICS.md:21	span	cep:expr	coalesce(x, 'unknown') not in T
+docs/language/SEMANTICS.md:22	span	none (exempt: keyword-only mention)	is null
+docs/language/SEMANTICS.md:23	span	cep:expr	not (x == 5)
+docs/language/SEMANTICS.md:23	span	none (exempt: keyword-only mention)	is null
+docs/language/SEMANTICS.md:24	span	cep-meta:expr	not …
+docs/language/SEMANTICS.md:24	span	none (exempt: keyword-only mention)	is null
+docs/language/SEMANTICS.md:35	span	none (exempt: keyword-only mention)	time arrival
+docs/language/SEMANTICS.md:37	span	cep-meta:timeclause	time <attr> watermark bounded <duration>
+docs/language/SEMANTICS.md:37	span	cep-meta:timeclause	time <attr> watermark ascending
+docs/language/SEMANTICS.md:37	span	none (exempt: keyword-only mention)	time arrival
+docs/language/SEMANTICS.md:37	span	cep-invalid:aftermatch (stage grammar; design §5 listed)	timestamp = <attr>
+docs/language/SEMANTICS.md:47	span	fix (red; got furthest at poselem; see design §5)	wm_construct = max(previous wm_construct, min(input wms))
+docs/language/SEMANTICS.md:49	span	cep-meta:windowkind	delay(D)
+docs/language/SEMANTICS.md:51	span	none (exempt: keyword-only mention)	idle after
+docs/language/SEMANTICS.md:55	span	none (exempt: keyword-only mention)	idle after
+docs/language/SEMANTICS.md:55	span	cep-meta:idle (red in R-F3; a production now)	idle after D
+docs/language/SEMANTICS.md:55	span	cep-meta:idle (red in R-F3; a production now)	idle after D
+docs/language/SEMANTICS.md:57	span	fix (red; got furthest at poselem; see design §5)	d = 2 min
+docs/language/SEMANTICS.md:61	span	fix (red; got furthest at expr; see design §5)	(event_time, stream id, per-stream ingestion sequence)
+docs/language/SEMANTICS.md:69	span	cep-meta:expr	<expr> in <Table>
+docs/language/SEMANTICS.md:77	span	fix (red; got furthest at poselem; see design §5)	text_invisibles=true
+docs/language/SEMANTICS.md:93	span	fix (red; got furthest at partkey; see design §5)	any of
+docs/language/SEMANTICS.md:93	span	fix (red; got furthest at partkey; see design §5)	all of
+docs/language/SEMANTICS.md:98	span	fix (red; got furthest at partkey; see design §5)	any of ["ignore previous"]
+docs/language/SEMANTICS.md:114	span	cep-meta:within	within D
+docs/language/SEMANTICS.md:114	span	cep-meta:for	for D
+docs/language/SEMANTICS.md:117	span	cep-meta:within	within D
+docs/language/SEMANTICS.md:117	span	text	for D₂ > D
+docs/language/SEMANTICS.md:120	span	cep:within	within 5 min
+docs/language/SEMANTICS.md:120	span	text	t − t_first = 5 min ≤ 5 min
+docs/language/SEMANTICS.md:124	span	cep-meta:chainelem	and not B[pred] for D
+docs/language/SEMANTICS.md:124	span	cep-meta:chainelem	and not HumanApprovals[…] for ${kill_window}
+docs/language/SEMANTICS.md:124	span	cep-invalid:chainelem (stage grammar; listed at G1)	→ not B for D
+docs/language/SEMANTICS.md:124	span	none (exempt: keyword-only mention)	and not
+docs/language/SEMANTICS.md:126	span	text	max(last positive event's time, every absence deadline)
+docs/language/SEMANTICS.md:128	span	fix (red; got furthest at expr; see design §5)	not HumanApprovals for 5 min
+docs/language/SEMANTICS.md:128	span	fix (red; got furthest at poselem; see design §5)	d = 2 min
+docs/language/SEMANTICS.md:130	span	cep:within	within 5 min
+docs/language/SEMANTICS.md:130	span	cep:for	for 5 min
+docs/language/SEMANTICS.md:135	span	fix (red; got furthest at expr; see design §5)	(ts, stream id, seq)
+docs/language/SEMANTICS.md:136	span	fix (red; got furthest at late; see design §5)	late: drop
+docs/language/SEMANTICS.md:140	span	text	e1=A → e2=B within 5 min
+docs/language/SEMANTICS.md:144	span	text	max(last positive event's time, absence deadlines)
+docs/language/SEMANTICS.md:157	span	cep:windowkind	cron('0 9 * * MON-FRI', 'America/New_York')
+docs/language/SEMANTICS.md:159	span	cep:windowkind	sort(2, score, desc)
+docs/language/SEMANTICS.md:161	span	cep:windowkind	delay(10 min)
+docs/language/SEMANTICS.md:176	span	cep-meta:rate	output first every D
+docs/language/SEMANTICS.md:178	span	cep-invalid:chain (stage grammar; design §5 listed)	every D
+docs/language/SEMANTICS.md:180	span	fix (red; got furthest at aftermatch; see design §5)	first every D
+docs/language/SEMANTICS.md:180	span	fix (red; got furthest at aftermatch; see design §5)	first every 10 min
+docs/language/SEMANTICS.md:184	span	cep:partkey	(k, j) of S
+docs/language/SEMANTICS.md:184	span	cep:partition	partition by (tenantId, userId) of Grants ttl 10 min
+docs/language/SEMANTICS.md:184	span	cep:rate	output first every 5 min
+docs/language/SEMANTICS.md:188	span	cep-meta:windowkind	delay(D)
+docs/language/SEMANTICS.md:190	span	fix (red; got furthest at expr; see design §5)	not … for 5 min
+docs/language/SEMANTICS.md:190	span	cep:expr	3 min
+docs/language/SEMANTICS.md:190	span	fix (red; got furthest at aftermatch; see design §5)	TTL 3 min < pattern bound 5 min
+docs/language/SEMANTICS.md:210	span	none (exempt: keyword-only mention)	idle after
+docs/language/errors.md:6	span	cep:program	language cep/0.1;
+docs/language/errors.md:7	span	cep:program	language cep/0.1;
+docs/language/errors.md:11	span	cep:intent (red in R-F3; a production now)	intent '<one sentence>'
+docs/language/errors.md:11	span	cep-meta:rulehead (red in R-F3; a production now)	rule <Name>
+docs/language/errors.md:15	span	cep-meta:within	within <duration>
+docs/language/errors.md:15	span	cep:within	within 5 min
+docs/language/errors.md:19	span	none (exempt: keyword-only mention)	after match skip past last
+docs/language/errors.md:23	span	cep-meta:from (red in R-F3; a production now)	from every <step>…
+docs/language/errors.md:23	span	cep-meta:from (red in R-F3; a production now)	from once <step>…
+docs/language/errors.md:26	span	cep-invalid:chainelem (stage grammar; design §5 listed)	and not <Stream>[…]
+docs/language/errors.md:26	span	cep-meta:for	for <duration>
+docs/language/errors.md:27	span	cep-meta:for	for <duration>
+docs/language/errors.md:27	span	cep:for	for 5 min
+docs/language/errors.md:31	span	none (exempt: keyword-only mention)	late events drop
+docs/language/errors.md:35	span	none (exempt: keyword-only mention)	emit on close
+docs/language/errors.md:35	span	none (exempt: keyword-only mention)	emit on change
+docs/language/errors.md:35	span	none (exempt: keyword-only mention)	emit on due
+docs/language/errors.md:35	span	none (exempt: keyword-only mention)	emit on batch end
+docs/language/errors.md:39	span	cep:window (red in R-F3; a production now)	window cron('0 0 * * *', 'America/New_York')
+docs/language/errors.md:43	span	cep-meta:ttl (red in R-F3; a production now)	ttl <duration>
+docs/language/errors.md:47	span	cep:expr	5 min
+docs/language/errors.md:47	span	cep:expr	1 hour 30 min
+docs/language/errors.md:47	span	cep:expr	250 ms
+docs/language/errors.md:62	span	cep-invalid:expr (stage grammar)	followed by
+docs/language/errors.md:75	span	cep-meta:timeclause	time <attr> watermark bounded <duration>
+docs/language/errors.md:75	span	cep-meta:timeclause	time <attr> watermark ascending
+docs/language/errors.md:75	span	none (exempt: keyword-only mention)	time arrival
+docs/language/errors.md:83	span	fix (red; got furthest at timeclause; see design §5)	time <attr>
+docs/language/errors.md:86	span	none (exempt: keyword-only mention)	idle after
+docs/language/errors.md:87	span	none (exempt: keyword-only mention)	idle after
+docs/language/errors.md:88	span	cep-meta:idle (red in R-F3; a production now)	idle after <duration>
+docs/language/errors.md:92	span	fix (red; got furthest at partition; see design §5)	partition by <key> of <Stream> … ttl <duration>
+docs/language/errors.md:96	span	fix (red; got furthest at aftermatch; see design §5)	, <key> of <ThatStream>
+docs/language/errors.md:100	span	fix (red; got furthest at expr; see design §5)	part 2 of the partition key: session of B is int, but sessionId of A is string
+docs/language/errors.md:103	span	cep-invalid:keylist (stage validator E-PART-004)	k of S, j of S
+docs/language/errors.md:103	span	cep:partkey	(k, j) of S
+docs/language/errors.md:104	span	fix (red; got furthest at aftermatch; see design §5)	to key it on both, write (k, j) of S, and give every stream the same number of parts
+docs/language/errors.md:104	span	cep:partkey	(k, j) of S
+docs/language/errors.md:108	span	cep:partkey	k of S
+docs/language/errors.md:108	span	cep:partkey	(k, j) of S
+docs/language/errors.md:112	span	cep:partkey	(k, j) of S
+docs/language/errors.md:116	span	fix (red; got furthest at expr; see design §5)	the partition keys of rule R have different numbers of parts: S 2, T 1
+docs/language/errors.md:116	span	cep:keylist (red in R-F3; a production now)	(k, j) of S, (k2, j2) of T
+docs/language/errors.md:119	span	fix (red; got furthest at partition; see design §5)	partition.NewRule
+docs/language/errors.md:131	span	fix (red; got furthest at chainelem; see design §5)	and not …
+docs/language/errors.md:132	span	cep:expr	attr is not null
+docs/language/errors.md:135	span	none (exempt: keyword-only mention)	not in
+docs/language/errors.md:136	span	none (exempt: keyword-only mention)	is null
+docs/language/errors.md:180	span	none (exempt: keyword-only mention)	group by
+docs/language/errors.md:188	span	cep-meta:primarykey (red in R-F3; a production now)	primary key (…)
+docs/language/errors.md:201	span	none (exempt: keyword-only mention)	group by
+docs/language/errors.md:206	span	cep:program	language cep/0.1;
+docs/language/errors.md:209	span	cep:expr	1 hour 30 min
+docs/language/errors.md:209	span	cep-invalid:duration (stage lowering)	1.5 min
+docs/language/errors.md:209	span	cep-invalid:duration (stage lowering)	30 sec 5 min
+docs/language/errors.md:209	span	cep-invalid:duration (stage lowering)	5 min 5 min
+docs/language/errors.md:213	span	none (exempt: keyword-only mention)	idle after
+docs/language/errors.md:213	span	none (exempt: keyword-only mention)	output first every
+docs/language/errors.md:217	span	cep-invalid:chain (stage grammar; design §5 listed)	-> and not
+docs/language/errors.md:218	span	cep-meta:chain	… and not S[…] for D
+docs/language/errors.md:229	span	none (exempt: keyword-only mention)	late events allow
+docs/language/errors.md:230	span	none (exempt: keyword-only mention)	late events drop
+docs/language/errors.md:237	span	fix then cep-invalid:expr (as <timestamp> + <timestamp>; stage validator E-TYPE-001; design §5)	timestamp + timestamp
+docs/language/errors.md:237	span	text	duration × float
+docs/language/errors.md:237	span	fix (red; got furthest at aftermatch; see design §5)	is [not] null
+docs/language/errors.md:245	span	fix (red; got furthest at windowkind; see design §5)	sort(n, …)
+docs/language/errors.md:272	span	cep:expr	a has_any_cs('x', 'y')
+docs/language/errors.md:274	span	cep-invalid:select (stage grammar)	select *
+docs/language/SPEC.md:21	fence	cep-trivia	
+docs/language/SPEC.md:50	fence	cep	
+docs/language/SPEC.md:60	fence	cep	
+docs/language/SPEC.md:83	fence	text (the §4.4 template; measure its lines under the text rule before the markers commit)	
+docs/language/SPEC.md:104	fence	cep-rule	
+docs/language/SPEC.md:117	fence	cep-patternbody (verify; else cep-from)	
+docs/language/SPEC.md:139	fence	cep-body	
+docs/language/SPEC.md:205	fence	text (the keyword list)	
+docs/language/SPEC.md:226	fence	go (tagged today)	
