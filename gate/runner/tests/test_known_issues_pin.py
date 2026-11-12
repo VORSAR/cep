@@ -12,6 +12,9 @@ design ambiguity: the design names the test file but no pure function for it to 
 `knownissues.check(data, table, order, read) -> list[str]` in a new pure `gate/runner/knownissues.py`, `data` the
 JSON text, `table` the Markdown text, `read` the tracked-Markdown reader `anchors.resolves` takes.
 design ambiguity: the fault texts are not written; each red asserts a fault naming the planted id.
+
+RealTree (lane D) runs the pin over the real files: gate/known-issues.json, docs/product/known-issues.md, the order in
+gate/sprints.json, and the Markdown git tracks, so a drift between the data and the table is red at T2.
 """
 
 import json
@@ -19,6 +22,7 @@ import os
 import unittest
 
 from gate.runner import knownissues, sprintid
+from gate.runner.tests import support
 
 TESTDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "testdata", "known_issues")
 ORDER = sprintid.Order(
@@ -104,6 +108,26 @@ class Pin(unittest.TestCase):
         # S3.3-1-3 is named in the 2026-11-09 section, not in the plan-check section above it.
         self.entry("S3.3-1-3")["decision"] = self.entry("QB10")["decision"]
         self.assertNames("S3.3-1-3")
+
+
+class RealTree(unittest.TestCase):
+    def read_repo(self, rel: str) -> str:
+        with open(os.path.join(support.REPO, rel), encoding="utf-8") as f:
+            return f.read()
+
+    def test_the_real_files_agree(self):
+        code, out, err = support.run_tool(["git", "ls-files", "-z", "--", "*.md"], support.REPO)
+        self.assertEqual(code, 0, err)
+        tracked = {p for p in out.decode("utf-8", errors="replace").split("\0") if p}
+        self.assertIn(knownissues.TABLE, tracked)  # the witness: the reader sees the table it pins
+
+        def read(path: str) -> str | None:
+            return self.read_repo(path) if path in tracked else None
+
+        data = self.read_repo(knownissues.JSON)
+        self.assertTrue(json.loads(data)["entries"], "the pin needs entries to compare")
+        order = sprintid.load_order(self.read_repo(sprintid.SPRINTS))
+        self.assertEqual(knownissues.check(data, self.read_repo(knownissues.TABLE), order, read), [])
 
 
 if __name__ == "__main__":
