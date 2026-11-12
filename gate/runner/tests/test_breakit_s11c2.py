@@ -21,9 +21,17 @@ by any form but a literal `if False:` (`if 0:`, `for _ in ():`, an `if True: ret
 driver's case count and passes the pin. Checked on the real tree: test_suppressions_planted.py's
 assertSuppressionsRed reduced to `with contextlib.suppress(AssertionError): self.assertRed(…)` (its three other
 assertions deleted) left test_instruments_pin.RealTree green.
+
+BK-S2: ADR-0015 §3.6 (annotated 2026-11-12) names BA13's deliberate forge as one route — a test module that writes
+the shim's report file itself and exits 0. A second route needs no file: a module that, at import, replaces
+unittest.TextTestRunner.run (or pyshim's own _Result, looked up after the import) makes the shim itself write
+`passed <n> tests` to the report for a module whose only test fails. Same residue class (every test module is a law
+path), but the ADR's sentence names one route of several.
 """
 
 import contextlib
+import os
+import sys
 import unittest
 
 from gate.runner import suppressions, teeth
@@ -148,6 +156,42 @@ class TeethSeesAHollowedCase(unittest.TestCase):
                 cases, faults = teeth.python_cases(DRIVER.format(body=body), "d.py")
                 self.assertEqual(cases, ["Planted.test_a"])
                 self.assertTrue(faults, f"{why}: counted as a red case")
+
+
+FORGE = """import unittest
+
+_real = unittest.TextTestRunner.run
+
+
+def _forged(self, suite):
+    result = _real(self, unittest.TestSuite())  # runs nothing
+    result.testsRun = 3
+    return result
+
+
+unittest.TextTestRunner.run = _forged
+
+
+class T(unittest.TestCase):
+    def test_red(self):
+        self.fail("a real failure")
+"""
+
+
+class ShimRunnerPatchForge(support.GateTest):
+    """BK-S2: a module that patches the runner the shim calls is not a pass."""
+
+    def test_a_module_patching_the_runner_is_red(self):
+        self.write("pkg/__init__.py", "")
+        self.write("pkg/test_m.py", FORGE)
+        report = os.path.join(self.root, "pkg.test_m.report")
+        shim = os.path.join(support.GATE, "runner", "pyshim.py")
+        flags = ("-I", "-B", "-X", "dev", "-W", "error")  # rows.SHIM_FLAGS
+        code, out, err = support.run_tool([sys.executable, *flags, shim, self.repo, "pkg.test_m", report], self.repo)
+        with open(report, encoding="utf-8") as f:
+            said = f.read()
+        self.assertEqual(code, 1, (said, out, err))
+        self.assertNotIn("passed", said)
 
 
 if __name__ == "__main__":
