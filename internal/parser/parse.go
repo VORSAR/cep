@@ -272,12 +272,9 @@ func isNameChar(c byte) bool {
 // like a type). Any other error's message gets the same rewrite outside its quoted runs.
 func ruleWords(err error) string {
 	if ute, ok := errors.AsType[*participle.UnexpectedTokenError](err); ok {
-		msg := ute.Message()
+		// Message is exactly the token found, then what was expected: only the second part is rewritten.
 		found := fmt.Sprintf("unexpected token %q", ute.Unexpected)
-		if expected, ok := strings.CutPrefix(msg, found); ok {
-			return found + wordsFor(expected)
-		}
-		return msg
+		return found + wordsFor(strings.TrimPrefix(ute.Message(), found))
 	}
 	if perr, ok := errors.AsType[participle.Error](err); ok {
 		return wordsFor(perr.Message())
