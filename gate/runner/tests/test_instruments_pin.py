@@ -18,6 +18,7 @@ instrument or row id.
 import copy
 import json
 import os
+import subprocess
 import unittest
 
 from gate.runner import allowlists, law, registry, teeth
@@ -137,3 +138,33 @@ class Pin(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RealTree(unittest.TestCase):
+    """The pin over the real files (design §4.2; the coordinator, once gate/law.json's instruments were written from
+    lane D1's measurement and lane D2's -cases): every registry row pinned, every proof counted, every case asserting a
+    verdict. A deleted proof case, a demoted row or a lowered min_wants is red here at T2."""
+
+    def test_the_real_tree_holds_its_teeth(self):
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        with open(os.path.join(repo, "gate", "law.json"), encoding="utf-8") as f:
+            manifest = law.load_manifest(f.read())
+        rows = registry.load(os.path.join(repo, "gate", "registry.json"))
+        listed = subprocess.run(["git", "ls-files", "-z"], cwd=repo, capture_output=True, check=True).stdout
+        tracked = {p.decode() for p in listed.split(b"\0") if p}
+        go_files = sorted({p.path for i in manifest.instruments for p in i.proofs if p.path.endswith("_test.go")})
+        self.assertTrue(go_files, "no Go proof file is pinned")
+        cases = subprocess.run(
+            ["go", "run", "./tools/archcheck", "-cases", *go_files], cwd=repo, capture_output=True, text=True
+        )
+        self.assertEqual(cases.returncode, 0, cases.stderr)
+        counted = dict(teeth.go_cases(cases.stdout))
+        for inst in manifest.instruments:
+            for proof in inst.proofs:
+                if proof.path.endswith(".py"):
+                    with open(os.path.join(repo, proof.path), encoding="utf-8") as f:
+                        counted[proof.path] = teeth.python_cases(f.read(), proof.path)
+        with open(os.path.join(repo, "tools", "allowlists", "teeth.json"), encoding="utf-8") as f:
+            targets = {e["target"] for e in json.load(f)["entries"]}
+        self.assertEqual(teeth.pin(manifest, rows, tracked, counted, targets), [])
+        self.assertGreaterEqual(len(manifest.instruments), len(rows))

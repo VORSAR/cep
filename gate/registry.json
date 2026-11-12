@@ -622,7 +622,7 @@
         ":(glob)gate/**/test_*.py",
         ":(glob,exclude)gate/proofs/drivers/**"
       ],
-      "min_wants": 0,
+      "min_wants": 82,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [
@@ -937,7 +937,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 32,
+      "min_wants": 36,
       "lands_in": "S1.1a-1",
       "exclusive": false,
       "command": [

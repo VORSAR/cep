@@ -48,11 +48,11 @@
     },
     {
       "path": "go.mod",
-      "kind": "code"
+      "kind": "gomod"
     },
     {
       "path": "gate/proofs/go.mod",
-      "kind": "code"
+      "kind": "gomod"
     },
     {
       "path": "tools.json",
@@ -156,7 +156,998 @@
     {
       "path": "docs/language/invalid/",
       "kind": "code"
+    },
+    {
+      "path": "internal/expr/docsync_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/errorcounts_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/keywords_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/runtime/nosleep_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/validate/docsync_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "gate/runner/tests/test_instruments_pin.py",
+      "kind": "code"
+    },
+    {
+      "path": "gate/runner/tests/test_known_issues_pin.py",
+      "kind": "code"
+    },
+    {
+      "path": "gate/runner/tests/test_law_pin.py",
+      "kind": "code"
+    },
+    {
+      "path": "gate/runner/tests/test_sprints_pin.py",
+      "kind": "code"
     }
   ],
-  "instruments": []
+  "instruments": [
+    {
+      "id": "lawdelta",
+      "row": "lawdelta",
+      "lands_in": "S1.1c-1",
+      "code": [
+        "gate/runner/allowlists.py",
+        "gate/runner/git.py",
+        "gate/runner/law.py",
+        "gate/runner/records.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/lawdelta.py",
+        "gate/runner/suppressions.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_lawdelta_planted.py",
+          "cases": 8
+        }
+      ],
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        "gate/law.json"
+      ]
+    },
+    {
+      "id": "gofmt",
+      "row": "gofmt",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gofmt.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_hook_commit.py",
+          "cases": 7
+        }
+      ],
+      "tiers": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "git",
+        ":(glob)**/*.go"
+      ]
+    },
+    {
+      "id": "vet",
+      "row": "vet",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/vet.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_vet_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "go-vet-units",
+        "./..."
+      ]
+    },
+    {
+      "id": "archcheck",
+      "row": "archcheck",
+      "lands_in": "S1.1b",
+      "code": [
+        "tools/archcheck/main.go"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_archcheck_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        ":(glob)**/*.go",
+        ":(glob,exclude)gate/**",
+        ":(glob,exclude)tools/**"
+      ]
+    },
+    {
+      "id": "ruff",
+      "row": "ruff",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/ruff.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_ruff_format.py",
+          "cases": 1
+        },
+        {
+          "path": "gate/proofs/drivers/test_ruff_sleep.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "git",
+        ":(glob)gate/**/*.py",
+        ".githooks/pre-commit"
+      ]
+    },
+    {
+      "id": "pyfloor",
+      "row": "pyfloor",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/runner/pyshim.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/pyfloor.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_pyfloor.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 5,
+      "expected_scope": [
+        "git",
+        "gate/runner/tests/test_run_guard.py",
+        "gate/toolchain/tests/test_bootstrap.py",
+        "gate/toolchain/tests/test_install.py",
+        "gate/toolchain/tests/test_manifest.py",
+        "gate/hooks/tests/test_launcher.py"
+      ]
+    },
+    {
+      "id": "hooks",
+      "row": "hooks",
+      "lands_in": "S1.1a-2",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/hooks.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_hooks_off.py",
+          "cases": 5
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 3,
+      "expected_scope": [
+        "git",
+        ".githooks/pre-commit",
+        ".githooks/pre-merge-commit",
+        ".githooks/pre-push"
+      ]
+    },
+    {
+      "id": "ci-fresh",
+      "row": "ci-fresh",
+      "lands_in": "S1.1a-2",
+      "code": [
+        "gate/ci/generate.py",
+        "gate/runner/registry.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/ci_fresh.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_cifresh_planted.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 2,
+      "expected_scope": [
+        "git",
+        ".github/workflows/gate.yml",
+        ".github/workflows/nightly.yml"
+      ]
+    },
+    {
+      "id": "doclinks",
+      "row": "doclinks",
+      "lands_in": "S3.2b-1",
+      "code": [
+        "gate/runner/anchors.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/doclinks.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_doclinks_red.py",
+          "cases": 3
+        }
+      ],
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 100,
+      "expected_scope": [
+        "git",
+        ":(glob)docs/**/*.md",
+        "CLAUDE.md",
+        "README.md"
+      ]
+    },
+    {
+      "id": "apipartition",
+      "row": "apipartition",
+      "lands_in": "S3.3-1",
+      "code": [
+        "tools/apipartition/main.go"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_api_planted.py",
+          "cases": 4
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 3,
+      "expected_scope": [
+        "go",
+        ".",
+        "./io",
+        "./io/inmemory"
+      ]
+    },
+    {
+      "id": "clockgolden",
+      "row": "clockgolden",
+      "lands_in": "S3.3-1",
+      "code": [
+        "tools/apipartition/main.go"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_api_planted.py",
+          "cases": 4
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./internal/clock"
+      ]
+    },
+    {
+      "id": "apidiff",
+      "row": "apidiff",
+      "lands_in": "S3.3-1",
+      "code": [
+        "gate/runner/git.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/apidiff.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_api_planted.py",
+          "cases": 4
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 3,
+      "expected_scope": [
+        "go",
+        ".",
+        "./io",
+        "./io/inmemory"
+      ]
+    },
+    {
+      "id": "deps",
+      "row": "deps",
+      "lands_in": "S1.1c-1",
+      "code": [
+        "gate/runner/allowlists.py",
+        "gate/runner/anchors.py",
+        "gate/runner/deps.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/deps.py",
+        "gate/runner/sprintid.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_deps_planted.py",
+          "cases": 6
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 3,
+      "expected_scope": [
+        "git",
+        "go.mod",
+        "gate/proofs/go.mod",
+        "tools/deps-allowlist.json"
+      ]
+    },
+    {
+      "id": "suppressions",
+      "row": "suppressions",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "gate/runner/allowlists.py",
+        "gate/runner/anchors.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/suppressions.py",
+        "gate/runner/sprintid.py",
+        "gate/runner/suppressions.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_suppressions_planted.py",
+          "cases": 9
+        }
+      ],
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "nightly"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        ":(glob)**/*.go",
+        ":(glob)tools/allowlists/*.json",
+        "ruff.toml",
+        ":(glob)gate/**/*.py",
+        ":(glob).githooks/*"
+      ]
+    },
+    {
+      "id": "testhygiene",
+      "row": "testhygiene",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "tools/archcheck/main.go"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_testhygiene_planted.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        ":(glob)**/*_test.go",
+        ":(glob,exclude)bench/**",
+        ":(glob,exclude)gate/proofs/**"
+      ]
+    },
+    {
+      "id": "docsync",
+      "row": "docsync",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "gate/runner/docsync.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/docsync.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_docsync_planted.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./..."
+      ]
+    },
+    {
+      "id": "unit",
+      "row": "unit",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_leak_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "go",
+        "./..."
+      ]
+    },
+    {
+      "id": "coverage-inclusion",
+      "row": "coverage-inclusion",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/coverage/classify.py",
+        "gate/coverage/coverprofile.py",
+        "gate/coverage/main.py",
+        "gate/runner/jsonstream.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_coverage_below.py",
+          "cases": 1
+        },
+        {
+          "path": "gate/proofs/drivers/test_coverage_notests.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "go",
+        "./internal/...",
+        ".",
+        "./rule/...",
+        "./io/..."
+      ]
+    },
+    {
+      "id": "pytests",
+      "row": "pytests",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/runner/pyshim.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/pytests.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_pytests_vacuity.py",
+          "cases": 6
+        },
+        {
+          "path": "gate/proofs/drivers/test_shim_forged_pass.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 82,
+      "expected_scope": [
+        "git",
+        ":(glob)gate/**/test_*.py",
+        ":(glob,exclude)gate/proofs/drivers/**"
+      ]
+    },
+    {
+      "id": "differential",
+      "row": "differential",
+      "lands_in": "S2.2a",
+      "code": [
+        "gate/differential/shapes.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/differential.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_differential_swap.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 63,
+      "expected_scope": [
+        "git",
+        ":(glob)docs/language/examples/**/*.cep",
+        ":(glob)docs/language/eval/generated/**/*.cep",
+        ":(glob)docs/language/invalid/*.cep"
+      ]
+    },
+    {
+      "id": "semantics",
+      "row": "semantics",
+      "lands_in": "S3.1-1",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/semantics.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_semantics_red.py",
+          "cases": 2
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        ":(glob)docs/language/checks/test_*.py"
+      ]
+    },
+    {
+      "id": "race",
+      "row": "race",
+      "lands_in": "S3.2a-2",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/race.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_race_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "go",
+        "./..."
+      ]
+    },
+    {
+      "id": "conformance",
+      "row": "conformance",
+      "lands_in": "S3.3-2",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gotest.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_expect_planted.py",
+          "cases": 8
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./conformance"
+      ]
+    },
+    {
+      "id": "baseline",
+      "row": "baseline",
+      "lands_in": "S3.3-2",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gotest.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_regen_baseline.py",
+          "cases": 4
+        }
+      ],
+      "tiers": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ]
+    },
+    {
+      "id": "notbuilt",
+      "row": "notbuilt",
+      "lands_in": "S1.1c-1",
+      "code": [
+        "gate/runner/notbuilt.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/notbuilt.py",
+        "gate/runner/sprintid.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_notbuilt_expired.py",
+          "cases": 7
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        "conformance/notbuilt.json"
+      ]
+    },
+    {
+      "id": "tripwire",
+      "row": "tripwire",
+      "lands_in": "S3.2b-2",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gotest.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_tripwire_planted.py",
+          "cases": 3
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ]
+    },
+    {
+      "id": "determinism",
+      "row": "determinism",
+      "lands_in": "S3.2b-2",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gotest.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_tripwire_planted.py",
+          "cases": 3
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ]
+    },
+    {
+      "id": "determinism-macos",
+      "row": "determinism-macos",
+      "lands_in": "S3.2b-2",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gotest.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_determinism_macos_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "go",
+        "./internal/playback"
+      ]
+    },
+    {
+      "id": "proofs",
+      "row": "proofs",
+      "lands_in": "S1.1a-1",
+      "code": [
+        "gate/proofs/row.py",
+        "gate/runner/pyshim.py",
+        "gate/runner/rows/__init__.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_proofs_vacuity.py",
+          "cases": 3
+        }
+      ],
+      "tiers": [
+        "T4"
+      ],
+      "min_wants": 36,
+      "expected_scope": [
+        "git",
+        ":(glob)gate/proofs/drivers/test_*.py"
+      ]
+    },
+    {
+      "id": "fuzz-parser",
+      "row": "fuzz-parser",
+      "lands_in": "S2.2a",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gofuzz.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_fuzz_parser_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "nightly"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        "internal/parser/fuzz_test.go"
+      ]
+    },
+    {
+      "id": "fuzz-decoder",
+      "row": "fuzz-decoder",
+      "lands_in": "S3.1-2",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gofuzz.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_fuzz_decoder_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "nightly"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        "internal/event/fuzz_test.go"
+      ]
+    },
+    {
+      "id": "race-stress",
+      "row": "race-stress",
+      "lands_in": "S3.2a-2",
+      "code": [
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/race.py",
+        "gate/runner/rows/unit.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_racestress_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "nightly"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "go",
+        "./internal/runtime"
+      ]
+    },
+    {
+      "id": "docsync-b-catalog",
+      "row": "unit",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "internal/validate/docsync_test.go"
+      ],
+      "proofs": [
+        {
+          "path": "internal/validate/docsync_test.go",
+          "cases": 4,
+          "test": "TestDocsyncSeesPlantedDrift"
+        }
+      ],
+      "go_test": "internal/validate.TestDocsyncStaticCatalog"
+    },
+    {
+      "id": "docsync-b-keywords",
+      "row": "unit",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "internal/parser/keywords_test.go"
+      ],
+      "proofs": [
+        {
+          "path": "internal/parser/keywords_test.go",
+          "cases": 1,
+          "test": "TestKeywordDriftIsSeen"
+        },
+        {
+          "path": "internal/parser/keywords_test.go",
+          "cases": 1,
+          "test": "TestSpecReservedDriftIsSeen"
+        }
+      ],
+      "go_test": "internal/parser.TestKeywordsEqualGrammarLark"
+    },
+    {
+      "id": "docsync-c",
+      "row": "unit",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "internal/expr/docsync_test.go"
+      ],
+      "proofs": [
+        {
+          "path": "internal/expr/docsync_test.go",
+          "cases": 4,
+          "test": "TestDocsyncSeesPlantedDrift"
+        }
+      ],
+      "go_test": "internal/expr.TestDocsyncAppendixF"
+    },
+    {
+      "id": "docsync-d",
+      "row": "unit",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "internal/parser/errorcounts_test.go"
+      ],
+      "proofs": [
+        {
+          "path": "internal/parser/errorcounts_test.go",
+          "cases": 1,
+          "test": "TestErrorCountsMatchTheCatalogue"
+        }
+      ],
+      "go_test": "internal/parser.TestErrorCountsMatchTheCatalogue"
+    },
+    {
+      "id": "nosleep",
+      "row": "unit",
+      "lands_in": "S1.1c-2",
+      "code": [
+        "internal/runtime/nosleep_test.go"
+      ],
+      "proofs": [
+        {
+          "path": "internal/runtime/nosleep_test.go",
+          "cases": 1,
+          "test": "TestNoSleepOrPollingInRuntime"
+        }
+      ],
+      "go_test": "internal/runtime.TestNoSleepOrPollingInRuntime"
+    }
+  ]
 }
