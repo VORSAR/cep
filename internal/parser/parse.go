@@ -135,12 +135,17 @@ func parseError(name string, toks []Token, err error) *Error {
 		}
 		return toks[i]
 	}
-	cur, prev, prev2 := tok(at), tok(at-1), tok(at-2)
+	cur, prev, prev2, next := tok(at), tok(at-1), tok(at-2), tok(at+1)
 	if cur.Value == "[" {
 		if close := closingBracket(toks, at); close > at+1 {
 			peek, err := lexer.Upgrade(&sliceLexer{toks: toks[at+1 : close]})
 			if err == nil {
 				if _, err = filterGrammar.ParseFromLexer(peek); err != nil {
+					// The filter ended early: the token there is its `]`, not an end of input the user never
+					// wrote (F7).
+					if ute, ok := errors.AsType[*participle.UnexpectedTokenError](err); ok && ute.Unexpected.EOF() {
+						ute.Unexpected = toks[close]
+					}
 					return parseError(name, toks, err)
 				}
 			}
@@ -164,6 +169,15 @@ func parseError(name string, toks []Token, err error) *Error {
 		return mk(name, "E-PRAG-001", cur.Pos, "the file does not start with the version pragma")
 	case kind == "Keyword" && reservedFuture[cur.Value]:
 		return mk(name, "E-RES-001", cur.Pos, cur.Value+" is reserved for a later version")
+	// Decision 19 of S1.1c-2's plan check: an absence after a `->` is E-PAT-005 at what follows the `->`, with the
+	// owner's wording (decision 2 of "S1.1c-3's design, after the reviews"); a `->` with no step after it is too
+	// (F5, decision 4). `-> and` with no not is left to the clause check below.
+	case cur.Value == "->" && next.Value == "and" && tok(at+2).Value == "not":
+		return mk(name, "E-PAT-005", next.Pos, "an absence follows its step directly: drop the -> before and not")
+	case cur.Value == "->" && next.Value == "not":
+		return mk(name, "E-PAT-005", next.Pos, "an absence is written and not, straight after its step: write and not instead of -> not")
+	case cur.Value == "->" && endsTheChain(next):
+		return mk(name, "E-PAT-005", next.Pos, "a step must follow ->")
 	case (kind == "Keyword" || kind == "MixedKeyword") && expects("(<ident>"):
 		return mk(name, "E-KW-001", cur.Pos, cur.Value+" is a reserved word, so it cannot be a name")
 	case kind == "MixedKeyword":
@@ -197,7 +211,37 @@ func parseError(name string, toks []Token, err error) *Error {
 			return mk(name, c.code, cur.Pos, "the "+c.word+" clause is missing")
 		}
 	}
+	if i := bareDuration(toks, at); i >= 0 {
+		return mk(name, "E-DUR-001", toks[i].Pos, toks[i].Value+" has no unit")
+	}
 	return mk(name, "E-SYN-001", cur.Pos, ruleWords(perr))
+}
+
+// endsTheChain reports whether t, the token after a `->`, ends the chain instead of beginning a step: another `->`,
+// the end of the statement, or a keyword other than and (F5).
+func endsTheChain(t Token) bool {
+	return t.Value == "->" || t.Value == ";" || t.EOF() || typeName(t.Type) == "Keyword" && t.Value != "and"
+}
+
+// bareDuration is the index of a number standing alone in a duration slot participle backed out of, from toks[at]
+// to the statement's end — `bounded 1`, `idle after 5`, `delay(5)`: the optional clause around it was abandoned, so
+// participle stopped before the clause (F3, decision 3 of "S1.1c-3's design, after the reviews"); -1 if none.
+func bareDuration(toks []Token, at int) int {
+	value := func(i int) string {
+		if i < 0 || i >= len(toks) {
+			return ""
+		}
+		return toks[i].Value
+	}
+	for i := at; i < len(toks) && toks[i].Value != ";"; i++ {
+		if typeName(toks[i].Type) != "Number" || units[value(i+1)] != 0 {
+			continue
+		}
+		if p1, p2 := value(i-1), value(i-2); p1 == "bounded" || p1 == "after" && p2 == "idle" || p1 == "(" && p2 == "delay" {
+			return i
+		}
+	}
+	return -1
 }
 
 // expectsName reports whether participle's message msg expects what first ("expected <what>" or
