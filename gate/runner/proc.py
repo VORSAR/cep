@@ -49,18 +49,11 @@ class Group:
         code = proc.wait()
         with self._lock:
             self._pgid = None
-        self.left_detail = ""
-        try:
-            os.killpg(proc.pid, 0)
-            answer = "the group still exists"
-        except ProcessLookupError:
-            return code, False
-        except PermissionError:  # the group exists, and holds something this user may not signal (or one mid-exit)
-            answer = "the group exists but may not be signalled (EPERM)"
-        self.left_detail = f"{answer}: {members(proc.pid)}"  # named before the kill (known issue S1.1c-1-1)
-        with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.killpg(proc.pid, signal.SIGKILL)
-        return code, True
+        left, self.left_detail = probe(proc.pid)
+        if left:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(proc.pid, signal.SIGKILL)
+        return code, left
 
     def signal(self, signum: int) -> None:
         """Signal the live group, if any, and forbid any later spawn in this step."""
@@ -69,6 +62,18 @@ class Group:
             if self._pgid is not None:
                 with contextlib.suppress(ProcessLookupError, PermissionError):
                     os.killpg(self._pgid, signum)
+
+
+def probe(pgid: int) -> tuple[bool, str]:
+    """Whether anything of the group `pgid` is left running, and what the probe saw (empty when nothing)."""
+    try:
+        os.killpg(pgid, 0)
+        answer = "the group still exists"
+    except ProcessLookupError:
+        return False, ""
+    except PermissionError:  # the group exists, and holds something this user may not signal (or one mid-exit)
+        answer = "the group exists but may not be signalled (EPERM)"
+    return True, f"{answer}: {members(pgid)}"  # named before the kill (known issue S1.1c-1-1)
 
 
 def members(pgid: int) -> str:
