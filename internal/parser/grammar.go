@@ -69,11 +69,16 @@ type Attr struct {
 
 type TimeClause struct {
 	Pos       Position
-	Arrival   bool      `parser:"'time' ( @'arrival'"`
-	Attr      *NameTok  `parser:"| @@ 'watermark'"`
-	Bounded   *Duration `parser:"  ( 'bounded' @@"`
-	Ascending bool      `parser:"  | @'ascending' ) )"`
-	Idle      *Duration `parser:"('idle' 'after' @@)?"`
+	Arrival   bool        `parser:"'time' ( @'arrival'"`
+	Attr      *NameTok    `parser:"| @@ 'watermark'"`
+	Bounded   *Duration   `parser:"  ( 'bounded' @@"`
+	Ascending bool        `parser:"  | @'ascending' ) )"`
+	Idle      *IdleClause `parser:"@@?"`
+}
+
+// IdleClause is a stream's idle timeout: `idle after D`. A named pointer: the clause is optional.
+type IdleClause struct {
+	D *Duration `parser:"'idle' 'after' @@"`
 }
 
 type Annotation struct {

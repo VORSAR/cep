@@ -107,7 +107,7 @@ func (l *lowerer) stream(s *StreamDecl) model.Stream {
 			out.Time.AttrPos = pos(t.Attr.Pos)
 		}
 		if t.Idle != nil {
-			out.Time.IdleAfter, out.Time.IdlePos = l.duration(t.Idle), pos(t.Idle.Parts[0].Pos)
+			out.Time.IdleAfter, out.Time.IdlePos = l.duration(t.Idle.D), pos(t.Idle.D.Parts[0].Pos)
 		}
 	}
 	return out
