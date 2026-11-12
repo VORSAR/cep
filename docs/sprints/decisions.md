@@ -76,6 +76,7 @@
 | 2026-11-11 | [the GitNexus hook](#owner-decisions-2026-11-11--the-gitnexus-hook) |
 | 2026-11-11 | [the left-running flake at S1.1c-1's T4](#owner-decisions-2026-11-11--the-left-running-flake-at-s11c-1s-t4) |
 | 2026-11-11 | [S1.1c-1's close-out](#owner-decisions-2026-11-11--s11c-1s-close-out) |
+| 2026-11-12 | [the left-running flake's root (S1.1c-1-1)](#owner-decisions-2026-11-12--the-left-running-flakes-root-s11c-1-1) |
 
 ## The decisions
 
@@ -699,3 +700,9 @@ Two questions after PR #31's merge; both as recommended.
 
 1. **The sprint's branches are deleted** — `s1-1c/integration` local and remote, the six lane branches local — every commit on `main` by patch, and the one QA commit split when it landed has all its files there too.
 2. **The close-out goes up as its own docs PR** (`docs/s1-1c-1-close-out`), as at S3.3-1 and S3.3-2.
+
+### Owner decisions, 2026-11-12 — the left-running flake's root (S1.1c-1-1)
+
+The flake recurred on 2026-11-12 and named its cause, as the decision of 2026-11-11 arranged: `left_running.txt` read `the group exists but may not be signalled (EPERM): no member listed (gone before it could be named)`. The cause, proven on this Mac (Darwin 25.6.0, three trials of three): `killpg(pgid, 0)` on a process group whose only member is a zombie (exited, not yet reaped by its parent) answers EPERM, `ps` lists that member with state `Z`, and once it is reaped the answer is ESRCH. Linux answers that such a group exists. The runner's probe counted either answer as left running, so a member caught mid-exit (an orphan awaiting launchd) read as a leftover. One question; as recommended.
+
+1. **Fixed at the root in its own small PR before the current sprint continues** (`fix/zombie-group-probe`): a group whose members are all zombies, or that has no member by the time `ps` looks, counts as finished; a group with any live member is still left running (red, killed and named as before); a `ps` that fails stays red, never a silent pass. Known issue S1.1c-1-1 leaves the list. Rejected: fixing it inside the sprint; investigating further first.
