@@ -75,5 +75,5 @@ class TestHygienePlanted(support.DriverTest):
         files = self.in_scope()
         self.assertIn(CAP_TEST, files)
         self.assertNotIn(BENCH_TEST, files)
-        self.assertRow(run, JOB, ROW, True, f"covered {len(files)}")
+        self.assertRow(run, "lint", "testhygiene", True, f"covered {len(files)}")
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)

@@ -41,5 +41,5 @@ class DocsyncPlanted(support.DriverTest):
     def test_a_listed_package_is_green(self):
         self.world.write(f"{LISTED}/x.go", "package event\n")
         run = self.run_row()
-        self.assertRow(run, JOB, ROW, True, "covered 1")
+        self.assertRow(run, "lint", "docsync", True, "covered 1")
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)

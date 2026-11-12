@@ -144,7 +144,7 @@ class SuppressionsPlanted(support.DriverTest):
         run = self.run_row("T2")
         files = self.in_scope()
         self.assertIn(CLOCK, files)
-        self.assertRow(run, JOB, ROW, True, f"covered {len(files)}")
+        self.assertRow(run, "lint", "suppressions", True, f"covered {len(files)}")
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
 
     def test_an_expired_temp_entry_is_red_at_t4(self):
