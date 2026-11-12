@@ -13,12 +13,20 @@ lint.ignore, lint.extend-ignore). Pinned ruff 0.17.3, run as the ruff row runs i
 warning on stderr, exit 0, "All checks passed!") and every table of a file named by `extend = "<path>"` — measured.
 Each waives a rule with no ruff.json entry and the pin stays green; a file named by `extend` outside a law path
 (docs/, say) then changes with no LAW Δ line at all.
+
+BK-B3: the instrument pin's strength rule (teeth.python_cases) counts a case as red when its live code calls a red
+helper by name; it does not see that the call's failure is swallowed (`with contextlib.suppress(AssertionError)`,
+`try: … except AssertionError: pass`), that the driver re-defines the helper as a no-op, or that the call is dead
+by any form but a literal `if False:` (`if 0:`, `for _ in ():`, an `if True: return` before it). Each keeps the
+driver's case count and passes the pin. Checked on the real tree: test_suppressions_planted.py's
+assertSuppressionsRed reduced to `with contextlib.suppress(AssertionError): self.assertRed(…)` (its three other
+assertions deleted) left test_instruments_pin.RealTree green.
 """
 
 import contextlib
 import unittest
 
-from gate.runner import suppressions
+from gate.runner import suppressions, teeth
 from gate.runner.rows import suppressions as row
 from gate.runner.tests import support
 
@@ -94,6 +102,52 @@ class RuffPinReadsEveryWaiver(support.GateTest):
             ),
             "docs/base.toml's waiver, read through extend, waives TID251 for gate/x.py",
         )
+
+
+DRIVER = """import contextlib
+import unittest
+
+from gate.proofs.drivers import support
+
+
+class Planted(support.GateCase):
+{body}
+"""
+RED = '        self.assertRed(run, "lint", "suppressions", "exit 1: failed: x")\n'
+HOLLOWED = {
+    "the helper re-defined as a no-op": (
+        "    def assertRed(self, *args):\n        pass\n\n    def test_a(self):\n        run = self.gate()\n" + RED
+    ),
+    "the failure swallowed by contextlib.suppress": (
+        "    def test_a(self):\n        run = self.gate()\n        with contextlib.suppress(AssertionError):\n    "
+        + RED
+    ),
+    "the failure swallowed by try/except": (
+        "    def test_a(self):\n        run = self.gate()\n        try:\n    "
+        + RED
+        + "        except AssertionError:\n            pass\n"
+    ),
+    "dead under if 0": "    def test_a(self):\n        run = self.gate()\n        if 0:\n    " + RED,
+    "dead in a loop over ()": "    def test_a(self):\n        run = self.gate()\n        for _ in ():\n    " + RED,
+    "dead after an if True: return": (
+        "    def test_a(self):\n        run = self.gate()\n        if True:\n            return\n" + RED
+    ),
+}
+
+
+class TeethSeesAHollowedCase(unittest.TestCase):
+    """BK-B3: a case whose red assertion cannot fail is a fault, not a counted red case."""
+
+    def test_the_plain_case_is_counted_as_a_control(self):
+        source = DRIVER.format(body="    def test_a(self):\n        run = self.gate()\n" + RED)
+        self.assertEqual(teeth.python_cases(source, "d.py"), (["Planted.test_a"], []))
+
+    def test_each_hollowed_case_is_a_fault(self):
+        for why, body in HOLLOWED.items():
+            with self.subTest(why=why):
+                cases, faults = teeth.python_cases(DRIVER.format(body=body), "d.py")
+                self.assertEqual(cases, ["Planted.test_a"])
+                self.assertTrue(faults, f"{why}: counted as a red case")
 
 
 if __name__ == "__main__":
