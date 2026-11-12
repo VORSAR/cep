@@ -105,7 +105,7 @@ type TableDecl struct {
 type RuleDecl struct {
 	Pos Position
 	RuleHead
-	Intent     *StrTok       `parser:"'intent' @@"`
+	IntentClause
 	Partition  *Partition    `parser:"@@?"`
 	Body       *Body         `parser:"@@"`
 	Extras     []*Extra      `parser:"@@*"`
@@ -122,6 +122,11 @@ type RateClause struct {
 // RuleHead is a rule's head: `rule <Name>`. Embedded, its field is the rule's.
 type RuleHead struct {
 	Name string `parser:"'rule' @(Ident|Backticked)"`
+}
+
+// IntentClause is a rule's intent: `intent '<one sentence>'`. Embedded, its field is the rule's.
+type IntentClause struct {
+	Intent *StrTok `parser:"'intent' @@"`
 }
 
 type SelectClause struct {
