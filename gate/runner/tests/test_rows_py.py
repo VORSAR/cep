@@ -1,6 +1,7 @@
 """The real pytests and pyfloor wrappers (design note §5; plan check C10; design-QA counter-example 14)."""
 
 import os
+import shutil
 import signal
 import sys
 from unittest import mock
@@ -122,6 +123,14 @@ class Pytests(Base):
         self.assertIn("gate/tests/helpers.py", out)
         self.assertNotIn("gate/tests/support.py", out)
 
+    def test_a_dotted_directory_under_gate_is_named_by_the_walk(self):
+        # QB10 (S1.1c-3 design §3.5; DQ-S13): the walk of gate/ judges every Python file, tracked or not, in or out
+        # of this row's scope; `gate/a.b/helper.py` is neither a test module nor in the scope, so only the walk sees it.
+        self.track("gate/x/test_a.py", GOOD)
+        self.track("gate/a.b/helper.py", "x = 1\n")
+        self.assertEqual(self.pytests(), "exit 1: gate/a.b: a dotted directory under gate/ can never be imported")
+        self.assertIn("gate/a.b: a dotted directory under gate/ can never be imported", self.out())
+
     def test_the_named_helpers_under_tests_are_allowed(self):
         self.track("gate/tests/__init__.py", "")
         self.track("gate/tests/support.py", "x = 1\n")
@@ -215,6 +224,25 @@ class Pyfloor(Base):
         self.track("gate/x/test_a.py", body)
         want = "exit 1: gate/x/test_a.py: pyshim: gate.x.test_a: failed: 0 failures, 1 errors"
         self.assertEqual(self.pyfloor("gate/x/test_a.py"), want)
+
+    def test_two_modules_sharing_a_name_are_refused_before_any_runs(self):
+        # QB10 (S1.1c-3 design §3.5; DQ-S13, DA-L8): run_modules, which serves pyfloor, pytests and proofs, judges
+        # its own list first. `gate/x.b/test_c.py` and `gate/x/b/test_c.py` both name gate.x.b.test_c, so the dotted
+        # one would never run while its path counted as passed.
+        ran = os.path.join(self.root, "ran")
+        body = f"with open({ran!r}, 'a') as f:\n    f.write(__file__ + '\\n')\n" + GOOD
+        self.track("gate/x/b/__init__.py", "")
+        self.track("gate/x/b/test_c.py", body)
+        self.assertEqual(self.pyfloor("gate/x/b/test_c.py"), "covered 1")
+        self.assertTrue(os.path.exists(ran), "the witness: a module that runs writes the marker")
+        os.remove(ran)
+        shutil.rmtree(self.run_dir)  # the second run's own run directory
+        self.track("gate/x.b/test_c.py", body)
+        reason = self.pyfloor("gate/x/b/test_c.py", "gate/x.b/test_c.py")
+        self.assertTrue(reason.startswith("exit 1: "), reason)
+        out = self.row_file("lint", "pyfloor", "stdout").decode()
+        self.assertIn("gate/x.b/test_c.py and gate/x/b/test_c.py share the module name gate.x.b.test_c", out)
+        self.assertFalse(os.path.exists(ran), "a module ran although the listing was refused")
 
     def test_the_real_guard_module_passes_under_the_floor(self):
         # The one floor module on this branch: run for real, from the real repository, through the wrapper.
