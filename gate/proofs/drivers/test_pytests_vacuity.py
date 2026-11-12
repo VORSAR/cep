@@ -22,7 +22,11 @@ class PytestsVacuity(support.DriverTest):
         self.world.commit()
 
     def run_pytests(self) -> support.Run:
-        return self.world.run(registry=self.world.registry(support.registry_row("pytests")))
+        # The real row, its floor set to the one module every run here holds: gate/registry.json's min_wants counts
+        # the real tree's modules (82 since S1.1c-2's instruments), which no world here holds; gate/law.json's
+        # instruments pin that floor, not this proof.
+        row = dict(support.registry_row("pytests"), min_wants=1)
+        return self.world.run(registry=self.world.registry(row))
 
     def assertNamesOnly(self, rel: str, text: str, *, tracked: bool, cause: str) -> None:
         (self.world.track if tracked else self.world.write)(rel, text)
