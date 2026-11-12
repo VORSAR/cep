@@ -55,12 +55,6 @@
       "first_seen": "S3.3-2",
       "forward": "",
       "decision": ""
-    },
-    {
-      "id": "S1.1c-1-1",
-      "first_seen": "S1.1c-1",
-      "forward": "",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-11--the-left-running-flake-at-s11c-1s-t4"
     }
   ]
 }
