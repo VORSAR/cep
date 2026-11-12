@@ -9,6 +9,7 @@ import os
 
 from gate.proofs.drivers import support
 
+ROW = "hooks"  # the row its red cases land on: teeth.red_rows ties this proof to it (BK-S7)
 OFF = "the hooks are off: run make setup"
 
 

@@ -12,6 +12,7 @@ import os
 
 from gate.proofs.drivers import support
 
+ROW = "notbuilt"  # the row its red cases land on: teeth.red_rows ties this proof to it (BK-S7)
 MARKER = "gate/current-sprint"
 NOTBUILT = "conformance/notbuilt.json"
 SPRINTS = "gate/sprints.json"

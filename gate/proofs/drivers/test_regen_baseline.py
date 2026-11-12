@@ -22,6 +22,7 @@ import re
 
 from gate.proofs.drivers import support
 
+ROW = "baseline"  # the row its red cases land on: teeth.red_rows ties this proof to it (BK-S7)
 BASELINE = "conformance/baseline"
 EX09 = "docs/language/examples/09-params-and-quoting.cep"
 EX10 = "10-grouped-keys.cep"
