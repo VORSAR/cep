@@ -338,7 +338,8 @@ const (
 )
 
 // listRoot writes a fixture root holding tools/allowlists/{purity,clock,testhygiene}.json, each a list of targets
-// in the grammar's shape (the extra fields are read by the Python row, not by archcheck — A-L2).
+// in the grammar's shape (the extra fields are read by the Python row, not by archcheck — A-L2), and an empty
+// generated.json (the fix round's BK-S6 list; a test that lists a generated file rewrites it with writeList).
 func listRoot(t *testing.T, purity, clock, tests []string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -346,7 +347,7 @@ func listRoot(t *testing.T, purity, clock, tests []string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for name, targets := range map[string][]string{"purity": purity, "clock": clock, "testhygiene": tests} {
+	for name, targets := range map[string][]string{"purity": purity, "clock": clock, "testhygiene": tests, "generated": nil} {
 		writeList(t, root, name, name, targets)
 	}
 	return root
@@ -707,9 +708,10 @@ func TestCLI(t *testing.T) {
 				"failed: tools/allowlists/purity.json: internal/gone: sync.Mutex: does not exist (a stale target)\nGATE_COVERED 1\n",
 		},
 		{
-			name: "normal mode: a clean file and present targets pass",
+			// The fix round (BK-S3) changed the fixture: a present target must also be used, or it waives nothing.
+			name: "normal mode: a clean file and present, used targets pass",
 			root: func(t *testing.T) string {
-				return cliRoot(t, []string{"internal/model: sync.Mutex"}, nil, nil, map[string]string{"internal/model/x.go": "package model\n"})
+				return cliRoot(t, []string{"internal/model: sync.Mutex"}, nil, nil, map[string]string{"internal/model/x.go": "package model\n\nimport \"sync\"\n\ntype T struct{ mu sync.Mutex }\n"})
 			},
 			files: []string{"internal/model/x.go"}, code: 0,
 			out: "GATE_COVERED 1\n",
@@ -1207,5 +1209,345 @@ func names() []string { return nil }
 	var out strings.Builder
 	if code := cli(root, []string{"-cases", a, gone, b}, &out); code != 0 || out.String() != want {
 		t.Fatalf("cli -cases: exit %d, output\n%s\nwant exit 0, output\n%s", code, out.String(), want)
+	}
+}
+
+// ---- S1.1c-2's fix round (docs/reviews/s1-1c-2-breakit-qa.md): BK-B4, BK-S1, BK-S3 and BK-S6 beyond the break-it's
+// own reds in breakit_s11c2_test.go.
+
+// constrained is Cases' one fault for a file go test does not always compile (BK-B4); -cases prints it as
+// "<path>: fault : …", the line shape of a file it cannot read (design §11).
+const constrained = ": a build-constrained proof file is not always compiled"
+
+// TestFixCasesBuildConstraints (BK-B4): a constraint line, a GOOS or GOARCH file-name suffix, or a name go ignores
+// makes a proof file one go test may never compile; Cases counts none of its cases and gives the one fault.
+func TestFixCasesBuildConstraints(t *testing.T) {
+	t.Parallel()
+	const body = "package x\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) { t.Fatal(\"x\") }\n"
+	for _, c := range []struct{ name, path, src string }{
+		{"//go:build ignore", "x_test.go", "//go:build ignore\n\n" + body},
+		{"//go:build on a real platform", "x_test.go", "//go:build linux\n\n" + body},
+		{"// +build never", "x_test.go", "// +build never\n\n" + body},
+		{"//+build never, no space", "x_test.go", "//+build never\n\n" + body},
+		{"a GOOS suffix", "internal/x/x_linux_test.go", body},
+		{"a GOARCH suffix", "internal/x/x_amd64_test.go", body},
+		{"a GOOS_GOARCH suffix", "internal/x/x_windows_arm64_test.go", body},
+		{"a name go ignores", "internal/x/_x_test.go", body},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			cases, faults := Cases(c.path, c.src)
+			if len(cases) != 0 || !slices.Equal(faults, []string{constrained}) {
+				t.Fatalf("Cases = %q, %q; want no case and the one fault %q", cases, faults, constrained)
+			}
+		})
+	}
+	for _, c := range []struct{ name, path string }{
+		{"a platform before the first underscore is no suffix", "internal/x/linux_test.go"},
+		{"a word that names no platform", "internal/x/x_gate_test.go"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			cases, faults := Cases(c.path, body)
+			if !slices.Equal(cases, []string{"TestA"}) || len(faults) != 0 {
+				t.Fatalf("Cases = %q, %q; want [TestA] and no fault", cases, faults)
+			}
+		})
+	}
+	t.Run("-cases prints it on the file's one fault line", func(t *testing.T) {
+		t.Parallel()
+		const path = "internal/x/x_test.go"
+		root := t.TempDir()
+		full := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("//go:build ignore\n\n"+body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		want := path + ": fault : a build-constrained proof file is not always compiled\n"
+		var out strings.Builder
+		if code := cli(root, []string{"-cases", path}, &out); code != 0 || out.String() != want {
+			t.Fatalf("cli -cases: exit %d, output %q; want exit 0, output %q", code, out.String(), want)
+		}
+	})
+}
+
+// TestFixCasesLiveVerdicts (BK-S1): a verdict counts only in live code, as the Python strength rule's: not under an
+// if (or for) whose condition folds to false from literals, not in the else of one that folds to true, not in a
+// range over an empty literal, not after a terminating statement in its list (a return, a branch, a panic, or a
+// Fatal, FailNow or Skip on the T), not in a closure bound to a name (or _) that no live call calls or passes on.
+func TestFixCasesLiveVerdicts(t *testing.T) {
+	t.Parallel()
+	const head = "package x\n\nimport \"testing\"\n\n"
+	test := func(body string) string { return head + "func TestA(t *testing.T) {\n\t" + body + "\n}\n" }
+	dead := []struct{ name, body string }{
+		{"under if !true", "if !true {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under if 0 == 1", "if 0 == 1 {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under if (\"a\" == \"b\")", "if (\"a\" == \"b\") {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under if false && x", "x := t.Name() != \"\"\n\tif false && x {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under if x && 1 > 2", "x := t.Name() != \"\"\n\tif x && 1 > 2 {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"in the else of if true", "if true {\n\t\tt.Log(\"x\")\n\t} else {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under for false", "for false {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"in a range over an empty literal", "for range []int{} {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"after a return", "return\n\tt.Fatal(\"x\")"},
+		{"after a panic", "panic(\"x\")\n\tt.Fatal(\"x\")"},
+		{"after t.Skip", "t.Skip(\"x\")\n\tt.Fatal(\"x\")"},
+		{"after t.SkipNow, in a block", "{\n\t\tt.SkipNow()\n\t\tt.Error(\"x\")\n\t}"},
+		{"after an if whose branches both return", "if t.Name() == \"\" {\n\t\treturn\n\t} else {\n\t\treturn\n\t}\n\tt.Fatal(\"x\")"},
+		{"after a break", "for {\n\t\tbreak\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"in a closure bound to a name never called", "f := func() { t.Fatal(\"x\") }\n\t_ = f"},
+		{"in a closure bound by var, never called", "var f = func() { t.Fatal(\"x\") }\n\t_ = f"},
+		{"in a closure whose only call is dead", "f := func() { t.Fatal(\"x\") }\n\tif false {\n\t\tf()\n\t}"},
+	}
+	for _, c := range dead {
+		t.Run("dead: "+c.name, func(t *testing.T) {
+			t.Parallel()
+			cases, faults := Cases("x_test.go", test(c.body))
+			if !slices.Equal(cases, []string{"TestA"}) || !slices.Equal(faults, []string{"TestA: " + noVerdict}) {
+				t.Fatalf("Cases = %q, %q; want [TestA] and its no-verdict fault: the verdict %s counted", cases, faults, c.name)
+			}
+		})
+	}
+	live := []struct{ name, body string }{
+		{"under if true", "if true {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under if 1 == 1", "if 1 == 1 {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"under a condition that is not constant", "if t.Name() == \"\" {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"in the else of if false", "if false {\n\t\tt.Log(\"x\")\n\t} else {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"before a return", "t.Fatal(\"x\")\n\treturn"},
+		{"after an if that returns on one branch", "if t.Name() == \"\" {\n\t\treturn\n\t}\n\tt.Fatal(\"x\")"},
+		{"after a goto, at its label", "goto L\nL:\n\tt.Fatal(\"x\")"},
+		{"in a range over a literal with an element", "for range []int{1} {\n\t\tt.Fatal(\"x\")\n\t}"},
+		{"in a closure called at once", "func() { t.Fatal(\"x\") }()"},
+		{"in a deferred closure", "defer func() { t.Fatal(\"x\") }()"},
+		{"in a closure passed to t.Cleanup", "t.Cleanup(func() { t.Error(\"x\") })"},
+		{"in a closure bound to a name, then called", "f := func() { t.Fatal(\"x\") }\n\tf()"},
+		{"in a closure bound to a name, then passed", "f := func() { t.Error(\"x\") }\n\tt.Cleanup(f)"},
+	}
+	for _, c := range live {
+		t.Run("live: "+c.name, func(t *testing.T) {
+			t.Parallel()
+			cases, faults := Cases("x_test.go", test(c.body))
+			if !slices.Equal(cases, []string{"TestA"}) || len(faults) != 0 {
+				t.Fatalf("Cases = %q, %q; want [TestA] and no fault: the verdict %s is live", cases, faults, c.name)
+			}
+		})
+	}
+	t.Run("a helper whose only verdict is dead does not count", func(t *testing.T) {
+		t.Parallel()
+		src := head + "func check(t *testing.T) {\n\tif false {\n\t\tt.Fatal(\"x\")\n\t}\n}\n\nfunc TestA(t *testing.T) { check(t) }\n"
+		cases, faults := Cases("x_test.go", src)
+		if !slices.Equal(cases, []string{"TestA"}) || !slices.Equal(faults, []string{"TestA: " + noVerdict}) {
+			t.Fatalf("Cases = %q, %q; want [TestA] and its no-verdict fault", cases, faults)
+		}
+	})
+	t.Run("a subtest in dead code is listed and is a no-verdict fault", func(t *testing.T) {
+		t.Parallel()
+		src := test("t.Error(\"parent\")\n\tif false {\n\t\tt.Run(\"s\", func(t *testing.T) { t.Fatal(\"x\") })\n\t}")
+		cases, faults := Cases("x_test.go", src)
+		if !slices.Equal(cases, []string{"TestA", "TestA/s"}) || !slices.Equal(faults, []string{"TestA/s: " + noVerdict}) {
+			t.Fatalf("Cases = %q, %q; want [TestA TestA/s] and TestA/s's no-verdict fault", cases, faults)
+		}
+	})
+}
+
+// TestFixUnusedTargets (BK-S3): each mode reports a target of its own lists whose file or package exists but which
+// waives nothing — "failed: tools/allowlists/<name>.json: <target>: waives nothing (an unused target)" — and leaves the
+// other mode's lists alone, as Stale's scoping does.
+func TestFixUnusedTargets(t *testing.T) {
+	t.Parallel()
+	const (
+		model   = "internal/model/x.go"
+		cron    = "internal/window/cron.go"
+		calm    = "internal/x/a_test.go"
+		unused  = ": waives nothing (an unused target)\n"
+		mutexed = "package model\n\nimport \"sync\"\n\ntype T struct{ mu sync.Mutex }\n"
+	)
+	cases := []struct {
+		name  string
+		root  func(t *testing.T) string
+		tests bool
+		files []string
+		code  int
+		out   string
+	}{
+		{
+			name: "normal mode: a purity target whose package never uses the identifier",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/model: sync.Mutex"}, nil, nil, map[string]string{model: "package model\n"})
+			},
+			files: []string{model}, code: 1,
+			out: "failed: tools/allowlists/purity.json: internal/model: sync.Mutex" + unused + "GATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: a purity target used only by a test file, or another identifier used",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/model: sync.Mutex", "internal/model: sync.Pool"}, nil, nil, map[string]string{
+					model:                      "package model\n\nimport \"sync\"\n\nvar _ = sync.Pool{}\n",
+					"internal/model/x_test.go": mutexed,
+				})
+			},
+			files: []string{model}, code: 1,
+			out: "failed: tools/allowlists/purity.json: internal/model: sync.Mutex" + unused + "GATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: a clock target whose file does not import time",
+			root: func(t *testing.T) string {
+				return cliRoot(t, nil, []string{cron + ": time"}, nil, map[string]string{cron: "package window\n"})
+			},
+			files: []string{cron}, code: 1,
+			out: "failed: tools/allowlists/clock.json: " + cron + ": time" + unused + "GATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: a clock target whose file imports time is used",
+			root: func(t *testing.T) string {
+				return cliRoot(t, nil, []string{cron + ": time"}, nil, map[string]string{cron: cronSrc})
+			},
+			files: []string{cron}, code: 0,
+			out: "GATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: an unused testhygiene target is -tests'",
+			root: func(t *testing.T) string {
+				return cliRoot(t, nil, nil, []string{calm}, map[string]string{model: "package model\n", calm: "package x\n"})
+			},
+			files: []string{model}, code: 0,
+			out: "GATE_COVERED 1\n",
+		},
+		{
+			name: "-tests: a testhygiene target whose file calls no banned name",
+			root: func(t *testing.T) string {
+				return cliRoot(t, nil, nil, []string{calm}, map[string]string{calm: "package x\n\nimport \"time\"\n\nvar _ = time.Second\n"})
+			},
+			tests: true, files: []string{calm}, code: 1,
+			out: "failed: tools/allowlists/testhygiene.json: " + calm + unused + "GATE_COVERED 1\n",
+		},
+		{
+			name: "-tests: unused purity and clock targets are the normal mode's",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/model: sync.Mutex"}, []string{cron + ": time"}, nil,
+					map[string]string{model: "package model\n", cron: "package window\n", calm: "package x\n"})
+			},
+			tests: true, files: []string{calm}, code: 0,
+			out: "GATE_COVERED 1\n",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			code, out := runCLI(t, c.root(t), c.tests, c.files...)
+			if code != c.code || out != c.out {
+				t.Fatalf("cli: exit %d, output %q; want exit %d, output %q", code, out, c.code, c.out)
+			}
+		})
+	}
+	t.Run("the repository's own lists have no unused target", func(t *testing.T) {
+		t.Parallel()
+		got, err := Unused(testLists(t), filepath.Join("..", ".."))
+		if err != nil || len(got) != 0 {
+			t.Fatalf("Unused = %q, %v; want none", got, err)
+		}
+	})
+}
+
+// TestFixGenerated (BK-S6; owner, 2026-11-12, S1.1c-2's review and break-it 3: "archcheck and the coverage tool accept
+// `// Code generated … DO NOT EDIT.` only before the package clause (Go's own rule), and every generated file must be
+// listed by name in a new list in the one grammar (empty today)"): tools/allowlists/generated.json, rule generated;
+// only a listed file with the marker skips the globals check; a marked file not listed gets every check and a finding
+// naming it; a listed file without the marker waives nothing; a listed file that is gone is stale.
+func TestFixGenerated(t *testing.T) {
+	t.Parallel()
+	const (
+		path   = "internal/model/x.go"
+		marker = "// Code generated by gen. DO NOT EDIT.\n\n"
+		global = "package model\n\nvar state = map[string]int{}\n\nfunc f() { state[\"a\"] = 1 }\n"
+	)
+	parse := func(t *testing.T, src string) bool {
+		t.Helper()
+		file, err := parser.ParseFile(token.NewFileSet(), "x.go", src, parser.ParseComments)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return generated(file)
+	}
+	t.Run("the marker before the package clause, after a licence comment too, marks the file", func(t *testing.T) {
+		t.Parallel()
+		if !parse(t, marker+global) || !parse(t, "// Licence.\n\n"+marker+global) {
+			t.Fatal("a marker before the package clause does not mark the file")
+		}
+	})
+	withGenerated := func(t *testing.T, targets []string, files map[string]string) string {
+		t.Helper()
+		root := cliRoot(t, nil, nil, nil, files)
+		writeList(t, root, "generated", "generated", targets)
+		return root
+	}
+	t.Run("the list is read into Lists.Generated", func(t *testing.T) {
+		t.Parallel()
+		l := loadAt(t, withGenerated(t, []string{path}, map[string]string{}))
+		if !l.Generated[path] || len(l.Generated) != 1 {
+			t.Fatalf("Generated = %v, want {%s: true}", l.Generated, path)
+		}
+	})
+	t.Run("a listed, marked file skips the globals check", func(t *testing.T) {
+		t.Parallel()
+		root := withGenerated(t, []string{path}, map[string]string{path: marker + global})
+		code, out := runCLI(t, root, false, path)
+		if code != 0 || out != "GATE_COVERED 1\n" {
+			t.Fatalf("cli: exit %d, output %q; want exit 0, output %q", code, out, "GATE_COVERED 1\n")
+		}
+	})
+	t.Run("a marked file not listed gets every check and a finding naming it", func(t *testing.T) {
+		t.Parallel()
+		got := checkWith(t, loadAt(t, listRoot(t, nil, nil, nil)), path, map[string]string{path: marker + global})
+		want := path + ":1: generated: the file says it is generated but tools/allowlists/generated.json does not list it"
+		if len(got) != 2 || got[0] != want || !strings.Contains(got[1], "globals: state is a mutable package-level var") {
+			t.Fatalf("CheckSources = %q; want %q and the globals finding on state", got, want)
+		}
+	})
+	t.Run("a listed file without the marker waives nothing", func(t *testing.T) {
+		t.Parallel()
+		root := withGenerated(t, []string{path}, map[string]string{path: "package model\n"})
+		code, out := runCLI(t, root, false, path)
+		want := "failed: tools/allowlists/generated.json: " + path + ": waives nothing (an unused target)\nGATE_COVERED 1\n"
+		if code != 1 || out != want {
+			t.Fatalf("cli: exit %d, output %q; want exit 1, output %q", code, out, want)
+		}
+	})
+	t.Run("a listed file that is gone is stale in the normal mode, not in -tests", func(t *testing.T) {
+		t.Parallel()
+		const gone = "internal/model/gone.go"
+		root := withGenerated(t, []string{gone}, map[string]string{path: "package model\n", "internal/x/a_test.go": "package x\n"})
+		code, out := runCLI(t, root, false, path)
+		want := "failed: tools/allowlists/generated.json: " + gone + ": does not exist (a stale target)\nGATE_COVERED 1\n"
+		if code != 1 || out != want {
+			t.Fatalf("cli: exit %d, output %q; want exit 1, output %q", code, out, want)
+		}
+		if code, out := runCLI(t, root, true, "internal/x/a_test.go"); code != 0 || out != "GATE_COVERED 1\n" {
+			t.Fatalf("cli -tests: exit %d, output %q; want exit 0, output %q", code, out, "GATE_COVERED 1\n")
+		}
+	})
+	for name, c := range map[string]struct{ text, want string }{
+		"an empty target": {`{"rule": "generated", "entries": [{"target": ""}]}`, `tools/allowlists/generated.json: an empty target: want "<file>"`},
+		"a rule mismatch": {`{"rule": "clock", "entries": []}`, `tools/allowlists/generated.json: rule "clock", want "generated"`},
+		"a missing list":  {"", "tools/allowlists/generated.json: "},
+	} {
+		t.Run("LoadLists: "+name, func(t *testing.T) {
+			t.Parallel()
+			root := listRoot(t, nil, nil, nil)
+			file := filepath.Join(root, "tools", "allowlists", "generated.json")
+			var err error
+			if c.text == "" {
+				err = os.Remove(file)
+			} else {
+				err = os.WriteFile(file, []byte(c.text), 0o644)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadLists(root); err == nil || !strings.HasPrefix(err.Error(), c.want) {
+				t.Fatalf("LoadLists: %v, want an error starting %q", err, c.want)
+			}
+		})
 	}
 }
