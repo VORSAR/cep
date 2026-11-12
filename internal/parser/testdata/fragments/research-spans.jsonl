@@ -3,7 +3,7 @@
 {"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 37, "span": "ms sec min hour day week"}
 {"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 37, "span": "5 min"}
 {"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 37, "span": "1 hour 30 min"}
-{"class": "red", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 38, "span": "timestamp '<ISO-8601>'"}
+{"class": "cep-meta", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 38, "span": "timestamp '<ISO-8601>'"}
 {"class": "cep", "file": "docs/language/SPEC.md", "kind": "expr", "kwonly": false, "line": 38, "span": "timestamp '2026-01-01T10:00:00Z'"}
 {"class": "exempt", "file": "docs/language/SPEC.md", "kwonly": true, "line": 42, "span": "and or not"}
 {"class": "red", "file": "docs/language/SPEC.md", "kind": "aftermatch", "kwonly": false, "line": 42, "span": "is [not] null"}
@@ -130,7 +130,7 @@
 {"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 120, "span": "t − t_first = 5 min ≤ 5 min"}
 {"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "chainelem", "kwonly": false, "line": 124, "span": "and not B[pred] for D"}
 {"class": "cep-meta", "file": "docs/language/SEMANTICS.md", "kind": "chainelem", "kwonly": false, "line": 124, "span": "and not HumanApprovals[…] for ${kill_window}"}
-{"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 124, "span": "→ not B for D"}
+{"class": "text", "file": "docs/language/SEMANTICS.md", "kind": "chainelem", "kwonly": false, "line": 124, "span": "→ not B for D", "stage": "grammar"}
 {"class": "exempt", "file": "docs/language/SEMANTICS.md", "kwonly": true, "line": 124, "span": "and not"}
 {"class": "text", "file": "docs/language/SEMANTICS.md", "kwonly": false, "line": 126, "span": "max(last positive event's time, every absence deadline)"}
 {"class": "red", "file": "docs/language/SEMANTICS.md", "kind": "expr", "kwonly": false, "line": 128, "span": "not HumanApprovals for 5 min"}
@@ -190,7 +190,7 @@
 {"class": "red", "file": "docs/language/errors.md", "kind": "partition", "kwonly": false, "line": 92, "placeholders": true, "span": "partition by <key> of <Stream> … ttl <duration>"}
 {"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 96, "placeholders": true, "span": ", <key> of <ThatStream>"}
 {"class": "red", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 100, "span": "part 2 of the partition key: session of B is int, but sessionId of A is string"}
-{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 103, "span": "k of S, j of S", "stage": "grammar"}
+{"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "keylist", "kwonly": false, "line": 103, "span": "k of S, j of S", "stage": "validator"}
 {"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 103, "span": "(k, j) of S"}
 {"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 104, "span": "to key it on both, write (k, j) of S, and give every stream the same number of parts"}
 {"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 104, "span": "(k, j) of S"}
