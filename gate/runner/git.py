@@ -68,6 +68,34 @@ def show(rev: str, path: str, cwd: str | None = None) -> str | None:
     return out.decode("utf-8", errors="replace") if code == 0 else None
 
 
+def read_blobs(rev: str, paths: Sequence[str], cwd: str | None = None) -> dict[str, str | None]:
+    """Each path's text at the revision exactly as `show` gives it (UTF-8, errors replaced; None when absent there
+    or not a file), read through one `git cat-file --batch` process however many paths there are (S1.1c-2's FX-4:
+    one `git show` per file put the lawdelta row past its cap under T4's load). A batch line cannot carry a path
+    holding a newline, so such a path is read by `show`. A batch that exits non-zero is a GitError."""
+    found: dict[str, str | None] = {p: show(rev, p, cwd=cwd) for p in paths if "\n" in p}
+    batch = [p for p in dict.fromkeys(paths) if "\n" not in p]
+    if not batch:
+        return found
+    request = "".join(f"{rev}:{p}\n" for p in batch).encode("utf-8")
+    p = subprocess.run(["git", "cat-file", "--batch"], cwd=cwd, input=request, capture_output=True)
+    if p.returncode != 0:
+        raise GitError(f"git cat-file failed (exit {p.returncode})")
+    out, at = p.stdout, 0
+    for path in batch:
+        end = out.index(b"\n", at)
+        header = out[at:end].split(b" ")
+        at = end + 1
+        if len(header) != 3 or not header[2].isdigit():  # `<name> missing` or `<name> ambiguous`: nothing follows
+            found[path] = None
+            continue
+        size = int(header[2])
+        body = out[at : at + size]
+        at += size + 1  # the content, then the newline the batch writes after it
+        found[path] = body.decode("utf-8", errors="replace") if header[1] == b"blob" else None
+    return found
+
+
 def dirty(paths: Sequence[str], cwd: str | None = None) -> int:
     """How many uncommitted edits — staged, unstaged or untracked — `git status --porcelain -z` reports under the
     paths; a rename or copy is one edit (its second record, the source path, is skipped — the break-it's finding 4;
