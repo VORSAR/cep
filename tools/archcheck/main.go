@@ -44,6 +44,7 @@ import (
 	"go/ast"
 	"go/build"
 	"go/build/constraint"
+	"go/constant"
 	"go/parser"
 	"go/token"
 	"io"
@@ -678,9 +679,14 @@ const (
 // verdicts are the *testing.T methods that fail a test (S1.1c-2 design §4.2, DA-S12).
 var verdicts = []string{"Fatal", "Fatalf", "Error", "Errorf", "FailNow"}
 
+// stops are the *testing.T methods after which nothing in the same statement list runs (BK-S1).
+var stops = []string{"Fatal", "Fatalf", "FailNow", "Skip", "Skipf", "SkipNow"}
+
 // caseReader is Cases' reading of one _test.go file.
 type caseReader struct {
+	file    *ast.File
 	parents map[ast.Node]ast.Node    // each node's parent in the file
+	dead    map[ast.Node]bool        // the roots of the file's dead code (markDead)
 	funcs   map[string]*ast.FuncDecl // the file's top-level functions (no receiver), by name
 	testing []string                 // the local names the file gives "testing"
 	tnames  map[string]bool          // every parameter name the file gives a *testing.T or testing.TB
@@ -698,7 +704,9 @@ type caseReader struct {
 // count, a three-clause for, two ranges, or no loop — is the fault "<parent>: t.Run over a table -cases cannot count".
 // A case whose body (its t.Run closures included) calls none of Fatal, Fatalf, Error, Errorf or FailNow on a
 // *testing.T, directly or through one same-file function that calls one on the T it is passed, is listed and is the
-// fault "<case>: calls no Fatal, Fatalf, Error, Errorf or FailNow". A file that does not parse is the one fault
+// fault "<case>: calls no Fatal, Fatalf, Error, Errorf or FailNow". Only a call in live code counts (BK-S1, the Python
+// strength rule's live-code clause): markDead names what is dead; a t.Run in dead code is listed and is that fault.
+// A file that does not parse is the one fault
 // ": <parse error>"; a file go test may not compile — a //go:build or // +build line in any comment, or a name go/build
 // ignores or limits to a GOOS or GOARCH (x_linux_test.go, _x_test.go) — lists no case and is the one fault
 // ": a build-constrained proof file is not always compiled" (BK-B4). Cases and faults are in source order.
@@ -711,7 +719,9 @@ func Cases(path, src string) (cases, faults []string) {
 		return nil, []string{": " + notCompiled}
 	}
 	r := &caseReader{
+		file:    file,
 		parents: map[ast.Node]ast.Node{},
+		dead:    map[ast.Node]bool{},
 		funcs:   map[string]*ast.FuncDecl{},
 		testing: (&checker{file: file}).localNames("testing"),
 		tnames:  map[string]bool{},
@@ -739,12 +749,211 @@ func Cases(path, src string) (cases, faults []string) {
 			r.funcs[fd.Name.Name] = fd
 		}
 	}
+	r.markDead()
 	for _, decl := range file.Decls {
 		if fd, ok := decl.(*ast.FuncDecl); ok && r.isTest(fd) {
-			r.testCase(fd.Name.Name, fd.Body)
+			r.testCase(fd.Name.Name, fd.Body, false)
 		}
 	}
 	return r.cases, r.faults
+}
+
+// markDead marks the roots of the code no run reaches (BK-S1): the body of an if or a for whose condition folds to
+// false, the else of an if whose condition folds to true, the body of a range over an empty literal; in a statement
+// list, every statement after a terminating one up to the next label; and then a closure bound by :=, = or var to _ or
+// to a name that no call outside the dead code calls or passes on.
+func (r *caseReader) markDead() {
+	ast.Inspect(r.file, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.IfStmt:
+			if v, ok := constBool(n.Cond); ok && !v {
+				r.dead[n.Body] = true
+			} else if ok && n.Else != nil {
+				r.dead[n.Else] = true
+			}
+		case *ast.ForStmt:
+			if v, ok := constBool(n.Cond); ok && !v {
+				r.dead[n.Body] = true
+			}
+		case *ast.RangeStmt:
+			if lit, ok := n.X.(*ast.CompositeLit); ok {
+				if size, ok := elements(lit); ok && size == 0 {
+					r.dead[n.Body] = true
+				}
+			}
+		}
+		list := stmts(n)
+		for i, stmt := range list {
+			if !r.terminates(stmt) {
+				continue
+			}
+			for _, rest := range list[i+1:] {
+				if _, label := rest.(*ast.LabeledStmt); label {
+					break
+				}
+				r.dead[rest] = true
+			}
+			break
+		}
+		return true
+	})
+	ast.Inspect(r.file, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.AssignStmt:
+			if len(n.Lhs) == len(n.Rhs) {
+				for i, rhs := range n.Rhs {
+					r.closure(n.Lhs[i], rhs)
+				}
+			}
+		case *ast.ValueSpec:
+			for i, value := range n.Values {
+				if i < len(n.Names) {
+					r.closure(n.Names[i], value)
+				}
+			}
+		}
+		return !r.dead[n]
+	})
+}
+
+// closure marks rhs dead when it is a function literal bound to _ or to a name no live call calls or passes on.
+func (r *caseReader) closure(lhs, rhs ast.Expr) {
+	lit, isLit := ast.Unparen(rhs).(*ast.FuncLit)
+	id, isID := lhs.(*ast.Ident)
+	if isLit && isID && (id.Name == "_" || !r.called(lit, id.Name)) {
+		r.dead[lit] = true
+	}
+}
+
+// called reports whether a call outside dead code, in the top-level function enclosing from (the file, for a
+// package-level var), names name as its function or as one of its arguments.
+func (r *caseReader) called(from ast.Node, name string) bool {
+	scope := ast.Node(r.file)
+	for p := r.parents[from]; p != nil; p = r.parents[p] {
+		if fd, ok := p.(*ast.FuncDecl); ok {
+			scope = fd
+			break
+		}
+	}
+	found := false
+	ast.Inspect(scope, func(n ast.Node) bool {
+		if found || r.dead[n] {
+			return false
+		}
+		if call, ok := n.(*ast.CallExpr); ok {
+			for _, e := range append([]ast.Expr{call.Fun}, call.Args...) {
+				if id, ok := ast.Unparen(e).(*ast.Ident); ok && id.Name == name {
+					found = true
+				}
+			}
+		}
+		return !found
+	})
+	return found
+}
+
+// terminates reports a statement after which nothing in its list runs: a return, a branch (break, continue, goto,
+// fallthrough), a call of panic or of one of stops on a *testing.T, a block ending in one, an if whose two branches
+// both end in one, or a labelled one.
+func (r *caseReader) terminates(stmt ast.Stmt) bool {
+	switch s := stmt.(type) {
+	case *ast.ReturnStmt, *ast.BranchStmt:
+		return true
+	case *ast.ExprStmt:
+		call, ok := s.X.(*ast.CallExpr)
+		if !ok {
+			return false
+		}
+		if f, ok := call.Fun.(*ast.Ident); ok {
+			return f.Name == "panic"
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		x, ok := sel.X.(*ast.Ident)
+		return ok && r.tnames[x.Name] && slices.Contains(stops, sel.Sel.Name)
+	case *ast.BlockStmt:
+		return len(s.List) > 0 && r.terminates(s.List[len(s.List)-1])
+	case *ast.IfStmt:
+		return s.Else != nil && r.terminates(s.Body) && r.terminates(s.Else)
+	case *ast.LabeledStmt:
+		return r.terminates(s.Stmt)
+	}
+	return false
+}
+
+// constBool folds a condition written with literals only: true, false, basic literals, parentheses, !, unary - and +,
+// comparisons, && and || (false && x and x && false are false, true || x and x || true are true). ok is false for
+// anything else, so an if on a variable is live whatever it holds.
+func constBool(e ast.Expr) (value, ok bool) {
+	if e == nil {
+		return false, false
+	}
+	v := fold(e)
+	if v.Kind() != constant.Bool {
+		return false, false
+	}
+	return constant.BoolVal(v), true
+}
+
+// fold is e's constant value as constBool reads it; constant.Unknown when it is not one.
+func fold(e ast.Expr) constant.Value {
+	switch e := e.(type) {
+	case *ast.ParenExpr:
+		return fold(e.X)
+	case *ast.Ident:
+		if e.Name == "true" || e.Name == "false" {
+			return constant.MakeBool(e.Name == "true")
+		}
+	case *ast.BasicLit:
+		return constant.MakeFromLiteral(e.Value, e.Kind, 0)
+	case *ast.UnaryExpr:
+		x := fold(e.X)
+		if (e.Op == token.NOT && x.Kind() == constant.Bool) || ((e.Op == token.SUB || e.Op == token.ADD) && numeric(x)) {
+			return constant.UnaryOp(e.Op, x, 0)
+		}
+	case *ast.BinaryExpr:
+		x, y := fold(e.X), fold(e.Y)
+		switch e.Op {
+		case token.LAND, token.LOR:
+			decides := e.Op == token.LOR // the operand value that decides the result alone
+			for _, v := range []constant.Value{x, y} {
+				if v.Kind() == constant.Bool && constant.BoolVal(v) == decides {
+					return v
+				}
+			}
+			if x.Kind() == constant.Bool && y.Kind() == constant.Bool {
+				return y
+			}
+		case token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ:
+			if canCompare(x, y, e.Op) {
+				return constant.MakeBool(constant.Compare(x, e.Op, y))
+			}
+		}
+	}
+	return constant.MakeUnknown()
+}
+
+// numeric reports an integer, float or complex constant.
+func numeric(v constant.Value) bool {
+	k := v.Kind()
+	return k == constant.Int || k == constant.Float || k == constant.Complex
+}
+
+// canCompare reports whether constant.Compare takes x op y: two strings, two booleans with == or !=, two numbers
+// (a complex one with == or != only).
+func canCompare(x, y constant.Value, op token.Token) bool {
+	equality := op == token.EQL || op == token.NEQ
+	switch kx, ky := x.Kind(), y.Kind(); {
+	case kx == constant.String || ky == constant.String:
+		return kx == ky
+	case kx == constant.Bool || ky == constant.Bool:
+		return kx == ky && equality
+	case kx == constant.Complex || ky == constant.Complex:
+		return numeric(x) && numeric(y) && equality
+	}
+	return numeric(x) && numeric(y)
 }
 
 // hasConstraint reports a build-constraint line (//go:build or // +build, by go/build/constraint's reading) in any of
@@ -828,14 +1037,15 @@ func (r *caseReader) isTest(fd *ast.FuncDecl) bool {
 	return len(params) == 1 && len(params[0].Names) <= 1 && r.isTestT(params[0].Type)
 }
 
-// testCase lists name, faults it if body never reaches a verdict, and reads body for its subtests.
-func (r *caseReader) testCase(name string, body *ast.BlockStmt) {
+// testCase lists name, faults it if it is in dead code or body never reaches a verdict, and reads body for its
+// subtests.
+func (r *caseReader) testCase(name string, body *ast.BlockStmt, dead bool) {
 	r.cases = append(r.cases, name)
-	if body == nil || !r.reaches(body) {
+	if dead || body == nil || !r.reaches(body) {
 		r.faults = append(r.faults, name+": "+noVerdict)
 	}
 	if body != nil {
-		r.walk(name, body, nil)
+		r.walk(name, body, nil, dead)
 	}
 }
 
@@ -863,6 +1073,9 @@ func (r *caseReader) helper(name string) []int {
 			names[p] = true
 		}
 		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			if r.dead[n] {
+				return false
+			}
 			if call, ok := n.(*ast.CallExpr); ok && verdict(call, names) {
 				p := call.Fun.(*ast.SelectorExpr).X.(*ast.Ident).Name
 				if !slices.Contains(out, params[p]) {
@@ -876,11 +1089,14 @@ func (r *caseReader) helper(name string) []int {
 	return out
 }
 
-// reaches reports whether node calls a verdict on a *testing.T, directly or through one same-file helper it passes a
-// *testing.T to in the position the helper fails.
+// reaches reports whether node calls a verdict on a *testing.T in live code, directly or through one same-file helper
+// it passes a *testing.T to in the position the helper fails.
 func (r *caseReader) reaches(node ast.Node) bool {
 	found := false
 	ast.Inspect(node, func(n ast.Node) bool {
+		if r.dead[n] {
+			return false
+		}
 		call, ok := n.(*ast.CallExpr)
 		if found || !ok {
 			return !found
@@ -939,12 +1155,18 @@ func (r *caseReader) runsTable(body ast.Node) bool {
 }
 
 // walk reads node, part of case prefix's body, for its subtests; labels are the element names of the one counted
-// range node sits in (nil outside one).
-func (r *caseReader) walk(prefix string, node ast.Node, labels []string) {
+// range node sits in (nil outside one); dead is whether node is in dead code (markDead), which faults every subtest
+// in it.
+func (r *caseReader) walk(prefix string, node ast.Node, labels []string, dead bool) {
+	dead = dead || r.dead[node]
 	ast.Inspect(node, func(n ast.Node) bool {
+		if n != node && r.dead[n] && !dead {
+			r.walk(prefix, n, labels, true)
+			return false
+		}
 		switch n := n.(type) {
 		case *ast.ForStmt:
-			r.walk(prefix, n.Body, nil)
+			r.walk(prefix, n.Body, nil, dead)
 			return false
 		case *ast.RangeStmt:
 			if !r.runsTable(n.Body) {
@@ -955,7 +1177,7 @@ func (r *caseReader) walk(prefix string, node ast.Node, labels []string) {
 				r.faults = append(r.faults, prefix+": "+cannotCount)
 				return false
 			}
-			r.walk(prefix, n.Body, inner)
+			r.walk(prefix, n.Body, inner, dead)
 			return false
 		case *ast.CallExpr:
 			if !r.isRun(n) {
@@ -973,7 +1195,7 @@ func (r *caseReader) walk(prefix string, node ast.Node, labels []string) {
 				return false
 			}
 			for _, name := range names {
-				r.testCase(name, r.body(n.Args[1]))
+				r.testCase(name, r.body(n.Args[1]), dead)
 			}
 			return false
 		}
