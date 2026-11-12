@@ -1401,6 +1401,28 @@ func TestFixUnusedTargets(t *testing.T) {
 			out: "failed: tools/allowlists/purity.json: internal/model: sync.Mutex" + unused + "GATE_COVERED 1\n",
 		},
 		{
+			// git holds no empty directory, so only a proof world has one: support.make_purity_targets places one per
+			// purity package so Stale sees the list as live (S1.1c-2 lane C's open item 1).
+			name: "normal mode: a purity package directory holding no Go file is not judged",
+			root: func(t *testing.T) string {
+				root := cliRoot(t, []string{"internal/table: sync.Mutex"}, nil, nil, map[string]string{model: "package model\n"})
+				if err := os.MkdirAll(filepath.Join(root, "internal", "table"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				return root
+			},
+			files: []string{model}, code: 0,
+			out: "GATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: a purity package holding only test files is judged",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/model: sync.Mutex"}, nil, nil, map[string]string{"internal/model/x_test.go": mutexed})
+			},
+			code: 1,
+			out:  "failed: tools/allowlists/purity.json: internal/model: sync.Mutex" + unused + "GATE_COVERED 0\n",
+		},
+		{
 			name: "normal mode: a clock target whose file does not import time",
 			root: func(t *testing.T) string {
 				return cliRoot(t, nil, []string{cron + ": time"}, nil, map[string]string{cron: "package window\n"})
