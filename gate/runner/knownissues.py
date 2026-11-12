@@ -21,18 +21,38 @@ ENTRY_KEYS = ("id", "first_seen", "forward", "decision")
 ID_CHAR = r"[A-Za-z0-9_.\-]"  # an id's characters: a sprint id holds "." and "-" (S3.3-1-3)
 
 
+class _Duplicate(ValueError):
+    def __init__(self, key: str) -> None:
+        super().__init__(f"duplicate key {key}")
+
+
+def _pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """A JSON object whose keys are each written once (as allowlists.load reads a list, CA-S5)."""
+    out: dict[str, object] = {}
+    for key, value in pairs:
+        if key in out:
+            raise _Duplicate(key)
+        out[key] = value
+    return out
+
+
 def _entries(text: str) -> list[dict[str, str]]:
-    data = json.loads(text)
+    """The entries, strictly: the keys, the fields, and each id once (BK-S5, CA-S5: S1.1c-3's aging keys on it)."""
+    data = json.loads(text, object_pairs_hook=_pairs)
     if type(data) is not dict or sorted(data) != sorted(TOP_KEYS):
         raise ValueError(f"keys {', '.join(sorted(data)) if type(data) is dict else '-'}, want {', '.join(TOP_KEYS)}")
     if type(data["entries"]) is not list:
         raise ValueError("entries is not a list")
     out = []
+    seen: set[str] = set()
     for i, item in enumerate(data["entries"]):
         if type(item) is not dict or sorted(item) != sorted(ENTRY_KEYS):
             raise ValueError(f"entries[{i}]: want the keys {', '.join(ENTRY_KEYS)}")
         if any(type(item[k]) is not str for k in ENTRY_KEYS) or not item["id"]:
             raise ValueError(f"entries[{i}]: every field is a string, the id non-empty")
+        if item["id"] in seen:
+            raise ValueError(f"entries[{i}]: id {item['id']} is listed twice")
+        seen.add(item["id"])
         out.append(item)
     return out
 
