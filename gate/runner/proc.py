@@ -11,7 +11,10 @@ import os
 import signal
 import subprocess
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+
+# Group.spawn's shape: argv, then cwd, env, stdout and stderr by keyword; None once the group was signalled.
+type Spawn = Callable[..., subprocess.Popen[bytes] | None]
 
 
 class Group:

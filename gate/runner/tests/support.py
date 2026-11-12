@@ -186,7 +186,7 @@ class FakeToolchain:
     def tool_count(self) -> int:
         return 5
 
-    def parity(self, env, *, full_tree: bool) -> list[str]:
+    def parity(self, env, *, full_tree: bool, spawn, scratch: str) -> list[str]:
         self.calls.append((dict(env), full_tree))
         if self.hold is not None:
             self.hold.wait()
