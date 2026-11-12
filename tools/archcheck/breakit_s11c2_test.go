@@ -2,6 +2,7 @@ package main
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -26,5 +27,21 @@ func TestBreakitCasesDeadVerdicts(t *testing.T) {
 				t.Errorf("faults %q: %s counted as a verdict", faults, c.name)
 			}
 		})
+	}
+}
+
+// BK-S3: a list target whose file still exists but which waives nothing is reported by neither mode. Stale reads
+// only whether the path is gone; nothing reads whether the entry is used. A testhygiene entry left behind after its
+// sleep is removed stays a live waiver: a sleep added back to the file later is green, and no LAW Δ line names it
+// (tools/allowlists/ did not change). The same holds for a purity target whose package no longer imports the
+// identifier and a clock target whose file no longer imports time.
+func TestBreakitUnusedTestHygieneTarget(t *testing.T) {
+	t.Parallel()
+	const file = "internal/x/a_test.go"
+	root := listRoot(t, nil, nil, []string{file})
+	touch(t, root, file) // "package x\n": no time, nothing to waive
+	code, out := runCLI(t, root, true, file)
+	if code != 1 || !strings.Contains(out, file) {
+		t.Fatalf("-tests: exit %d, output %q: an entry that waives nothing is not reported", code, out)
 	}
 }
