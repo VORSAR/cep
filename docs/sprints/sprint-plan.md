@@ -402,7 +402,8 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.3-2, S1.1c-1 and S1.1c-2 merged (PRs #1–#35), and the Go 1.27.4 bump (PR #37, 2026-11-12). S1.1c-3's plan check is answered (owner, 2026-11-12; blind architecture and QA reviews, three research runs; all as recommended): the rest of S1.1c is three sprints — **S1.1c-3**, the documents and the clocks (the fragment test with every red snippet fixed, placeholders bound, wrong examples listed; advisory aging with part forwards and the 30-day correctness clock; BA10; QB10; ≈ 8.25), **S1.1c-4**, the scans (the vulnerability database read by the gate at T4 and nightly; the weekly canary; ≈ 4.75), **S1.1c-5**, the strict lint set → next: S1.1c-3's G0 (main's CI on c87942d: the owner reports); then S1.1c-4, S1.1c-5, S4.1.**
+**Phase 1 in progress: S1.1a-1 to S3.3-2, S1.1c-1 and S1.1c-2 merged (PRs #1–#35), and the Go 1.27.4 bump (PR #37, 2026-11-12). S1.1c-3 has started (G0, 2026-11-12) — the documents and the clocks: the fragment test with every red snippet fixed, advisory aging with part forwards and the 30-day correctness clock, BA10, QB10 → next: QA's tests against the stubs (W0), then the design note with the corrections' before/after list (G1); then S1.1c-4 (the scans), S1.1c-5 (the strict lint set), S4.1.**
+
 
 
 

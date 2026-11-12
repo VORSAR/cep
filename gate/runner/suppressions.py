@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from gate.runner import allowlists
 
-ENABLED: frozenset[str] = frozenset()  # S1.1c-4 sets it from its golangci config (DA-L4)
+ENABLED: frozenset[str] = frozenset()  # S1.1c-5 sets it from its golangci config (DA-L4)
 # git grep -e patterns, case-sensitive as git grep is (design §10.12); every recognised form contains one. "fmt:"
 # covers every spelling ruff reads after it (BK-B1).
 PREFILTER = ("nolint", "fmt:", "noqa", "yapf:", "isort:", "Code generated")
@@ -307,7 +307,7 @@ def check(directives: Iterable[Directive], ctx: allowlists.Ctx, enabled: frozens
         )
         out += [f"{where}: {fault}" for fault in faults]
         out += [
-            f"{where}: //nolint:{linter}: {linter} is not enabled (none is until S1.1c-4)"
+            f"{where}: //nolint:{linter}: {linter} is not enabled (none is until S1.1c-5)"
             for linter in d.linters
             if linter not in enabled
         ]

@@ -305,7 +305,7 @@ class Check(unittest.TestCase):
 
     def test_no_linter_is_enabled_until_s11c4(self):
         got = suppressions.check(self.directives(f"//nolint:errcheck // {META}"), fixture_ctx(), frozenset())
-        self.assertEqual(got, ["p.go:3: //nolint:errcheck: errcheck is not enabled (none is until S1.1c-4)"])
+        self.assertEqual(got, ["p.go:3: //nolint:errcheck: errcheck is not enabled (none is until S1.1c-5)"])
         self.assertEqual(suppressions.ENABLED, frozenset())
 
     def test_a_valid_directive_with_its_linter_enabled_is_green(self):
@@ -318,7 +318,7 @@ class Check(unittest.TestCase):
         got = suppressions.check(
             self.directives(f"//nolint:errcheck,gosec // {META}"), fixture_ctx(), frozenset({"errcheck"})
         )
-        self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled (none is until S1.1c-4)"])
+        self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled (none is until S1.1c-5)"])
 
     def test_the_field_rules_apply(self):
         comment = '//nolint:errcheck // PERMANENT reason="short" ref=docs/sprints/decisions.md#title sprint=S1.1c-2'
