@@ -21,3 +21,4 @@ class LeakPlanted(support.DriverTest):
         record = run.record("test", "unit")
         self.assertEqual(record["verdict"], "fail", run.stdout)
         self.assertIn(LEAKY, record["reason"], record)
+        self.assertRed(run, "test", "unit", f"exit 1: {LEAKY}: package failed")  # the exact reason (S1.1c-2 W0)

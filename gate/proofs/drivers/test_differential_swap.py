@@ -21,6 +21,15 @@ GROUP_FORM = 'form = "group"'
 EX10 = "docs/language/examples/10-grouped-keys.cep"
 CORPUS = ("docs/language/examples", "docs/language/eval/generated", "docs/language/invalid")
 ENGINE = ("internal/event", "internal/model", "internal/parser")
+# The row's reasons, exactly: its first failed file; a reason longer than the record's 300 characters is cut to 299
+# and an ellipsis (gate/runner/records.py, REASON_MAX).
+SWAP_FULL = f"exit 1: {T09}: expression 1 differs: lark {LARK} / engine {SWAPPED}"
+SWAP_RED = SWAP_FULL[:299] + "…"
+G01 = "docs/language/eval/generated/rev5/g01.cep"
+GROUP_RED = (
+    f"exit 1: {G01}: expression 1 differs: lark (group AdminLogins tenantId userId) / engine (key AdminLogins tenantId "
+    "userId)"
+)
 
 
 class DifferentialSwap(support.DriverTest):
@@ -50,6 +59,7 @@ class DifferentialSwap(support.DriverTest):
         self.assertEqual(record["verdict"], "fail", run.stdout)
         stderr = run.row_file("test", "differential", "stderr")
         self.assertTrue(record["reason"].startswith("exit 1: docs/language/"), f"{record['reason']}\n{stderr}")
+        self.assertRed(run, "test", "differential", SWAP_RED)  # the exact reason (S1.1c-2 W0)
         self.assertEqual((record["covered"], record["expected"]), (73, 73), record)  # every file was judged
         failed = [line for line in run.row_stdout("test", "differential").split("\n") if line.startswith("failed: ")]
         self.assertIn(f"failed: {T09}: expression 1 differs: lark {LARK} / engine {SWAPPED}", failed)
@@ -71,6 +81,7 @@ class DifferentialSwap(support.DriverTest):
         self.assertParityPassed(run, "test")
         record = run.record("test", "differential")
         self.assertEqual(record["verdict"], "fail", run.stdout)
+        self.assertRed(run, "test", "differential", GROUP_RED)  # the exact reason (S1.1c-2 W0)
         failed = [line for line in run.row_stdout("test", "differential").split("\n") if line.startswith("failed: ")]
         self.assertIn(
             f"failed: {EX10}: expression 1 differs: "

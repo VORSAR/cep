@@ -56,6 +56,7 @@ class NotBuiltExpired(support.DriverTest):
 
     def assertExpired(self, run: support.Run, sprint: str, expired: dict[str, str]) -> None:
         """Red; one failed line per expired file naming it, its construct and the marker's sprint; no other file."""
+        self.assertGateFailed(run)  # directly, one helper level from the test (S1.1c-2 design §4.2)
         record = self.assertFailReason(run)
         self.assertTrue(any(name in record["reason"] for name in expired), record)
         failed = self.failed_lines(run)
