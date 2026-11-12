@@ -364,7 +364,7 @@ class Crash(support.GateTest):
         self.assertIn("planted executor bug", self.reason("a"))
 
     def test_a_parity_crash_is_an_internal_error(self):
-        def boom(env, *, full_tree):
+        def boom(env, *, full_tree, spawn, scratch):
             raise RuntimeError("planted parity bug")
 
         self.toolchain.parity = boom
