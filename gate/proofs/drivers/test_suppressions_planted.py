@@ -124,7 +124,9 @@ class SuppressionsPlanted(support.DriverTest):
 
     def test_a_nolint_with_a_space_is_red_with_the_canonical_form(self):
         self.go(f"// nolint:errcheck // {self.metadata()}")
-        self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {NOT_CANONICAL}", f"{GO}:{GO_LINE}: ")
+        # design §10.8: the text carries the linters as written; only a bare //nolint keeps <linter> literal.
+        spaced = NOT_CANONICAL.replace("<linter>", "errcheck")
+        self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {spaced}", f"{GO}:{GO_LINE}: ")
 
     def test_a_canonical_nolint_with_full_metadata_is_red_while_no_linter_is_enabled(self):
         self.go(f"//nolint:errcheck // {self.metadata()}")

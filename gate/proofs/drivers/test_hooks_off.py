@@ -35,6 +35,13 @@ class HooksOff(support.DriverTest):
         run = self.world.run(registry=self.registry)
         self.assertParityPassed(run, "lint")
         self.assertEqual(run.record("lint", "hooks")["verdict"], "pass", run.stdout)
+        # A pass on the row under test, its covered count from the world by the row's own pathspecs (S1.1c-2
+        # design §4.2: parity's pass alone never counts).
+        hooks = support.registry_row("hooks")
+        self.assertEqual(hooks["expected_scope"][0], "git")
+        in_scope = [p for p in self.world.git("ls-files", "-z", "--", *hooks["expected_scope"][1:]).split("\0") if p]
+        self.assertTrue(in_scope)
+        self.assertRow(run, "lint", "hooks", True, f"covered {len(in_scope)}")
         self.assertEqual(run.summary("lint", "hooks")[2], "PASS", run.stdout)
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
 
