@@ -30,9 +30,10 @@
 // cases that assert nothing, as Cases reads them: "<path>: case <name>" and "<path>: fault <name>: <why>" lines, file by
 // file in argument order, and exits 0; the gate's Python pin judges the listing.
 //
-// The first two modes print one "failed: <file>:<line>: <check>: <message>" line per finding, then one
+// The first two modes print one "failed: <file>:<line>: <check>: <message>" line per finding, then, sorted, one
 // "failed: tools/allowlists/<name>.json: <target>: does not exist (a stale target)" line per target of the lists
-// that mode reads whose package directory or file is gone, then GATE_COVERED with the number of files read, and
+// that mode reads whose package directory or file is gone and one "…: <target>: waives nothing (an unused target)"
+// line per target that exists but waives nothing (BK-S3), then GATE_COVERED with the number of files read, and
 // exits 1 if anything failed, 2 on an internal error.
 package main
 
@@ -108,9 +109,6 @@ type Lists struct {
 	Purity                  map[string]map[string][]string
 	Clock, Tests, Generated map[string]bool
 }
-
-// Unused is the fix round's stub (BK-S3), so its red tests compile; the fix replaces it.
-func Unused(lists *Lists, root string) ([]string, error) { return nil, nil }
 
 // listFile is one allowlist as archcheck reads it: its rule and each entry's target. The grammar's other fields are
 // the suppressions row's to validate, so they are ignored here (design S1.1c-2 §3, A-L2).
@@ -191,14 +189,17 @@ func LoadLists(root string) (*Lists, error) {
 	return l, nil
 }
 
+// exists reports whether root-relative rel is a directory (dir) or a file under root.
+func exists(root, rel string, dir bool) bool {
+	info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+	return err == nil && info.IsDir() == dir
+}
+
 // Stale gives one finding per target whose package directory (purity) or file (clock, testhygiene) is gone under
 // root, sorted: "tools/allowlists/<name>.json: <target>: does not exist (a stale target)".
 func Stale(lists *Lists, root string) []string {
 	var out []string
-	exists := func(rel string, dir bool) bool {
-		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
-		return err == nil && info.IsDir() == dir
-	}
+	exists := func(rel string, dir bool) bool { return exists(root, rel, dir) }
 	stale := func(name, target string) {
 		out = append(out, fmt.Sprintf("%s/%s.json: %s: does not exist (a stale target)", AllowlistsDir, name, target))
 	}
@@ -224,6 +225,95 @@ func Stale(lists *Lists, root string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// Unused gives one finding per target whose package directory or file exists under root but which waives nothing
+// (BK-S3), sorted: "tools/allowlists/<name>.json: <target>: waives nothing (an unused target)". A purity target is
+// used when a non-test Go file of its package selects <identifier> on a name the file gives <import path>; a clock
+// target when its file is in an operator package and imports time; a testhygiene target when the sleep fence would
+// report its file unlisted. A target that does not exist is Stale's.
+func Unused(lists *Lists, root string) ([]string, error) {
+	var out []string
+	unused := func(name, target string) {
+		out = append(out, fmt.Sprintf("%s/%s.json: %s: waives nothing (an unused target)", AllowlistsDir, name, target))
+	}
+	for pkg, imports := range lists.Purity {
+		if !exists(root, pkg, true) {
+			continue
+		}
+		used, err := selected(root, pkg)
+		if err != nil {
+			return nil, err
+		}
+		for imp, idents := range imports {
+			for _, ident := range idents {
+				if !used[imp+"."+ident] {
+					unused("purity", pkg+": "+imp+"."+ident)
+				}
+			}
+		}
+	}
+	for file, listed := range lists.Clock {
+		if !listed || !exists(root, file, false) {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file)))
+		if err != nil {
+			return nil, err
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), file, src, parser.ImportsOnly)
+		if err != nil {
+			return nil, err
+		}
+		dir := filepath.ToSlash(filepath.Dir(file))
+		operator := slices.ContainsFunc(operators, func(op string) bool { return under(dir, op) })
+		if !operator || !slices.ContainsFunc(parsed.Imports, func(spec *ast.ImportSpec) bool { return importPath(spec) == "time" }) {
+			unused("clock", file+": time")
+		}
+	}
+	for file, listed := range lists.Tests {
+		if !listed || !exists(root, file, false) {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file)))
+		if err != nil {
+			return nil, err
+		}
+		if len(CheckTest(&Lists{}, file, string(src))) == 0 {
+			unused("testhygiene", file)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+// selected gives every "<import path>.<identifier>" a non-test Go file of package directory pkg selects.
+func selected(root, pkg string) (map[string]bool, error) {
+	files, err := pkgFiles(root, pkg+"/x.go")
+	if err != nil {
+		return nil, err
+	}
+	used := map[string]bool{}
+	for path, src := range files {
+		file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.SkipObjectResolution)
+		if err != nil {
+			return nil, err
+		}
+		c := &checker{file: file}
+		for _, spec := range file.Imports {
+			imp := importPath(spec)
+			locals := c.localNames(imp)
+			ast.Inspect(file, func(n ast.Node) bool {
+				if sel, ok := n.(*ast.SelectorExpr); ok {
+					if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(locals, x.Name) {
+						used[imp+"."+sel.Sel.Name] = true
+					}
+				}
+				return true
+			})
+		}
+	}
+	return used, nil
 }
 
 // name is how a module-relative package directory is shown: "" is the root package cep.
@@ -1482,14 +1572,20 @@ func runTests(root string, lists *Lists, listPath string) ([]string, int, error)
 	return findings, len(list), nil
 }
 
-// staleIn keeps the Stale findings of the named lists: each mode reports the lists it reads (the normal mode purity
-// and clock, -tests testhygiene), so no stale target is reported by two rows.
-func staleIn(lists *Lists, root string, names ...string) []string {
-	return slices.DeleteFunc(Stale(lists, root), func(f string) bool {
+// targetsIn keeps the Stale and Unused findings of the named lists, sorted: each mode reports the lists it reads (the
+// normal mode purity and clock, -tests testhygiene), so no stale or unused target is reported by two rows.
+func targetsIn(lists *Lists, root string, names ...string) ([]string, error) {
+	unused, err := Unused(lists, root)
+	if err != nil {
+		return nil, err
+	}
+	all := append(Stale(lists, root), unused...)
+	slices.Sort(all)
+	return slices.DeleteFunc(all, func(f string) bool {
 		return !slices.ContainsFunc(names, func(name string) bool {
 			return strings.HasPrefix(f, AllowlistsDir+"/"+name+".json: ")
 		})
-	})
+	}), nil
 }
 
 // listCases is -cases: per file in argument order, Cases' cases then its faults, one line each as
@@ -1527,24 +1623,26 @@ func cli(root string, args []string, out io.Writer) int {
 		return 2
 	}
 	lists, err := LoadLists(root)
-	var findings []string
+	var findings, targets []string
 	var count int
 	switch {
 	case err != nil:
 	case tests:
 		findings, count, err = runTests(root, lists, args[1])
+		if err == nil {
+			targets, err = targetsIn(lists, root, "testhygiene")
+		}
 	default:
 		findings, count, err = run(root, lists, args[0])
+		if err == nil {
+			targets, err = targetsIn(lists, root, "purity", "clock")
+		}
 	}
 	if err != nil {
 		fmt.Fprintf(out, "internal error: %v\n", err)
 		return 2
 	}
-	if tests {
-		findings = append(findings, staleIn(lists, root, "testhygiene")...)
-	} else {
-		findings = append(findings, staleIn(lists, root, "purity", "clock")...)
-	}
+	findings = append(findings, targets...)
 	for _, f := range findings {
 		fmt.Fprintf(out, "failed: %s\n", f)
 	}
