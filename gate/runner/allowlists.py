@@ -16,7 +16,8 @@ from datetime import date
 
 from gate.runner import anchors, sprintid
 
-RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated"})  # S1.1c-3 adds "govulncheck"
+# S1.1c-3 adds "fragments" (with the fragment test's register reader); S1.1c-4 adds "govulncheck".
+RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated"})
 KINDS = ("PERMANENT", "TEMP")
 TOP_KEYS = ("schema", "note", "rule", "entries")
 REQUIRED = ("target", "kind", "reason", "sprint")
@@ -143,13 +144,10 @@ def _day(text: str) -> date | None:
 def sprint_fault(sprint: str, ctx: Ctx) -> str:
     """ "" when the sprint is a row (or a part of one) of the order, not after the current sprint; else why."""
     try:
-        id = sprintid.parse(sprint)
-        position = ctx.order.index(sprint)
+        ctx.order.index(sprint)
     except ValueError:
         return f"sprint {sprint} is not a row of gate/sprints.json"
-    current = ctx.order.index(sprintid.canonical(ctx.current))
-    same_row = sprintid.row_of(id) == sprintid.row_of(ctx.current)
-    if position > current or (position == current and same_row and id.n > ctx.current.n):
+    if ctx.order.passed(sprintid.canonical(ctx.current), sprint):  # the part order, shared with aging (decision 8)
         return f"sprint {sprint} is after the current sprint {sprintid.canonical(ctx.current)}"
     return ""
 

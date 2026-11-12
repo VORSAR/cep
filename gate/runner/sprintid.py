@@ -77,9 +77,14 @@ class Order:
     def passed(self, part: str, marker: str) -> bool:
         """Whether the marker is past the part: a later row, or a later part of the same row, parts compared as numbers.
 
-        W0 stub (S1.1c-3 plan check §2 S2): lane E2 builds it, and the allowlists' inline part check moves onto it.
+        Positions are `index` (a printed part-row such as S1.1a-1 is a row of its own). At one position a part-less
+        part reads n = 0, so S1.1c-1 has passed S1.1c; a part-less marker is not past a part of its own row (S1.1c-3
+        design §3.1, §7 W0-3: aging names that case). A ValueError names a text that is not an id or not in the order.
         """
-        raise NotImplementedError("sprintid.Order.passed: not built yet (S1.1c-3 lane E2)")
+        at_part, at_marker = self.index(part), self.index(marker)
+        if at_part != at_marker:
+            return at_marker > at_part
+        return parse(marker).n > parse(part).n
 
     def first_open(self) -> str:
         for row in self.rows:
