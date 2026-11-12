@@ -42,6 +42,8 @@ import (
 	jsonv2 "encoding/json/v2"
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"io"
@@ -666,10 +668,11 @@ func CheckTest(lists *Lists, path, src string) []string {
 	return c.findings
 }
 
-// The two fault texts of Cases (S1.1c-2 design §11).
+// The fault texts of Cases (S1.1c-2 design §11; the fix round's BK-B4).
 const (
 	noVerdict   = "calls no Fatal, Fatalf, Error, Errorf or FailNow"
 	cannotCount = "t.Run over a table -cases cannot count"
+	notCompiled = "a build-constrained proof file is not always compiled"
 )
 
 // verdicts are the *testing.T methods that fail a test (S1.1c-2 design §4.2, DA-S12).
@@ -696,11 +699,16 @@ type caseReader struct {
 // A case whose body (its t.Run closures included) calls none of Fatal, Fatalf, Error, Errorf or FailNow on a
 // *testing.T, directly or through one same-file function that calls one on the T it is passed, is listed and is the
 // fault "<case>: calls no Fatal, Fatalf, Error, Errorf or FailNow". A file that does not parse is the one fault
-// ": <parse error>". Cases and faults are in source order.
+// ": <parse error>"; a file go test may not compile — a //go:build or // +build line in any comment, or a name go/build
+// ignores or limits to a GOOS or GOARCH (x_linux_test.go, _x_test.go) — lists no case and is the one fault
+// ": a build-constrained proof file is not always compiled" (BK-B4). Cases and faults are in source order.
 func Cases(path, src string) (cases, faults []string) {
-	file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.SkipObjectResolution)
+	file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.ParseComments|parser.SkipObjectResolution)
 	if err != nil {
 		return nil, []string{": " + err.Error()}
+	}
+	if hasConstraint(file) || !alwaysBuilt(path) {
+		return nil, []string{": " + notCompiled}
 	}
 	r := &caseReader{
 		parents: map[ast.Node]ast.Node{},
@@ -737,6 +745,30 @@ func Cases(path, src string) (cases, faults []string) {
 		}
 	}
 	return r.cases, r.faults
+}
+
+// hasConstraint reports a build-constraint line (//go:build or // +build, by go/build/constraint's reading) in any of
+// file's comments: one before the package clause limits the file; one elsewhere is vet's misplaced constraint.
+func hasConstraint(file *ast.File) bool {
+	for _, group := range file.Comments {
+		for _, comment := range group.List {
+			if constraint.IsGoBuild(comment.Text) || constraint.IsPlusBuild(comment.Text) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// alwaysBuilt reports whether go/build's file-name rules leave path's file in every build: judged in a context whose
+// GOOS and GOARCH are no real platform, a name with a GOOS or GOARCH suffix, or one starting with _ or ., is left
+// out. The file's content is not read here (hasConstraint reads its lines).
+func alwaysBuilt(path string) bool {
+	ctx := build.Context{GOOS: "none", GOARCH: "none", Compiler: "gc", OpenFile: func(string) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("package x\n")), nil
+	}}
+	ok, err := ctx.MatchFile(".", filepath.Base(filepath.FromSlash(path)))
+	return err == nil && ok
 }
 
 // isT reports whether e is *testing.T or testing.TB under one of the file's names for testing.
