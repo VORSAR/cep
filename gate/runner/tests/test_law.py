@@ -17,6 +17,7 @@ GOOD = {
         {"path": "docs/language/SPEC.md", "kind": "doc", "flag": "SPEC changed — owner decision required"},
         {"path": "docs/architecture/adr/", "kind": "doc", "flag": "an ADR changed — owner decision required"},
     ],
+    "instruments": [],
 }
 
 
@@ -47,7 +48,11 @@ class LoadManifest(unittest.TestCase):
         self.assertFault('{"schema": 1, "note": "n", "paths": [], "paths": []}', "duplicate key")
 
     def test_an_extra_top_level_key_is_named(self):
-        self.assertFault(text({**GOOD, "instruments": []}), "instruments")
+        self.assertFault(text({**GOOD, "extra": []}), "extra")
+
+    def test_a_missing_instruments_key_is_named(self):
+        doc = {k: v for k, v in GOOD.items() if k != "instruments"}
+        self.assertFault(text(doc), "instruments")
 
     def test_a_missing_note_is_named(self):
         doc = {k: v for k, v in GOOD.items() if k != "note"}
