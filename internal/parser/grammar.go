@@ -127,6 +127,11 @@ type SelectClause struct {
 type Partition struct {
 	Pos Position
 	PartitionKeys
+	TTLClause
+}
+
+// TTLClause is the partition clause's tail: `ttl D`. Embedded, its field is Partition's.
+type TTLClause struct {
 	TTL *DurationOrParam `parser:"'ttl' @@"`
 }
 
