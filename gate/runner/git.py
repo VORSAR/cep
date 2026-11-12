@@ -83,3 +83,27 @@ def dirty(paths: Sequence[str], cwd: str | None = None) -> int:
         status = status.decode("ascii", errors="replace") if isinstance(status, bytes) else status
         skip = "R" in status or "C" in status
     return count
+
+
+class GitError(Exception):
+    """A git command exited outside its contract; the message names the command and its exit code (DA-S3)."""
+
+
+def grep_files(rev: str, patterns: Sequence[str], pathspecs: Sequence[str], cwd: str | None = None) -> list[str]:
+    """The files at the revision under the pathspecs holding any of the fixed-string patterns, without the `<rev>:`
+    prefix git writes; exit 1 (no match) is []; any other exit is a GitError."""
+    args = ["grep", "-l", "-z", "-F", *(arg for p in patterns for arg in ("-e", p)), rev, "--", *pathspecs]
+    code, out = _raw(*args, cwd=cwd)
+    if code == 1:
+        return []
+    if code != 0:
+        raise GitError(f"git grep failed (exit {code})")
+    return [path.removeprefix(f"{rev}:") for path in _nul_split(out)]
+
+
+def ls_tree(rev: str, prefix: str, cwd: str | None = None) -> list[str]:
+    """The files at the revision under the prefix (none is []); a bad revision is a GitError."""
+    code, out = _raw("ls-tree", "-r", "-z", "--name-only", rev, "--", prefix, cwd=cwd)
+    if code != 0:
+        raise GitError(f"git ls-tree failed (exit {code})")
+    return _nul_split(out)

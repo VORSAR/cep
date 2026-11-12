@@ -21,6 +21,7 @@ LAW = os.path.join("gate", "law.json")
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
 NO_BASE = "lawdelta: no merge base with main (fetch-depth 0 or a local main is needed)"
 HEAD_IS_MAIN = "LAW Δ: HEAD is main — read the PR run"
+NO_EXEMPTIONS = "exemptions: 0 in code, 0 listed (+0 this diff)"  # always printed (S1.1c-2 design §2.6, §10.15)
 PLACEHOLDER = "placeholder.txt"
 
 
@@ -90,7 +91,7 @@ class LawDelta(support.GateTest):
         self.run_rows([self.law_row()])
         record = self.record("lint", "lawdelta")
         self.assertEqual((record["verdict"], record["reason"]), ("pass", "covered 1"))
-        self.assertEqual(self.row_file("lint", "lawdelta", "law.txt"), "LAW Δ: none\n".encode())
+        self.assertEqual(self.row_file("lint", "lawdelta", "law.txt"), f"LAW Δ: none\n{NO_EXEMPTIONS}\n".encode())
 
     # The row's own process.
 
@@ -102,15 +103,15 @@ class LawDelta(support.GateTest):
         code, out, row_dir = self.run_script()
         self.assertEqual(code, 0, out)
         base = self.git("merge-base", "HEAD", "main").decode().strip()[:7]
-        want = ["GATE_COVERED 1", f"LAW Δ (1 file, vs {base})", "gate/run.py: 1 file +1/−1"]
+        want = ["GATE_COVERED 1", f"LAW Δ (1 file, vs {base})", "gate/run.py: 1 file +1/−1", NO_EXEMPTIONS]
         self.assertEqual(out.splitlines(), want, out)
         self.assertEqual(self.law_txt(row_dir), "\n".join(want[1:]) + "\n")
 
     def test_head_on_main_says_so(self):
         self.law_world()
         code, out, row_dir = self.run_script()
-        self.assertEqual((code, out.splitlines()), (0, ["GATE_COVERED 1", HEAD_IS_MAIN]), out)
-        self.assertEqual(self.law_txt(row_dir), HEAD_IS_MAIN + "\n")
+        self.assertEqual((code, out.splitlines()), (0, ["GATE_COVERED 1", HEAD_IS_MAIN, NO_EXEMPTIONS]), out)
+        self.assertEqual(self.law_txt(row_dir), f"{HEAD_IS_MAIN}\n{NO_EXEMPTIONS}\n")
 
     def test_a_manifest_fault_is_named_before_covered(self):
         doc = json.loads(self.law_text)
@@ -147,7 +148,7 @@ class LawDelta(support.GateTest):
         self.commit("change")
         self.write("tools.json", "edited, not committed\n")
         code, out, row_dir = self.run_script()
-        want = ["GATE_COVERED 1", "LAW Δ: none", "LAW Δ: 1 law files have uncommitted edits (not shown)"]
+        want = ["GATE_COVERED 1", "LAW Δ: none", NO_EXEMPTIONS, "LAW Δ: 1 law files have uncommitted edits (not shown)"]
         self.assertEqual((code, out.splitlines()), (0, want), out)
         self.assertEqual(self.law_txt(row_dir), "\n".join(want[1:]) + "\n")
 
