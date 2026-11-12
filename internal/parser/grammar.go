@@ -103,8 +103,8 @@ type TableDecl struct {
 }
 
 type RuleDecl struct {
-	Pos        Position
-	Name       string        `parser:"'rule' @(Ident|Backticked)"`
+	Pos Position
+	RuleHead
 	Intent     *StrTok       `parser:"'intent' @@"`
 	Partition  *Partition    `parser:"@@?"`
 	Body       *Body         `parser:"@@"`
@@ -117,6 +117,11 @@ type RuleDecl struct {
 // RateClause is a rule's output rate: `output first every D`. A named pointer: the clause is optional.
 type RateClause struct {
 	Every *DurationOrParam `parser:"'output' 'first' 'every' @@"`
+}
+
+// RuleHead is a rule's head: `rule <Name>`. Embedded, its field is the rule's.
+type RuleHead struct {
+	Name string `parser:"'rule' @(Ident|Backticked)"`
 }
 
 type SelectClause struct {
