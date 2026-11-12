@@ -36,16 +36,19 @@ def run_by_proofs_row(path: str) -> bool:
 
 
 def misplaced(tracked: set[str], runs: set[str]) -> list[str]:
-    """Every Python file under gate/, tracked or not, that could hold tests nobody runs.
+    """Every Python file under gate/, tracked or not, that could hold tests nobody runs, and every way one of them
+    would be imported in another's place (QB10, `rows.collisions`).
 
     `runs` is this row's own scope: the modules it is about to run.
     """
     found: list[str] = []
+    walked: list[str] = []
     for directory, _, names in os.walk("gate"):
         for name in names:
             path = os.path.join(directory, name)
             if not name.endswith(".py"):
                 continue
+            walked.append(path)
             if name.endswith("_test.py"):
                 found.append(f"{path}: misnamed: test modules are test_*.py")
             elif "tests" in path.split("/")[:-1] and not name.startswith("test_") and name not in ALLOWED_IN_TESTS:
@@ -58,7 +61,7 @@ def misplaced(tracked: set[str], runs: set[str]) -> list[str]:
                 found.append(
                     f"{path}: no row runs it: move it into the pytests scope or directly into gate/proofs/drivers/"
                 )
-    return found
+    return found + rows.collisions(walked)
 
 
 def missing_init(paths: list[str]) -> list[str]:
@@ -87,7 +90,7 @@ def main(argv: list[str]) -> int:
     failures = misplaced(tracked_under_gate(row_dir), row_scope(row_dir, paths)) + missing_init(paths)
     passed, problems = rows.run_modules(PYTHON, paths, row_dir)
     rows.covered(passed)
-    return rows.finish(sorted(failures + problems))
+    return rows.finish(sorted(set(failures + problems)))  # the walk and run_modules may name one collision
 
 
 if __name__ == "__main__":

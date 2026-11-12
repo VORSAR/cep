@@ -65,12 +65,40 @@ def _module_name(path: str) -> str:
     return path.removesuffix(".py").replace("/", ".")
 
 
+INIT = "__init__.py"
+
+
+def _imported_as(path: str) -> str:
+    """The name `import` finds this file by: a package's __init__.py names its directory."""
+    directory, _, name = path.rpartition("/")
+    return _module_name(directory) if name == INIT else _module_name(path)
+
+
 def collisions(paths: Sequence[str]) -> list[str]:
     """QB10: every way a listing of Python files under gate/ (tracked or not) would run one module in another's place —
     two paths with one module name, a dotted directory, a regular package beside a same-named module — one line each
-    naming the paths; [] when there is none. W0 stub (S1.1c-3 plan check §2 S2): lane E2 builds it.
+    naming the paths, sorted; [] when there is none (S1.1c-3 design §3.5).
+
+    A regular package is a directory whose __init__.py is in the listing; a namespace directory beside a same-named
+    module is not a collision, because the import system takes the module first.
     """
-    raise NotImplementedError("rows.collisions: not built yet (S1.1c-3 lane E2)")
+    found: set[str] = set()
+    by_name: dict[str, list[str]] = {}
+    for path in sorted(set(paths)):
+        parts = path.split("/")[:-1]
+        dotted = next((i for i, part in enumerate(parts) if "." in part), None)
+        if dotted is not None:
+            found.add(f"{'/'.join(parts[: dotted + 1])}: a dotted directory under gate/ can never be imported")
+        by_name.setdefault(_imported_as(path), []).append(path)
+    for name, named in by_name.items():
+        if len(named) < 2:
+            continue
+        package = name.replace(".", "/")
+        if sorted(named) == [f"{package}.py", f"{package}/{INIT}"]:
+            found.add(f"{package}/ shadows {package}.py")
+        else:
+            found.add(f"{', '.join(named[:-1])} and {named[-1]} share the module name {name}")
+    return sorted(found)
 
 
 def _report_lines(path: str) -> list[str]:
@@ -100,7 +128,13 @@ def _run_module(python: str, path: str, out_dir: str) -> str:
 
 
 def run_modules(python: str, paths: Sequence[str], row_dir: str) -> tuple[int, list[str]]:
-    """Run each module in its own process: (modules that passed, one line per module that did not)."""
+    """Run each module in its own process: (modules that passed, one line per module that did not).
+
+    A listing in which one module would run in another's place is refused before any module runs (QB10).
+    """
+    refused = collisions(paths)
+    if refused:
+        return 0, refused
     out_dir = os.path.join(row_dir, "py")
     os.makedirs(out_dir, exist_ok=True)
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers.parse(os.environ))
