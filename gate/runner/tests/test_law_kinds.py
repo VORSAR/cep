@@ -6,6 +6,7 @@ test_lawdelta_exemptions.py; here the sub-lines themselves.
 """
 
 import json
+import re
 import unittest
 
 from gate.runner import law
@@ -34,11 +35,11 @@ def issue(id: str, **over: str) -> dict[str, str]:
 
 
 def subs(got: object) -> list[str]:
-    """The sub-lines of a list-returning kind. design ambiguity: whether the file line's `(<n> entries)` /
-    `file added: <n> entries` travels as an item of the list or is made by `block` is not said; an item ending in
-    "entries" is taken as that header and set aside."""
+    """The sub-lines of a list-returning kind. Design §10.13: `delta` returns [summary, *sub_lines], the summary
+    `(<n> entries)` or `file added: <n> entries`; it is checked for that form and set aside."""
     assert isinstance(got, list), got
-    return [s for s in got if not s.endswith("entries")]
+    assert re.fullmatch(r"\(\d+ entries\)|file added: \d+ entries", got[0]), got
+    return got[1:]
 
 
 class Kinds(unittest.TestCase):
