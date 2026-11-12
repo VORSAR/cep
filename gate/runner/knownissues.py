@@ -6,19 +6,31 @@ that cannot continue an id (`S1.1c-1's` counts; `S1.1c-10` does not match `S1.1c
 `forward` are rows or parts of gate/sprints.json's order. A non-empty `decision` resolves to a heading of a tracked
 Markdown file (`anchors.resolves`), and that heading's section — up to the next heading of the same or a higher
 level — names the id as a whole word. The caller injects the order and the tracked-Markdown reader.
+
+Each entry also carries `correctness` (a bool: a wrong or missed detection, a wrong emitted value, lost state, or a
+replay that differs) and `opened` (`YYYY-MM-DD`, not after the run's `today`, and on or before a `(YYYY-MM-DD)` its
+Found cell holds) (owner, 2026-11-12, S1.1c-3's plan check, decision 9; design §3.3). No new columns: a correctness
+issue's Issue cell begins `**Correctness.**`, and only a correctness issue's does.
 """
 
 import json
 import re
 from collections.abc import Callable
+from datetime import date
 
 from gate.runner import anchors, sprintid
 
 JSON = "gate/known-issues.json"
 TABLE = "docs/product/known-issues.md"
 TOP_KEYS = ("schema", "note", "entries")
-ENTRY_KEYS = ("id", "first_seen", "forward", "decision")
+ENTRY_KEYS = ("id", "first_seen", "forward", "decision", "correctness", "opened")
+TEXT_KEYS = ("id", "first_seen", "forward", "decision", "opened")
 ID_CHAR = r"[A-Za-z0-9_.\-]"  # an id's characters: a sprint id holds "." and "-" (S3.3-1-3)
+# After an id, a "." continues it only when an id character follows (design §3.2, §7 W0-5): "S1.1c-3-2." names it.
+NOT_CONTINUED = r"(?!\.*[A-Za-z0-9_\-])"
+ISO_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+FOUND_DAY = re.compile(r"\(([0-9]{4}-[0-9]{2}-[0-9]{2})\)")
+CORRECTNESS_WORD = "**Correctness.**"
 
 
 class _Duplicate(ValueError):
@@ -36,7 +48,7 @@ def _pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return out
 
 
-def _entries(text: str) -> list[dict[str, str]]:
+def _entries(text: str) -> list[dict]:
     """The entries, strictly: the keys, the fields, and each id once (BK-S5, CA-S5: S1.1c-3's aging keys on it)."""
     data = json.loads(text, object_pairs_hook=_pairs)
     if type(data) is not dict or sorted(data) != sorted(TOP_KEYS):
@@ -48,8 +60,10 @@ def _entries(text: str) -> list[dict[str, str]]:
     for i, item in enumerate(data["entries"]):
         if type(item) is not dict or sorted(item) != sorted(ENTRY_KEYS):
             raise ValueError(f"entries[{i}]: want the keys {', '.join(ENTRY_KEYS)}")
-        if any(type(item[k]) is not str for k in ENTRY_KEYS) or not item["id"]:
-            raise ValueError(f"entries[{i}]: every field is a string, the id non-empty")
+        if any(type(item[k]) is not str for k in TEXT_KEYS) or not item["id"]:
+            raise ValueError(f"entries[{i}]: {', '.join(TEXT_KEYS)} are strings, the id non-empty")
+        if type(item["correctness"]) is not bool:
+            raise ValueError(f"entries[{i}]: {item['id']}: correctness is not a bool (true or false)")
         if item["id"] in seen:
             raise ValueError(f"entries[{i}]: id {item['id']} is listed twice")
         seen.add(item["id"])
@@ -61,9 +75,10 @@ def _cells(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
-def table_rows(md: str) -> dict[str, str]:
-    """The known-issues table, read outside fences: id → its Found cell. The table is the one headed `Id | Found`."""
-    rows: dict[str, str] = {}
+def table_cells(md: str) -> dict[str, list[str]]:
+    """The known-issues table, read outside fences: id → its cells after the id (Found, Issue, …). The table is the
+    one headed `Id | Found`."""
+    rows: dict[str, list[str]] = {}
     inside = False
     for _, line in anchors.prose(md.splitlines()):
         if not line.lstrip().startswith("|"):
@@ -74,13 +89,24 @@ def table_rows(md: str) -> dict[str, str]:
             inside = True
             continue
         if inside and len(cells) >= 2 and not re.fullmatch(r":?-+:?", cells[0]):
-            rows[cells[0]] = cells[1]
+            rows[cells[0]] = cells[1:]
     return rows
 
 
 def names(text: str, id: str) -> bool:
-    """Whether the text names the id as a whole word: no id character on either side."""
-    return re.search(rf"(?<!{ID_CHAR}){re.escape(id)}(?!{ID_CHAR})", text) is not None
+    """Whether the text names the id as a whole word: no id character before it, and none after it but a sentence's
+    full stop (a "." that no id character follows)."""
+    return re.search(rf"(?<!{ID_CHAR}){re.escape(id)}{NOT_CONTINUED}", text) is not None
+
+
+def day(text: str) -> date | None:
+    """A `YYYY-MM-DD` calendar day, else None."""
+    if not ISO_DAY.fullmatch(text):
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def _level(line: str) -> int:
@@ -119,22 +145,51 @@ def _sprint_fault(where: str, sprint: str, order: sprintid.Order) -> str:
     return ""
 
 
-def check(data: str, table: str, order: sprintid.Order, read: Callable[[str], str | None]) -> list[str]:
-    """Every disagreement, one line each naming the id; [] when the file and the table agree."""
+def _row_faults(id: str, e: dict, cells: list[str]) -> list[str]:
+    """The table row against its entry: the Found cell's first_seen, its date against opened, the Issue cell's word."""
+    found, issue = cells[0], cells[1] if len(cells) > 1 else ""
+    faults = []
+    if not re.match(rf"{re.escape(e['first_seen'])}(?!{ID_CHAR})", found) or not e["first_seen"]:
+        faults.append(f"{id}: the Found cell {found!r} does not begin with first_seen {e['first_seen']}")
+    found_days = sorted(d for d in (day(text) for text in FOUND_DAY.findall(found)) if d is not None)
+    opened = day(e["opened"])
+    if opened is not None and found_days and opened > found_days[0]:
+        faults.append(f"{id}: opened {e['opened']} is after the date {found_days[0]} its Found cell gives")
+    if e["correctness"] and not issue.startswith(CORRECTNESS_WORD):
+        faults.append(f"{id}: a correctness issue's Issue cell begins {CORRECTNESS_WORD}")
+    if not e["correctness"] and issue.startswith(CORRECTNESS_WORD):
+        faults.append(f"{id}: the Issue cell begins {CORRECTNESS_WORD}, and correctness is false")
+    return faults
+
+
+def _opened_fault(id: str, opened: str, today: date) -> str:
+    """ "" when opened is a day not after today; else why, naming the field."""
+    d = day(opened)
+    if d is None:
+        return f"{id}: opened {opened!r} is not a day YYYY-MM-DD"
+    if d > today:
+        return f"{id}: opened {opened} is after today {today.isoformat()}"
+    return ""
+
+
+def check(data: str, table: str, order: sprintid.Order, read: Callable[[str], str | None], *, today: date) -> list[str]:
+    """Every disagreement, one line each naming the id; [] when the file and the table agree. `today` is the run's
+    UTC day (`rows.today()`), a required keyword so no caller skips the opened check (design §3.3, DQ-S14)."""
     try:
         entries = _entries(data)
     except ValueError as e:
         return [f"{JSON}: {e}"]
-    rows = table_rows(table)
+    rows = table_cells(table)
     by_id = {e["id"]: e for e in entries}
     faults = [f"{id}: in {JSON} and not in the table of {TABLE}" for id in sorted(set(by_id) - set(rows))]
     faults += [f"{id}: in the table of {TABLE} and not in {JSON}" for id in sorted(set(rows) - set(by_id))]
     for id in sorted(set(by_id) & set(rows)):
-        e, found = by_id[id], rows[id]
-        if not re.match(rf"{re.escape(e['first_seen'])}(?!{ID_CHAR})", found) or not e["first_seen"]:
-            faults.append(f"{id}: the Found cell {found!r} does not begin with first_seen {e['first_seen']}")
+        faults += _row_faults(id, by_id[id], rows[id])
     for id in sorted(by_id):
         e = by_id[id]
+        why = _opened_fault(id, e["opened"], today)
+        if why:
+            faults.append(why)
         for where in ("first_seen", "forward"):
             if where == "forward" and not e[where]:
                 continue

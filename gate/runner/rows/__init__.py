@@ -14,6 +14,7 @@ import signal
 import subprocess
 import sys
 from collections.abc import Sequence
+from datetime import UTC, date, datetime
 
 from gate import term
 from gate.runner import workers
@@ -21,6 +22,12 @@ from gate.runner import workers
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SHIM = os.path.join(REPO, "gate", "runner", "pyshim.py")
 SHIM_FLAGS = ("-I", "-B", "-X", "dev", "-W", "error")
+
+
+def today() -> date:
+    """The run's day: the UTC date, whatever the local zone (S1.1c-3 design §3.4; the inline copies move here when
+    their files next change, BA9)."""
+    return datetime.now(UTC).date()
 
 
 def start() -> str:

@@ -74,6 +74,7 @@ import json
 import os
 import sys
 import unittest
+from datetime import date
 
 from gate.runner import allowlists, anchors, docsync, knownissues, law, registry, sprintid, suppressions, teeth
 from gate.runner.rows import suppressions as row
@@ -259,7 +260,11 @@ class TeethCountsWhatRuns(unittest.TestCase):
         self.assertTrue(faults, f"{cases} counted from a class unittest never loads")
 
 
-ISSUE = '{{"id": "S3.3-2-1", "first_seen": "{first_seen}", "forward": "", "decision": ""}}'
+# S1.1c-3 (design §3.3): every entry carries correctness and opened, so the refusal seen is the id listed twice.
+ISSUE = (
+    '{{"id": "S3.3-2-1", "first_seen": "{first_seen}", "forward": "", "decision": "", '
+    '"correctness": false, "opened": "2026-11-01"}}'
+)
 ONE = '{"schema": 1, "note": "n", "entries": [' + ISSUE.format(first_seen="S3.3") + "]}"
 TWICE = (
     '{"schema": 1, "note": "n", "entries": ['
@@ -276,7 +281,8 @@ class KnownIssueListedTwice(unittest.TestCase):
 
     def test_the_pin_refuses_an_id_listed_twice(self):
         table = "| Id | Found |\n|---|---|\n| S3.3-2-1 | S1.1c-2 |\n"
-        self.assertTrue(knownissues.check(TWICE, table, ISSUE_ORDER, lambda path: None), "an id listed twice passes")
+        faults = knownissues.check(TWICE, table, ISSUE_ORDER, lambda path: None, today=date(2026, 11, 12))
+        self.assertTrue(any("listed twice" in f for f in faults), faults)
 
     def test_law_delta_counts_every_entry(self):
         self.assertEqual(law.delta("known-issues", ONE, TWICE)[0], "(2 entries)")
