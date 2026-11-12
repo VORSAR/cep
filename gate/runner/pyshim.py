@@ -10,8 +10,11 @@ and held to Python 3.12: `pyfloor` runs it under the pinned 3.12.16.
 
 The shim opens the report file before it imports the module, writes its one final line there, closes it, and still
 prints the line; the wrapper reads only the file, so a module that prints the pass line and leaves with os._exit(0)
-is red (S1.1c-2 design §4.3, BA13). A module that writes the file itself, from sys.argv[3], is the residue
-ADR-0015 §3.6 names: every test module is a law path, so review sees it as a LAW Δ line.
+is red (S1.1c-2 design §4.3, BA13). The runner, its run method, the suite's count and the result class are bound
+before the import, and the tests run must be the tests the suite holds, so a module that patches the runner at
+import is red too (BK-S2). A module that writes the file itself, from sys.argv[3], or rewires unittest's or the
+shim's internals is the residue ADR-0015 §3.6 names (owner, 2026-11-12, S1.1c-2's review and break-it 1): it shows
+in the grouped `gate/runner/` LAW Δ line, not by name.
 """
 
 import gc
@@ -77,6 +80,11 @@ def run(root: str, name: str) -> "tuple[str, int]":
         leaks.append(f"{info.exc_type.__name__}: {info.exc_value}")
 
     sys.unraisablehook = on_unraisable
+    # Bound before the import (BK-S2): a module that replaces the runner, its run method, the suite's count or the
+    # result class at import changes nothing the shim calls. Rewiring unittest's or the shim's own internals beyond
+    # these stays ADR-0015 §3.6's review-only residue.
+    runner_class, run_suite, result_class = unittest.TextTestRunner, unittest.TextTestRunner.run, _Result
+    count_cases = unittest.TestSuite.countTestCases
     loader = unittest.TestLoader()
     try:
         suite = loader.loadTestsFromName(name)
@@ -84,7 +92,8 @@ def run(root: str, name: str) -> "tuple[str, int]":
         return f"pyshim: {name}: import error", 1
     except Exception as e:  # the loader only catches ImportError
         raise ImportFailed(name) from e
-    result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2, resultclass=_Result).run(suite)
+    defined = count_cases(suite) if isinstance(suite, unittest.TestSuite) else 0
+    result = run_suite(runner_class(stream=sys.stderr, verbosity=2, resultclass=result_class), suite)
     gc.collect()
 
     problems: list[str] = []
@@ -94,6 +103,8 @@ def run(root: str, name: str) -> "tuple[str, int]":
         problems.append("import error")
     elif result.testsRun == 0:
         problems.append("ran 0 tests")
+    elif result.testsRun != defined and not result.shouldStop:  # a test that never started is no pass (BK-S2)
+        problems.append(f"ran {result.testsRun} of {defined} tests")
     if result.failures or result.errors:
         problems.append(f"failed: {len(result.failures)} failures, {len(result.errors)} errors")
     if result.skipped:
