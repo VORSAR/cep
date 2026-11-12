@@ -120,5 +120,53 @@ class Dirty(GitTest):
         self.assertEqual(git.dirty(["a.txt", "b.txt"], cwd=self.repo), 0)
 
 
+class GrepAndTree(GitTest):
+    """S1.1c-2 design §2.6 (DA-S3): exit 0 gives the paths without the `<rev>:` prefix, exit 1 gives [], any other
+    exit is a GitError naming the command."""
+
+    def world(self) -> str:
+        self.main_then_change()
+        self.track("internal/x/y.go", "package y\n\nvar _ = 1 //nolint:gosec // x\n")
+        self.track("internal/x/z.go", "package y\n")
+        self.track("gate/runner/z.py", "x = 1  # fmt: skip  # a reason\n")
+        self.track("tools/allowlists/a.json", "{}\n")
+        self.track("tools/allowlists/b.json", "{}\n")
+        self.commit("files")
+        return git.head(cwd=self.repo)
+
+    def test_grep_files_strips_the_revision_prefix(self):
+        rev = self.world()
+        got = git.grep_files(rev, ["nolint", "fmt: skip"], ["*.go", "gate/"], cwd=self.repo)
+        self.assertEqual(sorted(got), ["gate/runner/z.py", "internal/x/y.go"])
+        self.assertEqual(sorted(git.grep_files("HEAD", ["nolint"], ["*.go"], cwd=self.repo)), ["internal/x/y.go"])
+
+    def test_grep_files_with_no_match_is_empty(self):
+        rev = self.world()
+        self.assertEqual(git.grep_files(rev, ["no such text anywhere"], ["*.go"], cwd=self.repo), [])
+
+    def test_grep_files_on_a_bad_revision_is_a_git_error_naming_the_command(self):
+        self.world()
+        with self.assertRaises(git.GitError) as caught:
+            git.grep_files("no-such-rev", ["nolint"], ["*.go"], cwd=self.repo)
+        self.assertIn("git grep", str(caught.exception))
+
+    def test_ls_tree_lists_the_files_under_a_prefix(self):
+        rev = self.world()
+        self.assertEqual(
+            sorted(git.ls_tree(rev, "tools/allowlists/", cwd=self.repo)),
+            ["tools/allowlists/a.json", "tools/allowlists/b.json"],
+        )
+
+    def test_ls_tree_of_an_absent_prefix_is_empty(self):
+        rev = self.world()
+        self.assertEqual(git.ls_tree(rev, "nowhere/", cwd=self.repo), [])
+
+    def test_ls_tree_on_a_bad_revision_is_a_git_error_naming_the_command(self):
+        self.world()
+        with self.assertRaises(git.GitError) as caught:
+            git.ls_tree("no-such-rev", "tools/allowlists/", cwd=self.repo)
+        self.assertIn("git ls-tree", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
