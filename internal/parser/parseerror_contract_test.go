@@ -206,11 +206,11 @@ var pecContract = []pecRow{
 	{"E-SYN-001 fallback/after match", pecEdit(pecPattern, "after match skip past last", "after match skip past first"),
 		"E-SYN-001", 9, 25, `unexpected token "first" (expected "last")`},
 	{"E-SYN-001 fallback/partition key missing (names a type)", pecEdit(pecPattern, "partition by a of S", "partition by of S"),
-		"E-SYN-001", 6, 3, `unexpected token "partition" (expected Body Extra* SelectClause ("output" "first" "every" DurationOrParam)? "insert" "into" NameTok ";")`},
+		"E-SYN-001", 6, 3, `unexpected token "partition" (expected Body Extra* SelectClause RateClause? "insert" "into" NameTok ";")`},
 	{"E-SYN-001 fallback/partition key without of (names a type)", pecEdit(pecPattern, "partition by a of S", "partition by a S"),
 		"E-SYN-001", 6, 18, `unexpected token "S" (expected "of" NameTok)`},
 	{"E-SYN-001 fallback/partition key group (names a type)", pecEdit(pecPattern, "partition by a of S", "partition by (a, ) of S"),
-		"E-SYN-001", 6, 3, `unexpected token "partition" (expected Body Extra* SelectClause ("output" "first" "every" DurationOrParam)? "insert" "into" NameTok ";")`},
+		"E-SYN-001", 6, 3, `unexpected token "partition" (expected Body Extra* SelectClause RateClause? "insert" "into" NameTok ";")`},
 	// Bare integers where a duration is taken outside the rule body moved to pecG1Rows (F3; decision 3 of
 	// "S1.1c-3's design, after the reviews"): today they are E-SYN-001 at an earlier token.
 

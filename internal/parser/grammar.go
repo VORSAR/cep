@@ -99,14 +99,19 @@ type TableDecl struct {
 
 type RuleDecl struct {
 	Pos        Position
-	Name       string           `parser:"'rule' @(Ident|Backticked)"`
-	Intent     *StrTok          `parser:"'intent' @@"`
-	Partition  *Partition       `parser:"@@?"`
-	Body       *Body            `parser:"@@"`
-	Extras     []*Extra         `parser:"@@*"`
-	Select     *SelectClause    `parser:"@@"`
-	Rate       *DurationOrParam `parser:"('output' 'first' 'every' @@)?"`
-	InsertInto *NameTok         `parser:"'insert' 'into' @@ ';'"`
+	Name       string        `parser:"'rule' @(Ident|Backticked)"`
+	Intent     *StrTok       `parser:"'intent' @@"`
+	Partition  *Partition    `parser:"@@?"`
+	Body       *Body         `parser:"@@"`
+	Extras     []*Extra      `parser:"@@*"`
+	Select     *SelectClause `parser:"@@"`
+	Rate       *RateClause   `parser:"@@?"`
+	InsertInto *NameTok      `parser:"'insert' 'into' @@ ';'"`
+}
+
+// RateClause is a rule's output rate: `output first every D`. A named pointer: the clause is optional.
+type RateClause struct {
+	Every *DurationOrParam `parser:"'output' 'first' 'every' @@"`
 }
 
 type SelectClause struct {
