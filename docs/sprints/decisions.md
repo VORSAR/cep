@@ -83,6 +83,7 @@
 | 2026-11-12 | [S1.1c-2's review and break-it](#owner-decisions-2026-11-12--s11c-2s-review-and-break-it) |
 | 2026-11-12 | [S1.1c-2's close-out](#owner-decisions-2026-11-12--s11c-2s-close-out) |
 | 2026-11-12 | [S1.1c-3's plan check](#owner-decisions-2026-11-12--s11c-3s-plan-check) |
+| 2026-11-12 | [S1.1c-3's design, after the reviews](#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews) |
 
 ## The decisions
 
@@ -786,3 +787,12 @@ The plan check ([s1-1c-3-plan-check.md](s1-1c-3-plan-check.md), v2 at b5ef589) w
 10. **BA10 is fixed by moving parity's tree hash into a plain separate process** with a time cap of its own, which the gate does not wait for at exit and a stop ends (as recommended): the known issue's "cancel flag per file" is replaced, a flag being unable to reach a read already stuck; proven first by a test that plants a stuck read. Rejected: the cancel flag.
 
 Confirmed as recommended: (a) a syntax error's generic message names what was expected in rule words, never an internal grammar name (cep-vscode is told); (b) each documented wrong example is listed with the stage it must fail at; (c) a known issue may have no forward sprint only when a decision names it (BA9), and the three S3.3-2 entries age until decided; (d) two older findings go to known issues at S1.1c-3's G0, forwarded to S1.1c-4: neither Go module is `go mod tidy`-clean, and CI's `go mod download all` writes lines into the root `go.sum`; (e) decision 5's Python sleep-ban gap is written into the backlog (its 30-day gap is now decision 9's work). *(Annotated at S1.1c-3's G0, 2026-11-12: (d)'s two findings are known issues S1.1c-3-1 and S1.1c-3-2, both forwarded to S1.1c-4)*
+
+### Owner decisions, 2026-11-12 — S1.1c-3's design, after the reviews
+
+The design note ([s1-1c-3-design.md](s1-1c-3-design.md), v2 at 125819d) was reviewed blind by the architect with the-fool ([review](../reviews/s1-1c-3-design-architecture.md): 1 blocker, 15 should-fix, 11 later) and by QA for testability ([review](../reviews/s1-1c-3-design-qa.md): 0 blockers, 16 should-fix, 8 later); every finding is placed in the note's §9, the blocker (a fence of any tag but `cep` went unread, so the `-> and not` incident could return through a ```` ```text ```` fence) fixed in place. Four questions at G1; three as recommended, one ≠ R.
+
+1. **The corrections list is approved as recommended** (the note's §5): decision 4's four, SEMANTICS's header, the 24 real mistakes rewritten to forms the grammar accepts, the 23 prose spans rewritten as prose, the 12 spans kept word for word through new entry points; SEMANTICS:178 `every D` and SEMANTICS:124's quoted wrong form `→ not B for D` listed as named wrong examples (their text unchanged); SPEC:38 `timestamp '<ISO-8601>'` unchanged and bound green; SPEC:284's history line reworded. Rejected: un-quoting the two listed spans.
+2. **The two E-PAT-005 messages as proposed** (as recommended): `an absence follows its step directly: drop the -> before and not` for `-> and not`; `an absence is written and not, straight after its step: write and not instead of -> not` for `-> not`. Rejected: one shorter message.
+3. **F3 is fixed now, in lane B** (as recommended): a bare number where a duration belongs outside the rule body (`watermark bounded 1`, `idle after 5`, `window delay(5)`) gets E-DUR-001 at the number, not E-SYN-001 at an earlier token. Rejected: a known issue.
+4. **F5 and F7 are fixed now, in lane B** (**≠ R**; the recommendation forwarded both as known issues): `-> ->` and a trailing `->` no longer read "within comes before ->" — they get E-PAT-005 `a step must follow ->` at the token after the `->` (an existing code; the catalogue unchanged); a broken filter such as `S[a == ]` is placed at the `]`. Lane B grows to about 6.5 points and the sprint to about 9.75 items against the 13 cap.
