@@ -47,7 +47,7 @@ func lower(p *Program) (*model.App, *lowerError) {
 			app.Streams = append(app.Streams, l.stream(s.Stream))
 		case s.Table != nil:
 			t := model.Table{Name: name(s.Table.Name), Attrs: l.attrs(s.Table.Attrs), PrimaryKey: []string{}, Pos: pos(s.Table.Pos)}
-			for _, k := range s.Table.PrimaryKey {
+			for _, k := range s.Table.Cols {
 				t.PrimaryKey = append(t.PrimaryKey, name(k))
 			}
 			app.Tables = append(app.Tables, t)

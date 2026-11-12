@@ -96,10 +96,17 @@ type AnnItem struct {
 }
 
 type TableDecl struct {
-	Pos        Position
-	Name       string   `parser:"'table' @(Ident|Backticked)"`
-	Attrs      []*Attr  `parser:"'(' @@ (',' @@)* ')'"`
-	PrimaryKey []string `parser:"'primary' 'key' '(' @(Ident|Backticked) (',' @(Ident|Backticked))* ')' ';'"`
+	Pos   Position
+	Name  string  `parser:"'table' @(Ident|Backticked)"`
+	Attrs []*Attr `parser:"'(' @@ (',' @@)* ')'"`
+	PrimaryKeyClause
+	End struct{} `parser:"';'"`
+}
+
+// PrimaryKeyClause is a table's key: `primary key (<cols>)`. Embedded, its field is the table's; the statement's
+// closing `;` captures nothing, so it sits in a field that holds no value.
+type PrimaryKeyClause struct {
+	Cols []string `parser:"'primary' 'key' '(' @(Ident|Backticked) (',' @(Ident|Backticked))* ')'"`
 }
 
 type RuleDecl struct {
