@@ -10,6 +10,7 @@ package parser
 // begins file:line: (design note v2 §2.3).
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -229,6 +230,9 @@ var fragKinds = []struct {
 	{kindKeyList, "(k, j) of S, (k2, j2) of T", "(k, j) S"},
 }
 
+// angleLeft finds an <angle name> placeholder that binding left behind.
+var angleLeft = regexp.MustCompile(`<[A-Za-z][A-Za-z0-9 _'-]*>`)
+
 // TestParseFragmentKinds: every kind has an entry point; trailing tokens are refused; the lowering runs where the
 // lowerer takes the sub-tree; an error at the first token carries participle's own position (§6 [3] (15)).
 func TestParseFragmentKinds(t *testing.T) {
@@ -247,8 +251,9 @@ func TestParseFragmentKinds(t *testing.T) {
 			}
 		})
 		t.Run(string(k.kind)+"/trailing tokens", func(t *testing.T) {
-			if err := parseFragment(k.kind, k.good+" )"); err == nil || err == errFragmentNotBuilt {
-				t.Errorf("parseFragment(%s, %q) = %v; want trailing tokens refused", k.kind, k.good+" )", err)
+			// The ")" goes on its own line: after a "--" comment a same-line ")" is comment text (lane B2, S1.1c-3).
+			if err := parseFragment(k.kind, k.good+"\n)"); err == nil || err == errFragmentNotBuilt {
+				t.Errorf("parseFragment(%s, %q) = %v; want trailing tokens refused", k.kind, k.good+"\n)", err)
 			}
 		})
 	}
@@ -309,7 +314,8 @@ func TestBindPlaceholders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("bindPlaceholders(%q) = %v", b.src, err)
 			}
-			if strings.ContainsAny(bound, "<>…") && b.kind != kindExpr {
+			// A placeholder survives as an <angle name> or an ellipsis; the ">" of a "->" is not one (lane B2, S1.1c-3).
+			if (angleLeft.MatchString(bound) || strings.Contains(bound, "…")) && b.kind != kindExpr {
 				t.Errorf("bindPlaceholders(%q) = %q: a placeholder survived", b.src, bound)
 			}
 			if err := parseFragment(b.kind, bound); err != nil {
