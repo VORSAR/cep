@@ -5,14 +5,21 @@ package parser
 // rule-like in SPEC.md, SEMANTICS.md and errors.md. Each becomes a one-span document through checkMarkdown:
 //   - unmarked, every span but a keyword-only mention is found ("mark its kind");
 //   - with the marker its class implies, cep / cep-meta / text / exempt / a listed cep-invalid give no fault, and
-//     the 63 red spans, marked at the kind R-F3 got furthest with, give one.
-// SEMANTICS.md:124's `→ not B for D` is text with the incident's shape: red even marked text (decision 2).
+//     the 62 red spans, marked at the kind R-F3 got furthest with, give one.
+// SPEC.md:38's `timestamp '<ISO-8601>'` is cep-meta at expr, not red: a string literal whose whole content is <…>
+// binds without a table check (design note v2 §2.3; DQ-S1; decision 1 of "S1.1c-3's design, after the reviews").
+// SEMANTICS.md:124's `→ not B for D` keeps R-F3's class, text, and is red marked text (the incident's shape); the
+// same decision lists it as a wrong example at stage grammar, which the data says with a kind and a stage on a row
+// whose class is not cep-invalid: marked <!--cep-invalid:<kind>--> with its register entry, it gives no fault.
+// errors.md:103's `k of S, j of S` is listed at keylist, stage validator (design note v2 §7 W0-10): it parses at
+// keylist, and the validator, not this test, refuses it.
 
 import (
 	"bufio"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -23,7 +30,7 @@ type researchSpan struct {
 	Span   string `json:"span"`
 	Class  string `json:"class"` // cep, cep-meta, text, exempt, cep-invalid, red
 	Kind   string `json:"kind"`  // the kind it parses at (cep, cep-meta, cep-invalid's validator) or got furthest with
-	Stage  string `json:"stage"` // cep-invalid only: grammar, lowering or validator
+	Stage  string `json:"stage"` // the stage a listed span fails at: grammar, lowering or validator (cep-invalid, or listed at G1)
 	KWOnly bool   `json:"kwonly"`
 }
 
@@ -49,23 +56,12 @@ func readResearchSpans(t *testing.T) []researchSpan {
 	return rows
 }
 
-// incidentShape: `->` or `→` straight before `and` or `not` (R-F3 §6, widened).
-func incidentShape(s string) bool {
-	for _, arrow := range []string{"->", "→"} {
-		for i := strings.Index(s, arrow); i >= 0; {
-			rest := strings.TrimLeft(s[i+len(arrow):], " ")
-			if strings.HasPrefix(rest, "and") || strings.HasPrefix(rest, "not") {
-				return true
-			}
-			j := strings.Index(s[i+len(arrow):], arrow)
-			if j < 0 {
-				break
-			}
-			i += len(arrow) + j
-		}
-	}
-	return false
-}
+// incidentRe is the incident's shape as the design note v2 §2.3 defines it, word-bounded (DQ-L8): an arrow, then
+// `not` or `and not`. Lane B's helper and this test must share one definition: when fragment_test.go declares it,
+// this variable becomes a reference to that one.
+var incidentRe = regexp.MustCompile(`(->|→)\s*(and\s+)?not\b`)
+
+func incidentShape(s string) bool { return incidentRe.MatchString(s) }
 
 func TestTheDetectorClassifiesTheResearchSpans(t *testing.T) {
 	rows := readResearchSpans(t)
@@ -73,7 +69,7 @@ func TestTheDetectorClassifiesTheResearchSpans(t *testing.T) {
 	for _, r := range rows {
 		counts[r.Class]++
 	}
-	want := map[string]int{"cep": 57, "cep-meta": 30, "text": 26, "exempt": 40, "cep-invalid": 8, "red": 63}
+	want := map[string]int{"cep": 57, "cep-meta": 31, "text": 26, "exempt": 40, "cep-invalid": 8, "red": 62}
 	for class, n := range want {
 		if counts[class] != n {
 			t.Fatalf("research-spans.jsonl holds %d %s spans; R-F3 counted %d", counts[class], class, n)
@@ -93,8 +89,12 @@ func TestTheDetectorClassifiesTheResearchSpans(t *testing.T) {
 				}
 				return
 			}
-			if !hasFault(faults, r.File+":1", "mark its kind") {
-				t.Errorf("an unmarked rule-like span: want a fault naming %s:1 and %q; got %q", r.File, "mark its kind", faults)
+			want := "mark its kind"
+			if incidentShape(r.Span) {
+				want = "mark its kind | -> before and/not" // one fault per line: either names the span
+			}
+			if !hasFault(faults, r.File+":1:", want) {
+				t.Errorf("an unmarked rule-like span: want a fault naming %s:1: and %q; got %q", r.File, want, faults)
 			}
 		})
 		t.Run(name+"/marked", func(t *testing.T) {
@@ -117,20 +117,33 @@ func TestTheDetectorClassifiesTheResearchSpans(t *testing.T) {
 			}
 			faults := checkMarkdown(r.File, "Prose: "+quoted+marker+" in a sentence.\n", invalid)
 			red := r.Class == "red" || (r.Class == "text" && incidentShape(r.Span))
-			if red && !hasFault(faults, r.File+":1", "") {
-				t.Errorf("%s marked %s: want a fault naming %s:1; got none", r.Span, marker, r.File)
+			if red && !hasFault(faults, r.File+":1:", "") {
+				t.Errorf("%s marked %s: want a fault naming %s:1:; got %q", r.Span, marker, r.File, faults)
 			}
 			if !red && len(faults) != 0 {
 				t.Errorf("%s marked %s: want no fault; got %q", r.Span, marker, faults)
 			}
 		})
+		if r.Stage == "" || r.Class == "cep-invalid" {
+			continue
+		}
+		// Listed at G1 (decision 1 of "S1.1c-3's design, after the reviews"): marked cep-invalid at its kind with
+		// its register entry, the span fails at its stage and gives no fault, the incident's shape included.
+		t.Run(name+"/listed", func(t *testing.T) {
+			marker := "<!--cep-invalid:" + r.Kind + "-->"
+			invalid := []invalidExample{{File: r.File, Span: r.Span, Stage: r.Stage}}
+			if faults := checkMarkdown(r.File, "Prose: "+quoted+marker+" in a sentence.\n", invalid); len(faults) != 0 {
+				t.Errorf("%s marked %s, listed at %s: want no fault; got %q", r.Span, marker, r.Stage, faults)
+			}
+		})
 	}
 }
 
-// hasFault: some fault names at (file:line) and holds sub ("" for any); sub may list alternatives split by " | ".
+// hasFault: some fault begins with at — "file:line:" (the colon, so line 1 is not line 12), or "file:" for any
+// line — and holds sub ("" for any); sub may list alternatives split by " | ". Faults are "file:line: text" (§2.3).
 func hasFault(faults []string, at, sub string) bool {
 	for _, f := range faults {
-		if !strings.Contains(f, at) {
+		if !strings.HasPrefix(f, at) {
 			continue
 		}
 		if sub == "" {
