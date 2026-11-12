@@ -335,6 +335,40 @@ class DriverTest(unittest.TestCase):
         self.assertGateFailed(run)
         self.assertRow(run, job, row_id, False, reason)
 
+    def assertRefusedAtLoad(self, run: Run, reason: str) -> None:
+        """The runner refused before any row ran (S1.1c-2 design §4.2): exit 2, `reason` as the first line of its
+        output, `GATE FAILED` and `exit: 2` as its last two, and no record of any row."""
+        lines = run.stdout.split("\n")[:-1]
+        self.assertEqual((run.code, lines[-2:]), (2, ["GATE FAILED", "exit: 2"]), run.stdout)
+        self.assertEqual(lines[0], reason, run.stdout)
+        self.assertFalse(os.path.exists(os.path.join(run.run_dir, "records")), f"a row ran:\n{run.stdout}")
+        self.assertFalse(os.path.exists(os.path.join(run.run_dir, "run.json")), f"a run was recorded:\n{run.stdout}")
+
+    def assertHookRefused(self, result: tuple[int, str], reason: str) -> None:
+        """A git hook refused the commit or the push (S1.1c-2 design §4.2): git's exit 1, the hook's `GATE FAILED` and
+        `exit: 1` as the output's last two lines, and `reason` either as one whole line (a hook's own refusal, before
+        any row) or as the reason of exactly one FAIL row of the hook's gate run, with no other row failing."""
+        code, out = result
+        lines = out.split("\n")[:-1]
+        self.assertEqual(code, 1, out)
+        self.assertEqual(lines[-2:], ["GATE FAILED", "exit: 1"], out)
+        if reason in lines:
+            return
+        rows = [cells for cells in ([c.strip() for c in line.split(" | ", 4)] for line in lines) if len(cells) == 5]
+        failed = [cells[4] for cells in rows if cells[2] == "FAIL"]
+        self.assertEqual(failed, [reason], out)
+
+    def assertRegenRefused(self, result: tuple[int, str], reason: str) -> None:
+        """gate/baseline/regen.py refused (S1.1c-2 design §4.2): exit 1, `reason` as its last `refused: ` line, and no
+        line saying it wrote anything (`recorded <n> block(s)`, `no change…`)."""
+        code, out = result
+        lines = out.split("\n")
+        self.assertEqual(code, 1, out)
+        refused = [line for line in lines if line.startswith("refused: ")]
+        self.assertTrue(refused, out)
+        self.assertEqual(refused[-1], reason, out)
+        self.assertEqual([line for line in lines if line.startswith(("recorded ", "no change"))], [], out)
+
 
 class ParityDriver(DriverTest):
     """A parity proof: one planted defect, exactly one reason, and nothing but parity ever starts."""
