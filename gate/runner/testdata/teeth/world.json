@@ -1,0 +1,27 @@
+{
+  "note": "A fixture for test_instruments_pin.py: the tracked files the pin sees and what python_cases and go_cases count per proof file (cases, faults).",
+  "tracked": [
+    "gate/registry.json",
+    "gate/law.json",
+    "gate/runner/rows/lawdelta.py",
+    "gate/runner/rows/docsync.py",
+    "gate/runner/docsync.py",
+    "gate/runner/rows/unit.py",
+    "gate/proofs/drivers/test_lawdelta_planted.py",
+    "gate/proofs/drivers/test_docsync_planted.py",
+    "internal/parser/errorcounts_test.go",
+    "scripts/test_outside.py"
+  ],
+  "counted": {
+    "gate/proofs/drivers/test_lawdelta_planted.py": {"cases": ["a", "b", "c"], "faults": []},
+    "gate/proofs/drivers/test_docsync_planted.py": {"cases": ["a", "b"], "faults": []},
+    "internal/parser/errorcounts_test.go": {
+      "cases": [
+        "TestErrorCountsMatchTheCatalogue",
+        "TestErrorCountsMatchTheCatalogue/parse",
+        "TestUnrelated"
+      ],
+      "faults": []
+    }
+  }
+}

@@ -748,3 +748,114 @@ func TestCLI(t *testing.T) {
 		}
 	})
 }
+
+// TestCases is -cases' table rules (S1.1c-2 design §4.2, DA-S7's Cases(path, src string) (cases, faults []string)):
+// a case per top-level Test and per t.Run literal, nested names joined with "/", a range over an identifier-bound or
+// inline composite literal counted by its elements (a [:n] slice counts n), anything else a fault; a counted case
+// that never reaches Fatal, Fatalf, Error, Errorf or FailNow is a fault (DA-S12).
+//
+// design ambiguity: Cases returns the names without the "case " prefix and the faults without "fault ".
+// design ambiguity: the names of a range-counted table's elements; asserted by count under the test's prefix.
+// design ambiguity: a parent whose only verdicts sit in its t.Run closures counts as calling Fatal; read as yes.
+// design ambiguity: the no-verdict fault's text; asserted as one fault beginning with the test's name.
+func TestCases(t *testing.T) {
+	const head = "package x\n\nimport \"testing\"\n\n"
+	count := func(cases []string, prefix string) int {
+		n := 0
+		for _, c := range cases {
+			if strings.HasPrefix(c, prefix) {
+				n++
+			}
+		}
+		return n
+	}
+	t.Run("literal subtests and nesting", func(t *testing.T) {
+		src := head + `func TestA(t *testing.T) {
+	t.Run("one", func(t *testing.T) {
+		t.Run("two", func(t *testing.T) { t.Fatal("x") })
+	})
+	t.Run("three", func(t *testing.T) { t.Error("x") })
+}
+`
+		cases, faults := Cases("x_test.go", src)
+		if len(faults) != 0 {
+			t.Fatalf("faults %q", faults)
+		}
+		want := []string{"TestA", "TestA/one", "TestA/one/two", "TestA/three"}
+		slices.Sort(cases)
+		if !slices.Equal(cases, want) {
+			t.Fatalf("cases %q, want %q", cases, want)
+		}
+	})
+	t.Run("an identifier bound to a literal", func(t *testing.T) {
+		src := head + `func TestT(t *testing.T) {
+	table := []struct{ name string }{{"a"}, {"b"}, {"c"}}
+	for _, tc := range table {
+		t.Run(tc.name, func(t *testing.T) { t.Fatal(tc.name) })
+	}
+}
+`
+		cases, faults := Cases("x_test.go", src)
+		if len(faults) != 0 || count(cases, "TestT/") != 3 || !slices.Contains(cases, "TestT") {
+			t.Fatalf("cases %q faults %q, want TestT and 3 elements", cases, faults)
+		}
+	})
+	t.Run("an inline literal", func(t *testing.T) {
+		src := head + `func TestI(t *testing.T) {
+	for name, want := range map[string]int{"a": 1, "b": 2} {
+		t.Run(name, func(t *testing.T) { t.Errorf("%d", want) })
+	}
+}
+`
+		cases, faults := Cases("x_test.go", src)
+		if len(faults) != 0 || count(cases, "TestI/") != 2 {
+			t.Fatalf("cases %q faults %q, want 2 elements", cases, faults)
+		}
+	})
+	t.Run("a constant slice of a bound literal", func(t *testing.T) {
+		src := head + `func TestS(t *testing.T) {
+	table := []string{"a", "b", "c", "d"}
+	for _, name := range table[:2] {
+		t.Run(name, func(t *testing.T) { t.Fatal(name) })
+	}
+}
+`
+		cases, faults := Cases("x_test.go", src)
+		if len(faults) != 0 || count(cases, "TestS/") != 2 {
+			t.Fatalf("cases %q faults %q, want 2 elements", cases, faults)
+		}
+	})
+	t.Run("a range over a function call is a fault", func(t *testing.T) {
+		src := head + `func names() []string { return []string{"a"} }
+
+func TestF(t *testing.T) {
+	for _, name := range names() {
+		t.Run(name, func(t *testing.T) { t.Fatal(name) })
+	}
+}
+`
+		_, faults := Cases("x_test.go", src)
+		want := []string{"TestF: t.Run over a table -cases cannot count"}
+		if !slices.Equal(faults, want) {
+			t.Fatalf("faults %q, want %q", faults, want)
+		}
+	})
+	t.Run("a case that never fails is a fault", func(t *testing.T) {
+		src := head + `func TestGood(t *testing.T) { fail(t) }
+
+func fail(t *testing.T) { t.Helper(); t.FailNow() }
+
+func TestNoVerdict(t *testing.T) {
+	_ = 1 + 1
+	t.Log("never fails")
+}
+`
+		cases, faults := Cases("x_test.go", src)
+		if len(faults) != 1 || !strings.HasPrefix(faults[0], "TestNoVerdict") {
+			t.Fatalf("faults %q, want one naming TestNoVerdict", faults)
+		}
+		if !slices.Contains(cases, "TestGood") {
+			t.Fatalf("cases %q: a same-file helper's FailNow counts", cases)
+		}
+	})
+}

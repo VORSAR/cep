@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "note": "A fixture for test_instruments_pin.py (S1.1c-2 design §4.2): three row instruments for registry.json's three rows and one Go-test instrument; the unit row is exempt through teeth.json.",
+  "paths": [
+    {"path": "gate/registry.json", "kind": "registry"},
+    {"path": "gate/law.json", "kind": "law"},
+    {"path": "gate/runner/", "kind": "code"},
+    {"path": "gate/proofs/drivers/", "kind": "code"},
+    {"path": "internal/parser/errorcounts_test.go", "kind": "code"}
+  ],
+  "instruments": [
+    {
+      "id": "lawdelta",
+      "row": "lawdelta",
+      "lands_in": "S1.1c-1",
+      "code": ["gate/runner/rows/lawdelta.py"],
+      "proofs": [{"path": "gate/proofs/drivers/test_lawdelta_planted.py", "cases": 3}],
+      "tiers": ["T1", "T2", "T3", "T4"],
+      "min_wants": 1,
+      "expected_scope": ["git", "gate/law.json"]
+    },
+    {
+      "id": "docsync",
+      "row": "docsync",
+      "lands_in": "S1.1c-2",
+      "code": ["gate/runner/rows/docsync.py", "gate/runner/docsync.py"],
+      "proofs": [{"path": "gate/proofs/drivers/test_docsync_planted.py", "cases": 2}],
+      "tiers": ["T2", "T3", "T4"],
+      "min_wants": 1,
+      "expected_scope": ["go", "./..."]
+    },
+    {
+      "id": "unit",
+      "row": "unit",
+      "lands_in": "S1.1a-1",
+      "code": ["gate/runner/rows/unit.py"],
+      "proofs": [],
+      "tiers": ["T2", "T3", "T4"],
+      "min_wants": 0,
+      "expected_scope": ["go", "./..."],
+      "exempt": "unit"
+    },
+    {
+      "id": "docsync-d",
+      "row": "unit",
+      "lands_in": "S1.1c-2",
+      "code": ["internal/parser/errorcounts_test.go"],
+      "proofs": [
+        {"path": "internal/parser/errorcounts_test.go", "cases": 2, "test": "TestErrorCountsMatchTheCatalogue"}
+      ],
+      "go_test": "internal/parser.TestErrorCountsMatchTheCatalogue"
+    }
+  ]
+}
