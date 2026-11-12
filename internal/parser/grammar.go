@@ -158,12 +158,18 @@ type EmitTok struct {
 }
 
 type PatternBody struct {
-	Restart    string           `parser:"@('every'|'once')"`
-	First      *PosElem         `parser:"@@"`
-	Chain      []*ChainElem     `parser:"@@*"`
+	PatternChain
 	Within     *DurationOrParam `parser:"'within' @@"`
 	AfterMatch bool             `parser:"@('after' 'match' 'skip' 'past' 'last')"`
 	Late       *LateClause      `parser:"'late' 'events' @@"`
+}
+
+// PatternChain is a pattern's restart marker and its steps: the first positive step, then each `-> step` or
+// `and not S[…] for D`. Embedded, its fields are the pattern body's.
+type PatternChain struct {
+	Restart string       `parser:"@('every'|'once')"`
+	First   *PosElem     `parser:"@@"`
+	Chain   []*ChainElem `parser:"@@*"`
 }
 
 type ChainElem struct {
