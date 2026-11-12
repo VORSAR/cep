@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -856,6 +858,289 @@ func TestNoVerdict(t *testing.T) {
 		}
 		if !slices.Contains(cases, "TestGood") {
 			t.Fatalf("cases %q: a same-file helper's FailNow counts", cases)
+		}
+	})
+}
+
+// ---- S1.1c-2 lane D2's own cases: Cases' names, its scope rules and its helper depth; the -cases listing.
+
+// TestCasesNames pins Cases' exact output (design §11's seam): a range-counted table's elements are named
+// <ident>[<i>], <ident> being the table's identifier, or for an inline literal the loop's first named variable.
+// Every expectation below was written by hand from design §4.2 and §11 before Cases existed.
+func TestCasesNames(t *testing.T) {
+	t.Parallel()
+	const head = "package x\n\nimport \"testing\"\n\n"
+	for _, c := range []struct {
+		name, src     string
+		cases, faults []string
+	}{
+		{
+			name: "an identifier bound to a slice literal",
+			src: `func TestT(t *testing.T) {
+	table := []struct{ name string }{{"a"}, {"b"}}
+	for _, tc := range table {
+		t.Run(tc.name, func(t *testing.T) { t.Fatal(tc.name) })
+	}
+}
+`,
+			cases: []string{"TestT", "TestT/table[0]", "TestT/table[1]"},
+		},
+		{
+			name: "a map literal bound by var",
+			src: `func TestM(t *testing.T) {
+	var want = map[string]int{"a": 1, "b": 2, "c": 3}
+	for k, v := range want {
+		t.Run(k, func(t *testing.T) { t.Errorf("%d", v) })
+	}
+}
+`,
+			cases: []string{"TestM", "TestM/want[0]", "TestM/want[1]", "TestM/want[2]"},
+		},
+		{
+			name: "[:2] of a bound literal",
+			src: `func TestS(t *testing.T) {
+	table := []string{"a", "b", "c"}
+	for _, n := range table[:2] {
+		t.Run(n, func(t *testing.T) { t.Error(n) })
+	}
+}
+`,
+			cases: []string{"TestS", "TestS/table[0]", "TestS/table[1]"},
+		},
+		{
+			name: "a nested t.Run inside a range, over an inline literal",
+			src: `func TestN(t *testing.T) {
+	for _, n := range []string{"a", "b"} {
+		t.Run(n, func(t *testing.T) {
+			t.Run("inner", func(t *testing.T) { t.FailNow() })
+		})
+	}
+}
+`,
+			cases: []string{"TestN", "TestN/n[0]", "TestN/n[0]/inner", "TestN/n[1]", "TestN/n[1]/inner"},
+		},
+		{
+			name: "a table bound in the test, ranged inside a subtest",
+			src: `func TestO(t *testing.T) {
+	cases := [...]string{"a", "b"}
+	t.Run("group", func(t *testing.T) {
+		for _, c := range cases {
+			t.Run(c, func(t *testing.T) { t.Error(c) })
+		}
+	})
+}
+`,
+			cases: []string{"TestO", "TestO/group", "TestO/group/cases[0]", "TestO/group/cases[1]"},
+		},
+		{
+			name: "a helper that calls t.Fatalf counts",
+			src: `func must(t *testing.T, ok bool) {
+	t.Helper()
+	if !ok {
+		t.Fatalf("not ok")
+	}
+}
+
+func TestH(t *testing.T) { must(t, true) }
+`,
+			cases: []string{"TestH"},
+		},
+		{
+			name: "a helper two levels deep does not count",
+			src: `func outer(t *testing.T) { inner(t) }
+
+func inner(t *testing.T) { t.Fatal("x") }
+
+func TestDeep(t *testing.T) { outer(t) }
+`,
+			cases:  []string{"TestDeep"},
+			faults: []string{"TestDeep: calls no Fatal, Fatalf, Error, Errorf or FailNow"},
+		},
+		{
+			name: "a helper's verdict counts only when the case passes it its T",
+			src: `func fail(t *testing.T, other *testing.T) { other.Fatal("x") }
+
+func TestWrongT(t *testing.T) { fail(t, nil) }
+`,
+			cases:  []string{"TestWrongT"},
+			faults: []string{"TestWrongT: calls no Fatal, Fatalf, Error, Errorf or FailNow"},
+		},
+		{
+			name: "a subtest that never fails is faulted by its own name; its parent counts",
+			src: `func TestQ(t *testing.T) {
+	t.Run("loud", func(t *testing.T) { t.Error("x") })
+	t.Run("quiet", func(t *testing.T) { t.Log("x") })
+}
+`,
+			cases:  []string{"TestQ", "TestQ/loud", "TestQ/quiet"},
+			faults: []string{"TestQ/quiet: calls no Fatal, Fatalf, Error, Errorf or FailNow"},
+		},
+		{
+			name: "non-test functions, benchmarks, examples, fuzz targets and methods are ignored",
+			src: `func helper(t *testing.T) {}
+
+func Testify(t *testing.T) {}
+
+func TestMain(m *testing.M) {}
+
+func BenchmarkX(b *testing.B) {
+	for b.Loop() {
+	}
+}
+
+func ExampleX() {}
+
+func FuzzX(f *testing.F) {}
+
+type s struct{}
+
+func (s) TestY(t *testing.T) {}
+
+func Test(t *testing.T) { t.Fatal("x") }
+
+func Test_z(t *testing.T) { t.Fatal("x") }
+`,
+			cases: []string{"Test", "Test_z"},
+		},
+		{
+			name: "a three-clause for over t.Run cannot be counted",
+			src: `func TestL(t *testing.T) {
+	for i := 0; i < 2; i++ {
+		t.Run(string(rune('a'+i)), func(t *testing.T) { t.Fatal(i) })
+	}
+}
+`,
+			cases:  []string{"TestL"},
+			faults: []string{"TestL: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a table grown after its binding cannot be counted",
+			src: `func TestG(t *testing.T) {
+	table := []string{"a"}
+	table = append(table, "b")
+	for _, n := range table {
+		t.Run(n, func(t *testing.T) { t.Fatal(n) })
+	}
+}
+`,
+			cases:  []string{"TestG"},
+			faults: []string{"TestG: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a package-level table and a parameter are not bound in the function",
+			src: `var names = []string{"a"}
+
+func TestP(t *testing.T) {
+	for _, n := range names {
+		t.Run(n, func(t *testing.T) { t.Fatal(n) })
+	}
+	run := func(names []string) {
+		for _, n := range names {
+			t.Run(n, func(t *testing.T) { t.Fatal(n) })
+		}
+	}
+	run(nil)
+}
+`,
+			cases:  []string{"TestP"},
+			faults: []string{"TestP: t.Run over a table -cases cannot count", "TestP: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a parameter shadowing a bound table is not the table",
+			src: `func TestShadow(t *testing.T) {
+	names := []string{"a", "b"}
+	run := func(names []string) {
+		for _, n := range names {
+			t.Run(n, func(t *testing.T) { t.Fatal(n) })
+		}
+	}
+	run(names)
+}
+`,
+			cases:  []string{"TestShadow"},
+			faults: []string{"TestShadow: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a three-clause for inside a counted range cannot be counted",
+			src: `func TestFor(t *testing.T) {
+	for _, s := range []string{"a", "b"} {
+		for i := 0; i < 2; i++ {
+			t.Run(s, func(t *testing.T) { t.Fatal(i) })
+		}
+	}
+}
+`,
+			cases:  []string{"TestFor"},
+			faults: []string{"TestFor: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "nested ranges over t.Run cannot be counted",
+			src: `func TestR(t *testing.T) {
+	for _, a := range []string{"a", "b"} {
+		for _, b := range []string{"c", "d"} {
+			t.Run(a+b, func(t *testing.T) { t.Fatal(a, b) })
+		}
+	}
+}
+`,
+			cases:  []string{"TestR"},
+			faults: []string{"TestR: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a non-literal t.Run outside any range cannot be counted",
+			src: `func TestV(t *testing.T) {
+	name := "a"
+	t.Run(name, func(t *testing.T) { t.Fatal(name) })
+}
+`,
+			cases:  []string{"TestV"},
+			faults: []string{"TestV: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a keyed or fixed-length array literal",
+			src: `func TestK(t *testing.T) {
+	for _, n := range [3]string{"a"} {
+		t.Run(n, func(t *testing.T) { t.Fatal(n) })
+	}
+	for _, n := range []string{2: "c"} {
+		t.Run(n, func(t *testing.T) { t.Fatal(n) })
+	}
+}
+`,
+			cases:  []string{"TestK", "TestK/n[0]", "TestK/n[1]", "TestK/n[2]"},
+			faults: []string{"TestK: t.Run over a table -cases cannot count"},
+		},
+		{
+			name: "a subtest named by a same-file function is read",
+			src: `func sub(t *testing.T) { t.Error("x") }
+
+func quiet(t *testing.T) {}
+
+func TestNamed(t *testing.T) {
+	t.Run("sub", sub)
+	t.Run("quiet", quiet)
+	t.Fatal("x")
+}
+`,
+			cases:  []string{"TestNamed", "TestNamed/sub", "TestNamed/quiet"},
+			faults: []string{"TestNamed/quiet: calls no Fatal, Fatalf, Error, Errorf or FailNow"},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			cases, faults := Cases("x_test.go", head+c.src)
+			if !slices.Equal(cases, c.cases) || !slices.Equal(faults, c.faults) {
+				t.Fatalf("Cases = %q, %q\nwant %q, %q", cases, faults, c.cases, c.faults)
+			}
+		})
+	}
+	t.Run("a file that does not parse is one fault naming no test", func(t *testing.T) {
+		t.Parallel()
+		const src = "package x\n\nfunc (\n"
+		_, want := parser.ParseFile(token.NewFileSet(), "x_test.go", src, parser.SkipObjectResolution)
+		cases, faults := Cases("x_test.go", src)
+		if len(cases) != 0 || want == nil || !slices.Equal(faults, []string{": " + want.Error()}) {
+			t.Fatalf("Cases = %q, %q; want no case and the fault %q", cases, faults, ": "+want.Error())
 		}
 	})
 }
