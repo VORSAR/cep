@@ -80,6 +80,7 @@
 | 2026-11-12 | [S1.1c-2's plan check](#owner-decisions-2026-11-12--s11c-2s-plan-check) |
 | 2026-11-12 | [S1.1c-2's design, after the reviews](#owner-decisions-2026-11-12--s11c-2s-design-after-the-reviews) |
 | 2026-11-12 | [the left-running flake's root (S1.1c-1-1)](#owner-decisions-2026-11-12--the-left-running-flakes-root-s11c-1-1) |
+| 2026-11-12 | [S1.1c-2's review and break-it](#owner-decisions-2026-11-12--s11c-2s-review-and-break-it) |
 
 ## The decisions
 
@@ -748,3 +749,12 @@ The design note ([s1-1c-2-design.md](s1-1c-2-design.md) v1 at 0d6ac6c) was revie
 The flake recurred on 2026-11-12 and named its cause, as the decision of 2026-11-11 arranged: `left_running.txt` read `the group exists but may not be signalled (EPERM): no member listed (gone before it could be named)`. The cause, proven on this Mac (Darwin 25.6.0, three trials of three): `killpg(pgid, 0)` on a process group whose only member is a zombie (exited, not yet reaped by its parent) answers EPERM, `ps` lists that member with state `Z`, and once it is reaped the answer is ESRCH. Linux answers that such a group exists. The runner's probe counted either answer as left running, so a member caught mid-exit (an orphan awaiting launchd) read as a leftover. One question; as recommended.
 
 1. **Fixed at the root in its own small PR before the current sprint continues** (`fix/zombie-group-probe`): a group whose members are all zombies, or that has no member by the time `ps` looks, counts as finished; a group with any live member is still left running (red, killed and named as before); a `ps` that fails stays red, never a silent pass. Known issue S1.1c-1-1 leaves the list. Rejected: fixing it inside the sprint; investigating further first.
+
+### Owner decisions, 2026-11-12 — S1.1c-2's review and break-it
+
+The combined build (`s1-1c-2/integration` @ e7b5d89, T3 green) was reviewed blind by the architect ([review](../reviews/s1-1c-2-combined-architecture.md): 0 blockers, 5 should-fix, 4 later) and broken by QA ([break-it](../reviews/s1-1c-2-breakit-qa.md): 4 blockers, 7 should-fix, 2 later, each a committed red test). The coordinator re-ran the break-it's tests (36 Python subtests and 4 Go tests red) and re-checked its headline claim against the pinned ruff (`# fmt:  skip` with two spaces keeps the layout). Four questions; all as recommended.
+
+1. **BA13's second route is closed and the residue note corrected** (as recommended): the shim binds its test runner and result class before importing the module and cross-checks the tests it ran against the tests the module defines; ADR-0015 §3.6's residue names what remains — a module that deliberately writes the report file itself or rewires the shim's internals — and states that it shows in the grouped `gate/runner/` LAW Δ line, not by name (correcting decision 2 of "S1.1c-2's design, after the reviews", which said "a named LAW Δ line"). Rejected: correcting the note only.
+2. **A PERMANENT exemption's `ref` resolves only into `docs/architecture/adr/` or `docs/sprints/decisions.md`** (as recommended), so every permanent exemption traces to a recorded decision; the six `tools/allowlists/ruff.json` entries now cite decision 5 of "2026-11-02 — S1.1a-1 design review (toward G1)" ("the only exceptions are per-file entries in the coordinator-owned `ruff.toml`"). Rejected: rewording the policy to any tracked document's heading.
+3. **The generated-code marker is closed now** (as recommended; it predates this sprint): archcheck and the coverage tool accept `// Code generated … DO NOT EDIT.` only before the package clause (Go's own rule), and every generated file must be listed by name in a new list in the one grammar (empty today). Rejected: forwarding it to the backlog.
+4. **One batched fix round, about 13 of 13 points** (as recommended): every blocker and should-fix item fixed test-first; gosec's `#nosec` waiver form forwarded to S1.1c-4 (no linter is enabled before then); the cheap later items fixed; the `gomod` kind's `godebug`/`exclude`/`retract` lines and the shared context builder to the backlog. Rejected: blockers only, should-fix items forwarded to S1.1c-3.

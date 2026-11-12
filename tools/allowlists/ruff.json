@@ -7,42 +7,42 @@
       "target": "gate/wait.py: TID251",
       "kind": "PERMANENT",
       "reason": "the one wait helper may sleep between polls of a state",
-      "ref": "docs/development/testing.md#the-four-rules",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1",
       "sprint": "S1.1a-1"
     },
     {
       "target": "gate/runner/tests/test_sigchld.py: TID251",
       "kind": "PERMANENT",
       "reason": "sets SIGCHLD to SIG_IGN on purpose to prove the false-green fix",
-      "ref": "docs/sprints/s1-1a-gate-design.md#5-the-s11a-1-rows",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1",
       "sprint": "S1.1a-1"
     },
     {
       "target": "gate/run.py: BLE001",
       "kind": "PERMANENT",
       "reason": "main's catch-all turns any internal error into exit 2",
-      "ref": "docs/sprints/s1-1a-gate-design.md#5-the-s11a-1-rows",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1",
       "sprint": "S1.1a-1"
     },
     {
       "target": "gate/runner/main.py: BLE001",
       "kind": "PERMANENT",
       "reason": "main's catch-all turns any internal error into exit 2",
-      "ref": "docs/sprints/s1-1a-gate-design.md#5-the-s11a-1-rows",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1",
       "sprint": "S1.1a-1"
     },
     {
       "target": "gate/bootstrap.py: BLE001",
       "kind": "PERMANENT",
       "reason": "main's catch-all turns any internal error into exit 2",
-      "ref": "docs/sprints/s1-1a-gate-design.md#5-the-s11a-1-rows",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1",
       "sprint": "S1.1a-1"
     },
     {
       "target": "gate/toolchain/install.py: BLE001",
       "kind": "PERMANENT",
       "reason": "main's catch-all turns any internal error into exit 2",
-      "ref": "docs/sprints/s1-1a-gate-design.md#5-the-s11a-1-rows",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-02--s11a-1-design-review-toward-g1",
       "sprint": "S1.1a-1"
     }
   ]
