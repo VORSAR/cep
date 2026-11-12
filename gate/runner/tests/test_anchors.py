@@ -120,6 +120,21 @@ class Resolves(unittest.TestCase):
         got = anchors.resolves("docs/a.md#not-a-heading-fenced", self.READ)
         self.assertEqual(got, "docs/a.md has no heading #not-a-heading-fenced")
 
+    def test_a_heading_beside_an_html_comment(self):
+        # BK-L2 (S1.1c-2's fix round): a comment block (CommonMark HTML block 2, `<!--` up to the line holding
+        # `-->`) renders nothing, so a heading inside it has no anchor; a heading after it, or after a one-line
+        # comment, still has one.
+        md = "<!-- one line -->\n# After one\n\n<!--\n## Inside\n-->\n## After block\n  <!-- x\n## Inside too\n -->\n"
+        read = reader({"docs/c.md": md})
+        self.assertEqual(anchors.resolves("docs/c.md#after-one", read), "")
+        self.assertEqual(anchors.resolves("docs/c.md#after-block", read), "")
+        self.assertEqual(anchors.resolves("docs/c.md#inside", read), "docs/c.md has no heading #inside")
+        self.assertEqual(anchors.resolves("docs/c.md#inside-too", read), "docs/c.md has no heading #inside-too")
+
+    def test_a_comment_inside_a_fence_opens_no_comment_block(self):
+        md = "```\n<!--\n```\n## Real\n"
+        self.assertEqual(anchors.resolves("docs/d.md#real", reader({"docs/d.md": md})), "")
+
     def test_split_refs_faults_are_the_why(self):
         # design ambiguity: resolves returns "" or the why and never raises, so split_ref's ValueError texts come
         # back as the why, verbatim.

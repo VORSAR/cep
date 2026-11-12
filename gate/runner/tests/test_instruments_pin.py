@@ -49,7 +49,8 @@ class Pin(unittest.TestCase):
         manifest = law.load_manifest(json.dumps(self.law))
         rows = registry.loads(json.dumps(self.registry))
         counted = {path: (c["cases"], c["faults"]) for path, c in self.world["counted"].items()}
-        return teeth.pin(manifest, rows, frozenset(self.world["tracked"]), counted, self.teeth)
+        red_rows = {path: frozenset(c["red_rows"]) for path, c in self.world["counted"].items() if "red_rows" in c}
+        return teeth.pin(manifest, rows, frozenset(self.world["tracked"]), counted, self.teeth, red_rows=red_rows)
 
     def assertNames(self, id: str) -> None:
         faults = self.pin()
@@ -135,9 +136,35 @@ class Pin(unittest.TestCase):
         self.teeth = frozenset()
         self.assertNames("unit")
 
+    # 7. a row instrument's Python proofs hold a red case on its own row (BK-S7, S1.1c-2's fix round)
+    def test_an_instrument_borrowing_another_rows_driver_is_red(self):
+        self.instrument("docsync")["proofs"] = copy.deepcopy(self.instrument("lawdelta")["proofs"])
+        self.assertEqual(self.pin(), ["teeth: instrument docsync: no Python proof holds a red case on row docsync"])
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_a_proof_red_only_on_another_row_is_red(self):
+        self.world["counted"]["gate/proofs/drivers/test_docsync_planted.py"]["red_rows"] = ["lawdelta"]
+        self.assertEqual(self.pin(), ["teeth: instrument docsync: no Python proof holds a red case on row docsync"])
+
+    def test_a_proof_with_no_rows_counted_is_red(self):
+        del self.world["counted"]["gate/proofs/drivers/test_docsync_planted.py"]["red_rows"]
+        self.assertNames("docsync")
+
+
+class UnnamedDrivers(unittest.TestCase):
+    """CA-S1: the drivers no instrument names (the four test_parity_* today) are found, so the real-tree pin can hold
+    them to the strength rule too."""
+
+    def test_a_tracked_driver_no_instrument_names(self):
+        manifest = law.load_manifest(json.dumps(read("law.json")))
+        tracked = {
+            *read("world.json")["tracked"],
+            "gate/proofs/drivers/test_parity_hash.py",
+            "gate/proofs/drivers/support.py",
+            "gate/proofs/drivers/__init__.py",
+            "gate/proofs/drivers/data/test_x.py",
+            "gate/runner/tests/test_x.py",
+        }
+        self.assertEqual(teeth.unnamed_drivers(manifest, tracked), ["gate/proofs/drivers/test_parity_hash.py"])
 
 
 class RealTree(unittest.TestCase):
@@ -166,5 +193,25 @@ class RealTree(unittest.TestCase):
                         counted[proof.path] = teeth.python_cases(f.read(), proof.path)
         with open(os.path.join(repo, "tools", "allowlists", "teeth.json"), encoding="utf-8") as f:
             targets = {e["target"] for e in json.load(f)["entries"]}
-        self.assertEqual(teeth.pin(manifest, rows, tracked, counted, targets), [])
+        red_rows = {}
+        for inst in manifest.instruments:
+            for proof in inst.proofs:
+                if proof.path.endswith(".py"):
+                    with open(os.path.join(repo, proof.path), encoding="utf-8") as f:
+                        red_rows[proof.path] = teeth.red_rows(f.read())
+        self.assertEqual(teeth.pin(manifest, rows, tracked, counted, targets, red_rows=red_rows), [])
         self.assertGreaterEqual(len(manifest.instruments), len(rows))
+        # CA-S1: every tracked driver no instrument names is held to the same strength rule.
+        unnamed = teeth.unnamed_drivers(manifest, tracked)
+        self.assertTrue(
+            unnamed, "no unnamed driver: the parity drivers are expected here until an instrument names them"
+        )
+        faults = []
+        for path in unnamed:
+            with open(os.path.join(repo, path), encoding="utf-8") as f:
+                faults += teeth.python_cases(f.read(), path)[1]
+        self.assertEqual(faults, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

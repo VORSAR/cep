@@ -23,9 +23,9 @@ ORDER = sprintid.Order(
 )
 CURRENT = sprintid.parse("S1.1c-2")
 ISSUES = frozenset({"S3.3-2-1", "BA9"})
-GOOD_REF = "docs/a.md#title"
-BAD_REF = "docs/a.md#nowhere"
-BAD_WHY = "docs/a.md has no heading #nowhere"
+GOOD_REF = "docs/sprints/decisions.md#title"
+BAD_REF = "docs/sprints/decisions.md#nowhere"
+BAD_WHY = "docs/sprints/decisions.md has no heading #nowhere"
 REASON = "a reason long enough"  # 20 characters
 
 
@@ -263,6 +263,39 @@ class Faults(unittest.TestCase):
     def test_ref_fault_is_resolves_why(self):
         self.assertEqual(allowlists.ref_fault(GOOD_REF, ctx()), "")
         self.assertEqual(allowlists.ref_fault(BAD_REF, ctx()), BAD_WHY)
+
+
+class RefIsARecordedDecision(unittest.TestCase):
+    """CA-S3 (owner, 2026-11-12, S1.1c-2's review and break-it 2): "A PERMANENT exemption's `ref` resolves only into
+    `docs/architecture/adr/` or `docs/sprints/decisions.md`"; ref_fault is the one place both rows use."""
+
+    WHY = "ref {} is not a recorded decision: cite docs/architecture/adr/… or docs/sprints/decisions.md#…"
+
+    def everywhere(self) -> allowlists.Ctx:
+        """A resolver that finds every heading: only the path rule can say no."""
+        return allowlists.Ctx(today=TODAY, tier="T2", order=ORDER, current=CURRENT, issues=ISSUES, resolve=lambda r: "")
+
+    def test_a_ref_into_any_other_document_is_red(self):
+        for path in (
+            "docs/development/testing.md",
+            "docs/sprints/s1-1a-gate-design.md",
+            "docs/architecture/ARCHITECTURE.md",
+            "docs/architecture/adr.md",
+            "docs/sprints/decisions.md.md",
+            "decisions.md",
+            "docs/a.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(allowlists.ref_fault(f"{path}#title", self.everywhere()), self.WHY.format(path))
+
+    def test_an_adr_or_decisions_ref_is_resolved(self):
+        for ref in ("docs/architecture/adr/ADR-0015-x.md#title", "docs/sprints/decisions.md#title"):
+            with self.subTest(ref=ref):
+                self.assertEqual(allowlists.ref_fault(ref, self.everywhere()), "")
+        self.assertEqual(allowlists.ref_fault(BAD_REF, ctx()), BAD_WHY)  # and the resolver still says no
+
+    def test_a_permanent_entry_citing_another_document_is_red(self):
+        self.assertEqual(fields(permanent(ref="docs/a.md#title")), [self.WHY.format("docs/a.md")])
 
 
 class Check(unittest.TestCase):

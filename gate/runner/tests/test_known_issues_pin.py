@@ -58,6 +58,20 @@ class Pin(unittest.TestCase):
     def test_the_correct_fixture_is_green(self):
         self.assertEqual(self.check(), [])
 
+    # BK-S5 / CA-S5: one entry per id, as allowlists.load refuses a target listed twice; S1.1c-3's aging keys on it.
+
+    def test_an_id_listed_twice_is_red(self):
+        first = self.data["entries"][0]
+        self.data["entries"].append({**first, "first_seen": "S1.1c"})
+        n = len(self.data["entries"]) - 1
+        self.assertEqual(self.check(), [f"gate/known-issues.json: entries[{n}]: id {first['id']} is listed twice"])
+
+    def test_a_duplicate_key_is_red(self):
+        text = json.dumps(self.data).replace('"first_seen": ', '"first_seen": "S8", "first_seen": ', 1)
+        docs = {"docs/sprints/decisions.md": self.decisions}
+        got = knownissues.check(text, self.table, ORDER, docs.get)
+        self.assertEqual(got, ["gate/known-issues.json: duplicate key first_seen"])
+
     def test_a_sub_section_belongs_to_its_section(self):
         # BA13 is named under a ### heading inside the plan-check section: the section runs to the next "## ".
         self.data["entries"].append(

@@ -3,9 +3,10 @@
 
 `gate/runner/docsync.py` is pure: `tree(md)` is the first fence after the `## 3.` heading (read through
 `anchors.prose`), `listed(lines)` the first column's directories (text before two spaces, split on ", "; `x/` -> `x`;
-a file names its directory, `cep.go` -> `.`; a placeholder path such as `io/*` is ignored), `missing(packages,
-listed)` the packages not listed, sorted. The row runs `go list -e -f '{{.Dir}}' ./...` with `GOFLAGS=-mod=readonly`
-and `GOPROXY=off`, reads its exit code and ignores its stderr (offline, `go: downloading ...` lands there, §0.7).
+a .go file names its directory, `cep.go` -> `.`, any other file nothing (BK-L1); a placeholder path such as `io/*`
+is ignored), `missing(packages, listed)` the packages not listed, sorted. The row runs `go list -e -f '{{.Dir}}'
+./...` with `GOFLAGS=-mod=readonly` and `GOPROXY=off`, reads its exit code and ignores its stderr (offline, `go:
+downloading ...` lands there, §0.7).
 
 design ambiguity: whether a package under a listed directory (internal/runtime/sub under internal/runtime/) is listed;
 read here as not (an exact directory, the §3 tree names packages one per line).
@@ -91,9 +92,7 @@ class Listed(unittest.TestCase):
                 "io/stdin",
                 "io/inmemory",
                 "internal/parser",
-                "tools/importcheck",
                 "tools/allowlists",
-                "tools",
                 ".githooks",
                 "Makefile",
             },
@@ -101,6 +100,17 @@ class Listed(unittest.TestCase):
 
     def test_a_placeholder_is_ignored(self):
         self.assertEqual(docsync.listed(["io/*                    connectors"]), set())
+
+    def test_only_a_go_file_names_its_directory(self):
+        # BK-L1 (S1.1c-2's fix round): a data file (rules.json, deps-allowlist.json, tools.json) names no package.
+        lines = [
+            "cep.go                         the API",
+            "internal/x/x.go                a file of internal/x",
+            "tools/importcheck/rules.json   the layer law",
+            "tools/deps-allowlist.json      the register",
+            "api/exports.golden             the export law",
+        ]
+        self.assertEqual(docsync.listed(lines), {".", "internal/x"})
 
 
 class Missing(unittest.TestCase):
