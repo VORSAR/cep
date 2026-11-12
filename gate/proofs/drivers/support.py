@@ -393,9 +393,15 @@ class ParityDriver(DriverTest):
 def copy_hooks(world: World) -> list[str]:
     """The tracked .githooks/ launchers, gate/hooks/ (no tests) and the Makefile, byte for byte with their modes, so
     the hook proofs run the real hooks (QA Q2). Also what the registry's T0 rows run: go.mod and tools/archcheck with
-    its rules (S1.1b added archcheck at T0; without them its row fails in the world). Gives the copied paths."""
+    its rules (S1.1b added archcheck at T0; without them its row fails in the world), and tools/allowlists/, which
+    archcheck reads from S1.1c-2 on (design §3, DQ-S5). Gives the copied paths."""
     copied = []
-    t0 = [*world.tracked("tools/archcheck"), "tools/importcheck/rules.json", "go.mod"]
+    t0 = [
+        *world.tracked("tools/archcheck"),
+        "tools/importcheck/rules.json",
+        "go.mod",
+        *world.tracked("tools/allowlists"),
+    ]
     for rel in [*world.tracked(".githooks"), *world.tracked("gate/hooks"), "Makefile", ".gitignore", *t0]:
         if "tests" in rel.split("/")[:-1] or rel.endswith("_test.go"):
             continue
