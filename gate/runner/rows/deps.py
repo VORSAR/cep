@@ -6,18 +6,20 @@ graph (`go mod graph`) and the modules the packages build or test with (`go list
 tool's modules count as imported through whichever module declares the tool (gate/proofs after decision 7, the
 root before it). GOPROXY=off: a module missing from the cache is a named failure with its fix command, never a
 download. `-e` keeps a package that does not build in the listing: a module reached only through it falls from
-imported to graph-only, weaker, never red (design note §5.3). GATE_COVERED is 3: the three named checks, printed
-once the allowlist is read. The rule itself is gate/runner/deps.py.
+imported to graph-only, weaker, never red (design note §5.3). Each entry's `sprint` and `ref` are checked against
+gate/sprints.json, gate/current-sprint and the tracked Markdown (S1.1c-2 design §4.6a). GATE_COVERED is 3: the three
+named checks, printed once the allowlist is read. The rule itself is gate/runner/deps.py.
 """
 
 import os
 import subprocess
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import deps, rows
+from gate.runner import allowlists, anchors, deps, rows, sprintid
 
 MODULES = (".", "gate/proofs")
 TOOL = "golang.org/x/exp/cmd/apidiff"
@@ -90,21 +92,50 @@ def gather(row_dir: str, env: dict[str, str]) -> tuple[list[deps.Module], frozen
     return [modules[path] for path in sorted(modules)], frozenset(graph - set(mains)), failures
 
 
+def context(row_dir: str, env: dict[str, str]) -> allowlists.Ctx:
+    """The sprint order, the marker and a resolver over tracked Markdown (an untracked doc never satisfies a ref)."""
+    order = sprintid.load_order(rows.read_text(sprintid.SPRINTS))
+    current = sprintid.read_marker(rows.read_text(sprintid.MARKER))
+    order.index(sprintid.canonical(current))  # the marker's row is in the order, or a ValueError naming it
+    listed = run(row_dir, env, ".", "markdown", ["git", "ls-files", "-z", "--", "*.md"])
+    tracked = frozenset(path for path in listed.split("\0") if path)
+
+    def read(path: str) -> str | None:
+        if path not in tracked:
+            return None
+        try:
+            return rows.read_text(path)
+        except OSError:
+            return None
+
+    return allowlists.Ctx(
+        today=datetime.now(UTC).date(),
+        tier=env.get("GATE_TIER", ""),
+        order=order,
+        current=current,
+        issues=frozenset(),
+        resolve=lambda ref: anchors.resolves(ref, read),
+    )
+
+
 def main(argv: list[str]) -> int:
     row_dir = rows.start()
     env = {**os.environ, **ENV}
     try:
         modules, graph, failures = gather(row_dir, env)
         listed = run(row_dir, env, ".", "gomods", ["git", "ls-files", "-z", "--", "go.mod", ":(glob)**/go.mod"])
+        ctx = context(row_dir, env)
     except Failed as e:
         return rows.finish([str(e)])
+    except (OSError, ValueError) as e:
+        return rows.finish([f"deps: {e}"])
     gomods = sorted({path for path in listed.split("\0") if path})
     try:
         entries = deps.load_allowlist(rows.read_text(deps.ALLOWLIST))
     except (OSError, ValueError) as e:
         return rows.finish([f"deps: {e}"])
     rows.covered(3)
-    return rows.finish(failures + deps.compare(modules, graph, entries, gomods, read_license))
+    return rows.finish(failures + deps.compare(modules, graph, entries, gomods, read_license, ctx))
 
 
 if __name__ == "__main__":

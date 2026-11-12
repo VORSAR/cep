@@ -7,12 +7,18 @@ lists, the module graph, the entries and the tracked go.mod files into failed li
 entry, a stale entry, a version the graph disagrees with, a licence part outside the Apache-2-compatible set, and,
 for a module whose packages are built or tested (imported), a licence file that is missing, unknown or disagrees
 with the field (decision 4: a fingerprint for imported modules; the field plus liveness for graph-only ones, which
-have no source on disk by design). A third tracked go.mod is the one-module failure of ADR-0001 §1.
+have no source on disk by design). A third tracked go.mod is the one-module failure of ADR-0001 §1. A graph node that
+neither build list selects is red (S1.1c-2 design §4.5: `go list -m all` selects every graph module, so a node
+outside both lists is one the rule could not check). Each entry names the sprint whose approval added it and the
+deciding section as `ref`, checked by allowlists.sprint_fault and ref_fault, the grammar's one implementation
+(design §4.6a; owner, 2026-11-12, plan check 17).
 """
 
 import json
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
+
+from gate.runner import allowlists
 
 ALLOWLIST = "tools/deps-allowlist.json"
 GOMODS = ("go.mod", "gate/proofs/go.mod")
@@ -21,7 +27,7 @@ ALLOWED_TEXT = "Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC"
 LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING", "COPYING.md")
 DROPPED_NODES = frozenset({"go", "toolchain"})  # go mod graph's version nodes (review: architect S7)
 TOP_KEYS = frozenset({"schema", "note", "modules"})
-ENTRY_KEYS = frozenset({"module", "version", "scope", "license", "approved", "why"})
+ENTRY_KEYS = frozenset({"module", "version", "scope", "license", "approved", "why", "sprint", "ref"})
 
 
 @dataclass(frozen=True)
@@ -44,6 +50,8 @@ class Entry:
     approved: str
     why: str
     replace: str = ""  # the one replace target this entry approves (owner, 2026-11-11, the fix round)
+    sprint: str = ""  # the sprint whose approval added the entry (design §4.6a)
+    ref: str = ""  # the deciding section, <path>#<heading-anchor>
 
 
 def _keys(value: object, keys: frozenset[str], where: str) -> dict:
@@ -56,7 +64,7 @@ def _keys(value: object, keys: frozenset[str], where: str) -> dict:
 
 
 def load_allowlist(text: str) -> tuple[Entry, ...]:
-    """{"schema": 1, "note": str, "modules": [{the six keys, non-empty strings}, ...]}: non-empty, modules unique."""
+    """{"schema": 1, "note": str, "modules": [{the eight keys, non-empty strings}, ...]}: non-empty, modules unique."""
     try:
         data = json.loads(text)
     except ValueError as e:
@@ -92,6 +100,8 @@ def load_allowlist(text: str) -> tuple[Entry, ...]:
                 item["approved"],
                 item["why"],
                 item.get("replace", ""),
+                sprint=item["sprint"],
+                ref=item["ref"],
             )
         )
     return tuple(entries)
@@ -168,10 +178,12 @@ def compare(
     entries: Sequence[Entry],
     gomods: Sequence[str],
     read: Callable[[str], str | None],
+    ctx: allowlists.Ctx,
 ) -> list[str]:
     """The failed lines, one each, in the design's order (§5.2), sorted by module within a kind.
 
-    read(dir): the first LICENSE_FILES text found under dir, or None.
+    read(dir): the first LICENSE_FILES text found under dir, or None. ctx: the sprint order, the marker and the ref
+    resolver for each entry's `sprint` and `ref`.
     """
     failures: list[str] = []
     tracked = sorted(set(gomods))
@@ -187,6 +199,8 @@ def compare(
     for path in sorted(graph - set(by_path)):
         if path not in by_module:
             failures.append(f"deps: {path} is in the module graph and not in {ALLOWLIST}")
+    for path in sorted(graph - set(by_path)):
+        failures.append(f"deps: {path} is in the module graph and selected by neither module's build list")
     for module in sorted(by_module):
         if module not in by_path and module not in graph:
             failures.append(f"deps: stale entry {module}: not in the module graph of {' or '.join(GOMODS)}")
@@ -229,4 +243,9 @@ def compare(
             failures.append(f"deps: {path}: unknown licence text in {module.dir}")
         elif path in parts and classified not in parts[path]:
             failures.append(f"deps: {path}: license field {by_module[path].license}, file reads {classified}")
+    for module in sorted(by_module):
+        entry = by_module[module]
+        for why in (allowlists.sprint_fault(entry.sprint, ctx), allowlists.ref_fault(entry.ref, ctx)):
+            if why:
+                failures.append(f"deps: {module}: {why}")
     return failures

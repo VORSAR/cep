@@ -14,7 +14,9 @@ is the repository's own and the real allowlist copy fits it; the design's stripp
 re-selects versions (x/text's go.mod pulls x/tools v0.51.0 with a graph of its own) that no copy of the allowlist
 can list. No package of the world imports anything but the plant; the tool's four modules count as imported through
 `go list -deps` of the tool, as on the real tree, and read their licence files from the module cache. Each case
-asserts the row's `failed:` lines are exactly its one planted line (design note section 5.4).
+asserts the row's `failed:` lines are exactly its one planted line (design note section 5.4). Each entry names its
+sprint and a ref into docs/sprints/decisions.md (S1.1c-2 design section 4.6a), so the world copies that document;
+the planted entries borrow the first real entry's sprint and ref.
 """
 
 import json
@@ -23,6 +25,7 @@ import os
 from gate.proofs.drivers import support
 
 ALLOWLIST = "tools/deps-allowlist.json"
+DECISIONS = "docs/sprints/decisions.md"
 PLANTED = "example.com/planted"
 VERSION = "v1.0.0"
 MIT = (
@@ -68,7 +71,7 @@ class DepsPlanted(support.DriverTest):
     def deps_world(self, *, license_text: str | None, entries: list[dict]) -> None:
         w = self.world
         w.copy_gate()
-        for rel in ("go.mod", "go.sum", "gate/proofs/go.mod", "gate/proofs/go.sum", ALLOWLIST):
+        for rel in ("go.mod", "go.sum", "gate/proofs/go.mod", "gate/proofs/go.sum", ALLOWLIST, DECISIONS):
             w.copy(rel)
         for rel in ("go.mod", "gate/proofs/go.mod"):
             w.write(rel, without_tool(support.read_text(os.path.join(w.repo, rel))))
@@ -95,7 +98,8 @@ class DepsPlanted(support.DriverTest):
         path = os.path.join(w.repo, ALLOWLIST)
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        data["modules"].extend(entries)
+        first = data["modules"][0]
+        data["modules"].extend({**e, "sprint": first["sprint"], "ref": first["ref"]} for e in entries)
         w.write(ALLOWLIST, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
     def run_row(self) -> support.Run:
