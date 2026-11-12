@@ -37,7 +37,7 @@ func TestBreakitNamedSyncSecondImportName(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.path+"/"+c.banned, func(t *testing.T) {
-			wantFindingAll(t, check(t, c.path, c.src), "purity:", c.banned)
+			wantFindingAll(t, checkNamed(t, c.path, c.src), "purity:", c.banned)
 		})
 	}
 }
