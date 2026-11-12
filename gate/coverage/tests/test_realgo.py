@@ -39,7 +39,8 @@ class RealGo(support.CoverageTest):
         os.makedirs(mine)
         py = [sys.executable, "-I", "-B", "-X", "utf8"]
         unit_code, _, _ = support.run([*py, UNIT, "./..."], module, support.go_env(GATE_ROW_DIR=unit), unit, "unit")
-        code, out, err = support.run([*py, support.MAIN], module, support.go_env(GATE_ROW_DIR=mine), mine, "main")
+        argv = [*py, support.MAIN, "--floor", "90"]  # required (S1.1c-2 design §4.4), as the registry passes it
+        code, out, err = support.run(argv, module, support.go_env(GATE_ROW_DIR=mine), mine, "main")
         self.assertEqual(err, "")
         return unit_code, code, out.split("\n")[:-1]
 
