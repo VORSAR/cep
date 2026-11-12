@@ -214,8 +214,8 @@ Rule: SPEC §2.4 — `within`, `for`, `ttl`, `idle after`, `delay`, `allow` and 
 Fix: use a positive duration.
 
 ### E-PAT-005 Pattern without a positive step **[parse]**
-Rule: SPEC §5.2 — every pattern anchors on at least one positive step; a pure absence ("no heartbeat for D") is not expressible in v0.1.
-Fix: anchor the absence on a positive event, or use a cron window with a count.
+Rule: SPEC §5.2 — every pattern anchors on at least one positive step, and an absence follows its step directly (`-> and not` is not a form); a pure absence ("no heartbeat for D") is not expressible in v0.1.
+Fix: anchor the absence on a positive event, written `… and not S[…] for D` straight after a step with no `->` before it, or use a cron window with a count.
 
 ### E-PAT-006 Duplicate capture name **[static]**
 Rule: SPEC §5.2 — capture names are unique within a rule.
