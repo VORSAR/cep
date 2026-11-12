@@ -46,6 +46,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // RulesPath is where the import law lives, relative to the module root.
@@ -655,6 +656,479 @@ func CheckTest(lists *Lists, path, src string) []string {
 		return true
 	})
 	return c.findings
+}
+
+// The two fault texts of Cases (S1.1c-2 design §11).
+const (
+	noVerdict   = "calls no Fatal, Fatalf, Error, Errorf or FailNow"
+	cannotCount = "t.Run over a table -cases cannot count"
+)
+
+// verdicts are the *testing.T methods that fail a test (S1.1c-2 design §4.2, DA-S12).
+var verdicts = []string{"Fatal", "Fatalf", "Error", "Errorf", "FailNow"}
+
+// caseReader is Cases' reading of one _test.go file.
+type caseReader struct {
+	parents map[ast.Node]ast.Node    // each node's parent in the file
+	funcs   map[string]*ast.FuncDecl // the file's top-level functions (no receiver), by name
+	testing []string                 // the local names the file gives "testing"
+	tnames  map[string]bool          // every parameter name the file gives a *testing.T or testing.TB
+	helpers map[string][]int         // a function's parameters it calls a verdict on, by function name (memo)
+	cases   []string
+	faults  []string
+}
+
+// Cases counts the planted cases of one _test.go file for the teeth (S1.1c-2 design §4.2, §11): a case per top-level
+// func Test<X>(t *testing.T); a case <parent>/<literal> per t.Run("<literal>", …), nested names joined with "/"; and
+// for a for … range <x> whose body calls t.Run with a non-literal name, a case <parent>/<ident>[<i>] per element of
+// <x> when <x> is an inline slice, array or map literal or an identifier bound to one earlier in the same function by
+// := or var (a [:n] slice of either counts n when n is an integer literal). <ident> is the table's identifier, or for an
+// inline literal the loop's first named variable. Any other t.Run with a non-literal name — over a range Cases cannot
+// count, a three-clause for, two ranges, or no loop — is the fault "<parent>: t.Run over a table -cases cannot count".
+// A case whose body (its t.Run closures included) calls none of Fatal, Fatalf, Error, Errorf or FailNow on a
+// *testing.T, directly or through one same-file function that calls one on the T it is passed, is listed and is the
+// fault "<case>: calls no Fatal, Fatalf, Error, Errorf or FailNow". A file that does not parse is the one fault
+// ": <parse error>". Cases and faults are in source order.
+func Cases(path, src string) (cases, faults []string) {
+	file, err := parser.ParseFile(token.NewFileSet(), path, src, parser.SkipObjectResolution)
+	if err != nil {
+		return nil, []string{": " + err.Error()}
+	}
+	r := &caseReader{
+		parents: map[ast.Node]ast.Node{},
+		funcs:   map[string]*ast.FuncDecl{},
+		testing: (&checker{file: file}).localNames("testing"),
+		tnames:  map[string]bool{},
+		helpers: map[string][]int{},
+	}
+	var stack []ast.Node
+	ast.Inspect(file, func(n ast.Node) bool {
+		if n == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		if len(stack) > 0 {
+			r.parents[n] = stack[len(stack)-1]
+		}
+		stack = append(stack, n)
+		if ft, ok := n.(*ast.FuncType); ok {
+			for name := range r.tParams(ft) {
+				r.tnames[name] = true
+			}
+		}
+		return true
+	})
+	for _, decl := range file.Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok && fd.Recv == nil {
+			r.funcs[fd.Name.Name] = fd
+		}
+	}
+	for _, decl := range file.Decls {
+		if fd, ok := decl.(*ast.FuncDecl); ok && r.isTest(fd) {
+			r.testCase(fd.Name.Name, fd.Body)
+		}
+	}
+	return r.cases, r.faults
+}
+
+// isT reports whether e is *testing.T or testing.TB under one of the file's names for testing.
+func (r *caseReader) isT(e ast.Expr) bool {
+	return r.testingType(e, "TB") || r.isTestT(e)
+}
+
+// isTestT reports whether e is *testing.T, the one parameter of a test.
+func (r *caseReader) isTestT(e ast.Expr) bool {
+	star, ok := e.(*ast.StarExpr)
+	return ok && r.testingType(star.X, "T")
+}
+
+// testingType reports whether e is testing.<name> under one of the file's names for testing.
+func (r *caseReader) testingType(e ast.Expr, name string) bool {
+	sel, ok := e.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != name {
+		return false
+	}
+	x, ok := sel.X.(*ast.Ident)
+	return ok && slices.Contains(r.testing, x.Name)
+}
+
+// tParams gives each named *testing.T or testing.TB parameter of ft with its position among the parameters.
+func (r *caseReader) tParams(ft *ast.FuncType) map[string]int {
+	out := map[string]int{}
+	if ft.Params == nil {
+		return out
+	}
+	i := 0
+	for _, field := range ft.Params.List {
+		if len(field.Names) == 0 {
+			i++
+			continue
+		}
+		for _, id := range field.Names {
+			if r.isT(field.Type) && id.Name != "_" {
+				out[id.Name] = i
+			}
+			i++
+		}
+	}
+	return out
+}
+
+// isTest reports a top-level func Test<X>(t *testing.T), <X> empty or not starting with a lower-case letter (go test's
+// rule); benchmarks, examples, fuzz targets, TestMain and methods are not cases.
+func (r *caseReader) isTest(fd *ast.FuncDecl) bool {
+	rest, ok := strings.CutPrefix(fd.Name.Name, "Test")
+	if !ok || fd.Recv != nil || fd.Type.TypeParams != nil || fd.Type.Results != nil {
+		return false
+	}
+	if rest != "" && unicode.IsLower([]rune(rest)[0]) {
+		return false
+	}
+	params := fd.Type.Params.List
+	return len(params) == 1 && len(params[0].Names) <= 1 && r.isTestT(params[0].Type)
+}
+
+// testCase lists name, faults it if body never reaches a verdict, and reads body for its subtests.
+func (r *caseReader) testCase(name string, body *ast.BlockStmt) {
+	r.cases = append(r.cases, name)
+	if body == nil || !r.reaches(body) {
+		r.faults = append(r.faults, name+": "+noVerdict)
+	}
+	if body != nil {
+		r.walk(name, body, nil)
+	}
+}
+
+// verdict reports a call x.<verdict>(…) with x one of names.
+func verdict(call *ast.CallExpr, names map[string]bool) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	x, ok := sel.X.(*ast.Ident)
+	return ok && names[x.Name] && slices.Contains(verdicts, sel.Sel.Name)
+}
+
+// helper gives the positions of the *testing.T parameters on which the same-file function name itself calls a
+// verdict (one level: what it calls is not read).
+func (r *caseReader) helper(name string) []int {
+	if got, ok := r.helpers[name]; ok {
+		return got
+	}
+	var out []int
+	if fd := r.funcs[name]; fd != nil && fd.Body != nil {
+		params := r.tParams(fd.Type)
+		names := map[string]bool{}
+		for p := range params {
+			names[p] = true
+		}
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok && verdict(call, names) {
+				p := call.Fun.(*ast.SelectorExpr).X.(*ast.Ident).Name
+				if !slices.Contains(out, params[p]) {
+					out = append(out, params[p])
+				}
+			}
+			return true
+		})
+	}
+	r.helpers[name] = out
+	return out
+}
+
+// reaches reports whether node calls a verdict on a *testing.T, directly or through one same-file helper it passes a
+// *testing.T to in the position the helper fails.
+func (r *caseReader) reaches(node ast.Node) bool {
+	found := false
+	ast.Inspect(node, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if found || !ok {
+			return !found
+		}
+		if verdict(call, r.tnames) {
+			found = true
+			return false
+		}
+		if f, ok := call.Fun.(*ast.Ident); ok {
+			for _, i := range r.helper(f.Name) {
+				if i < len(call.Args) {
+					if a, ok := call.Args[i].(*ast.Ident); ok && r.tnames[a.Name] {
+						found = true
+					}
+				}
+			}
+		}
+		return !found
+	})
+	return found
+}
+
+// isRun reports a call t.Run(name, f) on a *testing.T.
+func (r *caseReader) isRun(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Run" || len(call.Args) != 2 {
+		return false
+	}
+	x, ok := sel.X.(*ast.Ident)
+	return ok && r.tnames[x.Name]
+}
+
+// literal is a t.Run name given as a string literal.
+func literal(e ast.Expr) (string, bool) {
+	lit, ok := e.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return "", false
+	}
+	s, err := strconv.Unquote(lit.Value)
+	return s, err == nil
+}
+
+// runsTable reports whether body calls t.Run with a non-literal name (not counting t.Run calls inside a t.Run).
+func (r *caseReader) runsTable(body ast.Node) bool {
+	found := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && r.isRun(call) {
+			if _, lit := literal(call.Args[0]); !lit {
+				found = true
+			}
+			return false
+		}
+		return !found
+	})
+	return found
+}
+
+// walk reads node, part of case prefix's body, for its subtests; labels are the element names of the one counted
+// range node sits in (nil outside one).
+func (r *caseReader) walk(prefix string, node ast.Node, labels []string) {
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.ForStmt:
+			r.walk(prefix, n.Body, nil)
+			return false
+		case *ast.RangeStmt:
+			if !r.runsTable(n.Body) {
+				return true
+			}
+			inner, ok := r.table(n)
+			if !ok || labels != nil {
+				r.faults = append(r.faults, prefix+": "+cannotCount)
+				return false
+			}
+			r.walk(prefix, n.Body, inner)
+			return false
+		case *ast.CallExpr:
+			if !r.isRun(n) {
+				return true
+			}
+			var names []string
+			if lit, ok := literal(n.Args[0]); ok {
+				names = []string{prefix + "/" + lit}
+			} else if labels != nil {
+				for _, l := range labels {
+					names = append(names, prefix+"/"+l)
+				}
+			} else {
+				r.faults = append(r.faults, prefix+": "+cannotCount)
+				return false
+			}
+			for _, name := range names {
+				r.testCase(name, r.body(n.Args[1]))
+			}
+			return false
+		}
+		return true
+	})
+}
+
+// body is a subtest's function: a literal, or a same-file function named; nil when Cases cannot read it.
+func (r *caseReader) body(f ast.Expr) *ast.BlockStmt {
+	switch f := f.(type) {
+	case *ast.FuncLit:
+		return f.Body
+	case *ast.Ident:
+		if fd := r.funcs[f.Name]; fd != nil {
+			return fd.Body
+		}
+	}
+	return nil
+}
+
+// table gives the element names of a range Cases can count: <ident>[0] … <ident>[n-1].
+func (r *caseReader) table(rs *ast.RangeStmt) ([]string, bool) {
+	x, bound := rs.X, -1
+	if s, ok := x.(*ast.SliceExpr); ok {
+		n, isInt := intLit(s.High)
+		if s.Low != nil || s.Max != nil || !isInt {
+			return nil, false
+		}
+		x, bound = s.X, n
+	}
+	var lit *ast.CompositeLit
+	var ident string
+	switch x := x.(type) {
+	case *ast.CompositeLit:
+		lit, ident = x, loopVar(rs)
+	case *ast.Ident:
+		lit, ident = r.bound(rs, x.Name), x.Name
+	}
+	if lit == nil {
+		return nil, false
+	}
+	size, ok := elements(lit)
+	if !ok || bound > size {
+		return nil, false
+	}
+	if bound >= 0 {
+		size = bound
+	}
+	labels := make([]string, size)
+	for i := range size {
+		labels[i] = fmt.Sprintf("%s[%d]", ident, i)
+	}
+	return labels, true
+}
+
+// intLit is an integer literal's value.
+func intLit(e ast.Expr) (int, bool) {
+	lit, ok := e.(*ast.BasicLit)
+	if !ok || lit.Kind != token.INT {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(lit.Value, 0, 0)
+	return int(n), err == nil && n >= 0
+}
+
+// loopVar is the first of a range's key and value that is named, "range" if neither is.
+func loopVar(rs *ast.RangeStmt) string {
+	for _, e := range []ast.Expr{rs.Key, rs.Value} {
+		if id, ok := e.(*ast.Ident); ok && id.Name != "_" {
+			return id.Name
+		}
+	}
+	return "range"
+}
+
+// elements is how many times a range over lit runs: a map's or slice's elements, an array's length; a slice or array
+// literal with index keys, or of a named type, is not counted.
+func elements(lit *ast.CompositeLit) (int, bool) {
+	switch t := lit.Type.(type) {
+	case *ast.MapType:
+		return len(lit.Elts), true
+	case *ast.ArrayType:
+		if slices.ContainsFunc(lit.Elts, func(e ast.Expr) bool { _, keyed := e.(*ast.KeyValueExpr); return keyed }) {
+			return 0, false
+		}
+		if _, dots := t.Len.(*ast.Ellipsis); t.Len == nil || dots {
+			return len(lit.Elts), true
+		}
+		return intLit(t.Len)
+	}
+	return 0, false
+}
+
+// bound is the composite literal name is bound to, by := or var, in a statement before from in a block enclosing it
+// within the same top-level function; nil if the nearest binding is to anything else, a statement between writes
+// name, or name is a parameter or not bound in the function.
+func (r *caseReader) bound(from ast.Node, name string) *ast.CompositeLit {
+	for child, p := from, r.parents[from]; p != nil; child, p = p, r.parents[p] {
+		switch p := p.(type) {
+		case *ast.FuncDecl:
+			return nil
+		case *ast.FuncLit:
+			if paramNames(p.Type)[name] {
+				return nil
+			}
+		}
+		list := stmts(p)
+		at := slices.IndexFunc(list, func(s ast.Stmt) bool { return s == child })
+		for j := at - 1; j >= 0; j-- {
+			if lit, found := binding(list[j], name); found {
+				return lit
+			}
+		}
+	}
+	return nil
+}
+
+// paramNames are every parameter name of ft.
+func paramNames(ft *ast.FuncType) map[string]bool {
+	out := map[string]bool{}
+	if ft.Params != nil {
+		for _, field := range ft.Params.List {
+			for _, id := range field.Names {
+				out[id.Name] = true
+			}
+		}
+	}
+	return out
+}
+
+// stmts is the statement list a block-like node holds.
+func stmts(n ast.Node) []ast.Stmt {
+	switch n := n.(type) {
+	case *ast.BlockStmt:
+		return n.List
+	case *ast.CaseClause:
+		return n.Body
+	case *ast.CommClause:
+		return n.Body
+	}
+	return nil
+}
+
+// binding reads one statement for name: found when it binds name (lit is the composite literal it binds, if any) or
+// writes it (lit nil: the table is not the literal any more).
+func binding(stmt ast.Stmt, name string) (lit *ast.CompositeLit, found bool) {
+	switch s := stmt.(type) {
+	case *ast.AssignStmt:
+		if s.Tok == token.DEFINE {
+			for i, lhs := range s.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && id.Name == name {
+					if len(s.Rhs) == len(s.Lhs) {
+						lit, _ = s.Rhs[i].(*ast.CompositeLit)
+					}
+					return lit, true
+				}
+			}
+		}
+	case *ast.DeclStmt:
+		if gen, ok := s.Decl.(*ast.GenDecl); ok && gen.Tok == token.VAR {
+			for _, spec := range gen.Specs {
+				vs := spec.(*ast.ValueSpec)
+				for i, id := range vs.Names {
+					if id.Name == name {
+						if i < len(vs.Values) {
+							lit, _ = vs.Values[i].(*ast.CompositeLit)
+						}
+						return lit, true
+					}
+				}
+			}
+		}
+	}
+	return nil, writes(stmt, name)
+}
+
+// writes reports whether stmt assigns to name (or through it), increments it, or deletes from or clears it.
+func writes(stmt ast.Stmt, name string) bool {
+	found := false
+	ast.Inspect(stmt, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.AssignStmt:
+			if n.Tok != token.DEFINE {
+				found = found || slices.ContainsFunc(n.Lhs, func(e ast.Expr) bool { return root(e) == name })
+			}
+		case *ast.IncDecStmt:
+			found = found || root(n.X) == name
+		case *ast.CallExpr:
+			if f, ok := n.Fun.(*ast.Ident); ok && (f.Name == "delete" || f.Name == "clear") && len(n.Args) > 0 {
+				found = found || root(n.Args[0]) == name
+			}
+		}
+		return !found
+	})
+	return found
 }
 
 // pkgFiles reads the other non-test Go files beside path (relative to root), so the globals check sees the whole
