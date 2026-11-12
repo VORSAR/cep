@@ -32,7 +32,7 @@ At most two agents at once (plan check §1, §4, §9).
 
 ## Measured results
 
-*(filled as lanes land)*
+- **T2 on the G0 commit (bacb2e6, run 20261112T033210Z-c84596):** every row PASS but the three stubs, each red by its own name — `suppressions: not built yet (lane A)`, `testhygiene: not built yet (lane C)`, `docsync: not built yet (lane D)`; exit 1 as designed. The LAW Δ block named the sprint's law edits: the marker `S1.1c-1 → S1.1c-2`, `law.json` +8 paths, `registry.json` +3 rows and the floor argument, `gate/runner/` 5 files, `tools/allowlists/` 5 files, `gate/known-issues.json`. This is the baseline for plan check §7's "done" rule: a lane is done when its T2's failed rows are exactly the stubs not yet replaced.
 
 ## Test material
 
@@ -55,7 +55,7 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-12)
              ☑ dependencies merged, main green (S1.1c-1: PR #31; main fd274e4 — gate and nightly success)
              ☑ fits the cap, lanes ≤ 8 days (≈ 9 of 13; lanes A, C, D each ≤ 2 days as sized)
              ☑ plan check reviewed (architect, QA, product) and answered by the owner (2026-11-12)
-             ☐ test material exists, or making it is an item (QA's W0 is the item)
+             ☑ test material exists, or making it is an item (QA's W0 is the item)
              ☑ `gate/current-sprint` set, the first commit
 Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
              ☐ owner decisions recorded ☐ ADRs written for lasting decisions
