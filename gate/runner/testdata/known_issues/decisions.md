@@ -14,4 +14,4 @@ S3.3-1-3 is forwarded to S8.
 
 ## Owner decisions, 2026-11-08 — earlier
 
-QB10X is not QB10.
+QB10X is not the id.
