@@ -4,8 +4,9 @@ Each recogniser follows what the pinned tool honours, as measured (design §0.2 
 golangci-lint v2.15.0), never what its documentation suggests; test_suppressions.py holds both tables as data. A Go
 comment golangci reads as a directive must be written in the one canonical form with the grammar's metadata; a form
 golangci ignores is not an exemption and passes unseen. A Python marker is `# fmt: skip  # <reason>`; every other
-waiver form ruff honours (or that waives nothing under --ignore-noqa) is red. Pure: texts in, directives and faults
-out; the field rules are allowlists.fields, the only implementation.
+waiver form ruff honours (or that waives nothing under --ignore-noqa) is red. Every waiver a tool honours is returned
+as a Directive, valid or not, so the LAW Δ count holds it (W1-F3). Pure: texts in, directives and faults out; the
+field rules are allowlists.fields, the only implementation.
 """
 
 import io
@@ -21,6 +22,7 @@ ENABLED: frozenset[str] = frozenset()  # S1.1c-4 sets it from its golangci confi
 # covers every spelling ruff reads after it (BK-B1).
 PREFILTER = ("nolint", "fmt:", "noqa", "yapf:", "isort:")
 KEYS = frozenset({"reason", "ref", "expiry", "issue", "sprint"})
+PY_KINDS = frozenset({"MARKER", "REGION"})
 
 HONOURED = re.compile(r"nolint(?: |:|$)")
 CANONICAL = re.compile(r"nolint:([\w-]+(?:,[\w-]+)*)(?=\s|$)", re.ASCII)
@@ -35,6 +37,9 @@ NOQA = re.compile(r"((ruff|flake8): ?)?noqa\b", re.ASCII | re.IGNORECASE)
 METADATA = 'a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=…'
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 SPELLING = "ruff honours this spelling too; write # fmt: skip  # <reason>"
+UNTOKENIZABLE = "cannot be tokenized as Python"
+REGION_WAIVERS = frozenset({("fmt", "off"), ("yapf", "disable")})
+ISORT_WAIVER = re.compile(r"(?:ruff: ?)?isort: ?(skip|skip_file|off)", re.ASCII)
 NO_REASON = f"write its reason as another comment: # fmt: skip  # <reason, {allowlists.REASON_MIN}+ characters>"
 ON_STATEMENT = "write # fmt: skip  # <reason> on the statement"
 WAIVES_NOTHING = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
@@ -42,11 +47,15 @@ WAIVES_NOTHING = "ruff runs --ignore-noqa: this comment waives nothing; remove i
 
 @dataclass(frozen=True)
 class Directive:
+    """One waiver a pinned tool honours, valid or not (W1-F3: the LAW Δ count holds every one; the reader's fault
+    names what is wrong with an invalid one, and `check` adds nothing for it)."""
+
     path: str
     line: int
-    linters: tuple[str, ...]  # ("fmt",) for a Python marker
-    kind: str  # PERMANENT, TEMP, or MARKER for a Python marker
+    linters: tuple[str, ...]  # ("fmt",) for a skip marker; the tool ("fmt", "yapf", "isort") for a region waiver
+    kind: str  # PERMANENT or TEMP (or "" unread) for //nolint; MARKER for a skip; REGION for another Python waiver
     meta: dict[str, str]
+    valid: bool = True
 
 
 # ------------------------------------------------------------------------------------------------------------- Go
@@ -148,18 +157,19 @@ def go_directives(path: str, source: str) -> tuple[list[Directive], list[str]]:
         where = f"{path}:{line}"
         m = CANONICAL.match(text)
         if m is None:
-            faults.append(f"{where}: write //nolint:{_linters_as_written(head)} (two slashes, no space)")
+            written = _linters_as_written(head)
+            faults.append(f"{where}: write //nolint:{written} (two slashes, no space)")
+            directives.append(Directive(path, line, tuple(written.split(",")), "", {}, valid=False))
             continue
+        linters = tuple(m.group(1).split(","))
         rest = text[m.end() :]
-        if not rest.startswith(" // "):
-            faults.append(f"{where}: {METADATA}")
-            continue
-        read = _metadata(rest.removeprefix(" // "))
+        read = _metadata(rest.removeprefix(" // ")) if rest.startswith(" // ") else METADATA
         if isinstance(read, str):
             faults.append(f"{where}: {read}")
+            directives.append(Directive(path, line, linters, "", {}, valid=False))
             continue
         kind, meta = read
-        directives.append(Directive(path, line, tuple(m.group(1).split(",")), kind, meta))
+        directives.append(Directive(path, line, linters, kind, meta))
     return directives, faults
 
 
@@ -191,29 +201,52 @@ def _segment_faults(segment: str) -> str:
     return ""
 
 
+def _is_skip(segment: str) -> bool:
+    """A segment ruff reads as `fmt: skip`, in any spelling it honours (BK-B1)."""
+    return segment in SKIPS or _command(segment) == ("fmt", "skip")
+
+
+def _regions(path: str, line: int, segments: list[str]) -> list[Directive]:
+    """The comment's other waivers ruff honours (each red, each counted, W1-F3): `fmt: off`, `yapf: disable` in any
+    spelling, and the isort skips (measured: `ruff check --select I --ignore-noqa` honours them)."""
+    out = []
+    for segment in segments:
+        command = _command(segment)
+        if command in REGION_WAIVERS:
+            out.append(Directive(path, line, (command[0],), "REGION", {"command": command[1]}, valid=False))
+        elif m := ISORT_WAIVER.fullmatch(segment):
+            out.append(Directive(path, line, ("isort",), "REGION", {"command": m.group(1)}, valid=False))
+    return out
+
+
 def py_markers(path: str, source: str) -> tuple[list[Directive], list[str]]:
-    """The `# fmt: skip  # <reason>` markers (§0.2) as directives, and every other waiver form as a fault.
+    """Every waiver ruff honours as a directive, valid or not (W1-F3), and every waiver form but a valid
+    `# fmt: skip  # <reason>` (§0.2) as a fault.
 
     Python's tokenizer gives one COMMENT token per line, so the token is split on "#" into stripped segments: a
-    segment that is exactly a skip marks the line, and the others, noqa ones aside, are its reason."""
+    segment that is a skip marks the line, and the others, noqa ones aside, are its reason."""
     markers: list[Directive] = []
     faults: list[str] = []
     try:
         tokens = [t for t in tokenize.generate_tokens(io.StringIO(source).readline) if t.type == tokenize.COMMENT]
     except (SyntaxError, tokenize.TokenError) as e:
-        return [], [f"{path}: cannot be tokenized as Python: {e}"]
+        return [], [f"{path}: {UNTOKENIZABLE}: {e}"]
     for token in tokens:
-        where = f"{path}:{token.start[0]}"
+        line = token.start[0]
+        where = f"{path}:{line}"
         segments = [s.strip() for s in token.string.split("#")[1:]]
         own = [fault for fault in map(_segment_faults, segments) if fault]
         faults += [f"{where}: {fault}" for fault in own]
-        if not any(s in SKIPS for s in segments):
+        markers += _regions(path, line, segments)
+        skips = [s for s in segments if _is_skip(s)]
+        if not skips:
             continue
-        reason = "  # ".join(s for s in segments if s and s not in SKIPS and not NOQA.match(s))
-        if len(reason.strip()) < allowlists.REASON_MIN:
+        reason = "  # ".join(s for s in segments if s and not _is_skip(s) and not NOQA.match(s))
+        spelled = all(s in SKIPS for s in skips)  # a skip spelled otherwise has its fault already
+        short = len(reason.strip()) < allowlists.REASON_MIN
+        if spelled and short:
             faults.append(f"{where}: {NO_REASON}")
-            continue
-        markers.append(Directive(path, token.start[0], ("fmt",), "MARKER", {"reason": reason}))
+        markers.append(Directive(path, line, ("fmt",), "MARKER", {"reason": reason}, valid=spelled and not short))
     return markers, faults
 
 
@@ -221,11 +254,11 @@ def py_markers(path: str, source: str) -> tuple[list[Directive], list[str]]:
 
 
 def check(directives: Iterable[Directive], ctx: allowlists.Ctx, enabled: frozenset[str]) -> list[str]:
-    """The field rules for each Go directive, then each of its linters not enabled; a marker's reason was checked
-    when it was read."""
+    """The field rules for each valid Go directive, then each of its linters not enabled; a Python waiver, and a
+    directive whose reader faulted it, were judged when they were read."""
     out: list[str] = []
     for d in directives:
-        if d.kind == "MARKER":
+        if d.kind in PY_KINDS or not d.valid:
             continue
         where = f"{d.path}:{d.line}"
         got = d.meta.get
@@ -263,5 +296,6 @@ def read(path: str, source: str) -> tuple[list[Directive], list[str]]:
 
 
 def count(path: str, source: str) -> int:
-    """How many in-code exemptions the file holds (the LAW Δ block's `<n> in code`); a fault is not one."""
+    """How many in-code exemptions the file holds (the LAW Δ block's `<n> in code`): every waiver the tools honour,
+    valid or not (W1-F3)."""
     return len(read(path, source)[0])
