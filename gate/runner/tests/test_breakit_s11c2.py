@@ -27,6 +27,13 @@ the shim's report file itself and exits 0. A second route needs no file: a modul
 unittest.TextTestRunner.run (or pyshim's own _Result, looked up after the import) makes the shim itself write
 `passed <n> tests` to the report for a module whose only test fails. Same residue class (every test module is a law
 path), but the ADR's sentence names one route of several.
+
+BK-S4: golangci-lint v2.15.0 honours gosec's own `#nosec` waiver — measured with the pinned binary (`run
+--no-config --default=none --enable=gosec`): `"crypto/md5" // #nosec G501` and `md5.Sum(b) // #nosec G401` drop
+both findings, which reappear when the comments go. §0.3's table and go_directives know only `nolint`: a `#nosec`
+in a tracked .go file is no directive and no fault, and no PREFILTER pattern finds it. No linter is enabled until
+S1.1c-4, so today it waives nothing; the day gosec is enabled every `#nosec` already in the tree is a live waiver
+with no metadata and no LAW Δ line.
 """
 
 import contextlib
@@ -192,6 +199,19 @@ class ShimRunnerPatchForge(support.GateTest):
             said = f.read()
         self.assertEqual(code, 1, (said, out, err))
         self.assertNotIn("passed", said)
+
+
+NOSEC = 'package x\n\nimport (\n\t"crypto/md5" // #nosec G501\n)\n\nvar _ = md5.Sum(nil) // #nosec G401 -- reason\n'
+
+
+class NosecIsAWaiver(unittest.TestCase):
+    """BK-S4: a linter-native waiver golangci honours is read like //nolint."""
+
+    def test_a_nosec_is_read(self):
+        self.assertNotEqual(suppressions.go_directives("x.go", NOSEC), ([], []), "a #nosec passes unseen")
+
+    def test_a_nosec_is_found_by_lawdeltas_prefilter(self):
+        self.assertTrue(any(p in NOSEC for p in suppressions.PREFILTER))
 
 
 if __name__ == "__main__":
