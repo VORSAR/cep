@@ -16,7 +16,7 @@ from datetime import date
 
 from gate.runner import sprintid
 
-RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene"})  # S1.1c-3 adds "govulncheck"
+RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated"})  # S1.1c-3 adds "govulncheck"
 KINDS = ("PERMANENT", "TEMP")
 TOP_KEYS = ("schema", "note", "rule", "entries")
 REQUIRED = ("target", "kind", "reason", "sprint")

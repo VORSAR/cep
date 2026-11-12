@@ -30,14 +30,16 @@ from dataclasses import dataclass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from gate.coverage import classify, coverprofile
-from gate.runner import jsonstream
+from gate.runner import allowlists, jsonstream, suppressions
 
 SCOPE = ("./internal/...", ".", "./rule/...", "./io/...")
 NEEDED = "unit"
 PROFILE_NAME = "cover.prof"
 EVENTS_NAME = "test.json"
-# ADR-0015 §2.1's canonical header, on the first line. A bytes pattern: `.` never crosses the line's end.
-GENERATED = re.compile(rb"// Code generated .* DO NOT EDIT\.")
+# ADR-0015 §2.1 as closed at S1.1c-2's fix round (BK-S6; owner, 2026-11-12, S1.1c-2's review and break-it 3): a file
+# is generated only if Go's own rule marks it (suppressions.go_generated: before the package clause) and this list
+# names it by its module-relative path. No list excludes nothing; an unreadable one is a FAIL.
+GENERATED_LIST = "tools/allowlists/generated.json"
 _FLOOR = re.compile(r"100|[1-9][0-9]?")
 _NOT_A_PACKAGE = ("no Go files", "matched no packages")  # the runner's `go` scope rule (design note §4)
 FIX = "fix: each FAIL package needs tests that build, run and cover at least {floor}% of its statements (ADR-0015 §2.2)"
@@ -106,18 +108,38 @@ def _is_real(entry: dict) -> bool:
     return not any(text in error.get("Err", "") for text in _NOT_A_PACKAGE)
 
 
-def _generated(directory: str, names: Sequence[str]) -> frozenset[str]:
+def listed_generated(module_dir: str) -> frozenset[str]:
+    """The paths tools/allowlists/generated.json lists, relative to the module; empty when there is no list."""
+    path = os.path.join(module_dir, GENERATED_LIST)
+    try:
+        with open(path, "rb") as f:
+            text = f.read().decode("utf-8", errors="replace")
+    except FileNotFoundError:
+        return frozenset()
+    try:
+        return frozenset(e.target for e in allowlists.load(text, "generated").entries)
+    except ValueError as e:
+        raise Failure(str(e)) from None  # allowlists.load names the file and the fault
+
+
+def _generated(module_dir: str, directory: str, names: Sequence[str], listed: frozenset[str]) -> frozenset[str]:
+    """The files of a package that Go's rule marks generated and the list names (both, never one)."""
     found = set()
     for name in names:
-        with open(os.path.join(directory, name), "rb") as f:
-            first = f.readline().removesuffix(b"\n")
-        if GENERATED.fullmatch(first):
+        path = os.path.join(directory, name)
+        rel = os.path.relpath(os.path.realpath(path), os.path.realpath(module_dir)).replace(os.sep, "/")
+        if rel not in listed:
+            continue
+        with open(path, "rb") as f:
+            source = f.read().decode("utf-8", errors="replace")
+        if suppressions.go_generated(rel, source):
             found.add(name)
     return frozenset(found)
 
 
 def packages(module_dir: str, scratch: str) -> list[classify.Package]:
     """The real packages the scope patterns match, each with its generated files."""
+    listed = listed_generated(module_dir)
     out, err = os.path.join(scratch, "golist.stdout"), os.path.join(scratch, "golist.stderr")
     with open(out, "wb") as o, open(err, "wb") as e:
         code = subprocess.run(
@@ -136,7 +158,8 @@ def packages(module_dir: str, scratch: str) -> list[classify.Package]:
     for entry in entries:
         if _is_real(entry):
             names = [*(entry.get("GoFiles") or ()), *(entry.get("CgoFiles") or ())]
-            found.append(classify.Package(entry["ImportPath"], _generated(entry.get("Dir", ""), names)))
+            generated = _generated(module_dir, entry.get("Dir", ""), names, listed)
+            found.append(classify.Package(entry["ImportPath"], generated))
     return sorted(found, key=lambda p: p.path)
 
 
