@@ -10,6 +10,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 from datetime import date, timedelta
 from unittest import mock
 
@@ -70,7 +71,9 @@ def go_file(*directives: str, pad: int = 0) -> str:
     return "package y\n\n" + "// padding\n" * pad + body
 
 
-class Exemptions(support.GateTest):
+class ExemptionWorld(support.GateTest):
+    """A temporary repository with `main` and a `change` branch, and the row run in-process there."""
+
     def commit(self, message: str) -> None:
         self.git("add", "-A")
         self.git(*IDENTITY, "commit", "-q", "-m", message)
@@ -113,6 +116,8 @@ class Exemptions(support.GateTest):
         self.assertEqual(len(starts), 1, lines)
         return lines[starts[0] :]
 
+
+class Exemptions(ExemptionWorld):
     # The exemption line.
 
     def test_plus_zero_and_nothing_else_for_an_unchanged_list(self):
@@ -342,6 +347,47 @@ class Exemptions(support.GateTest):
         self.assertEqual(code, 0, lines)
         i = next(n for n, s in enumerate(lines) if s.startswith("gate/known-issues.json +"))
         self.assertEqual(lines[i + 1], "  BA9: forward S1.1c-3 → S1.1c-4")
+
+
+class GitProcesses(ExemptionWorld):
+    """S1.1c-2's FX-4 (W1-F4 at T4): the row's git processes do not grow with what it reads. At T4 the row started
+    one `git show` per marker file and list at each revision and one `git ls-files` per law path (162 processes on
+    the real tree), and inside a proof's world under T4's load it ran past its 60 s cap. Here the second run reads
+    five more marker files, two more lists and four more law paths than the first, and starts no more processes."""
+
+    def count_git(self) -> int:
+        with mock.patch("subprocess.run", wraps=subprocess.run) as run:
+            code, lines = self.run_row()
+        self.assertEqual(code, 0, lines)
+        return sum(1 for c in run.call_args_list if c.args and c.args[0][0] == "git")
+
+    def manifest(self, extra: int) -> str:
+        paths = [*WITH_LISTS["paths"], {"path": "gate/runner/", "kind": "code"}]
+        paths += [{"path": f"p{i}.txt", "kind": "code"} for i in range(extra)]
+        return json.dumps({**WITH_LISTS, "paths": paths}) + "\n"
+
+    def test_more_files_lists_and_law_paths_start_no_more_git_processes(self):
+        issues = json.dumps({"schema": 1, "note": "n", "entries": []}) + "\n"
+        files = {"tools/allowlists/purity.json": allowlist("purity"), "gate/known-issues.json": issues, "p0.txt": "p\n"}
+        self.main_world(files, WITH_LISTS)
+        self.change(
+            {
+                "gate/law.json": self.manifest(1),
+                "tools/allowlists/purity.json": allowlist("purity", entry("internal/a: sync.Pool")),
+                "gate/runner/m0.py": PY_MARK,
+            }
+        )
+        first = self.count_git()
+        self.change(
+            {
+                "gate/law.json": self.manifest(5),
+                **{f"p{i}.txt": "p\n" for i in range(1, 5)},
+                "tools/allowlists/clock.json": allowlist("clock", entry("internal/a/b.go: time")),
+                "tools/allowlists/teeth.json": allowlist("teeth", entry("gate/x.py")),
+                **{f"gate/runner/m{i}.py": PY_MARK for i in range(1, 6)},
+            }
+        )
+        self.assertEqual(self.count_git(), first)
 
 
 class InCodeScope(support.GateTest):

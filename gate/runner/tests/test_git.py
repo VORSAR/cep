@@ -6,7 +6,9 @@ Expected values are worked out by hand from git's documented output: `--numstat 
 """
 
 import os
+import subprocess
 import unittest
+from unittest import mock
 
 from gate.runner import git
 from gate.runner.tests import support
@@ -101,6 +103,57 @@ class ShowAndListing(GitTest):
         self.assertEqual(git.ls_files(["a.txt"], cwd=self.repo), ["a.txt"])
         self.assertEqual(git.ls_files(["d/"], cwd=self.repo), ["d/x.txt"])
         self.assertEqual(git.ls_files(["nope.txt"], cwd=self.repo), [])
+
+
+class ReadBlobs(GitTest):
+    """S1.1c-2's FX-4 (W1-F4 at T4): `read_blobs` reads every file at a revision through one `git cat-file --batch`
+    process, giving each path exactly what `show` gives — the text with undecodable bytes replaced, None when the
+    path is absent there — so a row's git processes do not grow with the files it reads."""
+
+    PATHS = ["a.txt", "b.txt", "with space.txt", "bytes.bin", "d/empty.txt", "d", "nope.txt"]
+
+    def world(self) -> str:
+        self.main_then_change()
+        self.track("with space.txt", "spaced\n")
+        self.track("d/empty.txt", "")
+        with open(os.path.join(self.repo, "bytes.bin"), "wb") as f:
+            f.write(b"ok \xff\xfe end\n\x00tail")
+        self.commit("files")
+        return git.head(cwd=self.repo)
+
+    def test_each_path_reads_as_show_reads_it(self):
+        rev = self.world()
+        want = {p: git.show(rev, p, cwd=self.repo) for p in self.PATHS if p != "d"}
+        got = git.read_blobs(rev, self.PATHS, cwd=self.repo)
+        self.assertEqual(got.pop("d"), None)  # a directory is no file's text
+        self.assertEqual(got, want)
+        self.assertEqual((got["a.txt"], got["d/empty.txt"], got["nope.txt"]), ("a1\na2\n", "", None))
+
+    def test_a_bad_revision_reads_none_for_every_path(self):
+        self.world()
+        self.assertEqual(git.read_blobs("0" * 40, ["a.txt", "b.txt"], cwd=self.repo), {"a.txt": None, "b.txt": None})
+
+    def test_a_path_holding_a_newline_reads_as_show_reads_it(self):
+        self.world()
+        self.track("new\nline.txt", "x\n")
+        self.commit("newline")
+        got = git.read_blobs(git.head(cwd=self.repo), ["new\nline.txt", "a.txt"], cwd=self.repo)
+        self.assertEqual(got, {"new\nline.txt": "x\n", "a.txt": "a1\na2\n"})
+
+    def test_one_git_process_for_any_number_of_files(self):
+        rev = self.world()
+        counts = []
+        for paths in (["a.txt"], self.PATHS):
+            with mock.patch("subprocess.run", wraps=subprocess.run) as run:
+                git.read_blobs(rev, paths, cwd=self.repo)
+            counts.append(run.call_count)
+        self.assertEqual(counts, [1, 1])
+
+    def test_no_paths_starts_no_process(self):
+        rev = self.world()
+        with mock.patch("subprocess.run", wraps=subprocess.run) as run:
+            self.assertEqual(git.read_blobs(rev, [], cwd=self.repo), {})
+        self.assertEqual(run.call_count, 0)
 
 
 class Dirty(GitTest):
