@@ -55,6 +55,10 @@ BK-L1: docsync (a) reads a §3 line naming a file as listing the file's director
 therefore list directories as packages nobody described: `tools/deps-allowlist.json` lists `tools`,
 `api/exports.golden` lists `api`, `tools/importcheck/rules.json` lists `tools/importcheck`. A new Go package in any
 of them passes docsync.
+
+BK-L2: a PERMANENT entry's ref must name a heading of a tracked Markdown file (anchors.resolves). A heading inside
+an HTML comment — `<!--` … `## Gone` … `-->`, which renders as nothing and has no anchor on the rendered page —
+satisfies it, so a waiver may cite a section the reader cannot find.
 """
 
 import contextlib
@@ -62,7 +66,7 @@ import os
 import sys
 import unittest
 
-from gate.runner import docsync, knownissues, law, sprintid, suppressions, teeth
+from gate.runner import anchors, docsync, knownissues, law, sprintid, suppressions, teeth
 from gate.runner.rows import suppressions as row
 from gate.runner.tests import support
 
@@ -297,6 +301,14 @@ class DocsyncDataFileLines(unittest.TestCase):
             docsync.missing(["api", "tools", "tools/importcheck"], docsync.listed(tree)),
             ["api", "tools", "tools/importcheck"],
         )
+
+
+class RefToACommentedHeading(unittest.TestCase):
+    """BK-L2."""
+
+    def test_a_heading_inside_an_html_comment_does_not_resolve(self):
+        md = "# Title\n\n<!--\n## Gone\n-->\n"
+        self.assertNotEqual(anchors.resolves("docs/a.md#gone", lambda path: md), "", "a commented heading resolves")
 
 
 if __name__ == "__main__":
