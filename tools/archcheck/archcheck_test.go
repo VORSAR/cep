@@ -401,7 +401,9 @@ func TestListsPurity(t *testing.T) {
 		}
 	})
 	t.Run("a list without internal/table: sync.Mutex makes table's mutex red", func(t *testing.T) {
-		src := "package table\nimport \"sync\"\nvar mu sync.Mutex\nfunc f() { mu.Lock() }\n"
+		// The mutex is a field: a package-level `var mu sync.Mutex` is a globals finding whatever the lists hold
+		// (ADR-0015 §2.2), which would hide what this case tests.
+		src := "package table\nimport \"sync\"\ntype T struct{ mu sync.Mutex }\nfunc (t *T) f() { t.mu.Lock() }\n"
 		with := loadAt(t, listRoot(t, []string{"internal/table: sync.Mutex"}, nil, nil))
 		wantNone(t, checkWith(t, with, "internal/table/x.go", map[string]string{"internal/table/x.go": src}))
 		without := loadAt(t, listRoot(t, []string{"internal/event: sync.Pool"}, nil, nil))
@@ -533,4 +535,216 @@ func TestTestsModeRefusesANonTestFile(t *testing.T) {
 	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
 		t.Fatalf("-tests on a non-test file: want exit 2, got %v\n%s", err, out)
 	}
+}
+
+// ---- S1.1c-2 lane C's own cases: LoadLists' faults, the fence's edges, and cli (main's body) end to end in-process.
+
+func TestLoadListsFaults(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct{ file, text, want string }{
+		"bad JSON":                 {"purity", "{", "tools/allowlists/purity.json: "},
+		"a clock target, no colon": {"clock", `{"rule": "clock", "entries": [{"target": "internal/window/cron.go"}]}`, `tools/allowlists/clock.json: target "internal/window/cron.go": want "<file>: time"`},
+		"a clock target, not time": {"clock", `{"rule": "clock", "entries": [{"target": "internal/window/cron.go: sync"}]}`, `tools/allowlists/clock.json: target "internal/window/cron.go: sync": want "<file>: time"`},
+		"a clock target, no file":  {"clock", `{"rule": "clock", "entries": [{"target": ": time"}]}`, `tools/allowlists/clock.json: target ": time": want "<file>: time"`},
+		"an empty testhygiene one": {"testhygiene", `{"rule": "testhygiene", "entries": [{"target": ""}]}`, `tools/allowlists/testhygiene.json: an empty target: want "<file>"`},
+		"a rule mismatch":          {"testhygiene", `{"rule": "clock", "entries": []}`, `tools/allowlists/testhygiene.json: rule "clock", want "testhygiene"`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			root := listRoot(t, nil, nil, nil)
+			if err := os.WriteFile(filepath.Join(root, "tools", "allowlists", c.file+".json"), []byte(c.text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := LoadLists(root)
+			if err == nil || !strings.HasPrefix(err.Error(), c.want) {
+				t.Fatalf("LoadLists: %v, want an error starting %q", err, c.want)
+			}
+		})
+	}
+	t.Run("a missing list file is an error naming it", func(t *testing.T) {
+		t.Parallel()
+		root := listRoot(t, nil, nil, nil)
+		if err := os.Remove(filepath.Join(root, "tools", "allowlists", "clock.json")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadLists(root); err == nil || !strings.HasPrefix(err.Error(), "tools/allowlists/clock.json: ") {
+			t.Fatalf("LoadLists: %v, want an error naming tools/allowlists/clock.json", err)
+		}
+	})
+}
+
+func TestCheckTestEdges(t *testing.T) {
+	t.Parallel()
+	empty := loadAt(t, listRoot(t, nil, nil, nil))
+	const path = "internal/x/x_test.go"
+	t.Run("a second import name of time is read too", func(t *testing.T) {
+		t.Parallel()
+		src := "package x\n\nimport (\n\t\"time\"\n\tt2 \"time\"\n)\n\nvar _ = time.Second\n\nfunc f() { t2.Sleep(1) }\n"
+		want := []string{path + ":10: testhygiene: time.Sleep in a test" + fence}
+		if got := CheckTest(empty, path, src); !slices.Equal(got, want) {
+			t.Fatalf("CheckTest = %q, want %q", got, want)
+		}
+	})
+	t.Run("a blank import of time and a Sleep on another package are fine", func(t *testing.T) {
+		t.Parallel()
+		src := "package x\n\nimport (\n\t_ \"time\"\n\t\"other\"\n)\n\nfunc f() { other.Sleep(1) }\n"
+		if got := CheckTest(empty, path, src); len(got) != 0 {
+			t.Fatalf("CheckTest = %q, want none", got)
+		}
+	})
+	t.Run("a file that does not parse is a finding, never a pass", func(t *testing.T) {
+		t.Parallel()
+		got := CheckTest(empty, path, "package x\n\nfunc (\n")
+		if len(got) != 1 || !strings.HasPrefix(got[0], path+": testhygiene: the fence cannot read it: ") {
+			t.Fatalf("CheckTest = %q, want one finding saying the fence cannot read %s", got, path)
+		}
+	})
+}
+
+// cliRoot is a fixture root with the lists, the import law and the named files written.
+func cliRoot(t *testing.T, purity, clock, tests []string, files map[string]string) string {
+	t.Helper()
+	root := listRoot(t, purity, clock, tests)
+	rules, err := os.ReadFile(filepath.Join("..", "importcheck", "rules.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files["tools/importcheck/rules.json"] = string(rules)
+	for rel, src := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// runCLI writes the NUL-separated list of names and runs cli at root; it gives cli's exit code and output.
+func runCLI(t *testing.T, root string, tests bool, names ...string) (int, string) {
+	t.Helper()
+	list := filepath.Join(t.TempDir(), "files.nul")
+	var text string
+	for _, n := range names {
+		text += n + "\x00"
+	}
+	if err := os.WriteFile(list, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{list}
+	if tests {
+		args = []string{"-tests", list}
+	}
+	var out strings.Builder
+	code := cli(root, args, &out)
+	return code, out.String()
+}
+
+func TestCLI(t *testing.T) {
+	t.Parallel()
+	const (
+		sleepy = "internal/x/a_test.go"
+		calm   = "internal/x/b_test.go"
+	)
+	sleepySrc := "package x\n\nimport \"time\"\n\nfunc f() { time.Sleep(1) }\n"
+	twoTests := func() map[string]string { return map[string]string{sleepy: sleepySrc, calm: "package x\n"} }
+	cases := []struct {
+		name  string
+		root  func(t *testing.T) string
+		tests bool
+		files []string
+		code  int
+		out   string
+	}{
+		{
+			name:  "-tests: each finding after failed:, then the test files read",
+			root:  func(t *testing.T) string { return cliRoot(t, nil, nil, nil, twoTests()) },
+			tests: true, files: []string{sleepy, calm}, code: 1,
+			out: "failed: " + sleepy + ":5: testhygiene: time.Sleep in a test" + fence + "\nGATE_COVERED 2\n",
+		},
+		{
+			name:  "-tests: a listed file is read and counted, never judged",
+			root:  func(t *testing.T) string { return cliRoot(t, nil, nil, []string{sleepy}, twoTests()) },
+			tests: true, files: []string{sleepy, calm}, code: 0,
+			out: "GATE_COVERED 2\n",
+		},
+		{
+			name: "-tests: a non-test file is an internal error naming it",
+			root: func(t *testing.T) string {
+				return cliRoot(t, nil, nil, nil, map[string]string{"internal/x/a.go": "package x\n"})
+			},
+			tests: true, files: []string{"internal/x/a.go"}, code: 2,
+			out: "internal error: internal/x/a.go: -tests reads _test.go files only\n",
+		},
+		{
+			name: "-tests: a stale testhygiene target is red, a stale purity one is the normal mode's",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/gone: sync.Mutex"}, nil, []string{"io/gone_test.go"}, map[string]string{})
+			},
+			tests: true, code: 1,
+			out: "failed: tools/allowlists/testhygiene.json: io/gone_test.go: does not exist (a stale target)\nGATE_COVERED 0\n",
+		},
+		{
+			name: "normal mode: a finding after failed:, then the files read",
+			root: func(t *testing.T) string {
+				return cliRoot(t, nil, nil, nil, map[string]string{"internal/event/planted.go": "package event\n\nimport _ \"" + mod + "internal/model\"\n"})
+			},
+			files: []string{"internal/event/planted.go"}, code: 1,
+			out: "failed: internal/event/planted.go:3: imports: internal/event may not import internal/model (ARCHITECTURE §3; tools/importcheck/rules.json)\nGATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: stale purity and clock targets are red, a stale testhygiene one is -tests'",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/gone: sync.Mutex"}, []string{"internal/window/cron.go: time"}, []string{"io/gone_test.go"},
+					map[string]string{"internal/model/x.go": "package model\n"})
+			},
+			files: []string{"internal/model/x.go"}, code: 1,
+			out: "failed: tools/allowlists/clock.json: internal/window/cron.go: time: does not exist (a stale target)\n" +
+				"failed: tools/allowlists/purity.json: internal/gone: sync.Mutex: does not exist (a stale target)\nGATE_COVERED 1\n",
+		},
+		{
+			name: "normal mode: a clean file and present targets pass",
+			root: func(t *testing.T) string {
+				return cliRoot(t, []string{"internal/model: sync.Mutex"}, nil, nil, map[string]string{"internal/model/x.go": "package model\n"})
+			},
+			files: []string{"internal/model/x.go"}, code: 0,
+			out: "GATE_COVERED 1\n",
+		},
+		{
+			name: "a missing list file is an internal error naming it",
+			root: func(t *testing.T) string {
+				root := cliRoot(t, nil, nil, nil, map[string]string{"internal/model/x.go": "package model\n"})
+				if err := os.Remove(filepath.Join(root, "tools", "allowlists", "purity.json")); err != nil {
+					t.Fatal(err)
+				}
+				return root
+			},
+			files: []string{"internal/model/x.go"}, code: 2,
+			out: "internal error: tools/allowlists/purity.json: ",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			code, out := runCLI(t, c.root(t), c.tests, c.files...)
+			match := out == c.out
+			if c.code == 2 {
+				match = strings.HasPrefix(out, c.out) && strings.Count(out, "\n") == 1
+			}
+			if code != c.code || !match {
+				t.Fatalf("cli: exit %d, output %q; want exit %d, output %q", code, out, c.code, c.out)
+			}
+		})
+	}
+	t.Run("usage", func(t *testing.T) {
+		t.Parallel()
+		for _, args := range [][]string{nil, {"-tests"}, {"-x", "files.nul"}, {"a", "b"}} {
+			var out strings.Builder
+			if code := cli(t.TempDir(), args, &out); code != 2 || out.String() != "usage: go run ./tools/archcheck [-tests] <files.nul>\n" {
+				t.Fatalf("cli %q: exit %d, output %q; want exit 2 and the usage line", args, code, out.String())
+			}
+		}
+	})
 }
