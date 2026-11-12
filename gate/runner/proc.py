@@ -60,6 +60,19 @@ class Group:
                 os.killpg(proc.pid, signal.SIGKILL)
         return code, left
 
+    def kill_left(self) -> tuple[bool, str]:
+        """After a stop that did not wait for the group's leader: probe the last group started, naming what the
+        TERM left (S1.1c-1-1), then KILL it and forbid any later spawn (S1.1c-3 design §10 C6)."""
+        with self._lock:
+            self._signalled = True
+            pgid = self._pgid
+        if pgid is None:
+            return False, ""
+        left, self.left_detail = probe(pgid)
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(pgid, signal.SIGKILL)
+        return left, self.left_detail
+
     def signal(self, signum: int) -> None:
         """Signal the live group, if any, and forbid any later spawn in this step."""
         with self._lock:
