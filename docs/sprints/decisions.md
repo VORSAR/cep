@@ -78,6 +78,7 @@
 | 2026-11-11 | [S1.1c-1's close-out](#owner-decisions-2026-11-11--s11c-1s-close-out) |
 | 2026-11-11 | [the rest of S1.1c, cut in two](#owner-decisions-2026-11-11--the-rest-of-s11c-cut-in-two) |
 | 2026-11-12 | [S1.1c-2's plan check](#owner-decisions-2026-11-12--s11c-2s-plan-check) |
+| 2026-11-12 | [S1.1c-2's design, after the reviews](#owner-decisions-2026-11-12--s11c-2s-design-after-the-reviews) |
 | 2026-11-12 | [the left-running flake's root (S1.1c-1-1)](#owner-decisions-2026-11-12--the-left-running-flakes-root-s11c-1-1) |
 
 ## The decisions
@@ -734,6 +735,13 @@ The plan check ([s1-1c-2-plan-check.md](s1-1c-2-plan-check.md), v2 at b7e36ab) w
 19. **The whole-program `-> and not` is refused E-PAT-005 at the `and`**, an existing code, with a counter-example file under `docs/language/invalid/` (as recommended); the catalogue and its counts are unchanged.
 
 Carried without a question (each follows an ADR or a recorded decision): the sleep fence excludes `gate/proofs/` (ADR-0015 §2.1); the clock exception for `internal/window/cron.go` is dropped until S9.1 builds the file (ADR-0015 §2.2); `gate/`, `tools/`, `.githooks/`, `Makefile` and the language corpus join the law manifest whole (ADR-0015 §1.3); the coverage floor becomes the registry's argument. Before S1.1c-2's G0 the coordinator re-annotates the forecast (due at S3.3's G5, not made).
+
+### Owner decisions, 2026-11-12 — S1.1c-2's design, after the reviews
+
+The design note ([s1-1c-2-design.md](s1-1c-2-design.md) v1 at 0d6ac6c) was reviewed blind by the architect with the-fool ([review](../reviews/s1-1c-2-design-architecture.md): 4 blockers, 14 should-fix, 13 later) and by QA for testability ([review](../reviews/s1-1c-2-design-qa.md): 4 blockers, 10 should-fix, 5 later). Both found that v1's recognisers and strength rule were written from expectation rather than measured: `tokenize` gives one comment token per line; the pinned ruff honours skip forms v1 missed; the pinned golangci-lint honours `// nolint:x` and `///nolint:x`; v1's strength rule was red on eight real drivers and green on a hollowed one. The coordinator re-ran the tool claims; v2 measures every recogniser and rule first and pins the tables in tests. Two questions; both as recommended.
+
+1. **Each added or removed in-code exemption is named in the LAW Δ block** (as recommended): when the count of `//nolint` directives and `# fmt: skip` markers changes, the block names each one — path, line, linter, kind, sprint and `ref` — capped like other lists. Rejected: the count alone (S1.1c-4's bulk waivers would arrive as one number).
+2. **BA13 closes as fixed for the accidental forge, and the deliberate forge is a named residue** (as recommended): the shim's result goes through a report file only the runner reads; a test module that writes that file itself remains possible and is named in ADR-0015 §3.6's review-only residue — every test module is a law path, so such a module is a named LAW Δ line — with a planted case documenting it. Rejected: BA13 kept open, narrowed.
 
 ### Owner decisions, 2026-11-12 — the left-running flake's root (S1.1c-1-1)
 

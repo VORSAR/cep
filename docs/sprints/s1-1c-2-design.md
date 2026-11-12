@@ -1,197 +1,231 @@
-# S1.1c-2 — design note: the exemptions and the teeth (v1, 2026-11-12)
+# S1.1c-2 — design note: the exemptions and the teeth (v2, 2026-11-12 — G1)
 
-*Step 1 of the full loop for S1.1c-2 ([sprint model §6](00-sprint-model.md#6-the-full-loop)), written after G0 (`s1-1c-2/integration` @ 3bf601f) from the answered [plan check](s1-1c-2-plan-check.md) ([decisions, 2026-11-12](decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check)). A build-ready spec: every path, signature, failure text, test and step a lane needs. Reviewed by the architect with the-fool and by QA for testability before G1; no semantics panel (decision 7 of 2026-11-10). Card: [sprint plan — S1.1c-2](sprint-plan.md#s11c-2--the-exemptions-and-the-teeth). Code claims cite `file:line` on 3bf601f.*
+*Step 1 of the full loop for S1.1c-2 ([sprint model §6](00-sprint-model.md#6-the-full-loop)), from the answered [plan check](s1-1c-2-plan-check.md) ([decisions, 2026-11-12](decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check)). A build-ready spec: every path, signature, failure text, test and step a lane needs. v1 (0d6ac6c) was reviewed blind by the architect with the-fool ([review](../reviews/s1-1c-2-design-architecture.md): 4 blockers, 14 should-fix, 13 later) and by QA for testability ([review](../reviews/s1-1c-2-design-qa.md): 4 blockers, 10 should-fix, 5 later); the coordinator re-ran the tool claims that change the design (§0); §9 places every finding; the owner answered the two questions on 2026-11-12 ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-2s-design-after-the-reviews)). Card: [sprint plan — S1.1c-2](sprint-plan.md#s11c-2--the-exemptions-and-the-teeth). Code claims cite `file:line` on `s1-1c-2/integration` @ f8e6350.*
 
-## 0. Proven before review (sprint model §10: a library claim is proven by a scratch run)
+**The rule this version follows (both reviews' root finding):** every recogniser and every strength rule below is defined by what the pinned tools and the real tree do, measured in §0 — never by what their documentation suggests — and each measured table is pinned in a test so a tool bump that changes it is red.
 
-1. **The runner gives every row its tier.** `gate/runner/env.py:29-30` `row_env` sets `GATE_TIER`, `GATE_ROW`, `GATE_RUN_DIR`, `GATE_ROW_DIR`. A row can therefore be red at T4 and nightly only (decision 8).
-2. **ruff honours `# fmt: skip` followed by a second comment, and silently drops it when text follows on the same comment.** Scratch run, pinned ruff 0.17.3, `ruff format --isolated`: `x = [\n 1,2,  3]  # fmt: skip  # the matrix reads as a grid` kept its layout; `... # fmt: skip -- the matrix reads as a grid` was reformatted to `y = [1, 2, 3]`. → the reason form is `# fmt: skip  # <reason>` (§2.4), and a `# fmt: skip<anything>` comment is red.
-3. **`go list -m all` selects one version for every module `go mod graph` names** but the `go`/`toolchain` pseudo-nodes ([R-V G7](../reviews/s1-1c-2-research-vuln-canary.md)), and `gate/runner/rows/deps.py:52-92` builds `modules` from `go list -m -json all` of both modules. `deps.compare` already checks the allowlist's version against the selected one for every such module (`gate/runner/deps.py:201-206`). The forward "graph-only modules get no version check" (S1.1c-1, A-L3) therefore reduces to one guard: a graph node that neither module's build list selects is red (§4.6).
-4. **The T2 baseline at G0** (record): every row PASS but the three stubs, each red by name.
+## 0. Measured before G1 (sprint model §10: a library claim is proven by a scratch run)
 
-## 1. The law model (A holistic 3: one table, so the model is reviewable)
+**0.1 The tier.** Every row receives `GATE_TIER` (`gate/runner/env.py:29-30`). A tier label is not a schedule: a row runs at the nightly only if its `tiers` hold `nightly` (`gate/ci/generate.py` builds `nightly.yml` from the rows selected at that tier). → the `suppressions` row's tiers become T1–T4 **and nightly** (§2.4).
 
-| Law file | Kind (LAW Δ one-liner) | Owner | Checker | Pin | Clock |
-|---|---|---|---|---|---|
-| `gate/registry.json` | `registry` (±rows, changed fields) | coordinator | `registry.py` on every run; `ci-fresh` | `instruments` (§4.2) | — |
-| `gate/law.json` | `law` (±paths, kinds; ±instruments, changed fields) | coordinator | `lawdelta` (liveness) | `test_law_pin.py` (ADR-0015 §1.3) | — |
-| `gate/current-sprint`, `gate/sprints.json` | `marker`, `sprints` | coordinator | `notbuilt` | `test_sprints_pin.py` (the plan table) | the plan's ✓ rows |
-| `tools/allowlists/*.json` | **`allowlist`** (±entries by target) | coordinator | **`suppressions`** (grammar); archcheck (purity, clock, testhygiene targets); `teeth.py` (teeth); ruff pin (ruff) | — | TEMP `expiry` (calendar, red at T4 + nightly) |
-| `gate/known-issues.json` | **`known-issues`** (±ids, forward, decision) | coordinator | `test_known_issues_pin.py` (T2); S1.1c-3's `aging` | the Markdown table | rows after `first_seen`; the `forward` row (S1.1c-3) |
-| `tools/deps-allowlist.json` | `deps` | coordinator | `deps` | — | — |
-| `ruff.toml` | `code` | coordinator | `ruff` | `ruff.json` both ways (§2.4) | — |
-| `tools/importcheck/rules.json` | `edges` | coordinator | archcheck | ARCHITECTURE §3 (review) | — |
-| `conformance/notbuilt.json` | `notbuilt` | coordinator | `notbuilt` (T4), `TestCorpus` | — | the marker |
-| `gate/tripwire.json`, `tools.json`, goldens, baselines | as built | coordinator | their rows | — | — |
-| `go.mod`, `gate/proofs/go.mod` | **`gomod`** (§4.6) | coordinator | `deps` | — | — |
-| `gate/`, `tools/`, `.githooks/`, `Makefile`, corpus | `code` (grouped last) | lanes write code; coordinator data | the rows | — | — |
+**0.2 What pinned ruff 0.17.3 honours** (`ruff format --isolated`, scratch; the architect's and QA's runs agree with the coordinator's):
 
-## 2. Lane A — the grammar, the anchors, the suppressions row, two LAW Δ kinds, the exemption line (python-engineer, W1)
+| Form on the line | ruff keeps the layout? |
+|---|---|
+| `# fmt: skip` · `# fmt:skip` · `# fmt: skip  # r` · `# fmt: skip # r` · `# r  # fmt: skip` · `# noqa # fmt: skip` | **yes** |
+| `# fmt: skip -- r` · `# fmt: skip; r` · `# FMT: SKIP` | no (silently reformatted) |
+| `# yapf: disable` … `# yapf: enable` (region) | yes |
+| `# isort: skip`, `# isort: skip_file`, `# ruff: isort: skip_file` | they pass an unsorted import block under `--ignore-noqa` |
+| `[lint.extend-per-file-ignores]` in `ruff.toml` | waives a rule (e.g. the `time.sleep` ban) |
 
-### 2.1 `gate/runner/anchors.py` (new, pure; moved out of `rows/doclinks.py:25-77`)
+Python's `tokenize` yields **one** COMMENT token per line: `# fmt: skip  # reason here` is one token (coordinator's run).
 
+**0.3 What pinned golangci-lint v2.15.0 honours** (`run --no-config --default=none --enable=errcheck --max-same-issues=0 --max-issues-per-linter=0`; the defaults' caps hide findings; the architect's table, four rows re-run by the coordinator):
+
+| Form | Honoured (finding suppressed)? | nolintlint reports it? |
+|---|---|---|
+| `//nolint:errcheck // …` | yes | no (canonical) |
+| `// nolint:errcheck` · `//  nolint:errcheck` · `//nolint errcheck` · `// nolint` | yes | yes |
+| `///nolint:errcheck` | **yes** | **no** |
+| `//nolint:all` | yes | (by config) |
+| `//NOLINT:…` · `/* nolint:… */` · `/*nolint:…*/` · `//<TAB>nolint:…` · `// x nolint:…` · `// text //nolint:…` | no | — |
+
+**0.4 The strength rule over the real drivers** (the architect's `verdict_scan.py`, re-run by the coordinator on HEAD): under v1's rule, eight of the 32 drivers fault — `test_hook_commit.py` (7 cases, its own `assertRefusedUnformatted`), `test_regen_baseline.py` (4, a tool's refusal, not a gate run), `test_tripwire_planted.py` (2 left after W0-F2: `assertEqual(record["verdict"], "fail")`), `test_notbuilt_expired.py` (2: `assertExpired` → `assertFailReason` → `assertGateFailed`, two levels), `test_leak_planted.py` (1), `test_parity_hash.py` (1, a load refusal: exit 2, no records), `test_lawdelta_planted.py` (1, a green control), `test_differential_swap.py` (plants nothing red by the rule). And QA's scratch: v1's rule stays green when a case's red assertion is swapped for `assertParityPassed` (DQ-B4).
+
+**0.5 The Go proof files** (QA's and the architect's reads): the dedicated files are `internal/parser/errorcounts_test.go` (1 test), `internal/runtime/nosleep_test.go` (1), `internal/expr/docsync_test.go` (2: docsync (c)), `internal/parser/keywords_test.go` (4: docsync (b)'s keyword half); docsync (b)'s catalog half — `TestDocsyncStaticCatalog`, `TestDocsyncSeesPlantedDrift` — sits in `internal/validate/static_test.go` (7 tests, a general engine file). `tools/archcheck/archcheck_test.go` ranges over **inline** map literals inside `t.Run` closures (≈ `:230`, `:256`); `static_test.go:75`, `:119-124` range over function results.
+
+**0.6 Shim callers** (DQ-S3, DA-L10): `rows._run_module` (the `pytests`, `proofs` and `pyfloor` rows), `gate/proofs/drivers/test_pyfloor.py:52-57` (direct, T4 only), `gate/runner/tests/test_pyshim.py` (direct, T2).
+
+**0.7 Already true** (v1 §0.3–0.4): `go list -m all` selects every graph module (so the graph-only forward is one guard); T2 on the G0 commit is green but the three stubs; `go list -e ./...` lists the 20 packages offline even with an empty module cache, writing `go: downloading …` to stderr (DQ-L5).
+
+## 1. The law model
+
+| Law file | Kind (LAW Δ) | Checker | Pin | Clock |
+|---|---|---|---|---|
+| `gate/registry.json` | `registry` | `registry.py`; `ci-fresh` | `instruments` (§4.2) | — |
+| `gate/law.json` | `law` (paths; instruments) | `lawdelta` (liveness) | `test_law_pin.py` | — |
+| `gate/current-sprint`, `gate/sprints.json` | `marker`, `sprints` | `notbuilt` | `test_sprints_pin.py` | the plan's ✓ rows |
+| `tools/allowlists/*.json` | **`allowlist`** (one line per changed entry) | **`suppressions`**; archcheck (purity, clock, testhygiene targets); the teeth pin (teeth); the ruff pin (ruff) | — | TEMP `expiry`: red at T4 and nightly |
+| in-code exemptions (`//nolint`, `# fmt: skip`) | **named in the exemption section** (§2.6, owner 2026-11-12) | `suppressions` | — | TEMP `expiry` |
+| `gate/known-issues.json` | **`known-issues`** | `test_known_issues_pin.py`; S1.1c-3's `aging` | the Markdown table | rows after `first_seen`; `forward` |
+| `tools/deps-allowlist.json` | `deps` | `deps` (+ `sprint`, `ref`, §4.6a) | — | — |
+| `ruff.toml` | `code` | `ruff`; the ruff pin | `ruff.json` both ways | — |
+| `go.mod`, `gate/proofs/go.mod` | **`gomod`** | `deps` | — | — |
+| the four pin tests, the dedicated Go proof files | `code`, each an **exact** entry (§4.2) | `pytests`, `unit` | `instruments` | — |
+| `gate/`, `tools/`, `.githooks/`, `Makefile`, the corpus | `code` (grouped) | the rows | — | — |
+
+## 2. Lane A — the grammar, the anchors, the suppressions row, the LAW Δ kinds, the exemption section (python-engineer, W1)
+
+### 2.1 `gate/runner/anchors.py` (new, pure; moved from `rows/doclinks.py:25-77`)
+`FENCE`, `HEADING`, `HTML_ANCHOR`, `slug`, `prose`, `anchors` move verbatim; `doclinks.py` imports them (its tests unchanged and green). New:
 ```python
-FENCE, HEADING, HTML_ANCHOR  # the three regexes, moved verbatim
-def slug(heading: str) -> str                 # verbatim from doclinks.py:35-47
-def prose(lines: list[str]) -> Iterator[tuple[int, str]]   # verbatim, :50-59
-def anchors(text: str) -> set[str]             # verbatim, :62-74
-def split_ref(ref: str) -> tuple[str, str]     # "a/b.md#x" -> ("a/b.md", "x"); "" anchor when no '#'; ValueError on "", a leading "/", "..", or more than one '#'
-def resolves(ref: str, read: Callable[[str], str | None]) -> str  # "" when it resolves, else why
+def split_ref(ref: str) -> tuple[str, str]          # ValueError texts in §2.8
+def resolves(ref: str, read: Callable[[str], str | None]) -> str   # "" or the why (§2.8)
 ```
-`resolves` rules, each why exact: `ref has no anchor: write <path>#<heading-anchor>`; `<path> is not a tracked Markdown file` (read returns None, or not `.md`); `<path> has no heading #<anchor>`. `doclinks.py` imports `slug`, `prose`, `anchors` from it (its behaviour unchanged; its tests unchanged and green). The short form `ADR-0015#2` fails `split_ref`'s path rule (`ADR-0015 is not a tracked Markdown file`).
+`read(path)` returns the text of a **tracked** Markdown file or `None`; the row builds it from `git ls-files '*.md'` once (DA-L5: an untracked local doc never satisfies a ref).
 
-### 2.2 `gate/runner/allowlists.py` (new, pure)
-
+### 2.2 `gate/runner/allowlists.py` (new, pure) — the one set of field validators
 ```python
 RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene"})   # S1.1c-3 adds "govulncheck"
-FILE_KEYS = frozenset({"schema", "note", "rule", "entries"})
 @dataclass(frozen=True)
-class Entry:   target: str; kind: str; reason: str; sprint: str; ref: str = ""; expiry: str = ""; issue: str = ""
+class Ctx:   today: date; tier: str; order: sprintid.Order; current: sprintid.ID; issues: frozenset[str]; resolve: Callable[[str], str]
 @dataclass(frozen=True)
-class AllowList:  name: str; rule: str; entries: tuple[Entry, ...]
-def load(text: str, name: str) -> AllowList          # ValueError naming name, entry index and key
-def check(lst: AllowList, *, today: date, tier: str, resolve: Callable[[str], str], order: sprintid.Order,
-          current: sprintid.ID, issues: frozenset[str]) -> list[str]      # one failure line each, sorted by entry
-def expiring(lst: AllowList, *, today: date, within_days: int = 14) -> list[tuple[Entry, int]]   # for the countdown
+class Entry: target: str; kind: str; reason: str; sprint: str; ref: str = ""; expiry: str = ""; issue: str = ""
+@dataclass(frozen=True)
+class AllowList: name: str; rule: str; entries: tuple[Entry, ...]
+def load(text: str, name: str) -> AllowList                       # ValueError, texts §2.8
+def fields(kind: str, reason: str, ref: str, expiry: str, issue: str, sprint: str, ctx: Ctx) -> list[str]   # the field rules, texts §2.8
+def sprint_fault(sprint: str, ctx: Ctx) -> str                     # "" or why
+def ref_fault(ref: str, ctx: Ctx) -> str                           # "" or why
+def check(lst: AllowList, ctx: Ctx) -> list[str]                   # fields() per entry, prefixed "tools/allowlists/<name>.json: entries[<i>] (<target>): "
+def expiring(items: Iterable[tuple[str, str]], today: date) -> list[tuple[str, int]]   # (label, expiry) -> (label, k) for -14 ≤ … : k = (expiry - today).days ≤ 14, past ones (k < 0) included
 ```
-`load` faults (ValueError; the row prints `suppressions: tools/allowlists/<name>: <fault>`): not JSON or a duplicate key (`loads` from `law.py`); keys ≠ `FILE_KEYS`; `schema` ≠ 1; `note` not a str; `rule` not in `RULES`; the file stem ≠ `rule` (`purity.json` holds rule `purity`); `entries` not a list; an entry's keys outside `{target, kind, reason, sprint, ref, expiry, issue}` or missing one of `{target, kind, reason, sprint}`; a non-str value; two entries with one target.
+**`fields`, `sprint_fault`, `ref_fault` are the only implementation of the field rules**; `suppressions.check_go` and `deps.compare` (§4.6a) call them (DA-S1). Rules: `kind` ∈ {PERMANENT, TEMP}; `reason.strip()` ≥ 12 characters; PERMANENT has `ref` (resolving), no `expiry`/`issue`; TEMP has `expiry` and `issue`, no `ref`; `expiry` is ISO `YYYY-MM-DD`; `0 ≤ (expiry − today).days ≤ 90` else `… more than 90 days ahead` (the bound is from the run's date, not the entry's commit — v1 changed this silently; DA-L13); an expiry before `today` is red only when `ctx.tier ∈ {"T4", "nightly"}`; `issue ∈ ctx.issues`; `sprint` parses, is a row or part of `ctx.order`, and is not after `ctx.current` (a part of the current row compares by part: `S1.1c-9` after `S1.1c-2`). Unit tests inject `Ctx` from fixtures and **never** read `gate/current-sprint`, `gate/sprints.json`, `gate/known-issues.json` or the clock (DQ-S9).
 
-`check` failures, per entry `entries[i] (<target>)`:
-- `kind` not `PERMANENT`/`TEMP` → `kind must be PERMANENT or TEMP`.
-- `len(reason.strip()) < 12` → `reason must be at least 12 characters`.
-- PERMANENT: `ref` missing → `PERMANENT needs ref=<path>#<anchor>`; `resolve(ref)` non-empty → that why; `expiry` or `issue` present → `PERMANENT takes no expiry or issue`.
-- TEMP: `expiry` missing or `issue` missing → `TEMP needs expiry=YYYY-MM-DD and issue=<known issue id>` (decision 8: both); `ref` present → `TEMP takes no ref`; `expiry` not `date.fromisoformat`-able → `expiry must be YYYY-MM-DD`; `expiry − today > 90 days` → `expiry <d> is more than 90 days ahead`; `expiry < today` and `tier in {"T4", "nightly"}` → `expired <d>` (at T0–T3 an expired entry is not red; §2.6's countdown names it); `issue not in issues` → `issue <id> is not in gate/known-issues.json`.
-- `sprint`: `sprintid.parse` fails → its message; `order.index(sprint)` raises → `sprint <s> is not a row of gate/sprints.json`; `order.index(sprint) > order.index(canonical(current))` → `sprint <s> is after the current sprint <c>`; same row and `parse(sprint).n > current.n` → the same text (QA-L1: `S1.1c-9` while the marker is `S1.1c-2`).
-`today` is `datetime.now(timezone.utc).date()` in the row, injected in tests; the run's tier is `os.environ["GATE_TIER"]` in the row, injected in tests.
-
-### 2.3 `gate/runner/suppressions.py` (new, pure)
-
+### 2.3 `gate/runner/suppressions.py` (new, pure) — recognisers measured in §0.2–0.3
 ```python
-ENABLED: frozenset[str] = frozenset()   # golangci linters enabled; empty until S1.1c-4 reads its .golangci.yml here
+ENABLED: frozenset[str] = frozenset()   # S1.1c-4 sets it from its golangci config (DA-L4: a TOML or JSON config, the stdlib reads both)
+PREFILTER = ("nolint", "fmt: skip", "fmt:skip", "noqa", "yapf:", "isort:", "fmt: off", "fmt: on")   # git grep -e patterns (§2.6); a test asserts every recognised form contains one
 @dataclass(frozen=True)
-class Directive:  line: int; linters: tuple[str, ...]; kind: str; meta: dict[str, str]; raw: str
-def go_comments(source: str) -> Iterator[tuple[int, str]]     # (line, text after "//") for each line comment
-def directives(source: str) -> list[Directive | tuple[int, str]]   # a parse fault is (line, why)
-def check_go(path: str, source: str, *, enabled, today, tier, resolve, order, current, issues) -> list[str]
-def py_markers(source: str) -> list[tuple[int, str, str]]     # (line, "noqa" | "fmt-skip" | "fmt-skip-bad" | "fmt-off", reason)
-def check_py(path: str, source: str) -> list[str]
-def count(go_sources: Iterable[str], py_sources: Iterable[str]) -> int   # //nolint directives + `# fmt: skip` markers
+class Directive: path: str; line: int; linters: tuple[str, ...]; kind: str; meta: dict[str, str]
+def go_comments(source: str) -> Iterator[tuple[int, str]]
+def go_directives(path: str, source: str) -> tuple[list[Directive], list[str]]     # (directives, faults)
+def py_markers(path: str, source: str) -> tuple[list[Directive], list[str]]       # `# fmt: skip` markers as directives (linters ("fmt",), kind "MARKER", meta {"reason": …}); faults
+def check(directives: Iterable[Directive], ctx: Ctx, enabled: frozenset[str]) -> list[str]
 ```
-**`go_comments`** is a state machine over the source's characters, states `CODE`, `LINE` (after `//` to end of line), `BLOCK` (`/*` … `*/`), `STRING` (`"` with `\` escapes, ends at `"` or newline), `RAW` (`` ` `` … `` ` ``, spans lines), `RUNE` (`'` with `\` escapes). Only `LINE` comments are yielded (golangci honours `//nolint` only as a line comment). `x := "//nolint:errcheck"` yields nothing (QA-S10).
-**A directive** is a comment whose text starts `nolint` (case-sensitive, no space: `//nolint`). Grammar: `nolint:<linter>[,<linter>]... // (PERMANENT|TEMP) <key>=<value>...`, values bare or double-quoted (`reason="…"` must be quoted). Faults, each `suppressions: <path>:<line>: <why>`: bare `//nolint` or `//nolint ` → `a suppression names its linter: //nolint:<linter>`; no `// PERMANENT|TEMP` part → `a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=… (DEVELOPMENT.md)`; an unknown key → `unknown key <k>`; then the same field rules as §2.2 over `reason`, `ref`, `expiry`, `issue`, `sprint`; and for each linter not in `enabled` → `//nolint:<l>: <l> is not enabled (none is until S1.1c-4)`.
-**`py_markers`** reads `tokenize` COMMENT tokens (never strings): a comment `# noqa…` (case-insensitive) → `noqa`; exactly `# fmt: skip` → `fmt-skip`, its reason the next COMMENT on the same line with its `# ` stripped (§0.2); `# fmt: skip` followed by other text in the same comment → `fmt-skip-bad`; `# fmt: off`/`# fmt: on` → `fmt-off`. `check_py` failures: `noqa` → `suppressions: <path>:<line>: ruff runs --ignore-noqa: this comment waives nothing; remove it`; `fmt-skip` with a reason under 12 characters or none → `…: write its reason as a second comment: # fmt: skip  # <reason, 12+ characters>`; `fmt-skip-bad` → `…: ruff ignores a skip with text after it; write # fmt: skip  # <reason>`; `fmt-off` → `…: use # fmt: skip  # <reason> on the statement`.
+**`go_comments`** — states `CODE`, `LINE`, `BLOCK`, `STRING` (`"`, `\` escapes, ends at `"` or newline), `RAW` (`` ` ``, spans lines), `RUNE` (`'`, `\` escapes); yields `(line, text after the first "//")` for line comments only; one test per state, and `"//nolint:x"` inside a string yields nothing.
+**A Go directive (§0.3):** strip leading `/` and spaces/no tabs from the comment text; if it then matches `^nolint( |:|$)` it is a directive golangci honours. It must be written in the canonical form — exactly `//nolint:<l>[,<l>]` (two slashes, no space, a non-empty comma list without a trailing comma) followed by ` // ` and the metadata — else red `write //nolint:<linter> (two slashes, no space)`. Text matching `^NOLINT`, block comments and `// x nolint` are not directives (golangci ignores them). Metadata: `(PERMANENT|TEMP)` then `key=value` pairs; `reason` double-quoted (a `\"` inside it is allowed; an unterminated quote is a fault); keys `reason`, `ref`, `expiry`, `issue`, `sprint`; a duplicate or unknown key is a fault. `check` applies `allowlists.fields` and then, per linter not in `enabled`, `<l> is not enabled (none is until S1.1c-4)`.
+**A Python marker (§0.2):** each COMMENT token is split on `#` into stripped segments. A segment equal to `fmt: skip` or `fmt:skip` is a skip; its reason is the other segments joined by `  # ` (a `noqa` segment is not a reason), ≥ 12 characters. Red: a segment starting with `fmt: skip`/`fmt:skip` and continuing (`fmt: skip -- r`, `fmt: skip; r`) — `ruff ignores this form`; case variants (`FMT: SKIP`); `fmt: off`/`fmt: on`, `yapf: disable`/`yapf: enable`, `isort: skip`, `isort: skip_file`, `ruff: isort: skip_file` — `write # fmt: skip  # <reason> on the statement`; any `noqa` segment — `ruff runs --ignore-noqa: this comment waives nothing; remove it`. Scope: tracked `gate/**/*.py` **and** `.githooks/*` (DA-L1, DQ-L2).
+**Pinned tables:** `test_suppressions.py` holds §0.2's and §0.3's tables as data and asserts each form's classification (QA's and the architect's probes); S1.1c-4 re-runs §0.3 against the binary as a differential.
 
 ### 2.4 The row `gate/runner/rows/suppressions.py` (replaces the G0 stub)
+Registry: tiers **T1, T2, T3, T4, nightly** (DA-B3; the coordinator re-tiers and regenerates — `nightly.yml` gains a `lint` job). `main`: `rows.start()`; `Ctx` from `gate/sprints.json`, `gate/current-sprint`, `gate/known-issues.json` ids, `datetime.now(timezone.utc).date()`, `os.environ["GATE_TIER"]`, `resolves` over tracked Markdown; every `tools/allowlists/*.json` loaded (faults red) and checked; per `{files}` entry: `.go` → `go_directives`; `gate/**/*.py`, `.githooks/*` → `py_markers`; then `check`. **The ruff pin:** `tomllib` reads `[lint.per-file-ignores]` **and** `[lint.extend-per-file-ignores]`; each `(file, code)` ↔ a `ruff.json` target `"<file>: <code>"`, both ways; a non-empty `lint.ignore` or `lint.extend-ignore` is red. **Stale targets** of `ruff.json` (a file that does not exist) and `teeth.json` (a row id the registry lacks) are red (DA-L2). **Covered** = the number of `{files}` entries processed, skipped ones included; side inputs are never counted (DA-S9). No network, no git beyond `ls-files`.
 
-`main(argv)`: `rows.start()`; the files list `argv[1]` (the registry's `{files}`: every tracked `.go`, `tools/allowlists/*.json`, `ruff.toml`, `gate/**/*.py` — §G0's `expected_scope`); load `gate/sprints.json` (`sprintid.load_order`), `gate/current-sprint` (`read_marker`), `gate/known-issues.json` ids (a small `json` read here; the full pin is lane D's), every `tools/allowlists/*.json` (`allowlists.load`, faults red); then per file: `.go` → `check_go`, `gate/**/*.py` → `check_py`, each list → `allowlists.check`; **the ruff pin**: `tomllib` reads `ruff.toml`'s `[lint.per-file-ignores]` as `{file: [code, …]}`, `ruff.json`'s targets split `"<file>: <code>"`; each `(file, code)` in one and not the other → `suppressions: ruff.toml waives <code> for <file> without an entry in tools/allowlists/ruff.json` / `… ruff.json lists <file>: <code>, which ruff.toml does not waive`. `rows.covered(<files read>)`; `rows.finish(failures)`. No network, no git.
+### 2.5 The LAW Δ kinds — one line per changed entry (`law.py`)
+A kind's compare may now return **several lines**: `delta()` keeps its one-liner contract for every other kind; `allowlist` and `known-issues` return `list[str]`, which `law.block` renders as the file's line followed by indented `  ` sub-lines, at most 6, then `  (and <k> more)` (DA-S11). **`allowlist`:** sub-lines `+<target> <KIND> <sprint> ref=<ref>|expiry=<d> issue=<id>`, `−<target>`, `<target>: <field> <old> → <new>` (`reason changed`); the file line ends `(<n> entries)`; a new list `file added: <n> entries` then its entries. **`known-issues`:** `+<id> first seen <s>`, `−<id>`, `<id>: forward <a> → <b>`, `<id>: decision set|changed|cleared`. The coordinator re-kinds `tools/allowlists/` and `gate/known-issues.json` when lane A lands.
 
-### 2.5 Two LAW Δ kinds (`gate/runner/law.py`; registered in `KINDS` and `PARSERS`)
+### 2.6 The exemption section and the countdown (`rows/lawdelta.py`, `gate/runner/git.py`)
+After the block (or `HEAD_IS_MAIN`/`NONE`), before the uncommitted-edits line:
+- `exemptions: <n> in code, <m> listed (<±d> this diff)` — `n` = directives and markers (§2.3) in tracked `.go`, `gate/**/*.py`, `.githooks/*` at the revision; `m` = entries of `tools/allowlists/*.json`; `d` = (n + m at HEAD) − (n + m at the merge base), signs `+`/`−` (U+2212).
+- **When `n` changed** (owner, 2026-11-12, design 1): one sub-line per added or removed in-code exemption, at most 6 then `  (and <k> more)`: `  +internal/x/y.go:12 //nolint:gosec PERMANENT S1.1c-4 ref=<ref>`, `  −gate/runner/z.py:40 # fmt: skip`. A directive is matched across revisions by `(path, linters, kind, meta)`, not by line number, so a moved line is neither added nor removed.
+- **The countdown:** for every TEMP entry and TEMP directive at HEAD with `−∞ < k ≤ 14` from `allowlists.expiring`: `  exemption <where>: <target> expires <date> (in <k> days)` for `k ≥ 0`, `  exemption <where>: <target> expired <date> (red at T4 and nightly)` for `k < 0` (DA-S2). `lawdelta` takes its date from one function, `today()`, patched in tests (DQ-S9).
+- **git, with an error contract** (DA-S3): `git.grep_files(rev, patterns, pathspecs) -> list[str]` (`git grep -l -e <p>… <rev> -- <specs>`; exit 0 → the paths with the `<rev>:` prefix stripped; exit 1 → `[]`; any other → `GitError` naming the command, which lawdelta turns into FAIL); `git.ls_tree(rev, prefix) -> list[str]` the same; the patterns are `suppressions.PREFILTER`.
+Nothing else prints for a list or file that did not change (decision 2).
 
-- **`allowlist`** — `(loads, _delta_allowlist)`: entries keyed by `target`; per target, in new-file order then removed: added `+<target> <KIND> <sprint>`, removed `−<target>`, changed `<target>: <field> <old> → <new>` (`reason changed` for a reason); `; `-joined; suffix ` (<n> entries)`. `file added: <n> entries` for a new list. Example: `tools/allowlists/purity.json +6/−0 — +internal/x: sync.Once PERMANENT S4.1 (4 entries)`.
-- **`known-issues`** — `(loads, _delta_known_issues)`: by `id`: `+<id> first seen <s>`, `−<id>`, `<id>: forward <a> → <b>`, `<id>: decision set|changed|cleared`.
-After lane A lands, the coordinator re-kinds `tools/allowlists/` → `allowlist` and `gate/known-issues.json` → `known-issues` in `gate/law.json` (one commit; the `law` kind's one-liner names both).
+### 2.7 DEVELOPMENT.md (the coordinator, when lane A lands)
+Examples become (DQ-S6, DA-S14): `//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go sprint=S1.1c-2` and `//nolint:errcheck // TEMP reason="close error surfaced by the sink rework" expiry=2026-12-31 issue=S3.3-2-1 sprint=S1.1c-2`; the rules paragraph states the canonical form, `ref`'s form, TEMP's `expiry` + `issue`, the 90-day bound, red at T4 and nightly, and `# fmt: skip  # <reason>`. `test_suppressions.py` reads these fenced examples and checks each with `Ctx(today=2026-11-12, tier="T2", order=<fixture>, current=S1.1c-2, issues={"S3.3-2-1"})` and the linter injected as enabled.
 
-### 2.6 The exemption line and the countdown (`gate/runner/rows/lawdelta.py`)
+### 2.8 Exact failure texts (lane A; QA's W0 asserts them — DQ-S8)
 
-After the block (or `HEAD_IS_MAIN`, or `NONE`), and before the uncommitted-edits line, `lawdelta` appends:
-- `exemptions: <n> in code, <m> listed (<±d> this diff)` — `n` = `suppressions.count` over the tracked `.go` and `gate/**/*.py` files at the revision; `m` = the entries in `tools/allowlists/*.json` at the revision; `d` = (n + m at HEAD) − (n + m at the merge base), printed `+0`, `+2`, `−1`. Files are read with `git.show`, found with a new `git.grep_files(rev, patterns, pathspecs) -> list[str]` (`git grep -l -e nolint -e 'fmt: skip' <rev> -- '*.go' 'gate/*.py'`), so only files holding a marker are shown; a list is counted from every `tools/allowlists/*.json` at the revision (`git.ls_tree(rev, "tools/allowlists/")`, new, both in `gate/runner/git.py`). On `HEAD_IS_MAIN`, `d` is `+0`.
-- one line per entry from `allowlists.expiring(...)` at HEAD: `exemption <name>: <target> expires <date> (in <k> days)`, and for a past date `exemption <name>: <target> expired <date> (red at T4 and nightly)`.
-A list that did not change prints nothing else (decision 2: quiet when unchanged). No record field, no schema move.
+| Where | Text (after the row's `suppressions: ` prefix where noted) |
+|---|---|
+| `split_ref` | `ref is empty` · `ref must be a repository path, not absolute` · `ref must not climb out with ..` · `ref has more than one #` |
+| `resolves` | `ref has no anchor: write <path>#<heading-anchor>` · `<path> is not a tracked Markdown file` · `<path> has no heading #<anchor>` |
+| `load` | `tools/allowlists/<name>.json: not JSON: <e>` · `…: duplicate key <k>` · `…: keys <got>, want schema, note, rule, entries` · `…: schema <s>, want 1` · `…: note is not a string` · `…: rule <r> is not one of <sorted RULES>` · `…: rule <r> but the file is <name>.json` · `…: entries is not a list` · `…: entries[<i>]: unknown key <k>` · `…: entries[<i>]: missing <k>` · `…: entries[<i>]: <k> is not a string` · `…: entries[<i>]: target <t> is listed twice` |
+| `fields` | `kind must be PERMANENT or TEMP` · `reason must be at least 12 characters` · `PERMANENT needs ref=<path>#<anchor>` · `PERMANENT takes no expiry or issue` · `TEMP needs expiry=YYYY-MM-DD and issue=<known issue id>` · `TEMP takes no ref` · `expiry must be YYYY-MM-DD` · `expiry <d> is more than 90 days ahead` · `expired <d>` · `issue <id> is not in gate/known-issues.json` · `sprint <s> is not a row of gate/sprints.json` · `sprint <s> is after the current sprint <c>` |
+| Go directives | `<path>:<line>: write //nolint:<linter> (two slashes, no space)` · `…: a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=…` · `…: unterminated quote` · `…: duplicate key <k>` · `…: unknown key <k>` · `…: <field text>` · `…: //nolint:<l>: <l> is not enabled (none is until S1.1c-4)` |
+| Python markers | `<path>:<line>: ruff ignores this form; write # fmt: skip  # <reason>` · `…: write its reason as another comment: # fmt: skip  # <reason, 12+ characters>` · `…: write # fmt: skip  # <reason> on the statement` · `…: ruff runs --ignore-noqa: this comment waives nothing; remove it` |
+| ruff pin | `ruff.toml waives <code> for <file> without an entry in tools/allowlists/ruff.json` · `tools/allowlists/ruff.json lists <file>: <code>, which ruff.toml does not waive` · `ruff.toml sets lint.<key>: write per-file waivers` |
+| stale | `tools/allowlists/<name>.json: <target>: does not exist (a stale target)` |
 
-### 2.7 DEVELOPMENT.md (the coordinator, with lane A's landing)
+## 3. Lane C — archcheck reads its lists; `-tests`; the two waits (go-engineer, W1)
 
-The three examples become: `//nolint:gosec // PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go sprint=S1.1c-4`, `//nolint:errcheck // TEMP reason="close error surfaced by the sink rework" expiry=2027-01-31 issue=S3.3-2-1 sprint=S1.1c-4`, and the `revive` line dropped (one TEMP example is enough); the rules paragraph names `ref`'s form, TEMP's `expiry` + `issue`, the 90-day bound, T4/nightly, and `# fmt: skip  # <reason>`. `test_suppressions.py` reads the policy's fenced examples and checks each parses as a valid directive with the linter injected as enabled (QA-S11).
-
-## 3. Lane C — archcheck reads its lists; the `-tests` mode; the two waits (go-engineer, W1)
-
-1. **`LoadAllowList(path, rule string) ([]string, error)`** in `tools/archcheck/main.go`: `encoding/json` into `struct{ Rule string; Entries []struct{ Target string } }` (unknown fields ignored: the Python row is the grammar's one validator — A-L2); `Rule != rule` → error `<path>: rule <got>, want <rule>`; returns the targets. A read or decode error is an internal error (exit 2, `internal error: <path>: …`).
-2. **purity**: `syncNamed` (`main.go:79-82`) is deleted; at start-up `tools/allowlists/purity.json`'s targets `"<pkg>: <import>.<Ident>"` build the same `map[string]map[string][]string` (split at `": "`, then at the last `.`). A target that does not split → internal error naming it.
-3. **clock**: the hard-coded `c.path != "internal/window/cron.go"` (`main.go:257`) becomes membership in `tools/allowlists/clock.json`'s targets `"<file>: time"` (empty now: `internal/window/cron.go` may not import time until S9.1 adds its entry — carried, A-L13).
-4. **Stale targets**: after the files are read, every purity target's package directory and every clock/testhygiene target file must exist on disk → else one finding `failed: tools/allowlists/<name>.json: <target>: does not exist (a stale target)`, not counted as a file.
-5. **`-tests` mode**: `go run ./tools/archcheck -tests <files.nul>` — reads the same list; for each `_test.go` file (any other file → internal error `-tests reads test files only`) it runs one check, the sleep fence: a selector on the file's local name(s) for `time` (`localNames("time")`, `main.go:236`) naming `Sleep`, `After`, `AfterFunc`, `Tick`, `NewTimer` or `NewTicker` → `failed: <file>:<line>: testhygiene: time.<Name> in a test: wait for a state, cap it with a context, yield on every pass of a poll (testing.md rule 1)`; a dot-import of `time` → `…: testhygiene: a dot-import of time hides the calls the fence reads`. Files in `tools/allowlists/testhygiene.json` (`"<file>"` targets; empty) are skipped. `GATE_COVERED <files read>`. The normal mode is unchanged.
-6. **The two waits** (`io/inmemory/breakit_s3_3_1_test.go:47,54`), red-first: run `-tests` on the real tree and quote its two findings; then each `select { … case <-time.After(d): t.Fatal(…) }` becomes `ctx, cancel := context.WithTimeout(context.Background(), d); defer cancel()` and `case <-ctx.Done(): t.Fatal(…)` with the same message; the test still passes alone and under `-race -count=20`.
-7. **The registry switch** (coordinator, after lane C lands): `testhygiene`'s command → `["go", "run", "./tools/archcheck", "-tests", "{files}"]`; `gate/runner/rows/testhygiene.py` deleted.
+```go
+type Lists struct { Purity map[string]map[string][]string; Clock, Tests map[string]bool }
+func LoadLists(root string) (*Lists, error)            // reads <root>/tools/allowlists/{purity,clock,testhygiene}.json; rule must match; a target that does not split is an error
+func CheckSources(rules *Rules, lists *Lists, path string, files map[string]string) ([]string, error)   // the lists replace syncNamed and the cron.go literal
+func CheckTest(lists *Lists, path, src string) []string // the sleep fence for one _test.go
+func Stale(lists *Lists, root string) []string          // targets whose package dir or file is gone
+```
+`LoadLists` reads JSON into `struct{ Rule string; Entries []struct{ Target string } }` (unknown fields ignored: the Python row is the grammar's validator — A-L2). `main` finds `root` as the working directory (the runner runs archcheck at the repository root); tests pass `filepath.Join("..", "..")` (DA-S7). purity targets `"<pkg>: <import>.<Ident>"`; clock targets `"<file>: time"` (empty now); testhygiene targets `"<file>"` (empty). **`-tests` mode** (`go run ./tools/archcheck -tests <files.nul>`): a non-`_test.go` entry is an internal error (exit 2); each file → `CheckTest`: a selector on the file's local name(s) for `time` naming `Sleep`, `After`, `AfterFunc`, `Tick`, `NewTimer`, `NewTicker` → `failed: <file>:<line>: testhygiene: time.<Name> in a test: wait for a state, cap it with a context, yield on every pass of a poll (testing.md rule 1)`; a dot-import of time → `failed: <file>:<line>: testhygiene: a dot-import of time hides the calls the fence reads`; then `Stale` → `failed: tools/allowlists/<name>.json: <target>: does not exist (a stale target)`; `GATE_COVERED <test files read>`. **The waits** (`io/inmemory/breakit_s3_3_1_test.go:47,54`): red first — quote `-tests`' two findings on the real tree — then each becomes a `context.WithTimeout` cap with `case <-ctx.Done(): t.Fatal(<same message>)`; the test passes alone and under `-race -count=20`. **QA's one-line support edit** (DQ-S5, DA-S8): `support.copy_hooks` (`gate/proofs/drivers/support.py:364`) copies `tools/allowlists/`, so `test_hook_commit.py` and `test_hooks_off.py` stay green at T4; lane C runs both hook drivers by hand on landing. The coordinator then switches the `testhygiene` command to `["go", "run", "./tools/archcheck", "-tests", "{files}"]` and deletes the stub. *(Plan check A-L11 — archcheck reads the lists from the index snapshot at T0 — is not carried: the hook's T0 snapshot is the staged tree, and the lists are law paths whose changes LAW Δ names; recorded, DA-L7.)*
 
 ## 4. Lane D — the teeth, `docsync` (a), the forwards, BA13, the floor (python-engineer, W2)
 
-### 4.1 `docsync` (a): `gate/runner/docsync.py` (pure) and `rows/docsync.py`
+### 4.1 `docsync` (a)
+`gate/runner/docsync.py` (pure): `tree(md) -> list[str]` (the first fence after the `## 3.` heading, via `anchors.prose`), `listed(lines) -> set[str]`, `missing(packages, listed) -> list[str]`. `rows/docsync.py`: `go list -e -f '{{.Dir}}' ./...` (stderr ignored, exit code read; `GOFLAGS=-mod=readonly`, `GOPROXY=off`) → repository-relative dirs → `docsync: <dir> is a Go package and ARCHITECTURE §3 does not list it`; `GATE_COVERED <packages>`. The coordinator adds `tools/archcheck/`, `tools/apipartition/`, `tools/shape/` to §3 and annotates `tools/analyzers/` at W2's start.
 
-```python
-def tree(architecture_md: str) -> list[str]   # the first fenced block after the "## 3." heading; ValueError when absent
-def listed(tree_lines: list[str]) -> set[str] # first column (text before 2+ spaces), split on ", "; "x/" -> "x"; an item with a file extension contributes its directory ("cep.go" -> "."); items naming a path with a placeholder ("io/*") are ignored
-def missing(packages: Iterable[str], listed_dirs: set[str]) -> list[str]   # sorted, "." for the root
-```
-The row runs `go list -e -f '{{.Dir}}' ./...` in the repository root (`rows.run_tool`, output to the row dir; `GOFLAGS=-mod=readonly`, `GOPROXY=off`), makes each directory repository-relative, and fails `docsync: <dir> is a Go package and ARCHITECTURE §3 does not list it` per missing one; `GATE_COVERED <packages>` (the registry's `expected_scope` `["go", "./..."]` counts the same packages). `go list` skips `testdata/` and the nested `gate/proofs` module. **The coordinator adds `tools/archcheck/`, `tools/apipartition/`, `tools/shape/` to §3's tree at W2's start** (Q15) and annotates `tools/analyzers/` (not built; the analyzer is `tools/archcheck/`).
-
-### 4.2 The instrument pin: `gate/runner/teeth.py` (pure) and `gate/runner/tests/test_instruments_pin.py`
-
-`gate/law.json` gains `"instruments"`: `law.TOP_KEYS` += `instruments`; `law.load_manifest` returns it as `Manifest.instruments: tuple[Instrument, ...]` (validation faults are `ManifestError`s naming the entry):
+### 4.2 The instrument pin — two shapes, a strength rule measured on the real drivers
+`law.json` gains `"instruments"` (`law.TOP_KEYS`; `load_manifest` → `Manifest.instruments`). Lane D's branch carries `"instruments": []` as a named data edit until the coordinator writes the list, so `law.json` loads at every step (DA-S13); `_delta_law` reads an old side with `.get("instruments", [])`.
 ```python
 @dataclass(frozen=True)
-class Proof:       path: str; cases: int
+class Proof:      path: str; cases: int; test: str = ""     # test: count only this Go test function (and its subtests)
 @dataclass(frozen=True)
-class Instrument:  id: str; row: str; lands_in: str; code: tuple[str, ...]; proofs: tuple[Proof, ...]
-                   tiers: tuple[str, ...] = (); min_wants: int = -1; expected_scope: tuple[str, ...] = ()
-                   go_test: str = ""; exempt: str = ""
+class Instrument: id: str; row: str; lands_in: str; code: tuple[str, ...]; proofs: tuple[Proof, ...]
+                  tiers: tuple[str, ...] = (); min_wants: int = -1; expected_scope: tuple[str, ...] = (); go_test: str = ""; exempt: str = ""
 ```
-Shapes: a **row instrument** has `tiers`, `min_wants`, `expected_scope` and no `go_test`; a **Go-test instrument** has `row: "unit"`, `go_test: "<package dir>.<TestName>"` and none of the three. Exactly one of `proofs` (non-empty) or `exempt`. `_delta_law` gains `instruments` one-liners: `+instrument <id>`, `−instrument <id>`, `instrument <id>: <field> <old> → <new>` (`cases` per proof path).
+**`gate/runner/teeth.py` is pure** (DA-L9): `python_cases(source: str) -> tuple[list[str], list[str]]` (case names, faults — by `ast`, no import) and `go_cases(listing: str) -> tuple[list[str], list[str]]` (parses archcheck's `-cases` output); the pin test does the I/O (reads files; runs one `go build -o <tmp>/archcheck ./tools/archcheck` per test class, then `-cases <files...>` once — DQ-L4, DA-L3). **The strength rule** (DQ-B4, plan check §6 teeth (8)): a counted Python case must reach, in live code (not after `return`/`raise`, not under `if False`, not in a nested `def` never called), either **a red helper** — `assertRed`, `assertGateFailed`, `assertParityStops`, `assertRow` with `ok` the literal `False` (positional or keyword), or the new `support` helpers `assertRefusedAtLoad(run, reason)` (exit 2, no records), `assertHookRefused(result, reason)`, `assertRegenRefused(result, reason)` — or **a pass on the row under test** — `assertRow(..., ok=True)` whose row id is not `"parity"`. `assertParityPassed` alone never counts. Indirection: up to two levels through helpers of the driver's own module or `support`. A driver needs ≥ 1 red case; 0 cases is a fault. A counted Go case (`-cases`) must call `Fatal`, `Fatalf`, `Error`, `Errorf` or `FailNow` on its `*testing.T`, directly or through a same-file helper (DA-S12).
+**QA's W0 converts the eight faulting drivers** (§0.4) to these helpers and adds the three helpers to `support.py`; the coordinator re-runs `verdict_scan` → zero faults before lane D starts.
+**Go-test instruments:** `docsync-b-catalog` (`internal/validate/docsync_test.go`, new: lane D moves `TestDocsyncStaticCatalog` and `TestDocsyncSeesPlantedDrift` out of `static_test.go` unchanged), `docsync-b-keywords` (`internal/parser/keywords_test.go`), `docsync-c` (`internal/expr/docsync_test.go`), `docsync-d` (`internal/parser/errorcounts_test.go`), `nosleep` (`internal/runtime/nosleep_test.go`); each file an **exact** `law.json` entry (`code`), decision 9's "dedicated test file" (DA-B4, DQ-S2).
+**`-cases`** (archcheck, owned by lane D in W2): `case <Test>`; `case <Test>/<literal>` per `t.Run("<literal>", …)`; nested `t.Run` names join with `/`; a `for … range <x>` whose body calls `t.Run` with a non-literal name counts the elements of `<x>` when `<x>` is an **inline** composite literal or an identifier bound in the same function to one (a `[:n]` slice of it counts `n` when `n` is a constant); anything else → `fault <Test>: t.Run over a table -cases cannot count` (DQ-S1). Fixtures in `archcheck_test.go`: an identifier literal, an inline literal, a function call (fault), `[:2]`, a nested `t.Run`, a case with no `Fatal`/`Error` (fault).
+**The pin's tests and their exact law entries** (DA-S5): `gate/runner/tests/test_instruments_pin.py`, `test_known_issues_pin.py`, `test_law_pin.py`, `test_sprints_pin.py` are exact `law.json` entries (deleting one is a `lawdelta` liveness red and a named `law` line); `pytests` `min_wants` becomes the measured module count. Tests 1–6 as v1 (registry ↔ row instruments both ways; tiers, `blocking`, `lands_in`, `min_wants`, `expected_scope` pinned; `go_test` listed by `-cases`; code and proofs exact law paths; cases counted; `exempt` names a `teeth.json` entry). Counts are measured, never hard-coded in tests: the pin compares the manifest with the files (DQ-S10).
 
-`teeth.py`:
-```python
-VERDICT = frozenset({"assertRed", "assertRow", "assertGateFailed", "assertParityStops", "assertParityPassed"})
-RED = frozenset({"assertRed", "assertGateFailed", "assertParityStops"})   # and assertRow(..., False, ...)
-def python_cases(path: str) -> tuple[int, list[str]]   # (cases unittest's loader finds, faults)
-def go_cases(path: str) -> tuple[int, list[str]]       # via `go run ./tools/archcheck -cases <path>` (§4.3)
-```
-`python_cases` imports the driver (`importlib`, repository root on `sys.path`), counts `unittest.TestLoader().loadTestsFromModule(module).countTestCases()`, and parses the source with `ast`: each `test_*` method must call a `VERDICT` helper on `self`, directly or through one helper method of its own class or module that does (one level) → else fault `teeth: <path>::<method> asserts no gate verdict`; the module must hold at least one case reaching a `RED` helper (or `assertRow` whose fourth positional argument is the literal `False`) → else `teeth: <path> plants nothing red`. **Zero cases is a fault** (`teeth: <path> counts 0 cases`).
+### 4.3 BA13 — fixed for the accidental forge; the deliberate one named (owner, 2026-11-12, design 2)
+`pyshim.main(argv)`: `argv = [prog, root, name, report]` — **required**; another count exits 2 with `usage: pyshim.py <root> <dotted.module> <report-file>`. It opens `report` before importing the module, writes its one final line there, closes it, and still prints it. `rows._run_module` passes `<out_dir>/<name>.report` (removed first) and reads only that file. Every direct caller moves to three arguments in the same commit: `test_pyfloor.py:52-57` (run by hand, T4-only) and `test_pyshim.py` (DQ-S3). The residue — a module that writes the report path from `sys.argv[3]` itself and exits 0 — is named in ADR-0015 §3.6 (review-only residue: every test module is a law path, so such a module is a named LAW Δ line) and planted in `test_shim_forged_pass.py`: the stdout forge is red; the file forge is documented green with that sentence (DA-S6, DQ-S4). BA13 leaves `known-issues.md` and `gate/known-issues.json` at close-out, together.
 
-The pin's six tests (each with fixture manifests and registries under `gate/runner/testdata/teeth/` for its red case, then one test over the real files):
-1. `test_every_row_has_one_row_instrument` — the registry's ids = the row instruments' `row`s, both ways; a duplicate → red.
-2. `test_each_row_is_pinned` — `blocking`, `tiers`, `lands_in`, `min_wants`, `expected_scope` equal the instrument's (`proofs` 24 → 23 red; a scope narrowed red).
-3. `test_each_go_test_exists` — `go_cases` of the package's test files lists the named test.
-4. `test_code_and_proofs_are_law` — every `code`/`proofs` path tracked and covered by `law.entry_for`.
-5. `test_proofs_have_their_cases` — each `Proof.cases` equals the counted cases; faults from §4.2 are red.
-6. `test_exempt_names_a_teeth_entry` — an `exempt` is a target of `tools/allowlists/teeth.json` (empty today: no instrument is exempt — decision 10).
+### 4.4 The floor; 4.5 the forwards; 4.6a the deps register; 4.7 the known-issues pin
+- **Floor:** `--floor` required in `gate/coverage/main.py` (the module's usage error, exit 2); the registry passes `--floor 90`.
+- **`gomod`** kind: `module`, `go`, `toolchain`, `require` (single and block, `// indirect`), `replace`, `tool`; one-liners `+require <m> <v>`, `−require <m>`, `<m> <v1> → <v2>`, `+replace <m> => <t>`, `+tool <p>`, `toolchain <a> → <b>`, `go <a> → <b>`; the coordinator re-kinds both module files.
+- **Graph-only guard:** `deps: <path> is in the module graph and selected by neither module's build list`.
+- **Three headings:** `law.doc_line` reads headings through `anchors.prose` and `anchors.HEADING` (fences skipped — DA-L11); the first three distinct headings of non-marker hunks, then `(and <k> more)`; marker-only hunks (changed lines differing only by `<!--cep…-->`/`<!--text-->` comments; one regex constant, `law.MARKER_COMMENT`, shared with S1.1c-3 — DA-L8) are counted `+<n> markers`.
+- **Deps register:** entries gain `sprint` and `ref`; `deps.compare(modules, graph, entries, gomods, read, ctx: allowlists.Ctx)` calls `allowlists.sprint_fault`/`ref_fault` (DA-L6); the coordinator writes the 25 entries' values at W2's start.
+- **Known-issues pin:** as v1 §4.7, plus `S1.1c-10` not matching `S1.1c-1`, and a decision section that does not name the id → red.
 
-**Reach (decision 9):** a `proofs` path is a driver under `gate/proofs/drivers/`, a gate test file, or a dedicated Go test file — never a general engine test file. The instrument list as built (P5): one row instrument per registry row (32 with G0's three) with its drivers (the eight from W0 for the rows that had none) and the Go-test instruments `docsync-b` (`internal/validate.TestEveryStaticCodeIsAccountedFor`), `docsync-d` (`internal/parser.TestErrorCountsMatchTheCatalogue`), `nosleep` (`internal/runtime.TestNoSleepOrPollingInRuntime`). Lane D measures every count on the integration branch and hands the coordinator the JSON; the coordinator writes `instruments`.
+## 5. QA's wave 0 for the lanes (red for the stated reason; unit tests on the owning lane's starting branch)
+- **Before lane D (on integration, QA):** convert the eight drivers (§0.4); add `assertRefusedAtLoad`, `assertHookRefused`, `assertRegenRefused` to `support.py`; `copy_hooks` copies `tools/allowlists/`; the coordinator re-runs the scan → zero faults, and the `proofs` row stays PASS at T4.
+- **Lane A's branch:** `test_anchors.py`, `test_allowlists.py` (every §2.8 text; the 12-character boundary green; exactly 90 days green; expired at T3 green, at T4 and nightly red), `test_suppressions.py` (one case per `go_comments` state; §0.2's and §0.3's tables; every directive fault; the policy's examples), `test_law.py` (the two kinds and their sub-lines and cap), `test_lawdelta.py` (the exemption line `+0`/`+1`/`−1`; named sub-lines; a moved directive neither added nor removed; the countdown at `k` = 14, 0, −1 with `today()` patched; nothing for an unchanged list), `test_git.py` (`grep_files`, `ls_tree`: exit 1 empty, exit 128 `GitError`).
+- **Lane C's branch:** `archcheck_test.go` — purity from the list, a target that does not split, clock membership (`internal/window/cron.go` red with the empty `clock.json`, green with an entry), stale purity/clock/testhygiene targets, every banned name, a dot-import, a non-test file in `-tests` (exit 2), a listed testhygiene file skipped.
+- **Lane D's branch:** `test_teeth.py` (parity-only, dead code after `return`, `if False:`, an uncalled nested def, `assertRow(ok=False)` by keyword, two-level indirection, zero cases), `test_instruments_pin.py` fixtures, `test_docsync.py` (stderr ignored), `test_known_issues_pin.py`, `gate/coverage/tests`, `test_deps.py` (graph-only; `sprint` after the marker; an unresolved `ref`), `test_law.py` (gomod incl. block require, `// indirect`, toolchain; exactly three headings; markers), `test_pyshim.py` (the third argument; the usage exit).
+- **On integration** (T4-only, red on the stubs): `test_suppressions_planted.py` (dates planted ≥ 3 days from any boundary, matched as `in \d+ days`; counts asserted only as `(+<d> this diff)` — DQ-S9, DQ-S10), `test_testhygiene_planted.py`, `test_docsync_planted.py`, `test_shim_forged_pass.py`. `proofs` `min_wants` becomes the measured driver count at the end (36 if nothing else moves).
 
-### 4.3 archcheck's `-cases` mode (lane D owns `tools/archcheck/` in W2)
+## 6. Order
+G1 → QA's W0 (the driver conversions first, then the lanes' reds) → W1: lane A ‖ lane C (lane A's 40 `# fmt: skip` reasons: 11 of those lines would pass 120 characters — DQ-S7 — so lane A reflows them, quoting the red E501 run first) → the coordinator: re-kinds, the `suppressions` nightly tier and `testhygiene` switch, DEVELOPMENT.md, regenerated workflows → W2: lane D (the §3 edit and the deps refs first) → `instruments` written from lane D's measurements, `proofs` and `pytests` `min_wants` measured → T3 → review + break-it → fix round → T4. **Every G0 or law commit that moves the marker, a count or a date also runs the `proofs` row** (W0-F1's lesson).
 
-`go run ./tools/archcheck -cases <file_test.go>` prints, sorted: `case <TestName>` per top-level `func Test<X>(t *testing.T)`; `case <TestName>/<literal>` per `t.Run("<literal>", …)` call whose first argument is a string literal; and for a `for … range <ident>` loop whose body calls `t.Run` with a non-literal name, `case <TestName>/<ident>[<i>]` per element of `<ident>`'s composite literal when `<ident>` is declared in the same function by `:=` or `var` with a slice, array or map composite literal (QA-S3: a loop cut short changes the count); a loop over anything else → `fault <TestName>: t.Run over a table this mode cannot count`. Exit 0; `teeth.go_cases` counts the `case` lines and reports `fault` lines as faults.
+## 7. Size
+≈ 10.5 points (v1's ≈ 9, plus the measured recognisers, the in-code exemption naming, the strength rule and the eight driver conversions, the Go `-cases` table rules, the exact pin entries); the card holds 13.
 
-### 4.4 BA13: the shim's report through a file (`gate/runner/pyshim.py`, `gate/runner/rows/__init__.py`)
+## 8. The documents at landing (the coordinator)
+ADR-0015 §1.2, §2, §3.6 (the fence's escapes; the shim's deliberate forge — BA13's residue), §3.8 (the teeth as built), §3.10; DEVELOPMENT.md (§2.7); testing.md; ARCHITECTURE §3; the record notes for S1.1c-4's plan check: cap PERMANENT entries per package or ask per group (plan check risk 6, DA-L12), a TOML or JSON golangci config (DA-L4), the §0.3 differential.
 
-`pyshim.main(argv)` takes a third argument, the report path: `argv = [prog, root, name, report]`. Before importing the module it opens `report` for writing and keeps the handle; at the end it writes the same one line it prints today (`pyshim: <name>: passed <n> tests` or `pyshim: <name>: <problems>`) to the handle and closes it, and still prints it for humans. `rows._run_module` passes `os.path.join(out_dir, f"{name}.report")` (removed first if present) and reads **only** that file: pass iff exit 0 and the file's one line is `pyshim: <name>: passed …`; no file → `exit <code>, and the shim made no report`. A module that prints the pass line and calls `os._exit(0)` leaves no report and is red (known issue BA13's own forward). The shim stays Python 3.12 (`pyfloor` runs it under 3.12.16). Both the `pytests` and `proofs` rows use `run_modules`, so both are covered. At close-out BA13 leaves known-issues.md and `gate/known-issues.json` together (the T2 pin keeps them equal).
+## 9. The reviews of v1 — every finding placed
 
-### 4.5 The coverage floor (`gate/coverage/main.py`)
-
-`DEFAULT_FLOOR` (`:34`) is deleted and `--floor` is required (`argparse` `required=True`; a missing one is the module's existing usage error, exit 2). The registry passes `--floor 90` since G0, so a change to the floor is a `registry` one-liner in LAW Δ. A test in `gate/coverage/tests/` pins the usage error.
-
-### 4.6 The three forwards
-
-- **`gomod`** (`law.py`, `(_gomod, _delta_gomod)`): `_gomod(text)` reads `module`, `go`, `toolchain`, `require` (single and block, `// indirect` kept as a flag), `replace`, `tool` lines into a dict; one-liners: `+require <m> <v>`, `−require <m>`, `<m> <v1> → <v2>`, `+replace <m> => <t>`, `+tool <p>`, `toolchain <a> → <b>`, `go <a> → <b>`; the coordinator re-kinds `go.mod` and `gate/proofs/go.mod` to `gomod`.
-- **Graph-only versions** (`deps.compare`): a path in `graph` that is in no build list (`graph − set(by_path)`, today empty — §0.3) is red `deps: <path> is in the module graph and selected by neither module's build list`, beside its allowlist check; a unit case plants one.
-- **Up to three headings** (`law.doc_line`): the headings of the first three hunks (deduplicated, each `§<n>` or text), then `(and <k> more)` when more hunks fall under other headings; **marker-only hunks** — a hunk whose changed lines differ only by `<!--cep…-->`/`<!--text-->` comments — are not named and are counted `+<n> markers` (A-S11). The S1.1c-1 form `(first of <k> hunks)` is replaced.
-
-### 4.6a The dependency register gains `sprint` and `ref` (decision 17)
-
-`tools/deps-allowlist.json`'s entries gain two required keys: `sprint` (the sprint whose approval added the module) and `ref` (the deciding section, `ref`'s form, §2.1). `deps.ENTRY_KEYS` (`gate/runner/deps.py:24`) gains both; `deps.compare` checks `sprint` with `sprintid` (at or before the marker) and `ref` with `anchors.resolves`, each fault `deps: <module>: <why>`. The coordinator writes the 25 entries' values at W2's start (each module's approval: decisions.md's dated sections and ADR-0009); the `deps` kind's one-liner names a changed `ref` or `sprint`.
-
-### 4.7 `test_known_issues_pin.py` (T2)
-
-The ids of `gate/known-issues.json` equal the Markdown table's, both ways; each table row's Found cell begins with its `first_seen` followed by a non-identifier character (`S1.1c-1's` counts; `S1.1c-10` does not match `S1.1c-1`); `first_seen` and a non-empty `forward` are rows or parts of `gate/sprints.json`'s order; a non-empty `decision` resolves (`anchors.resolves`) and its section — the heading's text up to the next heading of the same level — names the id as a whole word. **The `decision` form is `ref`'s form**: the G0 data's `decisions.md#…` becomes `docs/sprints/decisions.md#…` in the design commit.
-
-## 5. QA's wave 0 for the lanes (after this note; red for the stated reason)
-
-- **On lane A's starting branch:** `gate/runner/tests/test_anchors.py` (the moved functions, `split_ref`, `resolves` — every why of §2.1), `test_allowlists.py` (plan check §6 [2] grammar (1)–(12) with §2.2's texts), `test_suppressions.py` (`go_comments` states, the directive faults, `py_markers`, the policy's examples), `test_law.py` additions (the two kinds), `test_lawdelta.py` additions (the exemption line `+0`, `+1`, `−1`; the countdown lines; no line for an unchanged list).
-- **On lane C's starting branch:** `archcheck_test.go` cases (plan check §6 [2] archcheck (1)–(8)).
-- **On lane D's starting branch:** `test_teeth.py`, `test_instruments_pin.py`'s fixture cases, `test_docsync.py`, `test_known_issues_pin.py`, `gate/coverage/tests` (the required floor), `test_deps.py` (graph-only; `sprint` and `ref` on every entry), `test_law.py` (gomod, three headings, markers).
-- **On integration** (T4-only, red on the stubs): `gate/proofs/drivers/test_suppressions_planted.py`, `test_testhygiene_planted.py`, `test_docsync_planted.py`, `test_shim_forged_pass.py` (BA13: a planted module prints the pass line and `os._exit(0)` → the `pytests` row red `… the shim made no report`).
-
-## 6. Order and commits
-
-G1 (this note reviewed; v2) → QA's W0 for the lanes → W1: lane A (`anchors.py` → `allowlists.py` → `suppressions.py` → the row → the kinds → the exemption line → its drivers green; the 40 `# fmt: skip` reasons and the inert `# noqa` in `gate/differential/shapes.py:34` are lane A's comment-only edits) ‖ lane C (the waits red-first → the lists → `-tests` → stale targets) → the coordinator: re-kinds, the `testhygiene` switch, DEVELOPMENT.md → W2: lane D (`docsync` after the §3 edit → the forwards → `-cases` → `teeth.py` + the pin over fixtures → BA13 → the floor → the measured counts) → the coordinator writes `instruments`, `proofs` `min_wants` 35, re-kinds `go.mod`s → T3 → review + break-it (a hollowed driver among its plants) → fix round → T4.
-
-## 7. The documents at landing (the coordinator)
-
-ADR-0015 §1.2 (registry-lint as built), §2 (the as-built instrument ids; `testhygiene` as archcheck's `-tests` mode; `suppressions` as built), §3.6 (the fence's known escapes — `<-ctx.Done()` on a short deadline, `syscall.Nanosleep`, an `exec` of `sleep`, a non-test helper file — QA-L3; the canary's silence is S1.1c-3's), §3.8 (the teeth as built), §3.10 (the one grammar as built; the deps register keeps its own schema and gains `sprint` and `ref` — §4.6a); DEVELOPMENT.md (§2.7); testing.md (no Go wait helper; the context cap; yield on every pass of a poll); ARCHITECTURE §3 (§4.1).
+| # | Sev. | Finding | Disposition |
+|---|---|---|---|
+| DA-B1, DQ-B1 | blocker | one COMMENT token per line: the `# fmt: skip  # r` rule could not be built | fixed: §0.2, §2.3 (split on `#`) |
+| DQ-B2, DA-S4 | blocker / should-fix | ruff honours `# r  # fmt: skip`, `# fmt:skip`, yapf and isort forms; `extend-per-file-ignores` | fixed: §0.2 table pinned; §2.3, §2.4 |
+| DA-B2, DQ-L3 | blocker | golangci honours `// nolint`, `///nolint`, `//nolint x` | fixed: §0.3 table pinned; §2.3 recogniser; canonical form required |
+| DA-B3 | blocker | expired entries never checked at the nightly | fixed: §0.1, §2.4 (nightly tier) |
+| DA-B4, DQ-B3, DQ-S2 | blocker | the strength rule red on 8 real drivers; Go instruments wrong, in a general file | fixed: §0.4, §4.2 (helpers, conversions in W0, dedicated `docsync_test.go`, exact entries) |
+| DQ-B4, DA-S12 | blocker / should-fix | hollowing by `assertParityPassed`; Go cases without `Fatal` | fixed: §4.2's strength rule |
+| DA-S1 | should-fix | three copies of the field rules | fixed: `allowlists.fields`, `sprint_fault`, `ref_fault` |
+| DA-S2 | should-fix | no countdown for in-code TEMP | fixed: §2.6 |
+| DA-S3 | should-fix | git helpers without an error contract | fixed: §2.6 |
+| DA-S5 | should-fix | the pin can be deleted | fixed: §4.2 exact entries; `pytests` `min_wants` measured |
+| DA-S6, DQ-S4 | should-fix | BA13's deliberate forge | → owner, design 2: fixed, residue named (§4.3) |
+| DA-S7 | should-fix | lane C's lists had no signature | fixed: §3 |
+| DA-S8, DQ-S5 | should-fix | hook worlds lack the lists | fixed: §3 (QA's `copy_hooks` edit) |
+| DA-S9 | should-fix | covered wording | fixed: §2.4 |
+| DA-S10 | should-fix | in-code exemptions only counted | → owner, design 1: named (§2.6) |
+| DA-S11 | should-fix | one `; `-joined line | fixed: §2.5 sub-lines, cap 6 |
+| DA-S13 | should-fix | `instruments` required mid-sprint | fixed: §4.2 (`[]` on lane D's branch; `.get`) |
+| DA-S14, DQ-S6 | should-fix | the policy's examples fail the rules / time bombs | fixed: §2.7 |
+| DQ-S1 | should-fix | `-cases` misses inline literals | fixed: §4.2 |
+| DQ-S3 | should-fix | the shim's direct callers | fixed: §0.6, §4.3 |
+| DQ-S7 | should-fix | 11 skip lines over 120 characters | fixed: §6 (lane A reflows, red first) |
+| DQ-S8 | should-fix | inexact failure texts | fixed: §2.8 |
+| DQ-S9 | should-fix | no injection for dates, order, marker | fixed: §2.2 `Ctx`, §2.6 `today()`, §5 |
+| DQ-S10 | should-fix | hard-coded counts | fixed: §4.2, §5 (measured; relations only) |
+| DA-L1, DQ-L2 | later | `.githooks/*` outside the scope | fixed: §2.3 |
+| DA-L2 | later | stale ruff/teeth targets | fixed: §2.4 |
+| DA-L3, DQ-L4 | later | one `go run` per file | fixed: §4.2 (one build, one run) |
+| DA-L4 | later | S1.1c-4's config format | recorded for S1.1c-4 (§8) |
+| DA-L5 | later | untracked docs satisfy a ref | fixed: §2.1 |
+| DA-L6 | later | `deps.compare`'s signature | fixed: §4.6a |
+| DA-L7 | later | T0 snapshot dropped silently | recorded with the reason (§3) |
+| DA-L8 | later | one marker regex | fixed: `law.MARKER_COMMENT` |
+| DA-L9 | later | `teeth.py` not pure | fixed: §4.2 |
+| DA-L10 | later | `run_modules`' third caller | fixed: §0.6 |
+| DA-L11 | later | headings inside fences | fixed: §4.5 via `anchors.prose` |
+| DA-L12 | later | S1.1c-4's cap note | recorded (§8) |
+| DA-L13 | later | the 90-day base moved silently | stated in §2.2 |
+| DQ-L1 | later | two counter-examples are not tests | fixed: §3 (a quoted run), the driver for the scope |
+| DQ-L5 | later | `go list` stderr offline | fixed: §0.7, §4.1 |
