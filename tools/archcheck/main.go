@@ -4,8 +4,9 @@
 //	go run ./tools/archcheck -tests <files.nul>
 //	go run ./tools/archcheck -cases <file>...
 //
-// The named exceptions are read from tools/allowlists/ (purity.json, clock.json, testhygiene.json; S1.1c-2), the
-// one allowlist grammar's files: archcheck reads each entry's target, and the suppressions row validates the rest.
+// The named exceptions are read from tools/allowlists/ (purity.json, clock.json, testhygiene.json; S1.1c-2; and
+// generated.json, the fix round's BK-S6), the one allowlist grammar's files: archcheck reads each entry's target, and
+// the suppressions row validates the rest.
 //
 // Four checks, by reading each file's syntax with the standard library only:
 //   - imports: a package imports only the module packages tools/importcheck/rules.json lists for it
@@ -20,7 +21,9 @@
 //     identifier, no dot-import); os, net and io only at the boundary; unsafe and //go:linkname nowhere;
 //   - globals (non-test files): a package-level var is an error sentinel, a value built at its
 //     declaration by a Must-constructor (regexp.MustCompile, participle.MustBuild: built from
-//     constants, never written), a lookup table never written, or event's sync.Pool.
+//     constants, never written), a lookup table never written, or event's sync.Pool. A generated file is skipped
+//     only when generated.json lists it and its `// Code generated … DO NOT EDIT.` line precedes its package
+//     clause (go/ast.IsGenerated); a file with that line that is not listed gets every check and a finding.
 //
 // With -tests it reads _test.go files only and runs the sleep fence (the testhygiene row; testing.md rule 1): no
 // time.Sleep, After, AfterFunc, Tick, NewTimer or NewTicker, and no dot-import of time, outside the files
@@ -104,7 +107,8 @@ var (
 // Lists is archcheck's reading of tools/allowlists/: Purity is ADR-0015 §2's named purity exceptions (package ->
 // import path -> the only identifiers it may use from it: the only packages outside internal/runtime, io and cmd
 // that may import sync or sync/atomic); Clock is the files of an operator package that may import time; Tests is the
-// test files the sleep fence skips.
+// test files the sleep fence skips; Generated is the generated files the globals check skips (BK-S6; owner,
+// 2026-11-12, S1.1c-2's review and break-it 3).
 type Lists struct {
 	Purity                  map[string]map[string][]string
 	Clock, Tests, Generated map[string]bool
@@ -147,10 +151,10 @@ func splitPurity(target string) (pkg, imp, ident string, ok bool) {
 	return pkg, imp, ident, cut && dot && pkg != "" && imp != "" && ident != ""
 }
 
-// LoadLists reads <root>/tools/allowlists/{purity,clock,testhygiene}.json. A missing or unparsable file, a rule
-// that is not the file's name, or a target that does not split is an error naming the file.
+// LoadLists reads <root>/tools/allowlists/{purity,clock,testhygiene,generated}.json. A missing or unparsable file, a
+// rule that is not the file's name, or a target that does not split (or is empty) is an error naming the file.
 func LoadLists(root string) (*Lists, error) {
-	l := &Lists{Purity: map[string]map[string][]string{}, Clock: map[string]bool{}, Tests: map[string]bool{}}
+	l := &Lists{Purity: map[string]map[string][]string{}, Clock: map[string]bool{}, Tests: map[string]bool{}, Generated: map[string]bool{}}
 	purity, err := readList(root, "purity")
 	if err != nil {
 		return nil, err
@@ -176,15 +180,21 @@ func LoadLists(root string) (*Lists, error) {
 		}
 		l.Clock[file] = true
 	}
-	tests, err := readList(root, "testhygiene")
-	if err != nil {
-		return nil, err
-	}
-	for _, target := range tests {
-		if target == "" {
-			return nil, fmt.Errorf("%s/testhygiene.json: an empty target: want \"<file>\"", AllowlistsDir)
+	for _, list := range []struct {
+		name  string
+		files map[string]bool
+	}{{"testhygiene", l.Tests}, {"generated", l.Generated}} {
+		name, files := list.name, list.files
+		targets, err := readList(root, name)
+		if err != nil {
+			return nil, err
 		}
-		l.Tests[target] = true
+		for _, target := range targets {
+			if target == "" {
+				return nil, fmt.Errorf("%s/%s.json: an empty target: want \"<file>\"", AllowlistsDir, name)
+			}
+			files[target] = true
+		}
 	}
 	return l, nil
 }
@@ -195,8 +205,8 @@ func exists(root, rel string, dir bool) bool {
 	return err == nil && info.IsDir() == dir
 }
 
-// Stale gives one finding per target whose package directory (purity) or file (clock, testhygiene) is gone under
-// root, sorted: "tools/allowlists/<name>.json: <target>: does not exist (a stale target)".
+// Stale gives one finding per target whose package directory (purity) or file (clock, testhygiene, generated) is gone
+// under root, sorted: "tools/allowlists/<name>.json: <target>: does not exist (a stale target)".
 func Stale(lists *Lists, root string) []string {
 	var out []string
 	exists := func(rel string, dir bool) bool { return exists(root, rel, dir) }
@@ -218,9 +228,11 @@ func Stale(lists *Lists, root string) []string {
 			stale("clock", file+": time")
 		}
 	}
-	for file, listed := range lists.Tests {
-		if listed && !exists(file, false) {
-			stale("testhygiene", file)
+	for name, files := range map[string]map[string]bool{"testhygiene": lists.Tests, "generated": lists.Generated} {
+		for file, listed := range files {
+			if listed && !exists(file, false) {
+				stale(name, file)
+			}
 		}
 	}
 	slices.Sort(out)
@@ -231,7 +243,8 @@ func Stale(lists *Lists, root string) []string {
 // (BK-S3), sorted: "tools/allowlists/<name>.json: <target>: waives nothing (an unused target)". A purity target is
 // used when a non-test Go file of its package selects <identifier> on a name the file gives <import path>; a clock
 // target when its file is in an operator package and imports time; a testhygiene target when the sleep fence would
-// report its file unlisted. A target that does not exist is Stale's.
+// report its file unlisted; a generated target when its file is marked generated (generated). A target that does not
+// exist is Stale's.
 func Unused(lists *Lists, root string) ([]string, error) {
 	var out []string
 	unused := func(name, target string) {
@@ -281,6 +294,22 @@ func Unused(lists *Lists, root string) ([]string, error) {
 		}
 		if len(CheckTest(&Lists{}, file, string(src))) == 0 {
 			unused("testhygiene", file)
+		}
+	}
+	for file, listed := range lists.Generated {
+		if !listed || !exists(root, file, false) {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file)))
+		if err != nil {
+			return nil, err
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), file, src, parser.PackageClauseOnly|parser.ParseComments)
+		if err != nil {
+			return nil, err
+		}
+		if !generated(parsed) {
+			unused("generated", file)
 		}
 	}
 	slices.Sort(out)
@@ -376,7 +405,8 @@ func (c *checker) report(pos token.Pos, format string, args ...any) {
 
 // CheckSources runs every check over files[path]; the other entries of files are the rest of its package,
 // which the globals check reads to see whether a package-level var is ever written. lists holds the named purity
-// and clock exceptions.
+// and clock exceptions and the generated files: a file generated marks is skipped by the globals check only if
+// lists.Generated holds it, and is a "generated: …" finding on line 1 if not (BK-S6).
 func CheckSources(rules *Rules, lists *Lists, path string, files map[string]string) ([]string, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, files[path], parser.ParseComments)
@@ -390,11 +420,15 @@ func CheckSources(rules *Rules, lists *Lists, path string, files map[string]stri
 	c := &checker{rules: rules, lists: lists, fset: fset, path: path, dir: dir, file: file, test: strings.HasSuffix(path, "_test.go")}
 	c.imports()
 	c.fences()
+	marked := generated(file)
+	if marked && !lists.Generated[path] {
+		c.report(file.FileStart, "generated: the file says it is generated but %s/generated.json does not list it", AllowlistsDir)
+	}
 	if !under(dir, "bench") {
 		c.clock()
 		if !c.test {
 			c.purity()
-			if !generated(file) {
+			if !marked || !lists.Generated[path] {
 				if err := c.globals(files); err != nil {
 					return nil, err
 				}
@@ -589,15 +623,11 @@ func exceptionList(named map[string][]string) string {
 	return strings.Join(out, ", ")
 }
 
+// generated reports a file marked generated by Go's own rule (go/ast.IsGenerated): a `// Code generated … DO NOT
+// EDIT.` line in a comment before the package clause; a line after it marks nothing (BK-S6). The file must be parsed
+// with its comments. Whether the mark exempts anything is generated.json's to say (CheckSources).
 func generated(file *ast.File) bool {
-	for _, group := range file.Comments {
-		for _, comment := range group.List {
-			if strings.HasPrefix(comment.Text, "// Code generated ") && strings.HasSuffix(comment.Text, " DO NOT EDIT.") {
-				return true
-			}
-		}
-	}
-	return false
+	return ast.IsGenerated(file)
 }
 
 // root is the variable an assignment target writes through: x, x[i], x.f, *x.
@@ -1573,7 +1603,7 @@ func runTests(root string, lists *Lists, listPath string) ([]string, int, error)
 }
 
 // targetsIn keeps the Stale and Unused findings of the named lists, sorted: each mode reports the lists it reads (the
-// normal mode purity and clock, -tests testhygiene), so no stale or unused target is reported by two rows.
+// normal mode purity, clock and generated, -tests testhygiene), so no stale or unused target is reported by two rows.
 func targetsIn(lists *Lists, root string, names ...string) ([]string, error) {
 	unused, err := Unused(lists, root)
 	if err != nil {
@@ -1635,7 +1665,7 @@ func cli(root string, args []string, out io.Writer) int {
 	default:
 		findings, count, err = run(root, lists, args[0])
 		if err == nil {
-			targets, err = targetsIn(lists, root, "purity", "clock")
+			targets, err = targetsIn(lists, root, "purity", "clock", "generated")
 		}
 	}
 	if err != nil {
