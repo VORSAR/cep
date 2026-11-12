@@ -7,8 +7,9 @@ Every expected text is copied from the design note by hand, never from a run of 
 
 import json
 import unittest
+from datetime import date
 
-from gate.runner import deps
+from gate.runner import allowlists, deps, sprintid
 
 ALLOWLIST = "tools/deps-allowlist.json"
 ALLOWED_TEXT = "(allowed: Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC)"
@@ -25,6 +26,16 @@ BSD2 = (
 BSD3 = BSD2 + "3. Neither the name of the holder nor the names of its contributors may be used to endorse or promote\n"
 ISC = "ISC License\n\nPermission to use, copy, modify, and/or distribute this software for any purpose\n"
 GPL3 = "                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n"
+SPRINT = "S1.1c-1"
+REF = "docs/sprints/decisions.md#owner-decisions-2026-11-11"
+CTX = allowlists.Ctx(  # every entry's sprint and ref pass; test_deps_lane_d.py holds their faults
+    today=date(2026, 11, 12),
+    tier="T2",
+    order=sprintid.Order((sprintid.Row("S1.1c", False),)),
+    current=sprintid.parse("S1.1c-2"),
+    issues=frozenset(),
+    resolve=lambda ref: "" if ref == REF else f"unresolved {ref}",
+)
 
 
 def entry(module: str, version: str = "v1.0.0", license: str = "MIT") -> dict:
@@ -35,6 +46,8 @@ def entry(module: str, version: str = "v1.0.0", license: str = "MIT") -> dict:
         "license": license,
         "approved": "2026-11-11",
         "why": "a fixture",
+        "sprint": SPRINT,
+        "ref": REF,
     }
 
 
@@ -46,7 +59,7 @@ def listing(*entries: dict, schema: int = 1, note: str | None = "a fixture") -> 
 
 
 def E(module: str, version: str = "v1.0.0", license: str = "MIT") -> deps.Entry:
-    return deps.Entry(module, version, "runtime", license, "2026-11-11", "a fixture")
+    return deps.Entry(module, version, "runtime", license, "2026-11-11", "a fixture", sprint=SPRINT, ref=REF)
 
 
 def M(path: str, version: str = "v1.0.0", dir: str = "", *, imported: bool = False) -> deps.Module:
@@ -107,13 +120,13 @@ class LoadAllowlist(unittest.TestCase):
         short = {k: v for k, v in entry("example.com/a").items() if k != "why"}
         self.assertFault(
             listing(entry("example.com/b"), short),
-            f"{ALLOWLIST}: modules[1]: keys ['approved', 'license', 'module', 'scope', 'version'], "
+            f"{ALLOWLIST}: modules[1]: keys ['approved', 'license', 'module', 'ref', 'scope', 'sprint', 'version'], "
             "missing ['why'], unexpected []",
         )
         self.assertFault(
             listing({**entry("example.com/a"), "licence": "MIT"}),
-            f"{ALLOWLIST}: modules[0]: keys ['approved', 'licence', 'license', 'module', 'scope', 'version', 'why'],"
-            " missing [], unexpected ['licence']",
+            f"{ALLOWLIST}: modules[0]: keys ['approved', 'licence', 'license', 'module', 'ref', 'scope', 'sprint',"
+            " 'version', 'why'], missing [], unexpected ['licence']",
         )
 
     def test_an_optional_replace_key_is_accepted(self):
@@ -232,7 +245,7 @@ class GraphNodes(unittest.TestCase):
 
 class Compare(unittest.TestCase):
     def compare(self, modules, graph, entries, gomods=GOMODS, files=None):
-        return deps.compare(modules, frozenset(graph), entries, gomods, reader(files or {}))
+        return deps.compare(modules, frozenset(graph), entries, gomods, reader(files or {}), CTX)
 
     def test_green(self):
         modules = [M("example.com/a", dir="/d/a", imported=True), M("example.com/g")]
@@ -261,7 +274,10 @@ class Compare(unittest.TestCase):
     def test_a_graph_node_without_an_entry(self):
         self.assertEqual(
             self.compare([], ["golang.org/x/sys"], []),
-            [f"deps: golang.org/x/sys is in the module graph and not in {ALLOWLIST}"],
+            [
+                f"deps: golang.org/x/sys is in the module graph and not in {ALLOWLIST}",
+                "deps: golang.org/x/sys is in the module graph and selected by neither module's build list",
+            ],
         )
 
     def test_a_graph_node_that_is_also_a_module_is_named_once(self):
@@ -276,8 +292,12 @@ class Compare(unittest.TestCase):
             ["deps: stale entry example.com/gone: not in the module graph of go.mod or gate/proofs/go.mod"],
         )
 
-    def test_a_graph_only_entry_is_live_by_the_graph(self):
-        self.assertEqual(self.compare([], ["example.com/g"], [E("example.com/g")]), [])
+    def test_a_graph_only_entry_is_live_by_the_graph_and_red_by_the_guard(self):
+        # S1.1c-2 design §4.5: a node neither build list selects is red; its entry is not stale.
+        self.assertEqual(
+            self.compare([], ["example.com/g"], [E("example.com/g")]),
+            ["deps: example.com/g is in the module graph and selected by neither module's build list"],
+        )
 
     def test_a_version_mismatch(self):
         self.assertEqual(
@@ -370,6 +390,8 @@ class Compare(unittest.TestCase):
                 f"deps: example.com/u v1.0.0 is not in {ALLOWLIST}",
                 f"deps: example.com/m is in the module graph and not in {ALLOWLIST}",
                 f"deps: example.com/n is in the module graph and not in {ALLOWLIST}",
+                "deps: example.com/m is in the module graph and selected by neither module's build list",
+                "deps: example.com/n is in the module graph and selected by neither module's build list",
                 "deps: stale entry example.com/gone: not in the module graph of go.mod or gate/proofs/go.mod",
                 "deps: example.com/b: the allowlist says v1.0.1, the graph has v1.0.0",
                 f"deps: example.com/b: license GPL-3.0 is not Apache-2 compatible {ALLOWED_TEXT}",
@@ -392,11 +414,11 @@ class ReplaceApproval(unittest.TestCase):
         return deps.Module("example.com/a", "v1.0.0", "/cache/a", False, replace)
 
     def entry(self, replace: str = "") -> deps.Entry:
-        return deps.Entry("example.com/a", "v1.0.0", "runtime", "MIT", "2026-11-11", "why", replace)
+        return deps.Entry("example.com/a", "v1.0.0", "runtime", "MIT", "2026-11-11", "why", replace, SPRINT, REF)
 
     def test_an_unapproved_replace_is_red(self):
         out = deps.compare(
-            [self.module("../a")], frozenset({"example.com/a"}), [self.entry()], list(deps.GOMODS), lambda d: None
+            [self.module("../a")], frozenset({"example.com/a"}), [self.entry()], list(deps.GOMODS), lambda d: None, CTX
         )
         self.assertEqual(
             out, ["deps: example.com/a: replaced in go.mod by ../a; not approved in tools/deps-allowlist.json"]
@@ -404,13 +426,18 @@ class ReplaceApproval(unittest.TestCase):
 
     def test_an_approved_replace_passes(self):
         out = deps.compare(
-            [self.module("../a")], frozenset({"example.com/a"}), [self.entry("../a")], list(deps.GOMODS), lambda d: None
+            [self.module("../a")],
+            frozenset({"example.com/a"}),
+            [self.entry("../a")],
+            list(deps.GOMODS),
+            lambda d: None,
+            CTX,
         )
         self.assertEqual(out, [])
 
     def test_an_approval_without_a_replace_is_red(self):
         out = deps.compare(
-            [self.module()], frozenset({"example.com/a"}), [self.entry("../a")], list(deps.GOMODS), lambda d: None
+            [self.module()], frozenset({"example.com/a"}), [self.entry("../a")], list(deps.GOMODS), lambda d: None, CTX
         )
         self.assertEqual(out, ["deps: example.com/a: the allowlist approves a replace by ../a, go.mod has none"])
 
@@ -421,6 +448,7 @@ class ReplaceApproval(unittest.TestCase):
             [self.entry("../a")],
             list(deps.GOMODS),
             lambda d: None,
+            CTX,
         )
         self.assertEqual(
             out,
