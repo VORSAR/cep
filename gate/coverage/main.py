@@ -1,6 +1,8 @@
 """The coverage-inclusion instrument (plan check S6 as amended by design note §5; ADR-0015 §2.1, §2.2).
 
-    python3.15 -I -B -X utf8 gate/coverage/main.py [--profile P] [--events E] [--floor 90] [--module-dir .]
+    python3.15 -I -B -X utf8 gate/coverage/main.py --floor 90 [--profile P] [--events E] [--module-dir .]
+
+--floor is required (S1.1c-2 design §4.4): the registry passes it, so the floor is a LAW Δ line, never a default.
 
 --profile and --events default to the `unit` row's artifacts beside this row's own directory:
 dirname($GATE_ROW_DIR)/unit/cover.prof and dirname($GATE_ROW_DIR)/unit/test.json (plan check S3d).
@@ -31,7 +33,6 @@ from gate.coverage import classify, coverprofile
 from gate.runner import jsonstream
 
 SCOPE = ("./internal/...", ".", "./rule/...", "./io/...")
-DEFAULT_FLOOR = "90"
 NEEDED = "unit"
 PROFILE_NAME = "cover.prof"
 EVENTS_NAME = "test.json"
@@ -68,7 +69,7 @@ def options(argv: Sequence[str], environ: Mapping[str, str]) -> Options:
     parser = _Parser(prog="gate/coverage/main.py", add_help=False, allow_abbrev=False)
     parser.add_argument("--profile")
     parser.add_argument("--events")
-    parser.add_argument("--floor", default=DEFAULT_FLOOR)
+    parser.add_argument("--floor", required=True)
     parser.add_argument("--module-dir", dest="module_dir", default=".")
     args = parser.parse_args(list(argv))
     if not _FLOOR.fullmatch(args.floor):
