@@ -19,6 +19,8 @@ The full draft is [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md), drafted read-o
 
 **G0 — the owner, 2026-11-12:** the S1.1c-2 card approved ("lets do it"); the forecast re-annotated first ([sprint-plan §3](sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02): about 10 points a day since 2026-11-05; Phase 1 about 3–6 weeks from 2026-11-12).
 
+**The owner's check (G4) — the owner, 2026-11-12:** passed. Each plant, run by the coordinator in a scratch worktree at c87d47d, was red by name — a deleted case of `test_suppressions_planted.py` (`teeth: instrument suppressions: proof … lists 9 cases, the teeth count 8`), a `time.Sleep` in `internal/event/breakit2_test.go` (`testhygiene: time.Sleep in a test: …`), a `ref` to a missing heading in `tools/allowlists/purity.json` (`… has no heading #no-such-heading`); the LAW Δ block of the T4 run read. The PR opens ready for review, not as a draft (the owner, ≠ the draft rule's recommendation).
+
 ## How it runs
 
 At most two agents at once (plan check §1, §4, §9).
@@ -104,7 +106,7 @@ Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (707bbb7)
              ☑ tests on the real code ☑ every breaker's red test committed
 Review (G3)  ☑ architecture review of the combined diff: no drift (0 blockers; its findings fixed or placed)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☑ T4 strict-gate exit 0, run complete (a2827c8; CI on the PR) ☐ owner's check passed
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (a2827c8; CI on the PR) ☑ owner's check passed (2026-11-12)
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main CI green on the merge commit
