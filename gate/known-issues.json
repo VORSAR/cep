@@ -49,6 +49,18 @@
       "first_seen": "S3.3-2",
       "forward": "",
       "decision": ""
+    },
+    {
+      "id": "S1.1c-3-1",
+      "first_seen": "S1.1c-3",
+      "forward": "S1.1c-4",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check"
+    },
+    {
+      "id": "S1.1c-3-2",
+      "first_seen": "S1.1c-3",
+      "forward": "S1.1c-4",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check"
     }
   ]
 }

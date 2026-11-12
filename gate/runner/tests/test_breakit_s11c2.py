@@ -32,10 +32,10 @@ BK-S4: golangci-lint v2.15.0 honours gosec's own `#nosec` waiver — measured wi
 --no-config --default=none --enable=gosec`): `"crypto/md5" // #nosec G501` and `md5.Sum(b) // #nosec G401` drop
 both findings, which reappear when the comments go. §0.3's table and go_directives know only `nolint`: a `#nosec`
 in a tracked .go file is no directive and no fault, and no PREFILTER pattern finds it. No linter is enabled until
-S1.1c-4, so today it waives nothing; the day gosec is enabled every `#nosec` already in the tree is a live waiver
-with no metadata and no LAW Δ line. Forwarded to S1.1c-4's plan check (owner, 2026-11-12, S1.1c-2's review and
-break-it 4): its two red tests (`NosecIsAWaiver`, commit fc944ef) left this module at the fix round, to be restored
-there.
+S1.1c-5, so today it waives nothing; the day gosec is enabled every `#nosec` already in the tree is a live waiver
+with no metadata and no LAW Δ line. Forwarded to S1.1c-5's plan check (owner, 2026-11-12, S1.1c-2's review and
+break-it 4; the lint set's id since S1.1c-3's plan check): its two red tests (`NosecIsAWaiver`, commit fc944ef) left
+this module at the fix round, to be restored there.
 
 BK-B4 (Python side; the Go side is tools/archcheck/breakit_s11c2_test.go): the pin counts a driver's cases from its
 source, the proofs row runs what unittest loads. A module-level `load_tests` returning only the green control, a

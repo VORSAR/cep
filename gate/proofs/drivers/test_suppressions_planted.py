@@ -5,7 +5,7 @@ red for a stale target), tools/allowlists/, ruff.toml and every tracked Markdown
 resolve against. Each case plants one exemption in that otherwise green world and runs the real row from
 gate/registry.json: a bare `//nolint` and a `// nolint:` with a space (both honoured by golangci-lint, so red with
 the canonical form's text), a canonical `//nolint:errcheck` with full metadata (red: no linter is enabled until
-S1.1c-4), an allowlist entry whose ref names no heading, a TEMP entry 5 days past its expiry (green at T2, red at T4
+S1.1c-5), an allowlist entry whose ref names no heading, a TEMP entry 5 days past its expiry (green at T2, red at T4
 and at the nightly), `# fmt: skip -- …` (a form ruff ignores) and an inline `# noqa` (ruff runs --ignore-noqa).
 
 Nothing here is a calendar date, the marker or a count of existing exemptions (design DQ-S9, DQ-S10): the expiry is
@@ -35,7 +35,7 @@ EXPIRED_DAYS = 5  # 5 days from the boundary (expiry == today), so a run across 
 NO_HEADING = "no-such-heading-planted"
 # design §2.8, exactly
 NOT_CANONICAL = "write //nolint:<linter> (two slashes, no space)"
-NOT_ENABLED = "//nolint:errcheck: errcheck is not enabled (none is until S1.1c-4)"
+NOT_ENABLED = "//nolint:errcheck: errcheck is not enabled (none is until S1.1c-5)"
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 NOQA = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
 

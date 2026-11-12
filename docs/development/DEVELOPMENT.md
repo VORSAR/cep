@@ -62,7 +62,7 @@ These follow from decided objectives; each names its source.
 
 ## Suppression policy
 
-*The `suppressions` row checks it from S1.1c-2 (T1–T4 and nightly); golangci-lint's own linters and `nolintlint` turn on in S1.1c-4 — until then every `//nolint` is red, because no linter it could name is enabled (owner, 2026-11-12, S1.1c-2's design).*
+*The `suppressions` row checks it from S1.1c-2 (T1–T4 and nightly); golangci-lint's own linters and `nolintlint` turn on in S1.1c-5 — until then every `//nolint` is red, because no linter it could name is enabled (owner, 2026-11-12, S1.1c-2's design).*
 
 Every lint suppression in first-party code is **accountable**, checked by the gate. The metadata rides on the same line as the directive:
 
