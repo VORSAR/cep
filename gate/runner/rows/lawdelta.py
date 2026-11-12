@@ -11,7 +11,8 @@ Between them, the exemption section (S1.1c-2 design §2.6): one line counting th
 entries at HEAD and their change since the merge base; each in-code exemption added or removed, named (owner,
 2026-11-12, design 1), matched across revisions by what it is, not its line; then the countdown of every TEMP
 exemption due within 14 days or past. `today()` is the one date source. A git command outside its contract is a
-failure (DA-S3).
+failure (DA-S3). Every waiver the tools honour counts, valid or not, and one whose metadata changed in place is `~`,
+never `+` (W1-F3); a file or list that cannot be read at a revision is said on the line (CA-L1).
 """
 
 import collections
@@ -38,30 +39,43 @@ def today() -> date:
     return datetime.now(UTC).date()
 
 
-def in_code(rev: str) -> list[suppressions.Directive]:
-    """The directives and markers at the revision (§2.3), the files found by the PREFILTER patterns."""
+def in_code(rev: str) -> tuple[list[suppressions.Directive], list[str]]:
+    """The waivers at the revision (§2.3), valid or not (W1-F3), the files found by the PREFILTER patterns; and the
+    files that could not be read there, said on the line (CA-L1)."""
     found: list[suppressions.Directive] = []
+    unreadable: list[str] = []
     for path in sorted(git.grep_files(rev, suppressions.PREFILTER, IN_CODE)):
+        if not suppressions.scoped(path):
+            continue
         text = git.show(rev, path)
-        if text is not None and suppressions.scoped(path):
-            found += suppressions.read(path, text)[0]
-    return found
+        if text is None:
+            unreadable.append(path)
+            continue
+        directives, faults = suppressions.read(path, text)
+        if any(f.startswith(f"{path}: {suppressions.UNTOKENIZABLE}") for f in faults):
+            unreadable.append(path)
+        found += directives
+    return found, unreadable
 
 
-def listed(rev: str) -> list[tuple[str, dict]]:
-    """(list path, entry) for every entry of tools/allowlists/*.json at the revision; a list that cannot be read
-    holds none here (the suppressions row names it)."""
+def listed(rev: str) -> tuple[list[tuple[str, dict]], list[str]]:
+    """(list path, entry) for every entry of tools/allowlists/*.json at the revision; and the lists that cannot be
+    read there, said on the line (CA-L1; the suppressions row names the fault)."""
     entries: list[tuple[str, dict]] = []
+    unreadable: list[str] = []
     for path in sorted(git.ls_tree(rev, LISTS)):
         if not path.endswith(".json") or "/" in path.removeprefix(LISTS):
             continue
         try:
             data = json.loads(git.show(rev, path) or "")
         except ValueError:
-            continue
+            data = None
         items = data.get("entries") if type(data) is dict else None
-        entries += [(path, e) for e in items or [] if type(e) is dict]
-    return entries
+        if type(items) is not list:
+            unreadable.append(path)
+            continue
+        entries += [(path, e) for e in items if type(e) is dict]
+    return entries, unreadable
 
 
 def _identity(d: suppressions.Directive) -> tuple:
@@ -71,23 +85,56 @@ def _identity(d: suppressions.Directive) -> tuple:
 def _named(sign: str, d: suppressions.Directive) -> str:
     if d.kind == "MARKER":
         return f"{sign}{d.path}:{d.line} # fmt: skip"
+    if d.kind == "REGION":
+        return f"{sign}{d.path}:{d.line} # {d.linters[0]}: {d.meta.get('command', '')}"
     fields = [f"{k}={d.meta[k]}" for k in ("ref", "expiry", "issue") if d.meta.get(k)]
     words = [f"{sign}{d.path}:{d.line}", f"//nolint:{','.join(d.linters)}", d.kind, d.meta.get("sprint", "")]
-    return " ".join([*words, *fields])
+    return " ".join(w for w in [*words, *fields] if w)
+
+
+META_ORDER = ("ref", "expiry", "issue", "sprint")
+
+
+def _what_changed(old: suppressions.Directive, new: suppressions.Directive) -> str:
+    """What changed in place, as the list kinds say it: `<key> <old> → <new>` each, then `reason changed`."""
+    keys = [*META_ORDER, *sorted((set(old.meta) | set(new.meta)) - {*META_ORDER, "reason"})]
+    said = [f"{k} {old.meta.get(k, '')} → {new.meta.get(k, '')}" for k in keys if old.meta.get(k) != new.meta.get(k)]
+    if old.meta.get("reason") != new.meta.get("reason"):
+        said.append("reason changed")
+    return "; ".join(said)
 
 
 def changed(base: list[suppressions.Directive], head: list[suppressions.Directive]) -> list[str]:
-    """One sub-line per in-code exemption added, then removed; a moved one is neither."""
+    """One sub-line per in-code exemption added, changed in place, then removed; a moved one is none of these. An
+    added and a removed one at the same (path, linters, kind) is one whose metadata changed: `~`, never `+` (W1-F3)."""
     before = collections.Counter(map(_identity, base))
     after = collections.Counter(map(_identity, head))
-    added, removed = after - before, before - after
-    out = []
-    for sign, side, extra in (("+", head, added), ("−", base, removed)):
+    extra = {"+": after - before, "−": before - after}
+    sides: dict[str, list[suppressions.Directive]] = {"+": [], "−": []}
+    for sign, side in (("+", head), ("−", base)):
         for d in sorted(side, key=lambda d: (d.path, d.line)):
-            if extra[_identity(d)] > 0:
-                extra[_identity(d)] -= 1
-                out.append(_named(sign, d))
-    return out
+            if extra[sign][_identity(d)] > 0:
+                extra[sign][_identity(d)] -= 1
+                sides[sign].append(d)
+    added, edited = [], []
+    for d in sides["+"]:
+        old = next((o for o in sides["−"] if (o.path, o.linters, o.kind) == (d.path, d.linters, d.kind)), None)
+        if old is None:
+            added.append(_named("+", d))
+            continue
+        sides["−"].remove(old)
+        edited.append(f"{_named('~', d)}: {_what_changed(old, d)}")
+    return [*added, *edited, *(_named("−", d) for d in sides["−"])]
+
+
+def _unreadable(files: set[str], lists: set[str]) -> str:
+    """` (<n> file(s) unreadable, <m> list(s) unreadable)` when either revision had one; else "" (CA-L1)."""
+    parts = [
+        f"{len(found)} {noun}{'' if len(found) == 1 else 's'} unreadable"
+        for noun, found in (("file", files), ("list", lists))
+        if found
+    ]
+    return f" ({', '.join(parts)})" if parts else ""
 
 
 def countdown(head_code: list[suppressions.Directive], head_lists: list[tuple[str, dict]], day: date) -> list[str]:
@@ -112,13 +159,18 @@ def countdown(head_code: list[suppressions.Directive], head_lists: list[tuple[st
 
 
 def exemptions(base: str, head: str) -> list[str]:
-    """The section: `exemptions: <n> in code, <m> listed (<±d> this diff)`, the named changes, the countdown."""
-    head_code, head_lists = in_code(head), listed(head)
-    base_code, base_lists = (head_code, head_lists) if base == head else (in_code(base), listed(base))
+    """The section: `exemptions: <n> in code, <m> listed (<±d> this diff)`, then any file or list unreadable at
+    either revision (CA-L1), the named changes, the countdown."""
+    (head_code, bad_files), (head_lists, bad_lists) = in_code(head), listed(head)
+    if base == head:
+        base_code, base_lists = head_code, head_lists
+    else:
+        (base_code, base_bad_files), (base_lists, base_bad_lists) = in_code(base), listed(base)
+        bad_files, bad_lists = [*bad_files, *base_bad_files], [*bad_lists, *base_bad_lists]
     d = len(head_code) + len(head_lists) - len(base_code) - len(base_lists)
-    lines = [
-        f"exemptions: {len(head_code)} in code, {len(head_lists)} listed ({'+' if d >= 0 else '−'}{abs(d)} this diff)"
-    ]
+    sign = "+" if d >= 0 else "−"
+    said = _unreadable(set(bad_files), set(bad_lists))
+    lines = [f"exemptions: {len(head_code)} in code, {len(head_lists)} listed ({sign}{abs(d)} this diff){said}"]
     lines += law.capped(changed(base_code, head_code))
     return lines + countdown(head_code, head_lists, today())
 
