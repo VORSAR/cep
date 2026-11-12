@@ -59,14 +59,20 @@ of them passes docsync.
 BK-L2: a PERMANENT entry's ref must name a heading of a tracked Markdown file (anchors.resolves). A heading inside
 an HTML comment — `<!--` … `## Gone` … `-->`, which renders as nothing and has no anchor on the rendered page —
 satisfies it, so a waiver may cite a section the reader cannot find.
+
+BK-S7: the pin never ties a proof to its instrument's row. An instrument may name another row's driver as its proof
+(the cases count matching), and the strength rule's "a pass on the row under test" accepts `assertRow(…, ok=True)`
+on any row id but "parity". So a row whose own driver is gone keeps a green pin by borrowing a neighbour's; LAW Δ
+names the law.json edit (`instrument docsync: proofs … → …`), the pin does not.
 """
 
 import contextlib
+import json
 import os
 import sys
 import unittest
 
-from gate.runner import anchors, docsync, knownissues, law, sprintid, suppressions, teeth
+from gate.runner import allowlists, anchors, docsync, knownissues, law, registry, sprintid, suppressions, teeth
 from gate.runner.rows import suppressions as row
 from gate.runner.tests import support
 
@@ -309,6 +315,34 @@ class RefToACommentedHeading(unittest.TestCase):
     def test_a_heading_inside_an_html_comment_does_not_resolve(self):
         md = "# Title\n\n<!--\n## Gone\n-->\n"
         self.assertNotEqual(anchors.resolves("docs/a.md#gone", lambda path: md), "", "a commented heading resolves")
+
+
+TEETH = os.path.join(support.GATE, "runner", "testdata", "teeth")
+
+
+def teeth_fixture(name: str) -> dict:
+    with open(os.path.join(TEETH, name), encoding="utf-8") as f:
+        return json.load(f)
+
+
+class PinTiesAProofToItsRow(unittest.TestCase):
+    """BK-S7, on test_instruments_pin's own fixture."""
+
+    def test_an_instrument_borrowing_another_rows_driver_is_red(self):
+        manifest, rows, world = teeth_fixture("law.json"), teeth_fixture("registry.json"), teeth_fixture("world.json")
+        with open(os.path.join(TEETH, "teeth.json"), encoding="utf-8") as f:
+            targets = frozenset(e.target for e in allowlists.load(f.read(), "teeth").entries)
+        by_id = {i["id"]: i for i in manifest["instruments"]}
+        by_id["docsync"]["proofs"] = by_id["lawdelta"]["proofs"]  # docsync's own driver gone, lawdelta's borrowed
+        counted = {path: (c["cases"], c["faults"]) for path, c in world["counted"].items()}
+        faults = teeth.pin(
+            law.load_manifest(json.dumps(manifest)),
+            registry.loads(json.dumps(rows)),
+            frozenset(world["tracked"]),
+            counted,
+            targets,
+        )
+        self.assertTrue(faults, "the docsync instrument passes on the lawdelta row's driver")
 
 
 if __name__ == "__main__":
