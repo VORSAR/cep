@@ -82,13 +82,26 @@ def _pair(target: str) -> tuple[str, str]:
 
 
 def ruff_pin(lists: dict[str, allowlists.AllowList]) -> list[str]:
-    """ruff.toml's per-file waivers and ruff.json's targets, both ways; a global ignore is red."""
+    """ruff.toml's per-file waivers and ruff.json's targets, both ways; a global ignore is red. The pin reads
+    [lint]'s per-file tables only, so every other place ruff takes a waiver from is red (BK-B2, measured with the
+    pinned ruff 0.17.3): `extend` (another file's settings, maybe outside every law path), and the deprecated
+    top-level `ignore`, `extend-ignore`, `per-file-ignores` and `extend-per-file-ignores`, which ruff still honours.
+    Refused rather than read: one table to pin both ways, and nothing ruff itself warns about."""
     try:
         with open(RUFF_TOML, "rb") as f:
-            lint = tomllib.load(f).get("lint", {})
+            top = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
         return [f"{RUFF_TOML}: {e}"]
-    faults = [f"ruff.toml sets lint.{key}: write per-file waivers" for key in RUFF_GLOBAL if lint.get(key)]
+    lint = top.get("lint", {})
+    faults = []
+    if "extend" in top:
+        faults.append("ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there")
+    faults += [
+        f"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)"
+        for key in (*RUFF_GLOBAL, *RUFF_WAIVERS)
+        if top.get(key)  # an empty one waives nothing, as for lint.ignore
+    ]
+    faults += [f"ruff.toml sets lint.{key}: write per-file waivers" for key in RUFF_GLOBAL if lint.get(key)]
     waived = {(file, code) for key in RUFF_WAIVERS for file, codes in lint.get(key, {}).items() for code in codes}
     listed = {_pair(e.target) for e in lists["ruff"].entries} if "ruff" in lists else set()
     for file, code in sorted(waived - listed):
