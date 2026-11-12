@@ -37,7 +37,7 @@ var fixes = map[string]string{
 	"E-KW-001":   "rename, or backtick-quote: `` `select` ``.",
 	"E-KW-002":   "the message names the lowercase form (`FROM` → `from`).",
 	"E-RES-001":  "see the roadmap; restructure with v0.1 constructs.",
-	"E-PAT-005":  "anchor the absence on a positive event, or use a cron window with a count.",
+	"E-PAT-005":  "anchor the absence on a positive event, written `… and not S[…] for D` straight after a step with no `->` before it, or use a cron window with a count.",
 	"E-SYN-002":  "`a == 'x'` / `a != 'x'`.",
 	"E-SYN-003":  "`a has_any_cs('x', 'y')` for text, or load a table.",
 	"E-SYN-004":  "list the attributes.",
