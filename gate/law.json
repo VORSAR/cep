@@ -124,6 +124,38 @@
       "path": "docs/architecture/adr/",
       "kind": "doc",
       "flag": "an ADR changed — owner decision required"
+    },
+    {
+      "path": "gate/known-issues.json",
+      "kind": "code"
+    },
+    {
+      "path": "tools/allowlists/",
+      "kind": "code"
+    },
+    {
+      "path": "gate/",
+      "kind": "code"
+    },
+    {
+      "path": "tools/",
+      "kind": "code"
+    },
+    {
+      "path": ".githooks/",
+      "kind": "code"
+    },
+    {
+      "path": "Makefile",
+      "kind": "code"
+    },
+    {
+      "path": "docs/language/examples/",
+      "kind": "code"
+    },
+    {
+      "path": "docs/language/invalid/",
+      "kind": "code"
     }
   ]
 }

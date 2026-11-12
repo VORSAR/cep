@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "note": "Registry rows exempt from a planted proof of their own (law.json's instruments, ADR-0015 §3.8). Empty: every row gets a planted proof (owner, 2026-11-12, S1.1c-2's plan check, decision 10).",
+  "rule": "teeth",
+  "entries": []
+}

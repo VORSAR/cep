@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "note": "Test files that may call time.{Sleep, After, AfterFunc, Tick, NewTimer, NewTicker} (the testhygiene row; testing.md rule 1). Empty: no Go wait helper exists; tests wait for a state, capped by a context deadline.",
+  "rule": "testhygiene",
+  "entries": []
+}

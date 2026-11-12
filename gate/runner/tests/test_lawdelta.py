@@ -168,7 +168,8 @@ class LawDelta(support.GateTest):
         self.on_change()
         self.track("notes.txt", "not a law path\n")
         self.commit("change")
-        with mock.patch("gate.runner.git.numstat", return_value=[("gate/zzz/unlisted.txt", 1, 0)]):
+        # Outside every listed path: gate/ itself is a law path since S1.1c-2's G0 (owner, 2026-11-12, carried).
+        with mock.patch("gate.runner.git.numstat", return_value=[("zzz/unlisted.txt", 1, 0)]):
             code, out = self.in_process()
-        want = "failed: lawdelta: gate/zzz/unlisted.txt changed under a listed prefix but matches no entry"
+        want = "failed: lawdelta: zzz/unlisted.txt changed under a listed prefix but matches no entry"
         self.assertEqual((code, out.splitlines()), (1, ["GATE_COVERED 1", want]), out)
