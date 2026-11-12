@@ -39,6 +39,12 @@ BK-B4 (Python side; the Go side is tools/archcheck/breakit_s11c2_test.go): the p
 source, the proofs row runs what unittest loads. A module-level `load_tests` returning only the green control, or a
 `del Planted.test_red` after the class, keeps the static count while the shim runs and reports less — measured:
 pyshim says `passed 1 tests` for a module of three cases, two of them failing.
+
+BK-S5: gate/known-issues.json may list one id twice. knownissues.check keys the entries by id, so the second hides
+the first: an id re-entered with a later first_seen (and its Found cell edited to match) passes the pin, and LAW
+Δ's known-issues line reads it as `S3.3-2-1: first seen S3.3 → S1.1c-2` on a file it counts as `(1 entries)` while
+it holds two. allowlists.load refuses a target listed twice; the known-issues file does not. S1.1c-3's aging reads
+first_seen.
 """
 
 import contextlib
@@ -46,7 +52,7 @@ import os
 import sys
 import unittest
 
-from gate.runner import suppressions, teeth
+from gate.runner import knownissues, law, sprintid, suppressions, teeth
 from gate.runner.rows import suppressions as row
 from gate.runner.tests import support
 
@@ -235,6 +241,29 @@ class TeethCountsWhatRuns(unittest.TestCase):
                 cases, faults = teeth.python_cases(source, "d.py")
                 self.assertEqual(cases, ["Planted.test_a"])
                 self.assertTrue(faults, f"{why}: the case is counted but never runs")
+
+
+ISSUE = '{{"id": "S3.3-2-1", "first_seen": "{first_seen}", "forward": "", "decision": ""}}'
+ONE = '{"schema": 1, "note": "n", "entries": [' + ISSUE.format(first_seen="S3.3") + "]}"
+TWICE = (
+    '{"schema": 1, "note": "n", "entries": ['
+    + ISSUE.format(first_seen="S3.3")
+    + ", "
+    + ISSUE.format(first_seen="S1.1c-2")
+    + "]}"
+)
+ISSUE_ORDER = sprintid.Order((sprintid.Row("S3.3", True), sprintid.Row("S1.1c", False)))
+
+
+class KnownIssueListedTwice(unittest.TestCase):
+    """BK-S5."""
+
+    def test_the_pin_refuses_an_id_listed_twice(self):
+        table = "| Id | Found |\n|---|---|\n| S3.3-2-1 | S1.1c-2 |\n"
+        self.assertTrue(knownissues.check(TWICE, table, ISSUE_ORDER, lambda path: None), "an id listed twice passes")
+
+    def test_law_delta_counts_every_entry(self):
+        self.assertEqual(law.delta("known-issues", ONE, TWICE)[0], "(2 entries)")
 
 
 if __name__ == "__main__":
