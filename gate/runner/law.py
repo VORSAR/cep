@@ -2,9 +2,10 @@
 
 Pure: texts in, lines out, no I/O. `load_manifest` reads gate/law.json's text strictly (a duplicate key, an extra
 or missing key, a flag on a non-doc, an unsafe path are each a ManifestError naming the entry). `delta` gives one
-changed law file's one-line semantic delta and never raises: a side its parser cannot read says so. `block`
-renders the LAW Δ block: the data files and documents one line each, then the code and workflow entries grouped
-(owner, 2026-11-11, decision 4).
+changed law file's one-line semantic delta and never raises: a side its parser cannot read says so; the list kinds
+(`allowlist`, `known-issues`) give a summary and one sub-line per changed entry instead (S1.1c-2 design §2.5).
+`block` renders the LAW Δ block: the data files and documents one line each (a list kind's sub-lines indented under
+it, at most 6), then the code and workflow entries grouped (owner, 2026-11-11, decision 4).
 """
 
 import difflib
@@ -29,8 +30,12 @@ KINDS = frozenset(
         "baseline",
         "notbuilt",
         "doc",
+        "allowlist",
+        "known-issues",
     }
 )
+LISTED = frozenset({"allowlist", "known-issues"})  # kinds whose delta is [summary, *sub-lines] (design §2.5)
+SUB_LINES_MAX = 6
 GROUPED = frozenset({"code", "workflow"})
 TOP_KEYS = frozenset({"schema", "note", "paths"})
 HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*\s*$")
@@ -141,15 +146,29 @@ def line(path: str, added: int, removed: int, one_liner: str) -> str:
     return f"{path} +{added}/−{removed}" + (f" — {one_liner}" if one_liner else "")
 
 
-def block(base_short: str, data_lines: Sequence[str], grouped: Mapping[str, tuple[int, int, int]]) -> list[str]:
-    """The block: the data lines (git's path order) first, then one line per grouped entry (manifest order)."""
+def capped(sub_lines: Sequence[str]) -> list[str]:
+    """Sub-lines indented two spaces, at most 6, then `  (and <k> more)` (DA-S11)."""
+    shown = [f"  {text}" for text in sub_lines[:SUB_LINES_MAX]]
+    more = len(sub_lines) - SUB_LINES_MAX
+    return shown + ([f"  (and {more} more)"] if more > 0 else [])
+
+
+def block(
+    base_short: str, data_lines: Sequence[str | Sequence[str]], grouped: Mapping[str, tuple[int, int, int]]
+) -> list[str]:
+    """The block: the data lines (git's path order) first, then one line per grouped entry (manifest order).
+
+    A data line is a file's line, or a list kind's [file line, *sub-lines], rendered with its sub-lines `capped`."""
     grouped_lines = [
         f"{entry}: {files} file{'s' if files != 1 else ''} +{a}/−{b}" for entry, (files, a, b) in grouped.items()
     ]
     if not data_lines and not grouped_lines:
         return [NONE]
+    rendered: list[str] = []
+    for item in data_lines:
+        rendered += [item] if isinstance(item, str) else [item[0], *capped(item[1:])]
     n = len(data_lines) + sum(files for files, _, _ in grouped.values())
-    return [f"LAW Δ ({n} file{'s' if n != 1 else ''}, vs {base_short})", *data_lines, *grouped_lines]
+    return [f"LAW Δ ({n} file{'s' if n != 1 else ''}, vs {base_short})", *rendered, *grouped_lines]
 
 
 def _heading_in(lines: Sequence[str], start: int, end: int) -> str:
@@ -474,6 +493,80 @@ def _delta_law(old: dict, new: dict) -> str:
     return "; ".join(items)
 
 
+LIST_FIELDS = ("kind", "sprint", "ref", "expiry", "issue")
+
+
+def _entries(data: dict, key: str) -> dict[str, dict]:
+    if type(data) is not dict or type(data.get("entries")) is not list:
+        raise ValueError("entries is not a list")
+    return _by(data["entries"], key)
+
+
+def _listed(old: dict | None, new: dict | None, key: str, added, changed) -> list[str]:
+    """[summary, *sub-lines]: added (by key), changed, removed (§10.14); the summary counts the new side's entries."""
+    before = _entries(old, key) if old is not None else {}
+    after = _entries(new, key) if new is not None else {}
+    subs = [added(name, after[name]) for name in sorted(set(after) - set(before))]
+    for name in sorted(set(after) & set(before)):
+        subs += changed(name, before[name], after[name])
+    subs += [f"−{name}" for name in sorted(set(before) - set(after))]
+    if old is None:
+        return [f"file added: {len(after)} entries", *subs]
+    if new is None:
+        return [f"file removed: {len(before)} entries", *subs]
+    return [f"({len(after)} entries)", *subs]
+
+
+def _allowlist_added(target: str, e: dict) -> str:
+    fields = [f"{k}={e[k]}" for k in ("ref", "expiry", "issue") if e.get(k)]
+    return " ".join([f"+{target}", str(e.get("kind", "")), str(e.get("sprint", "")), *fields])
+
+
+def _allowlist_changed(target: str, old: dict, new: dict) -> list[str]:
+    subs = [
+        f"{target}: {k} {old.get(k, '')} → {new.get(k, '')}" for k in LIST_FIELDS if old.get(k, "") != new.get(k, "")
+    ]
+    return subs + ([f"{target}: reason changed"] if old.get("reason") != new.get("reason") else [])
+
+
+def _issue_added(id: str, e: dict) -> str:
+    return f"+{id} first seen {e.get('first_seen', '')}"
+
+
+def _issue_changed(id: str, old: dict, new: dict) -> list[str]:
+    subs = []
+    if old.get("first_seen") != new.get("first_seen"):
+        subs.append(f"{id}: first seen {old.get('first_seen', '')} → {new.get('first_seen', '')}")
+    if old.get("forward") != new.get("forward"):
+        subs.append(f"{id}: forward {old.get('forward', '')} → {new.get('forward', '')}")
+    a, b = old.get("decision", ""), new.get("decision", "")
+    if a != b:
+        subs.append(f"{id}: decision {'set' if not a else 'cleared' if not b else 'changed'}")
+    return subs
+
+
+LIST_PARSERS: dict[str, tuple] = {
+    # kind: (the entries' key, an added entry's sub-line, a changed entry's sub-lines)
+    "allowlist": ("target", _allowlist_added, _allowlist_changed),
+    "known-issues": ("id", _issue_added, _issue_changed),
+}
+
+
+def listed_delta(kind: str, old: str | None, new: str | None) -> list[str]:
+    """A list kind's [summary, *sub-lines]; never raises: a side that cannot be read is ["unparseable (old|new)"]."""
+    key, added, changed = LIST_PARSERS[kind]
+    sides = []
+    for side, text in (("old", old), ("new", new)):
+        try:
+            sides.append(None if text is None else loads(text))
+        except PARSE_FAULTS:
+            return [f"unparseable ({side})"]
+    try:
+        return _listed(sides[0], sides[1], key, added, changed)
+    except PARSE_FAULTS:
+        return ["unparseable (new)"]
+
+
 def _baseline(text: str) -> object:
     from gate.baseline import regen  # the file's own reader (its content key); imported here to keep law.py light
 
@@ -496,9 +589,12 @@ PARSERS: dict[str, tuple] = {
 }
 
 
-def delta(kind: str, old: str | None, new: str | None) -> str:
-    """One changed file's semantic one-liner; "" for a grouped kind. Never raises: a side that cannot be read says
-    "unparseable (old)" or "unparseable (new)"; a side that is absent reads "file added" / "file removed"."""
+def delta(kind: str, old: str | None, new: str | None) -> str | list[str]:
+    """One changed file's semantic one-liner; "" for a grouped kind; a list kind's [summary, *sub-lines]. Never
+    raises: a side that cannot be read says "unparseable (old)" or "unparseable (new)"; a side that is absent reads
+    "file added" / "file removed"."""
+    if kind in LIST_PARSERS:
+        return listed_delta(kind, old, new)
     if kind not in PARSERS:
         return ""
     read, compare = PARSERS[kind]
