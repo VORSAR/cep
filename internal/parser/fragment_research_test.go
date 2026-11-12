@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -58,8 +57,8 @@ func readResearchSpans(t *testing.T) []researchSpan {
 
 // incidentRe is the incident's shape as the design note v2 §2.3 defines it, word-bounded (DQ-L8): an arrow, then
 // `not` or `and not`. Lane B's helper and this test must share one definition: when fragment_test.go declares it,
-// this variable becomes a reference to that one.
-var incidentRe = regexp.MustCompile(`(->|→)\s*(and\s+)?not\b`)
+// this variable is a reference to that one (§10 C3).
+var incidentRe = incidentPattern
 
 func incidentShape(s string) bool { return incidentRe.MatchString(s) }
 
