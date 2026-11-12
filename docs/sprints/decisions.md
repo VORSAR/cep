@@ -81,6 +81,7 @@
 | 2026-11-12 | [S1.1c-2's design, after the reviews](#owner-decisions-2026-11-12--s11c-2s-design-after-the-reviews) |
 | 2026-11-12 | [the left-running flake's root (S1.1c-1-1)](#owner-decisions-2026-11-12--the-left-running-flakes-root-s11c-1-1) |
 | 2026-11-12 | [S1.1c-2's review and break-it](#owner-decisions-2026-11-12--s11c-2s-review-and-break-it) |
+| 2026-11-12 | [S1.1c-2's close-out](#owner-decisions-2026-11-12--s11c-2s-close-out) |
 
 ## The decisions
 
@@ -758,3 +759,12 @@ The combined build (`s1-1c-2/integration` @ e7b5d89, T3 green) was reviewed blin
 2. **A PERMANENT exemption's `ref` resolves only into `docs/architecture/adr/` or `docs/sprints/decisions.md`** (as recommended), so every permanent exemption traces to a recorded decision; the six `tools/allowlists/ruff.json` entries now cite decision 5 of "2026-11-02 — S1.1a-1 design review (toward G1)" ("the only exceptions are per-file entries in the coordinator-owned `ruff.toml`"). Rejected: rewording the policy to any tracked document's heading.
 3. **The generated-code marker is closed now** (as recommended; it predates this sprint): archcheck and the coverage tool accept `// Code generated … DO NOT EDIT.` only before the package clause (Go's own rule), and every generated file must be listed by name in a new list in the one grammar (empty today). Rejected: forwarding it to the backlog.
 4. **One batched fix round, about 13 of 13 points** (as recommended): every blocker and should-fix item fixed test-first; gosec's `#nosec` waiver form forwarded to S1.1c-4 (no linter is enabled before then); the cheap later items fixed; the `gomod` kind's `godebug`/`exclude`/`retract` lines and the shared context builder to the backlog. Rejected: blockers only, should-fix items forwarded to S1.1c-3.
+
+### Owner decisions, 2026-11-12 — S1.1c-2's close-out
+
+At the push (G4) and after PR #35's merge; four questions.
+
+1. **The PR opened ready for review, not as a draft** (≠ R): the sprint model's draft rule (§10) asks for a draft when a sprint adds a CI job, and this sprint adds the nightly `lint` job (`suppressions` at the nightly tier); its first run is the next scheduled nightly, which the owner checks by hand (plan check, decision 11).
+2. **The sprint's branches and worktrees are deleted** (as recommended) — `s1-1c-2/integration` local and remote, the nine lane branches local, their worktrees — every commit on `main` by patch; the lanes' six unmatched commits are earlier copies of commits that landed with the same message and contents after the rebase onto #34.
+3. **The close-out goes up as its own docs PR** (`docs/s1-1c-2-close-out`), as at S3.3-1, S3.3-2 and S1.1c-1 (as recommended).
+4. **Two lasting rules from the retro** (as recommended): a commit that moves the sprint marker, changes a row's `min_wants` or changes a file a proof's world copies runs the `proofs` row before the next gate (sprint model §10 — W0-F1 and FX-2 were seen first at T4); a gate row that starts one process per input has a test that its process count does not grow with its inputs (testing.md, rule 2 — FX-4).

@@ -1,7 +1,9 @@
 # S1.1c-2 — sprint record
 
+> **Historical — S1.1c-2, the exemptions and the teeth; merged in PR #35.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1c-2-plan-check.md) · [design](s1-1c-2-design.md) · **record** · reviews: [plan check: architecture](../reviews/s1-1c-2-plan-check-architecture.md), [plan check: QA](../reviews/s1-1c-2-plan-check-qa.md), [plan check: product](../reviews/s1-1c-2-plan-check-product.md), [design: architecture](../reviews/s1-1c-2-design-architecture.md), [design: QA (testability)](../reviews/s1-1c-2-design-qa.md), [combined build: architecture](../reviews/s1-1c-2-combined-architecture.md), [break-it: QA](../reviews/s1-1c-2-breakit-qa.md). **← [S1.1c-1](s1-1c-1-record.md) · [S1.1c-3 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S1.1c-2 — the exemptions and the teeth · **Routine:** the full loop without the semantics panel ([owner, 2026-11-10](decisions.md#owner-decisions-2026-11-10--s11cs-scope-before-its-plan-check), decision 7) · **Size:** 13 SP (items ≈ 9) against the 2-week cap · **Branch:** `s1-1c-2/integration`
-**What to build and how each item is proven:** [sprint plan — S1.1c-2](sprint-plan.md#s11c-2--the-exemptions-and-the-teeth) · **The plan check:** [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md) (the [2] items) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S1.1c-2](history.md#s11c-2--the-exemptions-and-the-teeth) · **The plan check:** [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md) (the [2] items) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -20,6 +22,8 @@ The full draft is [s1-1c-2-plan-check.md](s1-1c-2-plan-check.md), drafted read-o
 **G0 — the owner, 2026-11-12:** the S1.1c-2 card approved ("lets do it"); the forecast re-annotated first ([sprint-plan §3](sprint-plan.md#phase-1-decomposition--v3-recalibrated-to-the-13-point-cap-2026-11-02): about 10 points a day since 2026-11-05; Phase 1 about 3–6 weeks from 2026-11-12).
 
 **The owner's check (G4) — the owner, 2026-11-12:** passed. Each plant, run by the coordinator in a scratch worktree at c87d47d, was red by name — a deleted case of `test_suppressions_planted.py` (`teeth: instrument suppressions: proof … lists 9 cases, the teeth count 8`), a `time.Sleep` in `internal/event/breakit2_test.go` (`testhygiene: time.Sleep in a test: …`), a `ref` to a missing heading in `tools/allowlists/purity.json` (`… has no heading #no-such-heading`); the LAW Δ block of the T4 run read. The PR opens ready for review, not as a draft (the owner, ≠ the draft rule's recommendation).
+
+**Close-out — the owner, 2026-11-12** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-2s-close-out)): the PR ready for review, not a draft (≠ R); the sprint's branches and worktrees deleted (all on `main` by patch); the close-out as its own docs PR; two lasting rules from the retro (below).
 
 ## How it runs
 
@@ -48,11 +52,11 @@ At most two agents at once (plan check §1, §4, §9).
 
 ## Test material
 
-*(filled at W0: the drivers, their worlds and what each plants)*
+QA wrote the material before the code it proves, each piece red for its stated reason first: the eight row proofs for the rows that had none (`vet`, `archcheck`, `ci-fresh`, `determinism-macos`, `proofs`, `fuzz-parser`, `fuzz-decoder`, `race-stress`); three red helpers in `support.py`, eight older drivers converted to the strength rule, and four drivers for the new rows and BA13 (`suppressions`, `testhygiene`, `docsync`, the shim forge); the lanes' red unit tests (lane A 5ffaae7, lane C 076ab79, lane D 653fb85 and f87a59d); the break-it's red tests (15 commits). Each driver's docstring states its world and what it plants; all are on `main`.
 
 ## Scope changes
 
-None since G0.
+One, by the owner at the review ([2026-11-12](decisions.md#owner-decisions-2026-11-12--s11c-2s-review-and-break-it), decision 3): the generated-code marker closed in this sprint, though it predates it — Go's rule plus `tools/allowlists/generated.json`. The rest of the fix round was this sprint's own findings.
 
 ## Findings
 
@@ -107,15 +111,21 @@ Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (707bbb7)
 Review (G3)  ☑ architecture review of the combined diff: no drift (0 blockers; its findings fixed or placed)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☑ T4 strict-gate exit 0, run complete (a2827c8; CI on the PR) ☑ owner's check passed (2026-11-12)
-             ☐ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
+             ☑ every acceptance line met by its named proof (the T4 run: `proofs`, `pytests`, `unit`, `race`; `proofs` `min_wants` 36 — the card's 35 was written before the shim driver)
+Exit (G5)    ☑ one PR, ≤ 100 commits, merged by the owner (#35, 99 commits, main d6046fd)
+             ☐ main CI green on the merge commit (the owner reports; the PR's seven jobs green; the nightly `lint` job's first run is the next scheduled nightly)
+             ☑ sprint record + five-line retro ☑ known issues (BA13 fixed and removed; eight open) ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only; `product/backlog.md` opened with CA-L2, CA-L4) ☑ memory updated
+             ☑ worktrees removed ☑ points and duration recorded (below)
              ☐ the row closed in gate/sprints.json as in the plan table (n/a: S1.1c stays open for S1.1c-3 and S1.1c-4)
 ```
 
 ## Retro
 
-*(at close-out)*
+**Points and duration.** Card 13 (items ≈ 9 at the plan check, ≈ 10.5 after the design reviews, ≈ 13 with the review's fix round — the owner's decision 4); as built ≈ 13, the four findings met while verifying (FX-1 to FX-4) inside it. Plan check drafted 2026-11-11; answered, G0 and merged on 2026-11-12 (#35): about one day of build, with the flake's root fix (#34) between W1 and the review.
+
+1. **Worked — measure, then design.** Design v2 defined every recogniser by what the pinned ruff and golangci-lint actually honour, and the strength rule by the real drivers. The break-it still found spellings nobody had measured (BK-B1); the measured tables are now pinned in tests and extended in design §12.
+2. **Worked — the teeth bit at once.** The new checks found real gaps the moment they landed: a purity exception that waived nothing (FX-1), four drivers no instrument read (CA-S1), hollowed proofs that still counted (BK-B3, BK-B4). None reached `main`.
+3. **Missed — a change to what a T4-only proof reads was seen first at T4, twice:** the G0 marker move (W0-F1) and the `pytests` floor raise (FX-2). Lasting rule (owner, 2026-11-12, sprint model §10): such a commit runs the `proofs` row before the next gate.
+4. **Missed — a known slowness crossed its cap only under T4's load.** `lawdelta`'s per-file git processes were recorded at W1 (W1-F4); the fix round widened what it reads and a proof world timed out at T4 (FX-4). Lasting rule (owner, 2026-11-12, testing.md rule 2): a row that starts a process per input has a test that the count does not grow.
+5. **Friction, and next.** The laptop slept through a T4 that then looked hung, and an agent taken for stuck had already written its report: read the report and the process list before acting. Next: the Go 1.27.4 bump PR, then S1.1c-3's plan check; S1.1c-4 carries `#nosec` and the unpinned `ruff.toml` keys (BK-S4, FX-3).

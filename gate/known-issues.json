@@ -21,12 +21,6 @@
       "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check"
     },
     {
-      "id": "BA13",
-      "first_seen": "S1.1a-1",
-      "forward": "S1.1c-2",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check"
-    },
-    {
       "id": "S2.2b-2",
       "first_seen": "S2.2b",
       "forward": "S6.1",
