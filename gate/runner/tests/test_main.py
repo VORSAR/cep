@@ -242,7 +242,8 @@ class FirstLine(support.GateTest):
         self.track("notes.txt", "not a law path\n")
         self.git(*self.IDENTITY, "commit", "-q", "-m", "change")
         self.assertEqual(self.first_line("--tier", "T2", "--registry", self.rows()), "LAW Δ: none")
-        self.assertEqual(self.output.split("\n")[1], "")
+        # the exemption line always follows the block (S1.1c-2 design §2.6, §10.15), then the blank line
+        self.assertEqual(self.output.split("\n")[1:3], ["exemptions: 0 in code, 0 listed (+0 this diff)", ""])
 
     def test_a_job_without_the_row_says_not_run_at_the_job(self):
         line = self.first_line("--tier", "T2", "--job", "test", "--registry", self.rows(trivial_job="test"))
