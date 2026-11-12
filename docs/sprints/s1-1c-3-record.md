@@ -36,6 +36,9 @@ At most two agents at once (plan check §1, §4, §8, §9).
 
 *(filled as lanes land: the measurement named by each acceptance line, as a number)*
 
+- **G0, the `proofs` row alone at T4 on 0c0d38b (2026-11-12, after the marker move — sprint model §10):** PASS, covered 36, exit 0 (214.7 s).
+- **G0, T2 on 0c0d38b:** GATE PASSED, exit 0 (125.5 s wall); the LAW Δ block names the marker S1.1c-2 → S1.1c-3, `+S1.1c-3-1` and `+S1.1c-3-2`, ADR-0015 §2 (owner decision required: the annotation of decision 1), `gate/runner/` 3 files and one driver.
+- **W0 stubs on 6417bbe:** T2 GATE PASSED, exit 0 (117.2 s wall).
 - **G0, the pins over the renamed message (2026-11-12):** with the tests and the driver changed first, `test_suppressions` red on its 2 message cases; with `suppressions.py` changed, `test_suppressions` and `test_breakit_s11c2` green (65 tests). The known-issues and sprint pins green (`test_known_issues_pin`, `test_sprints_pin`, `test_sprintid`) after one reword: `knownissues.names` counts `.` as an id character, so an id ending a sentence is not "named" — a design input for P2.
 
 ## Test material
