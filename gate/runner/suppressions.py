@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from gate.runner import allowlists
 
 ENABLED: frozenset[str] = frozenset()  # S1.1c-4 sets it from its golangci config (DA-L4)
-# git grep -e patterns, case-sensitive as git grep is (design §10.12); every recognised form contains one.
-PREFILTER = ("nolint", "fmt: skip", "fmt:skip", "noqa", "yapf:", "isort:", "fmt: off", "fmt: on")
+# git grep -e patterns, case-sensitive as git grep is (design §10.12); every recognised form contains one. "fmt:"
+# covers every spelling ruff reads after it (BK-B1).
+PREFILTER = ("nolint", "fmt:", "noqa", "yapf:", "isort:")
 KEYS = frozenset({"reason", "ref", "expiry", "issue", "sprint"})
 
 HONOURED = re.compile(r"nolint(?: |:|$)")
@@ -26,11 +27,14 @@ CANONICAL = re.compile(r"nolint:([\w-]+(?:,[\w-]+)*)(?=\s|$)", re.ASCII)
 KIND = re.compile(r"[A-Z]+")
 KEY = re.compile(r"([a-z]+)=")
 SKIPS = ("fmt: skip", "fmt:skip")
-REGION = re.compile(r"(fmt: ?(off|on)|yapf: ?(disable|enable)|isort: ?\w+|ruff: ?isort: ?\w+)\b", re.ASCII)
+COMMANDS = ("fmt", "yapf")  # ruff reads `<tool>:` + any run of spaces, tabs or form feeds + the command (§0.2, BK-B1)
+RUFF_SPACE = " \t\f"
+REGION = re.compile(r"(fmt:[ \t\f]*(off|on)|yapf:[ \t\f]*(disable|enable)|isort: ?\w+|ruff: ?isort: ?\w+)\b", re.ASCII)
 NOQA = re.compile(r"((ruff|flake8): ?)?noqa\b", re.ASCII | re.IGNORECASE)
 
 METADATA = 'a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=…'
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
+SPELLING = "ruff honours this spelling too; write # fmt: skip  # <reason>"
 NO_REASON = f"write its reason as another comment: # fmt: skip  # <reason, {allowlists.REASON_MIN}+ characters>"
 ON_STATEMENT = "write # fmt: skip  # <reason> on the statement"
 WAIVES_NOTHING = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
@@ -162,14 +166,26 @@ def go_directives(path: str, source: str) -> tuple[list[Directive], list[str]]:
 # --------------------------------------------------------------------------------------------------------- Python
 
 
+def _command(segment: str) -> tuple[str, str] | None:
+    """(tool, command) for a segment ruff reads as a formatter command: `fmt:` or `yapf:`, any run of spaces, tabs or
+    form feeds, then the rest (measured, §0.2 and BK-B1); else None."""
+    for tool in COMMANDS:
+        if segment.startswith(f"{tool}:"):
+            return tool, segment[len(tool) + 1 :].lstrip(RUFF_SPACE)
+    return None
+
+
 def _segment_faults(segment: str) -> str:
     """The fault one comment segment carries by itself, or ""."""
     if NOQA.match(segment):
         return WAIVES_NOTHING
     if segment in SKIPS:
         return ""
-    if segment.lower().startswith(SKIPS):  # continued (ruff reformats it) or a case variant ruff ignores
-        return RUFF_IGNORES
+    if _command(segment) == ("fmt", "skip"):  # a skip ruff honours, spelled another way
+        return SPELLING
+    lowered = _command(segment.lower())
+    if lowered is not None and lowered[0] == "fmt" and lowered[1].startswith("skip"):
+        return RUFF_IGNORES  # continued (ruff reformats it) or a case variant ruff ignores
     if REGION.match(segment):
         return ON_STATEMENT
     return ""
