@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "The approved module dependencies (ADR-0009 §1), one module per entry. The deps row (S1.1c-1) fails on a module in either tracked module's graph that is not listed, on a listed module no longer in the graph, and, for a module whose packages are built or tested, on a licence file that is missing, unknown or disagrees with `license`. Owner approvals are dated.",
+  "note": "The approved module dependencies (ADR-0009 §1), one module per entry. The deps row (S1.1c-1) fails on a module in either tracked module's graph that is not listed, on a listed module no longer in the graph, and, for a module whose packages are built or tested, on a licence file that is missing, unknown or disagrees with `license`. Owner approvals are dated. Each entry names the sprint whose approval added it and the deciding section as ref (owner, 2026-11-12, S1.1c-2's plan check 17).",
   "modules": [
     {
       "module": "github.com/alecthomas/participle/v2",
@@ -8,7 +8,9 @@
       "scope": "runtime",
       "license": "MIT",
       "approved": "2026-11-04",
-      "why": "the engine parser (ADR-0002 as amended; docs/language/research/participle-spike.md)"
+      "why": "the engine parser (ADR-0002 as amended; docs/language/research/participle-spike.md)",
+      "sprint": "S2.1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-04--s21-the-parser-participle-v2--adr-0002s-goyacc"
     },
     {
       "module": "github.com/alecthomas/repr",
@@ -16,7 +18,9 @@
       "scope": "runtime (participle's graph)",
       "license": "MIT",
       "approved": "2026-11-04",
-      "why": "required by participle"
+      "why": "required by participle",
+      "sprint": "S2.1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-04--s21-the-parser-participle-v2--adr-0002s-goyacc"
     },
     {
       "module": "github.com/alecthomas/assert/v2",
@@ -24,7 +28,9 @@
       "scope": "participle's graph (its tests)",
       "license": "MIT",
       "approved": "2026-11-04",
-      "why": "required by participle's go.mod"
+      "why": "required by participle's go.mod",
+      "sprint": "S2.1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-04--s21-the-parser-participle-v2--adr-0002s-goyacc"
     },
     {
       "module": "github.com/hexops/gotextdiff",
@@ -32,7 +38,9 @@
       "scope": "participle's graph (indirect)",
       "license": "MIT",
       "approved": "2026-11-04",
-      "why": "required by alecthomas/assert"
+      "why": "required by alecthomas/assert",
+      "sprint": "S2.1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-04--s21-the-parser-participle-v2--adr-0002s-goyacc"
     },
     {
       "module": "golang.org/x/text",
@@ -40,7 +48,9 @@
       "scope": "runtime",
       "license": "BSD-3-Clause",
       "approved": "2026-11-01",
-      "why": "internal/text: NFC and the pinned Unicode tables (ADR-0007, ADR-0009 §6); Unicode 17.0.0 under Go 1.27, equal to unicode.Version (owner, 2026-11-04, S3.1-2 P5)"
+      "why": "internal/text: NFC and the pinned Unicode tables (ADR-0007, ADR-0009 §6); Unicode 17.0.0 under Go 1.27, equal to unicode.Version (owner, 2026-11-04, S3.1-2 P5)",
+      "sprint": "S3.1-2",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-01--phase-1-architecture-ratification"
     },
     {
       "module": "go.uber.org/goleak",
@@ -48,7 +58,9 @@
       "scope": "test",
       "license": "MIT",
       "approved": "2026-11-01",
-      "why": "the leak check of internal/runtime's and internal/playback's tests and the gate's leak proof (ADR-0015 §4; owner, S3.2b's plan check Q6, 2026-11-06)"
+      "why": "the leak check of internal/runtime's and internal/playback's tests and the gate's leak proof (ADR-0015 §4; owner, S3.2b's plan check Q6, 2026-11-06)",
+      "sprint": "S3.2b-2",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check"
     },
     {
       "module": "github.com/stretchr/testify",
@@ -56,7 +68,9 @@
       "scope": "goleak's graph (its tests)",
       "license": "MIT",
       "approved": "2026-11-06",
-      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)",
+      "sprint": "S3.2b-2",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check"
     },
     {
       "module": "github.com/davecgh/go-spew",
@@ -64,7 +78,9 @@
       "scope": "goleak's graph (its tests)",
       "license": "ISC",
       "approved": "2026-11-06",
-      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)",
+      "sprint": "S3.2b-2",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check"
     },
     {
       "module": "github.com/pmezard/go-difflib",
@@ -72,7 +88,9 @@
       "scope": "goleak's graph (its tests)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-06",
-      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)",
+      "sprint": "S3.2b-2",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check"
     },
     {
       "module": "gopkg.in/yaml.v3",
@@ -80,7 +98,9 @@
       "scope": "goleak's graph (its tests)",
       "license": "MIT AND Apache-2.0",
       "approved": "2026-11-06",
-      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)"
+      "why": "required by goleak's go.mod (owner, S3.2b's plan check Q6)",
+      "sprint": "S3.2b-2",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-06--s32bs-plan-check"
     },
     {
       "module": "golang.org/x/exp",
@@ -88,7 +108,9 @@
       "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "apidiff labels each public API change compatible or breaking (ADR-0015 §3's apipartition row; owner, S3.3's plan check decision 3)"
+      "why": "apidiff labels each public API change compatible or breaking (ADR-0015 §3's apipartition row; owner, S3.3's plan check decision 3)",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/mod",
@@ -96,7 +118,9 @@
       "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "required by golang.org/x/exp/cmd/apidiff"
+      "why": "required by golang.org/x/exp/cmd/apidiff",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/sync",
@@ -104,7 +128,9 @@
       "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "required by golang.org/x/exp/cmd/apidiff"
+      "why": "required by golang.org/x/exp/cmd/apidiff",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/tools",
@@ -112,7 +138,9 @@
       "scope": "build-time (go tool apidiff, declared in gate/proofs/go.mod since S1.1c-1 - owner 2026-11-11, design 7; the T4 apidiff row only)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "required by golang.org/x/exp/cmd/apidiff (go/packages)"
+      "why": "required by golang.org/x/exp/cmd/apidiff (go/packages)",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "github.com/google/go-cmp",
@@ -120,7 +148,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "github.com/yuin/goldmark",
@@ -128,7 +158,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "MIT",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/net",
@@ -136,7 +168,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/sys",
@@ -144,7 +178,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/telemetry",
@@ -152,7 +188,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/tools/go/expect",
@@ -160,7 +198,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "golang.org/x/tools/go/packages/packagestest",
@@ -168,7 +208,9 @@
       "scope": "module graph only, never built (apidiff's transitive graph; not in go.mod)",
       "license": "BSD-3-Clause",
       "approved": "2026-11-07",
-      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it"
+      "why": "the tool's graph, as `go mod graph` names it (S3.3-1 design §6.4); one entry per module since S1.1c-1 (owner 2026-11-11, 8) so the deps row reads it",
+      "sprint": "S3.3-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-07--s33s-plan-check"
     },
     {
       "module": "github.com/kr/pretty",
@@ -176,7 +218,9 @@
       "scope": "module graph only, never built (goleak → testify → gopkg.in/yaml.v3's tests; the proofs module's graph)",
       "license": "MIT",
       "approved": "2026-11-11",
-      "why": "required by gopkg.in/yaml.v3's go.mod (owner, S1.1c-1's plan check, 8)"
+      "why": "required by gopkg.in/yaml.v3's go.mod (owner, S1.1c-1's plan check, 8)",
+      "sprint": "S1.1c-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-11--s11c-1s-plan-check"
     },
     {
       "module": "gopkg.in/check.v1",
@@ -184,7 +228,9 @@
       "scope": "module graph only, never built (goleak → testify → gopkg.in/yaml.v3's tests; the proofs module's graph)",
       "license": "BSD-2-Clause",
       "approved": "2026-11-11",
-      "why": "required by gopkg.in/yaml.v3's go.mod (owner, S1.1c-1's plan check, 8)"
+      "why": "required by gopkg.in/yaml.v3's go.mod (owner, S1.1c-1's plan check, 8)",
+      "sprint": "S1.1c-1",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-11--s11c-1s-plan-check"
     }
   ]
 }
