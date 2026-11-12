@@ -859,3 +859,44 @@ func readRegister(path string) ([]registerEntry, error) {
 	}
 	return out, nil
 }
+
+// FragmentValidatorCase is one validator-stage register entry as fragment_validator_test.go (package parser_test,
+// which may import the validator) re-runs it: the span, its kind from its marker in its document, the span bound,
+// and the code its reason lists (`validator: <code> <pkg>.<Test>/<case>`).
+type FragmentValidatorCase struct {
+	File, Span, Kind, Bound, Code string
+}
+
+// FragmentValidatorCases reads the register at registerFile and gives its validator entries; root is the
+// repository root the entries' files are read from. A missing register is an error naming it.
+func FragmentValidatorCases(root, registerFile string) ([]FragmentValidatorCase, error) {
+	entries, err := readRegister(registerFile)
+	if err != nil {
+		return nil, err
+	}
+	var out []FragmentValidatorCase
+	for _, e := range entries {
+		if e.Stage != stageValidator {
+			continue
+		}
+		fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(e.Reason), stageValidator+":"))
+		if len(fields) < 2 {
+			return nil, fmt.Errorf("%s: %s: reason %q is not validator: <code> <pkg>.<Test>/<case>", registerFile, e.Span, e.Reason)
+		}
+		doc, err := os.ReadFile(root + "/" + e.File)
+		if err != nil {
+			return nil, err
+		}
+		_, after, ok := strings.Cut(string(doc), "`"+e.Span+"`<!--cep-invalid:")
+		kind, _, closed := strings.Cut(after, "-->")
+		if !ok || !closed {
+			return nil, fmt.Errorf("%s: %s: no <!--cep-invalid:<kind>--> marker after the span", e.File, e.Span)
+		}
+		bound, err := bindPlaceholders(e.Span)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %s: %w", e.File, e.Span, err)
+		}
+		out = append(out, FragmentValidatorCase{File: e.File, Span: e.Span, Kind: kind, Bound: bound, Code: fields[0]})
+	}
+	return out, nil
+}
