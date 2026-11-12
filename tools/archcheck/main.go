@@ -1,6 +1,10 @@
 // Command archcheck holds Go code to ARCHITECTURE §3's rules (sprint S1.1b, slim; owner 2026-11-04).
 //
 //	go run ./tools/archcheck <files.nul>
+//	go run ./tools/archcheck -tests <files.nul>
+//
+// The named exceptions are read from tools/allowlists/ (purity.json, clock.json, testhygiene.json; S1.1c-2), the
+// one allowlist grammar's files: archcheck reads each entry's target, and the suppressions row validates the rest.
 //
 // Four checks, by reading each file's syntax with the standard library only:
 //   - imports: a package imports only the module packages tools/importcheck/rules.json lists for it
@@ -9,26 +13,33 @@
 //     expr reads the model's expression node, never its params, streams or tables; S3.1-2: expr reads table
 //     snapshots, and only its tests may also build tables, through test_fences);
 //   - clock: the wall-clock calls stay in internal/runtime, io, internal/playback and cmd; operator
-//     packages do not import time, except internal/window/cron.go;
+//     packages do not import time, except the files clock.json lists;
 //   - purity (non-test files): go statements and channels stay in internal/runtime, io/* and cmd;
-//     sync only there, plus the named exceptions: internal/event uses sync.Pool only, internal/table
-//     sync.Mutex and atomic.Pointer only (no other identifier, no dot-import); os, net and io only at the boundary;
-//     unsafe and //go:linkname nowhere;
+//     sync only there, plus the named exceptions purity.json lists, each limited to its identifiers (no other
+//     identifier, no dot-import); os, net and io only at the boundary; unsafe and //go:linkname nowhere;
 //   - globals (non-test files): a package-level var is an error sentinel, a value built at its
 //     declaration by a Must-constructor (regexp.MustCompile, participle.MustBuild: built from
 //     constants, never written), a lookup table never written, or event's sync.Pool.
 //
-// It prints one "failed: <file>:<line>: <check>: <message>" line per finding, then GATE_COVERED with
-// the number of files read, and exits 1 if anything failed.
+// With -tests it reads _test.go files only and runs the sleep fence (the testhygiene row; testing.md rule 1): no
+// time.Sleep, After, AfterFunc, Tick, NewTimer or NewTicker, and no dot-import of time, outside the files
+// testhygiene.json lists.
+//
+// Either way it prints one "failed: <file>:<line>: <check>: <message>" line per finding, then one
+// "failed: tools/allowlists/<name>.json: <target>: does not exist (a stale target)" line per target of the lists
+// that mode reads whose package directory or file is gone, then GATE_COVERED with the number of files read, and
+// exits 1 if anything failed, 2 on an internal error.
 package main
 
 import (
 	"bytes"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -70,17 +81,138 @@ func LoadRules(path string) (*Rules, error) {
 	return r, nil
 }
 
+// AllowlistsDir holds the named exceptions archcheck reads, relative to the module root (ADR-0015 §3.10).
+const AllowlistsDir = "tools/allowlists"
+
 var (
 	clockCalls = []string{"Now", "Since", "Until", "Tick", "After", "AfterFunc", "NewTimer", "NewTicker", "Sleep"}
 	operators  = []string{"internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition"}
-	// syncNamed is ADR-0015 §2's named purity exceptions: the only packages outside internal/runtime, io and cmd
-	// that may import sync or sync/atomic, and the only identifiers each may use from them (S3.1-2). Moving it to
-	// tools/allowlists/ is S1.1c's (ADR-0015 §3.10).
-	syncNamed = map[string]map[string][]string{
-		"internal/event": {"sync": {"Pool"}},
-		"internal/table": {"sync": {"Mutex"}, "sync/atomic": {"Pointer"}},
-	}
+	// testWaits are the calls the sleep fence bans in a test (testing.md rule 1; design S1.1c-2 §3).
+	testWaits = []string{"Sleep", "After", "AfterFunc", "Tick", "NewTimer", "NewTicker"}
 )
+
+// Lists is archcheck's reading of tools/allowlists/: Purity is ADR-0015 §2's named purity exceptions (package ->
+// import path -> the only identifiers it may use from it: the only packages outside internal/runtime, io and cmd
+// that may import sync or sync/atomic); Clock is the files of an operator package that may import time; Tests is the
+// test files the sleep fence skips.
+type Lists struct {
+	Purity       map[string]map[string][]string
+	Clock, Tests map[string]bool
+}
+
+// listFile is one allowlist as archcheck reads it: its rule and each entry's target. The grammar's other fields are
+// the suppressions row's to validate, so they are ignored here (design S1.1c-2 §3, A-L2).
+type listFile struct {
+	Rule    string `json:"rule"`
+	Entries []struct {
+		Target string `json:"target"`
+	} `json:"entries"`
+}
+
+// readList reads <root>/tools/allowlists/<name>.json and gives its targets; the file's rule must be name.
+func readList(root, name string) ([]string, error) {
+	rel := AllowlistsDir + "/" + name + ".json"
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", rel, err)
+	}
+	var l listFile
+	if err := jsonv2.Unmarshal(data, &l); err != nil {
+		return nil, fmt.Errorf("%s: %w", rel, err)
+	}
+	if l.Rule != name {
+		return nil, fmt.Errorf("%s: rule %q, want %q", rel, l.Rule, name)
+	}
+	targets := make([]string, len(l.Entries))
+	for i, e := range l.Entries {
+		targets[i] = e.Target
+	}
+	return targets, nil
+}
+
+// splitPurity splits a purity target "<package>: <import path>.<identifier>" at ": ", then at the last ".".
+func splitPurity(target string) (pkg, imp, ident string, ok bool) {
+	pkg, rest, cut := strings.Cut(target, ": ")
+	imp, ident, dot := strings.CutLast(rest, ".")
+	return pkg, imp, ident, cut && dot && pkg != "" && imp != "" && ident != ""
+}
+
+// LoadLists reads <root>/tools/allowlists/{purity,clock,testhygiene}.json. A missing or unparsable file, a rule
+// that is not the file's name, or a target that does not split is an error naming the file.
+func LoadLists(root string) (*Lists, error) {
+	l := &Lists{Purity: map[string]map[string][]string{}, Clock: map[string]bool{}, Tests: map[string]bool{}}
+	purity, err := readList(root, "purity")
+	if err != nil {
+		return nil, err
+	}
+	for _, target := range purity {
+		pkg, imp, ident, ok := splitPurity(target)
+		if !ok {
+			return nil, fmt.Errorf("%s/purity.json: target %q: want \"<package>: <import path>.<identifier>\"", AllowlistsDir, target)
+		}
+		if l.Purity[pkg] == nil {
+			l.Purity[pkg] = map[string][]string{}
+		}
+		l.Purity[pkg][imp] = append(l.Purity[pkg][imp], ident)
+	}
+	clock, err := readList(root, "clock")
+	if err != nil {
+		return nil, err
+	}
+	for _, target := range clock {
+		file, imp, ok := strings.Cut(target, ": ")
+		if !ok || file == "" || imp != "time" {
+			return nil, fmt.Errorf("%s/clock.json: target %q: want \"<file>: time\"", AllowlistsDir, target)
+		}
+		l.Clock[file] = true
+	}
+	tests, err := readList(root, "testhygiene")
+	if err != nil {
+		return nil, err
+	}
+	for _, target := range tests {
+		if target == "" {
+			return nil, fmt.Errorf("%s/testhygiene.json: an empty target: want \"<file>\"", AllowlistsDir)
+		}
+		l.Tests[target] = true
+	}
+	return l, nil
+}
+
+// Stale gives one finding per target whose package directory (purity) or file (clock, testhygiene) is gone under
+// root, sorted: "tools/allowlists/<name>.json: <target>: does not exist (a stale target)".
+func Stale(lists *Lists, root string) []string {
+	var out []string
+	exists := func(rel string, dir bool) bool {
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+		return err == nil && info.IsDir() == dir
+	}
+	stale := func(name, target string) {
+		out = append(out, fmt.Sprintf("%s/%s.json: %s: does not exist (a stale target)", AllowlistsDir, name, target))
+	}
+	for pkg, imports := range lists.Purity {
+		if exists(pkg, true) {
+			continue
+		}
+		for imp, idents := range imports {
+			for _, ident := range idents {
+				stale("purity", pkg+": "+imp+"."+ident)
+			}
+		}
+	}
+	for file, listed := range lists.Clock {
+		if listed && !exists(file, false) {
+			stale("clock", file+": time")
+		}
+	}
+	for file, listed := range lists.Tests {
+		if listed && !exists(file, false) {
+			stale("testhygiene", file)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
 
 // name is how a module-relative package directory is shown: "" is the root package cep.
 func name(dir string) string {
@@ -126,6 +258,7 @@ func allows(list []string, target string) bool {
 
 type checker struct {
 	rules    *Rules
+	lists    *Lists
 	fset     *token.FileSet
 	path     string
 	dir      string
@@ -140,8 +273,9 @@ func (c *checker) report(pos token.Pos, format string, args ...any) {
 }
 
 // CheckSources runs every check over files[path]; the other entries of files are the rest of its package,
-// which the globals check reads to see whether a package-level var is ever written.
-func CheckSources(rules *Rules, path string, files map[string]string) ([]string, error) {
+// which the globals check reads to see whether a package-level var is ever written. lists holds the named purity
+// and clock exceptions.
+func CheckSources(rules *Rules, lists *Lists, path string, files map[string]string) ([]string, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, files[path], parser.ParseComments)
 	if err != nil {
@@ -151,7 +285,7 @@ func CheckSources(rules *Rules, path string, files map[string]string) ([]string,
 	if dir == "." {
 		dir = ""
 	}
-	c := &checker{rules: rules, fset: fset, path: path, dir: dir, file: file, test: strings.HasSuffix(path, "_test.go")}
+	c := &checker{rules: rules, lists: lists, fset: fset, path: path, dir: dir, file: file, test: strings.HasSuffix(path, "_test.go")}
 	c.imports()
 	c.fences()
 	if !under(dir, "bench") {
@@ -254,8 +388,8 @@ func (c *checker) clock() {
 		under(c.dir, "cmd")
 	operator := slices.ContainsFunc(operators, func(op string) bool { return under(c.dir, op) })
 	for _, spec := range c.file.Imports {
-		if importPath(spec) == "time" && operator && c.path != "internal/window/cron.go" {
-			c.report(spec.Pos(), "clock: %s may not import time (only internal/window/cron.go may; ADR-0015 §2.2)", c.dir)
+		if importPath(spec) == "time" && operator && !c.lists.Clock[c.path] {
+			c.report(spec.Pos(), "clock: %s may not import time: an operator package reads time through internal/clock, and a file's exception is an entry in %s/clock.json (ADR-0015 §2.2)", c.dir, AllowlistsDir)
 		}
 	}
 	timeNames := c.localNames("time")
@@ -278,7 +412,7 @@ func (c *checker) clock() {
 func (c *checker) purity() {
 	goAllowed := under(c.dir, "internal/runtime") || strings.HasPrefix(c.dir, "io/") || under(c.dir, "cmd")
 	syncOK := goAllowed || c.dir == "io"
-	named := syncNamed[c.dir]
+	named := c.lists.Purity[c.dir]
 	boundary := under(c.dir, "io") || under(c.dir, "internal/playback") || under(c.dir, "cmd")
 	for _, spec := range c.file.Imports {
 		p := importPath(spec)
@@ -493,77 +627,173 @@ func (c *checker) globals(files map[string]string) error {
 	return nil
 }
 
-// pkgFiles reads the other non-test Go files beside path, so the globals check sees the whole package.
-func pkgFiles(path string) (map[string]string, error) {
+// CheckTest is the sleep fence over one _test.go file (the testhygiene row; testing.md rule 1): a selector on any
+// local name the file gives time naming one of testWaits, and a dot-import of time, which hides them. A file listed
+// in testhygiene.json is skipped; one that does not parse is a finding, never a pass.
+func CheckTest(lists *Lists, path, src string) []string {
+	if lists.Tests[path] {
+		return nil
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, src, parser.SkipObjectResolution)
+	if err != nil {
+		return []string{fmt.Sprintf("%s: testhygiene: the fence cannot read it: %v", path, err)}
+	}
+	c := &checker{fset: fset, path: path, file: file, test: true}
+	names := c.localNames("time")
+	for _, spec := range file.Imports {
+		if importPath(spec) == "time" && spec.Name != nil && spec.Name.Name == "." {
+			c.report(spec.Pos(), "testhygiene: a dot-import of time hides the calls the fence reads")
+		}
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(names, x.Name) && slices.Contains(testWaits, sel.Sel.Name) {
+				c.report(sel.Pos(), "testhygiene: time.%s in a test: wait for a state, cap it with a context, yield on every pass of a poll (testing.md rule 1)", sel.Sel.Name)
+			}
+		}
+		return true
+	})
+	return c.findings
+}
+
+// pkgFiles reads the other non-test Go files beside path (relative to root), so the globals check sees the whole
+// package; they are keyed by their root-relative slash paths.
+func pkgFiles(root, path string) (map[string]string, error) {
 	files := map[string]string{}
-	dir := filepath.Dir(path)
-	entries, err := os.ReadDir(dir)
+	dir := filepath.ToSlash(filepath.Dir(path))
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
 	if err != nil {
 		return nil, err
 	}
 	for _, e := range entries {
 		n := e.Name()
 		if e.Type().IsRegular() && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go") {
-			data, err := os.ReadFile(filepath.Join(dir, n))
+			rel := filepath.ToSlash(filepath.Join(dir, n))
+			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 			if err != nil {
 				return nil, err
 			}
-			files[filepath.ToSlash(filepath.Join(filepath.ToSlash(dir), n))] = string(data)
+			files[rel] = string(data)
 		}
 	}
 	return files, nil
 }
 
-func run(listPath string) ([]string, int, error) {
-	rules, err := LoadRules(RulesPath)
+// paths reads a NUL-separated list of root-relative files.
+func paths(listPath string) ([]string, error) {
+	list, err := os.ReadFile(listPath)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for raw := range bytes.SplitSeq(list, []byte{0}) {
+		if len(raw) > 0 {
+			out = append(out, filepath.ToSlash(string(raw)))
+		}
+	}
+	return out, nil
+}
+
+// run checks every file the list names with CheckSources; it gives the findings and the number of files read.
+func run(root string, lists *Lists, listPath string) ([]string, int, error) {
+	rules, err := LoadRules(filepath.Join(root, filepath.FromSlash(RulesPath)))
 	if err != nil {
 		return nil, 0, err
 	}
-	list, err := os.ReadFile(listPath)
+	list, err := paths(listPath)
 	if err != nil {
 		return nil, 0, err
 	}
 	var findings []string
-	count := 0
-	for _, raw := range bytes.Split(list, []byte{0}) {
-		if len(raw) == 0 {
-			continue
-		}
-		path := filepath.ToSlash(string(raw))
-		files, err := pkgFiles(path)
+	for _, path := range list {
+		files, err := pkgFiles(root, path)
 		if err != nil {
 			return nil, 0, err
 		}
-		src, err := os.ReadFile(path)
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 		if err != nil {
 			return nil, 0, err
 		}
 		files[path] = string(src)
-		got, err := CheckSources(rules, path, files)
+		got, err := CheckSources(rules, lists, path, files)
 		if err != nil {
 			return nil, 0, err
 		}
 		findings = append(findings, got...)
-		count++
 	}
-	return findings, count, nil
+	return findings, len(list), nil
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("usage: go run ./tools/archcheck <files.nul>")
-		os.Exit(2)
-	}
-	findings, count, err := run(os.Args[1])
+// runTests is -tests: CheckTest over every file the list names, each of which must be a _test.go file; it gives the
+// findings and the number of test files read.
+func runTests(root string, lists *Lists, listPath string) ([]string, int, error) {
+	list, err := paths(listPath)
 	if err != nil {
-		fmt.Printf("internal error: %v\n", err)
-		os.Exit(2)
+		return nil, 0, err
+	}
+	var findings []string
+	for _, path := range list {
+		if !strings.HasSuffix(path, "_test.go") {
+			return nil, 0, fmt.Errorf("%s: -tests reads _test.go files only", path)
+		}
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			return nil, 0, err
+		}
+		findings = append(findings, CheckTest(lists, path, string(src))...)
+	}
+	return findings, len(list), nil
+}
+
+// staleIn keeps the Stale findings of the named lists: each mode reports the lists it reads (the normal mode purity
+// and clock, -tests testhygiene), so no stale target is reported by two rows.
+func staleIn(lists *Lists, root string, names ...string) []string {
+	return slices.DeleteFunc(Stale(lists, root), func(f string) bool {
+		return !slices.ContainsFunc(names, func(name string) bool {
+			return strings.HasPrefix(f, AllowlistsDir+"/"+name+".json: ")
+		})
+	})
+}
+
+// cli is archcheck run at root with args (the files list, after "-tests" for the sleep fence); it writes the report
+// to out and gives the exit code: 0 clean, 1 a finding, 2 a usage or internal error.
+func cli(root string, args []string, out io.Writer) int {
+	tests := len(args) == 2 && args[0] == "-tests"
+	if !tests && (len(args) != 1 || strings.HasPrefix(args[0], "-")) {
+		fmt.Fprintln(out, "usage: go run ./tools/archcheck [-tests] <files.nul>")
+		return 2
+	}
+	lists, err := LoadLists(root)
+	var findings []string
+	var count int
+	switch {
+	case err != nil:
+	case tests:
+		findings, count, err = runTests(root, lists, args[1])
+	default:
+		findings, count, err = run(root, lists, args[0])
+	}
+	if err != nil {
+		fmt.Fprintf(out, "internal error: %v\n", err)
+		return 2
+	}
+	if tests {
+		findings = append(findings, staleIn(lists, root, "testhygiene")...)
+	} else {
+		findings = append(findings, staleIn(lists, root, "purity", "clock")...)
 	}
 	for _, f := range findings {
-		fmt.Printf("failed: %s\n", f)
+		fmt.Fprintf(out, "failed: %s\n", f)
 	}
-	fmt.Printf("GATE_COVERED %d\n", count)
+	fmt.Fprintf(out, "GATE_COVERED %d\n", count)
 	if len(findings) > 0 {
-		os.Exit(1)
+		return 1
 	}
+	return 0
+}
+
+// main runs at the repository root: the gate's runner starts archcheck there.
+func main() {
+	os.Exit(cli(".", os.Args[1:], os.Stdout))
 }
