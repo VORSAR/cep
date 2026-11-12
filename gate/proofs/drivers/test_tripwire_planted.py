@@ -15,14 +15,16 @@ from gate.proofs.drivers import support
 
 CORPUS_TEST = "internal/playback/s3_2b_2_corpus_test.go"
 PLANT_SWITCH = 'os.Getenv("CEP_DETERMINISM_PLANT") == "maporder"'
+PLAYBACK = "github.com/vorsar/cep/internal/playback"
 
 
 class TripwireAndDeterminismPlanted(support.DriverTest):
     def engine_world(self) -> None:
         self.world.copy_gate()
-        for rel in ("go.mod", "go.sum", "gate/tripwire.json"):
+        for rel in ("go.mod", "go.sum", "gate/tripwire.json", "docs/language/SPEC.md"):
             self.world.copy(rel)
-        for prefix in ("internal", "docs/language/examples"):
+        # SPEC.md and the baselines let the row's other test, TestBaseline, pass beside the plant (S1.1c-2 W0, QA F2).
+        for prefix in ("internal", "docs/language/examples", "conformance/baseline"):
             for rel in self.world.tracked(prefix):
                 self.world.copy(rel)
 
@@ -61,8 +63,9 @@ class TripwireAndDeterminismPlanted(support.DriverTest):
         self.assertEqual(text.count(PLANT_SWITCH), 1, "the plant's anchor moved")
         self.world.write(CORPUS_TEST, text.replace(PLANT_SWITCH, "true"))
         run = self.run_row("determinism", "determinism")
-        record = run.record("determinism", "determinism")
-        self.assertEqual(record["verdict"], "fail", run.stdout)
+        # The exact reason: TestDeterminismGolden alone is red (S1.1c-2 W0, QA F2: a world without SPEC.md and the
+        # conformance baseline made TestBaseline red as well, so a bare "fail" proved nothing about the plant).
+        self.assertRed(run, "determinism", "determinism", f"exit 1: {PLAYBACK}: TestDeterminismGolden")
         self.assertIn(
             "differs from testdata/determinism.golden", run.row_file("determinism", "determinism", "test.json")
         )
