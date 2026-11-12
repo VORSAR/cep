@@ -131,6 +131,14 @@ class AgeRule(Case):
     def test_first_seen_in_s1_1a_1_with_no_decision_is_red(self):
         self.assertOneLine(self.aged([entry("OLD9", "S1.1a-1")]), "OLD9", AGE)
 
+    def test_first_seen_on_a_printed_part_row_is_positioned_by_that_row(self):
+        # DA-S10: S1.1a-1 is a row of its own in gate/sprints.json and S1.1a is not; its row by row_of would not be
+        # found. Two closed rows follow S1.1a-1 (S1.1a-2 and S2.2b): green; a third: red.
+        two = order(("S1.1a-1", True), ("S1.1a-2", True), ("S2.2b", True), ("S3.1", False), ("S1.1c", False))
+        three = order(("S1.1a-1", True), ("S1.1a-2", True), ("S2.2b", True), ("S3.1", True), ("S1.1c", False))
+        self.assertEqual(self.aged([entry("OLD9", "S1.1a-1")], two, "S3.1"), [])
+        self.assertOneLine(self.aged([entry("OLD9", "S1.1a-1")], three, "S1.1c-3"), "OLD9", AGE)
+
     def test_an_unresolved_decision_ages(self):
         lines = self.aged([entry("OLD1", "S2.2b", decision=f"{DECISIONS}#no-such-heading")], THREE_AFTER)
         self.assertOneLine(lines, "OLD1", AGE)
@@ -231,16 +239,8 @@ class ForwardRule(Case):
         lines = self.aged([entry("PART1", "S3.3-2", forward="S1.1c-3", decision=NAMING)], S1_1C_CLOSED, "S4.1")
         self.assertOneLine(lines, "PART1", FORWARD)
 
-    def test_a_part_above_the_plan_is_named(self):
-        """§6 aging (7): `forward: S1.1c-99` is red (above the plan), or it would wait for S1.1c's close unseen.
-
-        design question: gate/sprints.json names rows only, and the row's expected_scope does not read
-        sprint-plan.md, so the design names where "the plan's highest part" of a row comes from. The text is the
-        design's; this case pins one line naming the id and the part."""
-        lines = self.aged([entry("PART1", "S3.3-2", forward="S1.1c-99", decision=NAMING)])
-        self.assertEqual(len(lines), 1, lines)
-        self.assertIn("PART1", lines[0])
-        self.assertIn("S1.1c-99", lines[0])
+    # No case for a forward to a part above the plan (S1.1c-99): design §7 W0-4 drops it (gate/sprints.json names rows
+    # only; such a forward expires at its row's close, rule 2).
 
     def test_a_part_less_marker_where_a_part_is_needed_is_named(self):
         """§2 S2: the marker S1.1c cannot say whether S1.1c-3 has passed: a named red, never a silent pass (the
@@ -248,6 +248,7 @@ class ForwardRule(Case):
         lines = self.aged([entry("PART1", "S3.3-2", forward="S1.1c-3", decision=NAMING)], marker="S1.1c")
         self.assertEqual(len(lines), 1, lines)
         self.assertIn("PART1", lines[0])
+        self.assertIn("the marker names no part", lines[0])  # design §3.1, §7 W0-3; DQ-L5
 
     def test_a_part_less_marker_in_a_later_row_has_passed_the_part(self):
         lines = self.aged([entry("PART1", "S3.3-2", forward="S1.1c-3", decision=NAMING)], marker="S4.1")
