@@ -42,16 +42,20 @@ func TestBreakitCloseUnblocksAParkedPush(t *testing.T) {
 	pctx := &bkParkCtx{Context: context.Background(), parked: make(chan struct{})}
 	pushed := make(chan error, 1)
 	go func() { pushed <- src.Push(pctx, "", imRow("a", 1)) }()
+	parkCtx, cancelPark := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancelPark()
 	select {
 	case <-pctx.parked:
-	case <-time.After(10 * time.Second):
+	case <-parkCtx.Done():
 		t.Fatal("the Push never reached its send (state: the pusher waiting on the channel)")
 	}
 	closed := make(chan struct{})
 	go func() { src.Close(); close(closed) }()
+	closeCtx, cancelClose := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancelClose()
 	select {
 	case <-closed:
-	case <-time.After(5 * time.Second):
+	case <-closeCtx.Done():
 		t.Errorf("Close with a Push parked and no Open did not return in 5 s; want it to return at once and the Push to get ErrClosed")
 		// Release both: a pump takes the parked row, Close then closes the channel and the pump returns.
 		go func() { _ = src.Open(context.Background(), bkNopEmitter{}) }()
