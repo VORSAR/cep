@@ -174,7 +174,7 @@ func (l *lowerer) rule(r *RuleDecl) model.Rule {
 		out.Select = append(out.Select, model.SelectItem{Expr: l.expr(s.Expr), As: name(s.As), Pos: pos(s.Pos)})
 	}
 	if r.Rate != nil {
-		out.OutputFirstEvery = l.durationOrParam(r.Rate)
+		out.OutputFirstEvery = l.durationOrParam(r.Rate.Every)
 	}
 	return out
 }
