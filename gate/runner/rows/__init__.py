@@ -58,6 +58,14 @@ def _module_name(path: str) -> str:
     return path.removesuffix(".py").replace("/", ".")
 
 
+def collisions(paths: Sequence[str]) -> list[str]:
+    """QB10: every way a listing of Python files under gate/ (tracked or not) would run one module in another's place —
+    two paths with one module name, a dotted directory, a regular package beside a same-named module — one line each
+    naming the paths; [] when there is none. W0 stub (S1.1c-3 plan check §2 S2): lane E2 builds it.
+    """
+    raise NotImplementedError("rows.collisions: not built yet (S1.1c-3 lane E2)")
+
+
 def _report_lines(path: str) -> list[str]:
     try:
         return read_text(path).splitlines()
