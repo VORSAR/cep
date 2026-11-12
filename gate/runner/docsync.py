@@ -2,10 +2,10 @@
 
 `tree` reads §3's tree: the first fenced block after the `3.` heading, within §3 (a first fence under §4 is no fence
 for §3), the headings read outside fences through `anchors.prose`. `listed` reads the tree's first column — the text
-before the first run of two spaces, split on ", " — as directories: `x/` names `x`; a file names its directory
-(`cep.go` names `.`, `tools/importcheck/rules.json` names `tools/importcheck`); a path holding `*` is a placeholder
-and names nothing. `missing` is the packages no line names, exactly: a package below a listed directory must be
-listed itself (§11.7).
+before the first run of two spaces, split on ", " — as directories: `x/` names `x`; a .go file names its directory
+(`cep.go` names `.`); any other file names nothing (`tools/importcheck/rules.json` is the layer law, not a listing of
+`tools/importcheck`, BK-L1); a path holding `*` is a placeholder and names nothing. `missing` is the packages no
+line names, exactly: a package below a listed directory must be listed itself (§11.7).
 """
 
 import posixpath
@@ -65,10 +65,11 @@ def listed(lines: Iterable[str]) -> set[str]:
                 found.add(item.rstrip("/"))
                 continue
             name = posixpath.basename(item)
-            if "." in name.lstrip("."):
-                found.add(posixpath.dirname(item) or ".")
-            else:
-                found.add(item)
+            if name.endswith(".go"):
+                found.add(posixpath.dirname(item) or ".")  # a Go file names its package's directory
+            elif "." not in name.lstrip("."):
+                found.add(item)  # a directory written without its slash (`.githooks`, `Makefile` alike)
+            # any other file (rules.json, deps-allowlist.json, exports.golden) names no package (BK-L1)
     return found
 
 
