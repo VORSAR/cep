@@ -31,9 +31,10 @@ class ParityPath(support.ParityDriver):
             f.write(FAKE.format(python=support.pinned_python(), marker=marker))
         os.chmod(fake, 0o755)
 
-        run = self.world.run(cache_dir=cache, path_first=os.path.dirname(fake))
+        run = self.world.run(cache_dir=cache, path_first=os.path.dirname(fake), handoff=False)
 
-        self.assertParityStops(run, f"go: path: {os.path.realpath(fake)} is outside the cache: {support.RECOVER}")
+        reason = f"go: path: {os.path.realpath(fake)} is outside the cache: {support.RECOVER}"
+        self.assertParityStops(run, reason, planted="go")
         self.assertFalse(os.path.exists(marker), "parity ran the go outside the cache")
         out, err = os.path.join(self.world.root, "fake.stdout"), os.path.join(self.world.root, "fake.stderr")
         code = support.run_process([fake], cwd=self.world.root, env=self.world.env, out=out, err=err, cap_s=60)

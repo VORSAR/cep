@@ -7,7 +7,10 @@ Every driver:
 T4 for the notbuilt expiry's) (so it can
   never recurse into `proofs`), with a new run directory;
 - asserts the red verdict, its exact reason, `GATE FAILED` and `exit: 1`, and, outside the parity drivers, a parity
-  PASS in the same run.
+  PASS in the same run;
+- inside a full-tree proofs row, hands each nested T2-T4 run the outer run's verified tree digests
+  (`--parity-handoff`; proof-world speed-up design §3.6), and checks every passing parity names that reuse. The parity
+  drivers never pass it: they hash for real.
 """
 
 import contextlib
@@ -33,6 +36,9 @@ RUN_CAP_S = 600  # one nested gate run
 GRACE_S = 5
 NESTED_GRACE_S = 2  # under the runner's 5 s grace, so the driver's own cleanups run after it
 RECOVER = "run make clean-tools tools"  # the fix every parity reason but "not installed" names (Lane B's strings)
+# The scheduler's full-tree tiers (gate/runner/scheduler.py), written out so the drivers never take from the code they
+# prove when a nested run reads a hand-off.
+FULL_TREE_TIERS = frozenset({"T2", "T3", "T4"})
 HIDDEN = (
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -97,6 +103,41 @@ COVERAGE_ROW = registry_row("coverage-inclusion")
 PROOFS_ROW = registry_row("proofs")
 
 
+def handoff() -> str | None:
+    """The outer run's parity hand-off, `<GATE_RUN_DIR>/parity/handoff.json`, when this driver runs inside a full-tree
+    gate row; None for a driver run on its own (design §3.6, QB-L2)."""
+    run_dir = os.environ.get("GATE_RUN_DIR", "")
+    if os.environ.get("GATE_TIER") in FULL_TREE_TIERS and run_dir:
+        return os.path.join(run_dir, "parity", "handoff.json")
+    return None
+
+
+def _given(wanted: bool | str, tier: str) -> str | None:
+    """The hand-off World.run passes: an explicit path as given; the outer run's at a full-tree tier when wanted."""
+    if isinstance(wanted, str):
+        return wanted
+    return handoff() if wanted and tier in FULL_TREE_TIERS else None
+
+
+def handoff_run_id(path: str) -> str:
+    """The run id of the parity hand-off at `path`, which must exist and list every tool of tools(); otherwise an
+    AssertionError naming the path and what is missing (design §3.6, CA-S7, QB-S2a)."""
+    try:
+        with open(path, "rb") as f:
+            doc = json.loads(f.read())
+    except OSError as e:
+        raise AssertionError(f"the parity hand-off {path}: {e.strerror}") from None
+    except ValueError as e:
+        raise AssertionError(f"the parity hand-off {path} is not JSON: {e}") from None
+    if not (isinstance(doc, dict) and isinstance(doc.get("run_id"), str) and isinstance(doc.get("tools"), list)):
+        raise AssertionError(f"the parity hand-off {path} has no run_id or no tools list")
+    listed = {entry.get("name") for entry in doc["tools"] if isinstance(entry, dict)}
+    missing = [t.name for t in tools() if t.name not in listed]
+    if missing:
+        raise AssertionError(f"the parity hand-off {path} does not list {', '.join(missing)}")
+    return doc["run_id"]
+
+
 def _stop_group(pgid: int, signum: int) -> None:
     with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(pgid, signum)
@@ -139,11 +180,28 @@ def read_text(path: str) -> str:
 
 @dataclass(frozen=True)
 class Run:
-    """One finished nested gate run."""
+    """One finished nested gate run; `handoff` says whether it was given a parity hand-off, `handoff_run_id` the run
+    that hand-off came from."""
 
     code: int
     stdout: str
     run_dir: str
+    handoff: bool = False
+    handoff_run_id: str = ""
+
+    def parity_reason(self) -> str:
+        """What this run's parity says on a pass: every tool covered, and, given a hand-off, every tree taken from it
+        (design §3.6)."""
+        n = len(tools())
+        return f"covered {n}; {n} trees taken from run {self.handoff_run_id}" if self.handoff else f"covered {n}"
+
+    def tree_out(self, name: str) -> list[str] | None:
+        """The lines of the tool's tree child output, `<run_dir>/parity/tree-<name>.out` (its realpath, its details
+        digest, its tree digest), or None when no tree child ran for it."""
+        path = os.path.join(self.run_dir, "parity", f"tree-{name}.out")
+        if not os.path.exists(path):
+            return None
+        return read_text(path).split("\n")[:-1]
 
     def tail(self) -> list[str]:
         return self.stdout.split("\n")[:-1][-2:]
@@ -178,6 +236,17 @@ class Run:
             if cells[:2] == [job, row_id]:
                 return cells
         raise AssertionError(f"no summary line for {job}/{row_id} in:\n{self.stdout}")
+
+
+def _check_parity_reason(run: Run) -> None:
+    """Every passing parity record of a recorded run says what Run.parity_reason says (design §3.6, QB-S2b): with a
+    hand-off, every tree taken from it, so a reuse that vanished is red, not just slow."""
+    if not os.path.exists(os.path.join(run.run_dir, "run.json")):
+        return
+    want = run.parity_reason()
+    for record in run.records():
+        if record["id"] == "parity" and record["verdict"] == "pass" and record["reason"] != want:
+            raise AssertionError(f"parity passed with reason {record['reason']!r}, not {want!r}:\n{run.stdout}")
 
 
 class World:
@@ -297,20 +366,37 @@ class World:
         return dest
 
     def run(
-        self, *, registry: str | None = None, cache_dir: str | None = None, path_first: str = "", tier: str = TIER
+        self,
+        *,
+        registry: str | None = None,
+        cache_dir: str | None = None,
+        path_first: str = "",
+        tier: str = TIER,
+        handoff: bool | str = True,
     ) -> Run:
-        """The real runner, at T2 unless a test of a T4 row says otherwise, in a new run directory."""
+        """The real runner, at T2 unless a test of a T4 row says otherwise, in a new run directory.
+
+        `handoff` (design §3.6): True gives a full-tree run the outer run's hand-off when this driver runs inside a
+        full-tree gate row (`handoff()`); False gives none (the parity proofs hash for real); a path is passed as
+        given, at any tier. A run given a hand-off must take every tree from it. Whenever parity passes, its reason is
+        checked here against `Run.parity_reason`.
+        """
+        given = _given(handoff, tier)
+        run_id = handoff_run_id(given) if given is not None else ""
         self.runs += 1
         run_dir = os.path.join(self.root, f"run{self.runs}")
         argv = [pinned_python(), "-I", "-B", "-X", "utf8", os.path.join(self.repo, "gate", "run.py")]
         argv += ["--tier", tier, "--run-dir", run_dir, *(["--registry", registry] if registry else [])]
+        argv += ["--parity-handoff", given] if given is not None else []
         env = {**self.env, "VORSAR_CEP_TOOLS_CACHE": cache_dir or real_cache()}
         if path_first:
             env["PATH"] = os.pathsep.join([path_first, env.get("PATH", "")])
         out = os.path.join(self.root, f"run{self.runs}.stdout")
         err = os.path.join(self.root, f"run{self.runs}.stderr")
         code = run_process(argv, cwd=self.repo, env=env, out=out, err=err, cap_s=RUN_CAP_S)
-        return Run(code=code, stdout=read_text(out), run_dir=run_dir)
+        run = Run(code=code, stdout=read_text(out), run_dir=run_dir, handoff=given is not None, handoff_run_id=run_id)
+        _check_parity_reason(run)
+        return run
 
 
 class DriverTest(unittest.TestCase):
@@ -335,8 +421,9 @@ class DriverTest(unittest.TestCase):
         self.assertEqual((cells[2], cells[4]), ("PASS" if ok else "FAIL", reason), run.stdout)
 
     def assertParityPassed(self, run: Run, job: str) -> None:
-        """The control every non-parity driver carries: the pinned tools were all there and all right."""
-        self.assertRow(run, job, "parity", True, f"covered {len(tools())}", label="*")
+        """The control every non-parity driver carries: the pinned tools were all there and all right, in the form
+        the run's hand-off calls for (Run.parity_reason; World.run checks it on every run too)."""
+        self.assertRow(run, job, "parity", True, run.parity_reason(), label="*")
 
     def assertRed(self, run: Run, job: str, row_id: str, reason: str) -> None:
         self.assertGateFailed(run)
@@ -380,7 +467,11 @@ class DriverTest(unittest.TestCase):
 class ParityDriver(DriverTest):
     """A parity proof: one planted defect, exactly one reason, and nothing but parity ever starts."""
 
-    def assertParityStops(self, run: Run, reason: str) -> None:
+    def assertParityStops(self, run: Run, reason: str, *, planted: str) -> None:
+        """Parity alone ran and failed with `reason`; the witness that it hashed for real (design §3.6, CA-B1, QB-B1):
+        every tool but the `planted` one has its tree child's output, whose digest line is that tool's pin."""
+        self.assertFalse(run.handoff, "a parity proof hashes for real: it is never given a hand-off")
+        self.assertIn(planted, [t.name for t in tools()])
         self.assertGateFailed(run)
         records = run.records()
         parity = [r for r in records if r["id"] == "parity"]
@@ -395,6 +486,11 @@ class ParityDriver(DriverTest):
         self.assertEqual(run.started(), ["parity"])
         cells = run.summary("*", "parity")
         self.assertEqual((cells[2], cells[4]), ("FAIL", reason), run.stdout)
+        for t in tools():
+            if t.name != planted:
+                lines = run.tree_out(t.name)
+                self.assertIsNotNone(lines, f"{t.name}'s tree was never hashed: no parity/tree-{t.name}.out")
+                self.assertEqual(lines[2:3], [t.tree_sha256], f"{t.name}'s tree child output: {lines}")
 
 
 def copy_hooks(world: World) -> list[str]:
