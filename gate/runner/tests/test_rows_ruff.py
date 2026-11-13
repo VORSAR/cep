@@ -159,6 +159,17 @@ class Wrapper(support.GateTest):
         self.assertIn("TID251", out)
         self.assertIn("failed: gate/x/sleepy.py", out)
 
+    def test_a_finding_on_any_line_is_named(self):
+        # Ruff pads `-->` to its line-number gutter: two spaces from line 10, three from line 100. The row named no
+        # file for any finding past line 9 (found measuring the proofs row, 2026-11-14).
+        self.clean_files(1)
+        for line in (9, 10, 100):
+            self.track(f"gate/x/line_{line:03}.py", CLEAN * (line - 3) + "import time\n\ntime.sleep(0)\n")
+        self.assertEqual(self.ruff_row(), "exit 1: gate/x/line_009.py: ruff check (exit 1)")
+        failed = [line for line in self.out().splitlines() if line.startswith("failed: ")]
+        want = [f"failed: gate/x/line_{line:03}.py: ruff check (exit 1)" for line in (9, 10, 100)]
+        self.assertEqual(failed, want)
+
     def test_a_file_ruff_cannot_parse_is_red_and_named(self):
         self.clean_files(1)
         self.track("gate/x/broken.py", "def f(:\n")

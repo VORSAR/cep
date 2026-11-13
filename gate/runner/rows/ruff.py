@@ -25,7 +25,8 @@ ECHO = "ruff> "
 # Bytes patterns, so \d is ASCII only.
 _BOTH = re.compile(rb"(?:(\d+) files? would be reformatted, )?(\d+) files? already formatted")
 _REFORMAT = re.compile(rb"(\d+) files? would be reformatted")
-_LOCATION = re.compile(rb" ?--> (.+):\d+:\d+")
+# Ruff pads `-->` to its line-number gutter: one space for lines 1-9, two from 10, three from 100.
+_LOCATION = re.compile(rb" *--> (.+):\d+:\d+")
 
 
 def summary_count(line: bytes) -> int | None:
