@@ -155,7 +155,6 @@ class Runner:
         self._finished: dict[str, _Done] = {}
         self._parity: _Done | None = None
         self._parity_group = Group()
-        self._parity_stopped = False  # a stop came while parity ran: its group is KILLed and probed in run's finally
         self._parity_start = (0, 0)
         self._stop = ""
         self._internal = False
@@ -487,7 +486,6 @@ class Runner:
         self._mark("ceiling" if why == "ceiling" else "interrupt", "", ALL_JOBS, why)
         if self._parity is None:
             # The run stops waiting for parity: its thread is a daemon, and its children are in the parity group.
-            self._parity_stopped = True
             self._parity_group.signal(signal.SIGTERM)
             self._settle_parity(False, reason, NEVER_RAN, 0)
         for row in self._pending:
@@ -499,10 +497,11 @@ class Runner:
         self._stop_grace = self._arm("interrupt-grace", self._grace_s, "stop-grace")
 
     def _end_parity_group(self) -> None:
-        """C6 (DA-S14): a stop during parity settles it and ends the loop at once, so no grace and no _kill_all
-        follow; whatever the TERM left in the parity group is named by its probe, then KILLed."""
-        if not self._parity_stopped:
-            return
+        """Run's finally ends the parity group on every way out (CA-L3). C6 (DA-S14): a stop during parity settles it
+        and ends the loop at once, so no grace and no _kill_all follow; an exception (a bug) ends the loop with parity
+        perhaps still hashing. Either way, whatever is left in the group is named by its probe, then KILLed, and no
+        later spawn starts. After a settled parity the group holds no live leader (each was reaped), so this probes
+        nothing."""
         left, detail = self._parity_group.kill_left()
         if left:
             path = os.path.join(self._run_dir, PARITY_SCRATCH, "left_running.txt")
