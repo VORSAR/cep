@@ -229,7 +229,7 @@ def _stamp_faults(stamp: Mapping[str, object] | None, root: str, zip_sha256: str
     if stamp is None:
         return [f"vulns: no stamp.json at {root}: run make vulndb"]
     if not isinstance(stamp, Mapping):
-        return [f"vulns: stamp.json is malformed: not an object ({type(stamp).__name__})"]
+        return ["vulns: stamp.json is malformed: not a JSON object"]
     if set(stamp) != STAMP_KEYS:
         return [f"vulns: stamp.json is malformed: keys {', '.join(sorted(stamp))}, want fetched, sha256, url"]
     for key in sorted(STAMP_KEYS):
