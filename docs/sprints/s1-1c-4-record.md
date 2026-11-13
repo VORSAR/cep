@@ -53,6 +53,9 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 - **G0 (6d83a65):** the `proofs` row alone at T4 exit 0 (81.2 s); T2 exit 0 (22 rows, 81.6 s) with the W0 stubs in the tree.
 - **W0a/W0b (QA, `s1-1c-4/qa`):** `test_vulndb.py` 54 tests with a 39-row agreement table over 8 real entries (byte-identical to the database's `ID/` members; `NOTICE.md`), each verdict measured with govulncheck v1.9.0 outside the repository (query mode over one-entry planted databases; source mode for withdrawn and GOVERSION rows); `test_gomods.py` 20; `test_generate.py`'s `Scans` 4; `test_parity.py`'s `TreeCap`; all red on the stubs for their stated reasons (re-run by the coordinator: `test_vulndb` errors=160, `test_gomods` failures=7 errors=17).
 - **W0 commit (e5f8250):** T2 green but `test_allowlists.Load.test_rules`, the pin on the rule set, red on the new `vulns` rule — the pin updated with it, its module green. The `proofs` row alone at T4 (run 20261113T132602Z-0678c4, 277.4 s): covered 36 of 38, red only on `test_vulns_planted` (20 failures, on the stub) and `test_deps_planted`'s new `test_a_second_tool_lines_module_has_its_licence_read` (today's row reads only the `TOOL` constant) — by design, until lane E1.
+- **W1 (lanes E1, E2a, F1, F1b; QA's W0c), verified one by one and combined (3121f14):** E1 — `test_vulndb` 54 with the 39-row agreement table, `test_gomods`, `test_vulndb_fetch` 11, `test_vulns_row` 2, the deps tests, all green; on the real tree with a fresh copy (`make vulndb`: 3,599,175 bytes, sha256 3b16a8d3ee29, modified 2026-11-11T02:51:11Z) the `vulns` row red on GO-2026-5320, GO-2026-6860 and GO-2026-6866 before the 16 never-built marks and green after them, naming the three (2.3 s warm, 25.1 s at load 14; `timeout_s` 180). E2a — `gate/proofs` tidy (`go mod tidy -diff` exit 0); the cap from `PARITY_MEASURED_S`: slowest 10.357 s (CI, determinism-macos) against local rounds up to 9.59 s under load → `TREE_CAP_S` 120 s, the ratio guard shown red at 100 s; the download step's three designed forms each failing (table in the design's §8 / the owner's decision 2 during the build). F1 — the full candidate's T4 (ruff 0.17.5, python-build-standalone 20261110) red only on `test_manifest`'s file-order pin in `pytests` and `pyfloor` → `pin_tests.json`; `archive_pins` reproduced the committed ruff 0.17.3 and python 3.15.2 pins. F1b — the sort and summary, 60 tests.
+- **W2 (lanes E2b, F2), verified and combined (99bed2f, d0e8f22, f3e4db4):** E2b — the toolchain-line test, the tidy line (the root's real difference exactly the two recorded pins and six `go.sum` lines), the T4 `go.sum` line (silent on a clean tree, red on a planted line), the deps driver 9/9. F2 — form D in every downloading job, `canary.yml`, the three commands, `ci-fresh` covered 3; its dry run found W2-F1.
+- **T3 at f3e4db4:** `make combine-check` exit 0, 23 rows, 90.4 s (`ci-fresh` covered 3, `deps` covered 3, `aging` covered 4). **The `proofs` row alone at T4:** PASS, covered 38 of 38, 388.2 s, exit 0 — inside its 600 s cap at about two thirds, a margin to watch (lane F1 saw it time out on a machine loaded by four agents).
 
 ## Test material
 
@@ -86,9 +89,9 @@ Entry (G0)   ☑ card complete and approved (re-sized and reworded at the plan c
              ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit after the plan check's
 Design (G1)  ☑ architecture + the-fool findings resolved (design §8) ☑ QA testability findings resolved (design §8)
              ☑ owner decisions recorded (2026-11-13) ☐ ADRs written for lasting decisions (ADR-0015 annotated as built after W3)
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
+Build (G2)   ☑ every lane at its modules and drivers (the owner's one-time CPU rule: T2 once, on the combine) ☑ T3 combine-check exit 0 (f3e4db4, 90.4 s)
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
-             ☐ tests on the real code ☐ every breaker's red test committed
+             ☑ tests on the real code ☐ every breaker's red test committed (step 7)
 Review (G3)  ☐ architecture review of the combined diff: no drift
              ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☐ T4 strict-gate / CI exit 0, run complete ☐ owner's check passed
