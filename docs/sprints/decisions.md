@@ -91,6 +91,7 @@
 | 2026-11-13 | [S1.1c-4's design, after the reviews](#owner-decisions-2026-11-13--s11c-4s-design-after-the-reviews) |
 | 2026-11-13 | [during S1.1c-4's build](#owner-decisions-2026-11-13--during-s11c-4s-build) |
 | 2026-11-13 | [S1.1c-4's review and break-it](#owner-decisions-2026-11-13--s11c-4s-review-and-break-it) |
+| 2026-11-14 | [S1.1c-4's owner's check](#owner-decisions-2026-11-14--s11c-4s-owners-check) |
 
 ## The decisions
 
@@ -871,3 +872,11 @@ The combined build (`s1-1c-4/integration` @ 1b06251, pushed; draft PR #40; T3 ex
 3. **`make vulndb` refuses any redirect off https** (as recommended; raised by QA's break-it): the vulnerability database carries no digest, so a downgrade redirect could serve a doctored copy; any non-https hop fails the fetch, named, the old copy kept and `fetch-error.txt` written. Rejected: leaving it.
 4. **A canary break ages through a known issue** (as recommended; review CA-S3): a break the weekly canary reports two weeks running is filed as a known issue by the coordinator, so the aging row ages it (ADR-0015 §3.9's "nothing yellow becomes wallpaper"); ADR-0015 §3.2 and §3.9 are annotated with the canary as built. Rejected: the canary as a report that never ages.
 5. **The flake-fix PR is pushed and opened** (PR #41, ready for review).
+
+### Owner decisions, 2026-11-14 — S1.1c-4's owner's check
+
+After the fix round (combined at 35526c0; T4 exit 0) and PR #41's merge (main 2a3a3af, the sprint branch rebased onto it). Three answers; all as recommended.
+
+1. **The owner's check passes** (G4): in a scratch clone of 5585072 with its own database copy — x/text at v0.40.0 red, `vulns: GO-2026-6629 golang.org/x/text v0.40.0: fixed in 0.41.0`; x/text marked never built red in `deps`; the copy's stamp eight days back red naming `make vulndb`; an uncommitted `go.sum` line red at T4; the restored tree green; the nightly on the branch (its database date) and the canary's first summary read from the record.
+2. **The rebased sprint branch is force-pushed** (`--force-with-lease`) to update PR #40.
+3. **The `proofs` row's margin is read on the push's CI run first** (as recommended): over 480 s (80% of its 600 s cap) and the 31-case vulns driver is split in two by concern before #40 is marked ready; otherwise the margin is recorded as a known issue to watch. Rejected: splitting the driver now; raising the cap to 900 s.

@@ -51,30 +51,6 @@
       "opened": "2026-11-10"
     },
     {
-      "id": "S1.1c-3-1",
-      "first_seen": "S1.1c-3",
-      "forward": "S1.1c-4",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
-      "correctness": false,
-      "opened": "2026-11-12"
-    },
-    {
-      "id": "S1.1c-3-2",
-      "first_seen": "S1.1c-3",
-      "forward": "S1.1c-4",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
-      "correctness": false,
-      "opened": "2026-11-12"
-    },
-    {
-      "id": "S1.1c-3-3",
-      "first_seen": "S1.1c-3",
-      "forward": "S1.1c-4",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-13--s11c-3s-review-and-break-it",
-      "correctness": false,
-      "opened": "2026-11-13"
-    },
-    {
       "id": "S1.1c-3-4",
       "first_seen": "S1.1c-3",
       "forward": "",
