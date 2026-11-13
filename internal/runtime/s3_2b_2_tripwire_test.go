@@ -1,6 +1,7 @@
 package runtime_test
 
 import (
+	goruntime "runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -58,22 +59,42 @@ func TestOutboxHighIsOneAdvancesEmissions(t *testing.T) {
 }
 
 // TestSinkHighIsTheLongestQueue (design s3-2b-2 §8; review F10: sink-depth needs a source): Stats.SinkHigh is the
-// longest a binding's queue has been — a held sink lets it fill to its capacity.
+// longest a binding's queue has been — a held sink lets it fill to its capacity, and twice as many outputs as the
+// capacity still leave it at the capacity.
 func TestSinkHighIsTheLongestQueue(t *testing.T) {
 	t.Parallel()
 	ctx := rtCeiling(t)
 	hold, entered := make(chan struct{}), make(chan struct{})
-	var once sync.Once
+	holdFirst := sync.OnceFunc(func() { close(entered); <-hold })
 	r := rtStart(t, runtime.Config{Shards: 1, SinkQueue: 4}, twApp(t, 1, func(event.Event) error {
-		once.Do(func() { close(entered); <-hold })
+		holdFirst()
 		return nil
 	}))
 	// The key-less rule releases an event once the clock is past it (S3.2a-1's D1): the second event releases the first.
 	rtSend(t, ctx, r, 0, rtEv(0, rtAt(1), rtStr("a")))
 	rtSend(t, ctx, r, 0, rtEv(0, rtAt(2), rtStr("a")))
 	rtWait(t, ctx, entered, "the held sink's first call")
-	for i := range 8 {
+	// Four more events release four outputs behind the held call: the queue's capacity.
+	for i := range 4 {
 		rtSend(t, ctx, r, 0, rtEv(0, rtAt(float64(3+i)), rtStr("a")))
+	}
+	// Send returns once the intake holds an event, not once its output is queued: released any earlier, the sink
+	// drains a part-filled queue (CI run 43443667368: [[3]]). Wait for the full queue here, before the overfill: with
+	// a full queue and an output pending, the router stops reading the intake, so no Stats cut returns until the
+	// release.
+	for {
+		st, err := r.Stats(ctx)
+		if err != nil {
+			t.Fatalf("the queue never filled to 4 while the sink was held: Stats: %v", err)
+		}
+		if len(st.SinkHigh) == 1 && len(st.SinkHigh[0]) == 1 && st.SinkHigh[0][0] == 4 {
+			break
+		}
+		goruntime.Gosched()
+	}
+	// Four more: outputs beyond the capacity, held by the router while the queue stays full.
+	for i := range 4 {
+		rtSend(t, ctx, r, 0, rtEv(0, rtAt(float64(7+i)), rtStr("a")))
 	}
 	close(hold)
 	rtDrain(t, ctx, r, 0)
