@@ -1,0 +1,244 @@
+[
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27.4.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4",
+    "version": "go1.27.4"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27.4.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840",
+    "version": "go1.27.4"
+   }
+  ],
+  "stable": true,
+  "version": "go1.27.4"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27.3.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2",
+    "version": "go1.27.3"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27.3.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+    "version": "go1.27.3"
+   }
+  ],
+  "stable": true,
+  "version": "go1.27.3"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27.2.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "76812b213b1b2302c978d28fa52fa92d541704b9e7d9d5db8002c50e4018c4c5",
+    "version": "go1.27.2"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27.2.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5",
+    "version": "go1.27.2"
+   }
+  ],
+  "stable": true,
+  "version": "go1.27.2"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27.1.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12",
+    "version": "go1.27.1"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27.1.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445",
+    "version": "go1.27.1"
+   }
+  ],
+  "stable": true,
+  "version": "go1.27.1"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27.0.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "90493b3bbd5e10f91d12153198bf1994fd756399b4fec93b49b0c6e2acdeeb3e",
+    "version": "go1.27.0"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27.0.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685",
+    "version": "go1.27.0"
+   }
+  ],
+  "stable": true,
+  "version": "go1.27.0"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27rc3.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "205d5695db35df32fdd88ea6fa420dfb5f7d98feae5a9061a88b4f6308f61c5f",
+    "version": "go1.27rc3"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27rc3.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "6471852dc296512047775db96bf43ff2030781f79523d3f26d50f8d0631588f0",
+    "version": "go1.27rc3"
+   }
+  ],
+  "stable": false,
+  "version": "go1.27rc3"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27rc2.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "b543bf435ed266d66b275efba433dbe64904be607fe365494cf72f7ad4e91b63",
+    "version": "go1.27rc2"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27rc2.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "e2dfdfc2b2d4092bf23d5ffb0a11221c2f3eed2d8acfc51344066b9c83a368db",
+    "version": "go1.27rc2"
+   }
+  ],
+  "stable": false,
+  "version": "go1.27rc2"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.27rc1.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "7b7b4d66fc0a7bc8e57b3602340dfef46d4f5f95fc5d30e5c5af6a671830de54",
+    "version": "go1.27rc1"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.27rc1.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "102a6055d682b1f233bc1741122cc6fddae7a7dded1305fbcc30079984187144",
+    "version": "go1.27rc1"
+   }
+  ],
+  "stable": false,
+  "version": "go1.27rc1"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.26.11.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "e3a42e67a7a8acf450ebada2b074c7ca863000ca514907b7185b45e8f5cdff57",
+    "version": "go1.26.11"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.26.11.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec",
+    "version": "go1.26.11"
+   }
+  ],
+  "stable": true,
+  "version": "go1.26.11"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.26.10.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "0b5183492292ada170f9b561a834863808dd02edba599e4ad0e89899330020b3",
+    "version": "go1.26.10"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.26.10.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "ccfe7ae822d2c2f41f4fe7c956199967a4dac22d0ee0d2b2bfdb440aab3b20c5",
+    "version": "go1.26.10"
+   }
+  ],
+  "stable": true,
+  "version": "go1.26.10"
+ },
+ {
+  "files": [
+   {
+    "arch": "arm64",
+    "filename": "go1.26.1.darwin-arm64.tar.gz",
+    "kind": "archive",
+    "os": "darwin",
+    "sha256": "353df43a7811ce284c8938b5f3c7df40b7bfb6f56cb165b150bc40b5e2dd541f",
+    "version": "go1.26.1"
+   },
+   {
+    "arch": "amd64",
+    "filename": "go1.26.1.linux-amd64.tar.gz",
+    "kind": "archive",
+    "os": "linux",
+    "sha256": "031f088e5d955bab8657ede27ad4e3bc5b7c1ba281f05f245bcc304f327c987a",
+    "version": "go1.26.1"
+   }
+  ],
+  "stable": true,
+  "version": "go1.26.1"
+ }
+]
