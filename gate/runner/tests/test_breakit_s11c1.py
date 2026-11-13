@@ -11,7 +11,7 @@ from unittest import mock
 
 from gate.runner import git, law
 from gate.runner.rows import deps as deps_row
-from gate.runner.rows import lawdelta
+from gate.runner.rows import gomods, lawdelta
 from gate.runner.tests import support
 
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
@@ -92,18 +92,24 @@ class DepsGather(support.GateTest):
         `go mod graph` shows v1.2.0 too. The row reads only Version, so the allowlist's v1.2.0 passes while
         v1.0.0 (or a local directory, or another module path) is what ships. A replace must be a named line."""
 
-        def fake(row_dir: str, env: dict, cwd: str, name: str, argv) -> str:
-            if name.endswith(".list-m"):
+        def fake(row_dir: str, env: dict, cwd: str, name: str, argv, *, ok=(0,)) -> str:
+            # gomods.run, answered by argv (design §2.7: the loader is the deps row's gather; review DA-S12).
+            argv = list(argv)
+            if argv[:3] == ["go", "list", "-m"]:
                 return LIST_M if cwd == "." else '{"Path": "example.com/proofs", "Main": true, "Dir": "/p"}\n'
-            if name.endswith(".graph"):
+            if argv[:3] == ["go", "mod", "graph"]:
                 return "example.com/main example.com/dep@v1.2.0\n" if cwd == "." else ""
-            if name.endswith(".imported"):
-                return "example.com/dep\n" if cwd == "." else ""
-            if name.endswith(".tool"):
+            if argv[:2] == ["go", "list"] and argv[-1] == "./...":
+                return (
+                    '{"ImportPath": "example.com/dep", "Module": {"Path": "example.com/dep"}}\n' if cwd == "." else ""
+                )
+            if argv[:2] == ["go", "list"] and argv[-1] == "tool":
                 return ""
-            raise AssertionError(name)
+            if argv == ["go", "env", "GOVERSION"]:
+                return "go1.27.4\n"
+            raise AssertionError(argv)
 
-        with mock.patch.object(deps_row, "run", fake):
+        with mock.patch.object(gomods, "run", fake):
             modules, graph, failures = deps_row.gather(self.run_dir, {})
         # Owner, 2026-11-11 (the fix round): gather carries the replacement; the allowlist decides (compare).
         self.assertEqual([f for f in failures if "replace" in f], [], f"failures {failures}")
