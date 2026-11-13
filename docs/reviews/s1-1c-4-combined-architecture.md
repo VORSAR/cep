@@ -1,3 +1,5 @@
+> **Historical — S1.1c-4, the scans; merged in PR #40.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-13--s11c-4s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1c-4-plan-check.md) · [design](../sprints/s1-1c-4-design.md) · [record](../sprints/s1-1c-4-record.md) · reviews: [plan check architecture](s1-1c-4-plan-check-architecture.md), [plan check qa](s1-1c-4-plan-check-qa.md), [design architecture](s1-1c-4-design-architecture.md), [design qa](s1-1c-4-design-qa.md), [combined architecture](s1-1c-4-combined-architecture.md), [breakit qa](s1-1c-4-breakit-qa.md). **← [S1.1c-3](../sprints/s1-1c-3-record.md) · [S1.1c-5 (next)](../sprints/sprint-plan.md#status) →**
+
 > **S1.1c-4 combined build, architecture review with the-fool (blind), 2026-11-13** — the architect reviewer on `main..s1-1c-4/integration` @ 1b06251 (step 7). Every finding is placed in [the sprint record](../sprints/s1-1c-4-record.md)'s findings.
 
 # S1.1c-4 combined-build architecture review (step 7), with the-fool

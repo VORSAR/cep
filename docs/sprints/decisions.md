@@ -92,6 +92,7 @@
 | 2026-11-13 | [during S1.1c-4's build](#owner-decisions-2026-11-13--during-s11c-4s-build) |
 | 2026-11-13 | [S1.1c-4's review and break-it](#owner-decisions-2026-11-13--s11c-4s-review-and-break-it) |
 | 2026-11-14 | [S1.1c-4's owner's check](#owner-decisions-2026-11-14--s11c-4s-owners-check) |
+| 2026-11-14 | [S1.1c-4's close-out](#owner-decisions-2026-11-14--s11c-4s-close-out) |
 
 ## The decisions
 
@@ -880,3 +881,16 @@ After the fix round (combined at 35526c0; T4 exit 0) and PR #41's merge (main 2a
 1. **The owner's check passes** (G4): in a scratch clone of 5585072 with its own database copy — x/text at v0.40.0 red, `vulns: GO-2026-6629 golang.org/x/text v0.40.0: fixed in 0.41.0`; x/text marked never built red in `deps`; the copy's stamp eight days back red naming `make vulndb`; an uncommitted `go.sum` line red at T4; the restored tree green; the nightly on the branch (its database date) and the canary's first summary read from the record.
 2. **The rebased sprint branch is force-pushed** (`--force-with-lease`) to update PR #40.
 3. **The `proofs` row's margin is read on the push's CI run first** (as recommended): over 480 s (80% of its 600 s cap) and the 31-case vulns driver is split in two by concern before #40 is marked ready; otherwise the margin is recorded as a known issue to watch. Rejected: splitting the driver now; raising the cap to 900 s.
+
+### Owner decisions, 2026-11-14 — S1.1c-4's close-out
+
+After PR #40's CI (gate green; the canary's summary pins only, no breaks; the `proofs` row 480.0 s of its 600 s cap) and its merge (rebase, `main` 9b923ab). Eight answers; all as recommended.
+
+1. **The tool upgrade is taken, in its own small PR after S1.1c-4** (as recommended): `tools.json` to ruff 0.17.5 and python-build-standalone 20261110 for python 3.15.2 and python-floor 3.12.16, hashed with the installer's own code as #37 was, the pin test and the census updated; the canary's red T4 jobs then green until the next upgrade. Rejected: the canary's checks turned green while pins lag; nothing.
+2. **The proof worlds reuse the outer run's tool check** (as recommended; the `proofs` row is limited by total work — 38 drivers, 1,320 s of work on a 4-core runner — most of it each nested gate run re-hashing every tool tree): the `proofs` row hands the tree digests it has just verified to its own nested runs, for that run only; an unchanged sealed tree is not re-hashed; the parity proofs still hash for real; measured first; ADR-0015 §3.2's "verified every run" annotated. This replaces decision 3 of "S1.1c-4's owner's check" (splitting the vulns driver), whose premise — that the slowest driver sets the row's time — the CI records disproved. Rejected: unit-level cases out of the drivers; a larger runner; a 900 s cap.
+3. **#40 merges now; the speed-up follows as its own PR** (as recommended), beside the tool upgrade. Rejected: the speed-up inside S1.1c-4 first.
+4. **`main`'s CI is green on the merge commit 9b923ab** (checked by the coordinator at the owner's request: run 43488210685, every job).
+5. **The sprint's branches and worktrees are deleted** (as recommended, after the coordinator's check): `s1-1c-4/integration` local and remote, `qa`, `e1`, `e2`, `e2b`, `f1`, `f1b`, `f2`, `breakit`, `breakit2`, `fix-p`, `fix-c` local, and their worktrees — every commit on `main` by patch.
+6. **The close-out goes up as its own docs PR** (`docs/s1-1c-4-close-out`), as for the last four sprints (as recommended).
+7. **One lasting rule from the retro** (as recommended): a committed data file that code parses is loaded by a test (sprint model §10). Rejected: measuring a T4-only row against its cap at G2 (the speed-up addresses the cause); both.
+8. **The order after S1.1c-4:** the proof-world speed-up and the tool upgrade, then S1.1c-5's plan check (the status line).
