@@ -217,7 +217,7 @@ time timestamp to todo trigger true ttl tumbling watermark week window within
 
 ## Appendix C. Error codes
 
-See [errors.md](errors.md) — 68 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 28 files), 45 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`; rev 4 added `E-NULL-003`, `E-PART-004`; rev 5 added `E-PART-005`, `E-PART-006`, `E-PART-007`; rev 7 added `E-TBL-002`, `E-PART-008`).
+See [errors.md](errors.md) — 68 codes: 23 parse-level (each with at least one counter-example file in [invalid/](invalid/); 29 files), 45 static (rev 3 added `E-GRAPH-004`, `E-PART-003`, `E-TIME-003`; rev 4 added `E-NULL-003`, `E-PART-004`; rev 5 added `E-PART-005`, `E-PART-006`, `E-PART-007`; rev 7 added `E-TBL-002`, `E-PART-008`).
 
 ## Appendix D. Go builder API mapping (informative until the API spec lands)
 
