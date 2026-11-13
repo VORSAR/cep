@@ -19,6 +19,7 @@ from gate.runner import deps, rows
 MODULES = (".", "gate/proofs")
 PLATFORMS = (("linux", "amd64"), ("darwin", "arm64"))  # tools.json's two platforms (manifest.PLATFORMS)
 LOOKUP_DISABLED = "module lookup disabled"
+ENV = {"GOPROXY": "off", "GOFLAGS": "-mod=readonly", "GOTOOLCHAIN": "local", "CGO_ENABLED": "0"}  # both rows' go
 
 
 @dataclass(frozen=True)

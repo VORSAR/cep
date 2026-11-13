@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 from gate.runner import allowlists, anchors, deps, rows, sprintid
 from gate.runner.rows import gomods
 
-ENV = {"GOPROXY": "off", "GOFLAGS": "-mod=readonly", "GOTOOLCHAIN": "local", "CGO_ENABLED": "0"}
+ENV = gomods.ENV
 
 
 def read_license(directory: str) -> str | None:
