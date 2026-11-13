@@ -199,12 +199,11 @@ def _day(text: object) -> str:
     return moment.date().isoformat() if moment is not None else "?"
 
 
-def main(argv: list[str]) -> int:
-    row_dir = rows.start()
-    env = {**os.environ, **gomods.ENV}
-    now = datetime.now(UTC)
+def scan(row_dir: str, env: dict[str, str], *, repo: str, copy_root: str, now: datetime) -> tuple[list[str], list[str]]:
+    """The row's faults and its reason lines: `repo` holds the register and the waivers, `copy_root` the copy."""
     faults: list[str] = []
     notes: list[str] = []
+    lines: list[str] = []
     complete = True
     loaded: gomods.Loaded | None = None
     try:
@@ -219,18 +218,19 @@ def main(argv: list[str]) -> int:
             complete = False
     never_built: frozenset[str] = frozenset()
     try:
-        never_built = frozenset(e.module for e in deps.load_allowlist(rows.read_text(deps.ALLOWLIST)) if not e.built)
+        register = deps.load_allowlist(rows.read_text(os.path.join(repo, deps.ALLOWLIST)))
+        never_built = frozenset(e.module for e in register if not e.built)
     except (OSError, ValueError) as e:
         faults.append(f"vulns: {e}")
     live: dict[str, Waiver] = {}
     try:
-        live, refused = waivers(allowlists.load(rows.read_text(WAIVERS), "vulns"), now.date())
+        live, refused = waivers(allowlists.load(rows.read_text(os.path.join(repo, WAIVERS)), "vulns"), now.date())
         faults += refused
     except (OSError, ValueError) as e:
         faults.append(f"vulns: {e}")
     used: set[str] = set()
 
-    copy = open_copy(vulndb_fetch.copy_root(os.environ), now)
+    copy = open_copy(copy_root, now)
     notes += copy.notes
     silenced_copy: list[str] = []
     for fault in copy.faults:
@@ -270,25 +270,35 @@ def main(argv: list[str]) -> int:
         if target == VULNDB or complete:
             faults.append(f"vulns: {target} matches nothing: remove it")
 
-    rows.covered(COVERED)
     if copy.zip is None and silenced_copy and not faults:
         w = live[VULNDB]
-        print(f"vulns: not scanned: {'; '.join(silenced_copy)}; exempted by vulndb until {w.expiry} ({w.issue})")
+        lines.append(f"vulns: not scanned: {'; '.join(silenced_copy)}; exempted by vulndb until {w.expiry} ({w.issue})")
     if copy.zip is not None and loaded is not None:
         stamp = copy.stamp if isinstance(copy.stamp, dict) else {}
         db = _parsed(copy.cache.get(vulndb.DB_JSON))
-        print(
+        lines.append(
             f"vulns: vulndb {_day(db.get('modified') if isinstance(db, dict) else None)} (fetched"
             f" {_day(stamp.get('fetched'))}, {copy.root}), {len(entries)} entries; {len(loaded.modules)} modules"
             f" ({sum(1 for m in loaded.modules if m.built)} built); stdlib and toolchain at {loaded.go_version}"
         )
     if unbuilt:
-        print(f"vulns: never built: {', '.join(unbuilt)}")
+        lines.append(f"vulns: never built: {', '.join(unbuilt)}")
     if used:
-        print(f"vulns: silenced: {', '.join(f'{t} until {live[t].expiry} ({live[t].issue})' for t in sorted(used))}")
-    for note in sorted(set(notes)):
-        print(f"vulns: {note}")
-    print(f"vulns: {NOT_READ}", flush=True)
+        silenced = ", ".join(f"{t} until {live[t].expiry} ({live[t].issue})" for t in sorted(used))
+        lines.append(f"vulns: silenced: {silenced}")
+    lines += [f"vulns: {note}" for note in sorted(set(notes))]
+    lines.append(f"vulns: {NOT_READ}")
+    return faults, lines
+
+
+def main(argv: list[str]) -> int:
+    row_dir = rows.start()
+    env = {**os.environ, **gomods.ENV}
+    faults, lines = scan(row_dir, env, repo=".", copy_root=vulndb_fetch.copy_root(os.environ), now=datetime.now(UTC))
+    rows.covered(COVERED)
+    for line in lines:
+        print(line)
+    sys.stdout.flush()
     return rows.finish(faults)
 
 
