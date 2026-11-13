@@ -383,14 +383,20 @@ class Findings(unittest.TestCase):
         )
 
     def test_an_invalid_go_version_is_a_fault_never_a_finding_or_a_crash(self):
-        # design §2.2: go_version() raises InvalidVersion for a tag it cannot convert; findings() collects it as the
-        # stdlib entry's fault (the tag as given), the walk going on.
+        # design §2.2: go_version() raises InvalidVersion for a tag it cannot convert; findings() converts it once,
+        # before the walk, and collects one fault (the tag as given), the walk going on (review CA-L9).
         e = entry("GO-2099-0029", ("stdlib", semver({"introduced": "0"}, {"fixed": "1.27.5"})))
         found, faults = vulndb.findings({}, frozenset(), "devel go1.28-0123abcd", [e])
         self.assertEqual(found, [])
         self.assertEqual(
             faults,
-            [("GO-2099-0029", "stdlib", "vulns: GO-2099-0029 stdlib: version devel go1.28-0123abcd cannot be ordered")],
+            [
+                (
+                    "",
+                    "",
+                    "vulns: the go version devel go1.28-0123abcd cannot be ordered: stdlib and toolchain not judged",
+                )
+            ],
         )
 
     def test_the_cap_constants(self):
