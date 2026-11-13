@@ -68,7 +68,7 @@ func TestTheDetectorClassifiesTheResearchSpans(t *testing.T) {
 	for _, r := range rows {
 		counts[r.Class]++
 	}
-	want := map[string]int{"cep": 57, "cep-meta": 31, "text": 26, "exempt": 40, "cep-invalid": 8, "red": 62}
+	want := map[string]int{"cep": 57, "cep-meta": 33, "text": 26, "exempt": 40, "cep-invalid": 8, "red": 60}
 	for class, n := range want {
 		if counts[class] != n {
 			t.Fatalf("research-spans.jsonl holds %d %s spans; R-F3 counted %d", counts[class], class, n)

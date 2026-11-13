@@ -248,10 +248,12 @@ var bareForms = []struct {
 	with string
 	lead bool // only at the head of the span
 }{
+	{regexp.MustCompile(`^\s*,\s*`), "", true},      // a clause shown with its leading comma (E-PART-002's pinned fix)
 	{regexp.MustCompile(`\$\{…\}`), "$${p}", false}, // $$: a literal $ in a replacement
 	{regexp.MustCompile(`\[\s*…\s*\]`), "[x == 1]", false},
 	{regexp.MustCompile(`^\s*…(\s*(->|and\b))`), "every a0 = A0$1", true},
 	{regexp.MustCompile(`,\s*…`), "", false},
+	{regexp.MustCompile(`\s…\s+(ttl\b)`), " $1", false}, // a list continued with a bare … before ttl (E-PART-001's pinned fix)
 	{regexp.MustCompile(`=\s*…`), "= A1", false},
 	{regexp.MustCompile(`…`), " A1 ", false},
 	{regexp.MustCompile(`(^|[^A-Za-z0-9_])D([^A-Za-z0-9_]|$)`), "${1}5 min$2", false},

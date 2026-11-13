@@ -187,8 +187,8 @@
 {"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 86, "span": "idle after"}
 {"class": "exempt", "file": "docs/language/errors.md", "kwonly": true, "line": 87, "span": "idle after"}
 {"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 88, "placeholders": true, "span": "idle after <duration>"}
-{"class": "red", "file": "docs/language/errors.md", "kind": "partition", "kwonly": false, "line": 92, "placeholders": true, "span": "partition by <key> of <Stream> … ttl <duration>"}
-{"class": "red", "file": "docs/language/errors.md", "kind": "aftermatch", "kwonly": false, "line": 96, "placeholders": true, "span": ", <key> of <ThatStream>"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "partition", "kwonly": false, "line": 92, "placeholders": true, "span": "partition by <key> of <Stream> … ttl <duration>"}
+{"class": "cep-meta", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 96, "placeholders": true, "span": ", <key> of <ThatStream>"}
 {"class": "red", "file": "docs/language/errors.md", "kind": "expr", "kwonly": false, "line": 100, "span": "part 2 of the partition key: session of B is int, but sessionId of A is string"}
 {"class": "cep-invalid", "file": "docs/language/errors.md", "kind": "keylist", "kwonly": false, "line": 103, "span": "k of S, j of S", "stage": "validator"}
 {"class": "cep", "file": "docs/language/errors.md", "kind": "partkey", "kwonly": false, "line": 103, "span": "(k, j) of S"}
