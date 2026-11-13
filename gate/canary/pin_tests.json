@@ -11,8 +11,26 @@
       "measured": "2026-11-13, ruff 0.17.5 + python-build-standalone 20261110",
       "pattern": "AssertionError: Lists differ: \\[(?:\\('py|'/c/py)",
       "row": "pytests"
+    },
+    {
+      "id": "gate.toolchain.tests.test_toolchain_lines.ToolchainLines.test_a_missing_toolchain_line_is_named",
+      "measured": "unmeasured",
+      "pattern": "tools\\.json pins go",
+      "row": "pytests"
+    },
+    {
+      "id": "gate.toolchain.tests.test_toolchain_lines.ToolchainLines.test_a_stale_toolchain_line_is_named_with_both_versions",
+      "measured": "unmeasured",
+      "pattern": "tools\\.json pins go",
+      "row": "pytests"
+    },
+    {
+      "id": "gate.toolchain.tests.test_toolchain_lines.ToolchainLines.test_both_toolchain_lines_name_tools_jsons_go",
+      "measured": "unmeasured",
+      "pattern": "tools\\.json pins go",
+      "row": "pytests"
     }
   ],
-  "note": "The canary's expected pin reds (design §4.5), measured by one local T4 run in a scratch clone with tools.json swapped for the full candidate of 2026-11-13 (ruff 0.17.3 -> 0.17.5, python 3.15.2 and python-floor 3.12.16 build 20261026 -> 20261110), plus that test module alone under the python-build-standalone half only (its second text, masked by the first under the full candidate); a failure's id is the test's without unittest's subtest suffix (platform='...'), and go, golangci-lint and lark moves, which today's feeds cannot produce, are unmeasured: by reading they red this same test with the same two text shapes, and no row reads go.mod's toolchain lines or census.md.",
+  "note": "The canary's expected pin reds (design §4.5). Measured: the test_manifest file-order pin, by one local T4 run in a scratch clone with tools.json swapped for the full candidate of 2026-11-13 (ruff 0.17.3 -> 0.17.5, python 3.15.2 and python-floor 3.12.16 build 20261026 -> 20261110), plus that test module alone under the python-build-standalone half only (its second text, masked by the first under the full candidate); a failure's id is the test's without unittest's subtest suffix (platform='...'). Unmeasured, by reading (moves today's feeds cannot produce): a go move reds that same test with its first text shape (go's version is in its table), and the three tests of gate/toolchain/tests/test_toolchain_lines.py, which read go.mod's two toolchain lines (lane E2b; owner 2026-11-13, during S1.1c-4's build, decision 3), each by the stale-line rule, its exception line naming every stale line ('... tools.json pins go...'), in pytests only: pyfloor's row runs five other files (gate/registry.json); a golangci-lint or lark move reds the test_manifest pin alone, with that same first text shape (each version is in its table; no other test reading tools.json names them), so the measured entry covers both and neither has an entry of its own (one pattern per id). No row reads census.md.",
   "schema": 1
 }
