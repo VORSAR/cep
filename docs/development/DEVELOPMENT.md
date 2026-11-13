@@ -37,7 +37,7 @@ The gate is a **registry**, not a script: every check is one row. **The row sche
 | T3 | `make combine-check` | before pushing an integration branch | T2 + the race detector, deterministic-replay checks, the slow suites, the demo scenario |
 | T4 | `make strict-gate` == `make ci` == CI | each PR, main, each tag | everything, incl. the grammar differential, the planted proofs, the vulnerability scan and the dependency licence check (Apache-2-compatible only) |
 
-*(As built, 2026-11-06: `race` runs at T4, as its own CI job, and nightly as `race-stress`; golangci lint, suppressions, the vulnerability scan and the licence check are S1.1c's; the conformance suite is S3.3's. `gate/registry.json` gives each row's tiers.)*
+*(As built, 2026-11-06: `race` runs at T4, as its own CI job, and nightly as `race-stress`; golangci lint, suppressions, the vulnerability scan and the licence check are S1.1c's; the conformance suite is S3.3's. `gate/registry.json` gives each row's tiers.)* *(Annotated 2026-11-13, [owner, S1.1c-4's design, after the reviews](../sprints/decisions.md#owner-decisions-2026-11-13--s11c-4s-design-after-the-reviews), decision 3: from S1.1c-4, at T4 — a local `make strict-gate` and CI alike — a tracked `go.sum` (the root's or `gate/proofs`') that differs from `HEAD` is red in the `deps` row, naming the file: commit it, or fix the step that wrote it.)*
 
 **Reading a run.** CI shows the same table as the summary of one **`strict-gate`** check, which is the one check to read. A job that did not report (cancelled, timed out, crashed) is a failure, never an absence of failures. A run on `main` is never cancelled.
 
