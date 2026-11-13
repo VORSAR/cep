@@ -212,3 +212,17 @@ func TestBreakitCapitalKeywordsEscapeTheDetector(t *testing.T) {
 		})
 	}
 }
+
+// BK-L4: the leading-comma binding (added 2026-11-13 for E-PART-002's pinned fix) is applied until nothing changes,
+// so a doubled comma — a typo the language refuses — binds away and the span passes at its kind. One leading comma is
+// the notation; the second is a mistake.
+func TestBreakitDoubledLeadingCommaBindsAway(t *testing.T) {
+	t.Parallel()
+	if f := breakitFaults("Fix: `, k of S`<!--cep-meta:partkey-->.\n"); len(f) != 0 {
+		t.Fatalf("control: one leading comma is the notation: %q", f)
+	}
+	md := "Fix: `, , k of S`<!--cep-meta:partkey-->.\n"
+	if f := breakitFaults(md); len(f) == 0 {
+		t.Errorf("BK-L4: a doubled leading comma binds away and the span passes: %q", md)
+	}
+}
