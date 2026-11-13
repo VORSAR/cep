@@ -29,7 +29,7 @@ func staticEntries(text string) map[string]string {
 			code = ""
 		}
 		if i := strings.Index(line, "Fix: "); code != "" && i >= 0 && (i == 0 || strings.HasSuffix(line[:i], ". ")) {
-			out[code] = line[i+len("Fix: "):]
+			out[code] = fragmentMarker.ReplaceAllString(line[i+len("Fix: "):], "")
 			code = ""
 		}
 	}
@@ -58,6 +58,10 @@ func catalogDrift(text string, cat map[string]Entry) []string {
 	return out
 }
 
+// fragmentMarker is one of the four marker forms the rule-fragment test reads after a quoted span (S1.1c-3;
+// internal/parser/fixtext_test.go strips the same forms from the [parse] fix lines). It is never fix text.
+var fragmentMarker = regexp.MustCompile(`<!--(?:(?:cep|cep-meta|cep-invalid):[a-z]+|text)-->`)
+
 // TestDocsyncStaticCatalog is docsync (b) (S2.2b exit line 3): errors.md's [static] codes and catalog.go agree.
 func TestDocsyncStaticCatalog(t *testing.T) {
 	t.Parallel()
@@ -74,6 +78,11 @@ func TestDocsyncSeesPlantedDrift(t *testing.T) {
 	cat := map[string]Entry{"E-AAA-001": {Fix: "do one."}, "E-BBB-001": {Fix: "do two."}}
 	if d := catalogDrift(doc, cat); len(d) != 0 {
 		t.Fatalf("an agreeing fixture drifted: %v", d)
+	}
+	// A fragment marker after a quoted span is not part of the fix text users see (S1.1c-3, design §2.3).
+	if d := catalogDrift(strings.Replace(doc, "do one.", "do `one`<!--cep-meta:expr-->.", 1),
+		map[string]Entry{"E-AAA-001": {Fix: "do `one`."}, "E-BBB-001": {Fix: "do two."}}); len(d) != 0 {
+		t.Fatalf("a fix with a fragment marker drifted: %v", d)
 	}
 	cases := map[string]struct {
 		doc  string
