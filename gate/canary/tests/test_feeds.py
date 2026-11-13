@@ -12,7 +12,7 @@ import json
 import unittest
 
 from gate.canary.candidate import CanaryError
-from gate.canary.tests import feedsupport as fs
+from gate.canary.tests import support as fs
 
 GO = "https://go.dev/dl/?mode=json&include=all"
 GH = "https://api.github.com/repos/{}/releases?per_page={}"

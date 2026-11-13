@@ -1,7 +1,7 @@
 """candidate.build and candidate.structural_faults over the recorded feeds (S1.1c-4 design §4.3, §4.4; plan check §6
 canary (1)-(8), (13); S1.1c-3 plan check §6 [4] (1)-(8)). The feeds are today's real responses, trimmed to the
 fields the design reads (gate/canary/testdata/feeds/, fetched 2026-11-13); the pins are tools.json as it stood then
-(testdata/pinned-tools.json). `archive` is the fake in feedsupport: never the network.
+(testdata/pinned-tools.json). `archive` is the fake in support: never the network.
 
 The line rule (owner, 2026-11-13, G1-Q1): only patch releases on each pinned line are tried; a newer line is listed in
 Candidate.newer_lines and never downloaded.
@@ -16,7 +16,7 @@ import unittest
 
 from gate.canary import candidate
 from gate.canary.candidate import CanaryError, Upgrade
-from gate.canary.tests import feedsupport as fs
+from gate.canary.tests import support as fs
 from gate.toolchain import manifest
 
 BUILD = "build 20261026 → 20261110"
