@@ -1,45 +1,24 @@
 """The deps row (S1.1c-1 lane C; design note §5.3; owner 2026-11-11, the plan check, 1, 4 and 8, and the design, 1
 and 7; ADR-0009 §1; ADR-0001 §1): the dependency allowlist, licence and one-module checks, offline.
 
-In each tracked module (go.mod, gate/proofs/go.mod) it reads the build list (`go list -m -json all`), the module
-graph (`go mod graph`) and the modules the packages build or test with (`go list -e -deps -test ./...`); the apidiff
-tool's modules count as imported through whichever module declares the tool (gate/proofs after decision 7, the
-root before it). GOPROXY=off: a module missing from the cache is a named failure with its fix command, never a
-download. `-e` keeps a package that does not build in the listing: a module reached only through it falls from
-imported to graph-only, weaker, never red (design note §5.3). Each entry's `sprint` and `ref` are checked against
-gate/sprints.json, gate/current-sprint and the tracked Markdown (S1.1c-2 design §4.6a). GATE_COVERED is 3: the three
-named checks, printed once the allowlist is read. The rule itself is gate/runner/deps.py.
+It reads both tracked modules (go.mod, gate/proofs/go.mod) through the shared loader, gate/runner/rows/gomods.py
+(S1.1c-4 design note §2.1, §2.7): the build lists, the module graph and the modules every package, test and `tool`
+line compiles over both supported platforms; every package load error is a named line, never a module silently
+graph-only. GOPROXY=off: a module missing from the cache is a named failure with its fix command, never a
+download. Each entry's `sprint` and `ref` are checked against gate/sprints.json, gate/current-sprint and the
+tracked Markdown (S1.1c-2 design §4.6a). GATE_COVERED is 3: the three named checks, printed once the allowlist is
+read. The rule itself is gate/runner/deps.py.
 """
 
 import os
-import subprocess
 import sys
-from collections.abc import Sequence
-from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from gate.runner import allowlists, anchors, deps, rows, sprintid
+from gate.runner.rows import gomods
 
-MODULES = (".", "gate/proofs")
-TOOL = "golang.org/x/exp/cmd/apidiff"
-MODULE_PATH = "{{if .Module}}{{.Module.Path}}{{end}}"
 ENV = {"GOPROXY": "off", "GOFLAGS": "-mod=readonly", "GOTOOLCHAIN": "local", "CGO_ENABLED": "0"}
-
-
-class Failed(Exception):
-    """A tool that did not finish: its one failed line."""
-
-
-def run(row_dir: str, env: dict[str, str], cwd: str, name: str, argv: Sequence[str]) -> str:
-    """One tool's stdout, its output in the row directory; non-zero is Failed naming the first stderr line."""
-    out, err = os.path.join(row_dir, f"{name}.stdout"), os.path.join(row_dir, f"{name}.stderr")
-    with open(out, "wb") as o, open(err, "wb") as e:
-        code = subprocess.run(list(argv), cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=o, stderr=e).returncode
-    if code != 0:
-        lines = rows.read_text(err).splitlines()
-        raise Failed(f"deps: {' '.join(argv)} failed: {lines[0] if lines else f'exit {code}'}")
-    return rows.read_text(out)
 
 
 def read_license(directory: str) -> str | None:
@@ -52,44 +31,20 @@ def read_license(directory: str) -> str | None:
 
 
 def gather(row_dir: str, env: dict[str, str]) -> tuple[list[deps.Module], frozenset[str], list[str]]:
-    """The union of the build lists marked imported, the union of the graphs, and the two-version lines."""
-    builds: dict[str, dict[str, tuple[str, str, str]]] = {}
-    mains: list[str] = []
-    graph: set[str] = set()
-    imported: set[str] = set()
-    for mod in MODULES:
-        tag = "root" if mod == "." else mod.replace("/", "_")
-        build: dict[str, tuple[str, str, str]] = {}
-        main = ""
-        for obj in deps.decode_json_stream(
-            run(row_dir, env, mod, f"{tag}.list-m", ["go", "list", "-m", "-json", "all"])
-        ):
-            if obj.get("Main"):
-                main = obj["Path"]
-            elif "Version" in obj:
-                rep = obj.get("Replace") or {}
-                target = (rep.get("Path", "") + (" " + rep["Version"] if rep.get("Version") else "")) if rep else ""
-                build[obj["Path"]] = (obj["Version"], obj.get("Dir") or "", target)
-        builds[mod], mains = build, [*mains, main]
-        graph |= deps.graph_nodes(run(row_dir, env, mod, f"{tag}.graph", ["go", "mod", "graph"]), [main])
-        listing = ["go", "list", "-e", "-deps", "-test", "-f", MODULE_PATH, "./..."]
-        imported |= set(run(row_dir, env, mod, f"{tag}.imported", listing).split())
-    for mod in reversed(MODULES):  # the tool's modules: gate/proofs declares it after decision 7, the root before
-        tag = "root" if mod == "." else mod.replace("/", "_")
-        found = run(row_dir, env, mod, f"{tag}.tool", ["go", "list", "-e", "-deps", "-f", MODULE_PATH, TOOL]).split()
-        if found:
-            imported |= set(found)
-            break
+    """The union of the build lists marked imported (built), the union of the graphs, the two-version lines and the
+    loader's error lines (design §2.7)."""
+    loaded = gomods.load(row_dir, env)
+    root, proofs = loaded.versions["."], loaded.versions["gate/proofs"]
     failures = [
-        deps.two_versions_line(path, builds["."][path][0], builds["gate/proofs"][path][0])
-        for path in sorted(set(builds["."]) & set(builds["gate/proofs"]))
-        if builds["."][path][0] != builds["gate/proofs"][path][0]
+        deps.two_versions_line(path, root[path], proofs[path])
+        for path in sorted(set(root) & set(proofs))
+        if root[path] != proofs[path]
     ]
-    modules: dict[str, deps.Module] = {}
-    for mod in MODULES:
-        for path, (version, directory, replace) in builds[mod].items():
-            modules.setdefault(path, deps.Module(path, version, directory, path in imported, replace))
-    return [modules[path] for path in sorted(modules)], frozenset(graph - set(mains)), failures
+    modules = [
+        deps.Module(m.path, m.version, m.dir, m.built, " ".join(p for p in (m.replace_path, m.replace_version) if p))
+        for m in loaded.modules
+    ]
+    return modules, loaded.graph, failures + list(loaded.errors)
 
 
 def context(row_dir: str, env: dict[str, str]) -> allowlists.Ctx:
@@ -97,7 +52,7 @@ def context(row_dir: str, env: dict[str, str]) -> allowlists.Ctx:
     order = sprintid.load_order(rows.read_text(sprintid.SPRINTS))
     current = sprintid.read_marker(rows.read_text(sprintid.MARKER))
     order.index(sprintid.canonical(current))  # the marker's row is in the order, or a ValueError naming it
-    listed = run(row_dir, env, ".", "markdown", ["git", "ls-files", "-z", "--", "*.md"])
+    listed = gomods.run(row_dir, env, ".", "markdown", ["git", "ls-files", "-z", "--", "*.md"])
     tracked = frozenset(path for path in listed.split("\0") if path)
 
     def read(path: str) -> str | None:
@@ -109,7 +64,7 @@ def context(row_dir: str, env: dict[str, str]) -> allowlists.Ctx:
             return None
 
     return allowlists.Ctx(
-        today=datetime.now(UTC).date(),
+        today=rows.today(),
         tier=env.get("GATE_TIER", ""),
         order=order,
         current=current,
@@ -123,19 +78,17 @@ def main(argv: list[str]) -> int:
     env = {**os.environ, **ENV}
     try:
         modules, graph, failures = gather(row_dir, env)
-        listed = run(row_dir, env, ".", "gomods", ["git", "ls-files", "-z", "--", "go.mod", ":(glob)**/go.mod"])
+        listed = gomods.run(row_dir, env, ".", "gomods", ["git", "ls-files", "-z", "--", "go.mod", ":(glob)**/go.mod"])
         ctx = context(row_dir, env)
-    except Failed as e:
-        return rows.finish([str(e)])
-    except (OSError, ValueError) as e:
+    except (gomods.Failed, OSError, ValueError) as e:
         return rows.finish([f"deps: {e}"])
-    gomods = sorted({path for path in listed.split("\0") if path})
+    tracked = sorted({path for path in listed.split("\0") if path})
     try:
         entries = deps.load_allowlist(rows.read_text(deps.ALLOWLIST))
     except (OSError, ValueError) as e:
         return rows.finish([f"deps: {e}"])
     rows.covered(3)
-    return rows.finish(failures + deps.compare(modules, graph, entries, gomods, read_license, ctx))
+    return rows.finish(failures + deps.compare(modules, graph, entries, tracked, read_license, ctx))
 
 
 if __name__ == "__main__":
