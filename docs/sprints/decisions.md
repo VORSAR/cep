@@ -93,6 +93,7 @@
 | 2026-11-13 | [S1.1c-4's review and break-it](#owner-decisions-2026-11-13--s11c-4s-review-and-break-it) |
 | 2026-11-14 | [S1.1c-4's owner's check](#owner-decisions-2026-11-14--s11c-4s-owners-check) |
 | 2026-11-14 | [S1.1c-4's close-out](#owner-decisions-2026-11-14--s11c-4s-close-out) |
+| 2026-11-14 | [the proof-world speed-up's measurement](#owner-decisions-2026-11-14--the-proof-world-speed-ups-measurement) |
 
 ## The decisions
 
@@ -894,3 +895,11 @@ After PR #40's CI (gate green; the canary's summary pins only, no breaks; the `p
 6. **The close-out goes up as its own docs PR** (`docs/s1-1c-4-close-out`), as for the last four sprints (as recommended).
 7. **One lasting rule from the retro** (as recommended): a committed data file that code parses is loaded by a test (sprint model §10). Rejected: measuring a T4-only row against its cap at G2 (the speed-up addresses the cause); both.
 8. **The order after S1.1c-4:** the proof-world speed-up and the tool upgrade, then S1.1c-5's plan check (the status line).
+
+### Owner decisions, 2026-11-14 — the proof-world speed-up's measurement
+
+After measuring the `proofs` job on `main` ef6731f (one local run, 488 s): the 38 drivers start 133 nested gate runs, 120 of them at T2–T4 with the full-tree tool check, and those checks took 1,276 s of the nested runs' 1,902 s (67%); one check is 4.5 s on a quiet machine (4 s of it the tree hash), 12.6 s at the median under the row's own load; reading every tool file's details (name, type, mode, size, inode, modification and change times) takes 0.2 s for all 21,335. The run also showed the `ruff` row names no file for a finding past line 9. Three answers; all as recommended.
+
+1. **The speed-up follows a reviewed design in a small PR** (as recommended): a short design note — how the outer run hands its verified tree digests to the `proofs` row's nested runs, and how a forged or stale hand-off is caught — reviewed blind by an architect and a QA break-it before any code; then built test-first, T4, the owner's check. Rejected: the full sprint loop; building first with one review of the finished PR.
+2. **A tree is "unchanged" when every file's details match** (as recommended): the name, type, mode, size, inode, modification and change times of every entry are what the outer run saw when it hashed the tree; any difference means a real hash. Rejected: reuse by path alone for the run.
+3. **The `ruff` row's naming fix goes first, in its own small PR from `main`** (as recommended), test-first with the pinned ruff's real output on lines 9, 10 and 100. Ruff pads `-->` to its line-number gutter and the row's pattern allowed one space, so a finding past line 9 named no file, or, beside a named one, dropped out of the failure lines silently (the row stayed red). Rejected: inside the speed-up PR; the backlog.
