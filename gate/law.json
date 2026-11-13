@@ -570,7 +570,7 @@
       "proofs": [
         {
           "path": "gate/proofs/drivers/test_deps_planted.py",
-          "cases": 6
+          "cases": 7
         }
       ],
       "tiers": [
@@ -701,6 +701,40 @@
         "gate/sprints.json",
         "gate/current-sprint",
         "docs/sprints/decisions.md"
+      ]
+    },
+    {
+      "id": "vulns",
+      "row": "vulns",
+      "lands_in": "S1.1c-4",
+      "code": [
+        "gate/runner/allowlists.py",
+        "gate/runner/deps.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gomods.py",
+        "gate/runner/rows/vulns.py",
+        "gate/runner/vulndb.py",
+        "gate/toolchain/vulndb_fetch.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_vulns_planted.py",
+          "cases": 20
+        }
+      ],
+      "tiers": [
+        "T4",
+        "nightly"
+      ],
+      "min_wants": 6,
+      "expected_scope": [
+        "git",
+        "go.mod",
+        "go.sum",
+        "gate/proofs/go.mod",
+        "gate/proofs/go.sum",
+        "tools/deps-allowlist.json",
+        "tools/allowlists/vulns.json"
       ]
     },
     {
@@ -1041,7 +1075,7 @@
       "tiers": [
         "T4"
       ],
-      "min_wants": 37,
+      "min_wants": 38,
       "expected_scope": [
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
