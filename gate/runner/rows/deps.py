@@ -136,13 +136,21 @@ def _member(member: tuple[str, str] | str) -> str:
     return member if isinstance(member, str) else " ".join(member)
 
 
-def tidy_faults(mod: str, stdout: str, stderr: str) -> list[str]:
-    """The tidy line for one module (design §3.1): could not run, would change, or none."""
+def tidy_faults(mod: str, stdout: str, stderr: str, code: int) -> list[str]:
+    """The tidy line for one module (design §3.1): could not run, would change, or none. Keyed on the exit code
+    (review CA-L3): no diff header and exit 0 is clean whatever stderr says; no diff header and any other exit is
+    "could not run" (review DQ-B1), quoting the last stderr line that is not a download."""
     if not any(line.startswith("diff current/") for line in stdout.splitlines()):
+        if code == 0:
+            return []
         said = [line for line in stderr.splitlines() if line.strip() and not line.startswith(DOWNLOADING)]
-        if said or stdout.strip():  # exit 1 with no diff header: tidy could not run (review DQ-B1)
-            why = said[-1] if said else f"no diff header on stdout: {stdout.strip().splitlines()[0]}"
-            return [f"deps: go mod tidy could not run offline in {mod}: {why}: run go mod download in {mod}"]
+        if said:
+            why = said[-1]
+        elif stdout.strip():
+            why = f"no diff header on stdout: {stdout.strip().splitlines()[0]}"
+        else:
+            why = f"exit {code} and no diff header"
+        return [f"deps: go mod tidy could not run offline in {mod}: {why}: run go mod download in {mod}"]
     allowed = TIDY_ALLOWED if mod == "." else {}
     differing: list[str] = []
     removed: dict[str, set] = {}
@@ -163,12 +171,12 @@ def tidy_lines(row_dir: str, env: Mapping[str, str]) -> list[str]:
     for mod in gomods.MODULES:
         name = "root.tidy" if mod == "." else f"{mod.replace('/', '_')}.tidy"
         try:
-            stdout = gomods.run(row_dir, env, mod, name, list(TIDY), ok=(0, 1))
+            code, stdout = gomods.run_status(row_dir, env, mod, name, list(TIDY), ok=(0, 1))
             stderr = rows.read_text(os.path.join(row_dir, f"{name}.stderr"))
         except (gomods.Failed, OSError) as e:
             found.append(f"deps: go mod tidy could not run in {mod}: {e}")
             continue
-        found += tidy_faults(mod, stdout, stderr)
+        found += tidy_faults(mod, stdout, stderr, code)
     return found
 
 

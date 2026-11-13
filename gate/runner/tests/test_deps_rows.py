@@ -2,10 +2,10 @@
 2026-11-13, the design's decision 3): the tidy line, read from `go mod tidy -diff` as sets per file, and the T4
 `go.sum` line, from `git diff --name-only HEAD`.
 
-The tidy tests fake `gomods.run` (its stdout returned, its stderr file written, as the real one keeps them); the
-`go.sum` tests run the real git in the test's own repository. Every expected text is written from the design note
-by hand; ROOT_DIFF is the real root's `go mod tidy -diff` output, captured once (pinned go1.27.4, GOPROXY=off,
-GOFLAGS=-mod=readonly, 2026-11-13 at 16f5bd3).
+The tidy tests fake `gomods.run_status` (its exit code and stdout returned, its stderr file written, as the real
+one keeps them; review CA-L3); the `go.sum` tests run the real git in the test's own repository. Every expected text
+is written from the design note by hand; ROOT_DIFF is the real root's `go mod tidy -diff` output, captured once
+(pinned go1.27.4, GOPROXY=off, GOFLAGS=-mod=readonly, 2026-11-13 at 16f5bd3).
 """
 
 import os
@@ -93,11 +93,18 @@ class FakeRun:
                 f.write(text)
         return stdout
 
+    def status(self, row_dir, env, cwd, name, argv, *, ok=(0,)):
+        """gomods.run_status: go's exit code for `go mod tidy -diff` (1 when it prints a diff, review DA-S4; 1 for
+        the offline failure QA measured, design note §0.3; else 0) and the stdout (review CA-L3)."""
+        stdout = self(row_dir, env, cwd, name, argv, ok=ok)
+        stderr = self.outputs[cwd][1]
+        return (1 if "diff current/" in stdout or LOOKUP in stderr else 0), stdout
+
 
 class Tidy(support.GateTest):
     def tidy(self, root: tuple[str, str], proofs: tuple[str, str] = ("", "")) -> list[str]:
         fake = FakeRun({".": root, "gate/proofs": proofs})
-        with mock.patch.object(gomods, "run", fake):
+        with mock.patch.object(gomods, "run_status", fake.status):
             lines = deps_row.tidy_lines(self.run_dir, {})
         self.assertEqual(
             [(cwd, argv, ok) for cwd, _, argv, ok in fake.calls],
@@ -190,7 +197,7 @@ class Tidy(support.GateTest):
         def failing(row_dir, env, cwd, name, argv, *, ok=(0,)):
             raise gomods.Failed("go mod tidy -diff: flag provided but not defined: -diff")
 
-        with mock.patch.object(gomods, "run", failing):
+        with mock.patch.object(gomods, "run_status", failing):
             self.assertEqual(
                 deps_row.tidy_lines(self.run_dir, {}),
                 [
