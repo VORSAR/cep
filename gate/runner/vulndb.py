@@ -20,6 +20,7 @@ COPY_MAX_DAYS = 7  # decision 2: the copy fetched at most this many UTC calendar
 SOURCE_MAX_DAYS = 30  # decision 2: the database's own `modified` at most this many UTC calendar days old
 FETCH_CAP = 64 << 20  # the zip, about 21x today's 2.97 MB (design §2.3)
 MEMBER_CAP = 4 << 20  # one member's decompressed bytes, about 7x the largest today (design §2.4)
+TOTAL_CAP = 8 * FETCH_CAP  # the decompressed bytes read from one copy, each member counted once (review BK2-S3)
 
 DB_JSON = "index/db.json"
 MODULES_JSON = "index/modules.json"
@@ -65,6 +66,10 @@ class MemberUnreadable(ValueError):
 _UNREADABLE = (zipfile.BadZipFile, zlib.error, EOFError, RuntimeError, NotImplementedError, ValueError, OSError)
 
 
+class CopyTooLarge(ValueError):
+    """The members read from one copy decompress past TOTAL_CAP (review BK2-S3): a named fault, never an OOM kill."""
+
+
 def read_member(z: zipfile.ZipFile, name: str) -> bytes | None:
     """One member's bytes, None when absent; MemberTooLarge past MEMBER_CAP decompressed bytes; MemberUnreadable
     when its bytes cannot be read. The row's `Copy.read` and the fetch's validation both read through it."""
@@ -79,6 +84,41 @@ def read_member(z: zipfile.ZipFile, name: str) -> bytes | None:
     if len(data) > MEMBER_CAP:
         raise MemberTooLarge(name)
     return data
+
+
+class Members:
+    """A zip's members read through read_member, each counted once against TOTAL_CAP (CopyTooLarge past it, and no
+    member decompressed after that); only the three index members are kept in `cache`, each entry's bytes returned
+    and dropped (review BK2-S3). The row's Copy and the fetch's validation both read through one."""
+
+    def __init__(self, z: zipfile.ZipFile, cache: dict[str, bytes | None] | None = None) -> None:
+        self.zip = z
+        self.cache: dict[str, bytes | None] = {} if cache is None else cache
+        self.counted: set[str] = set()
+        self.total = 0
+
+    def _count(self, name: str, size: int) -> None:
+        if name not in self.counted:
+            self.counted.add(name)
+            self.total += size
+        if self.total > TOTAL_CAP:
+            raise CopyTooLarge(f"the copy decompresses past {TOTAL_CAP >> 20} MiB")
+
+    def read(self, name: str) -> bytes | None:
+        if name in self.cache:
+            return self.cache[name]
+        if self.total > TOTAL_CAP:
+            raise CopyTooLarge(f"the copy decompresses past {TOTAL_CAP >> 20} MiB")
+        try:
+            data = read_member(self.zip, name)
+        except MemberTooLarge:
+            self._count(name, MEMBER_CAP + 1)
+            raise
+        if data is not None:
+            self._count(name, len(data))
+        if name in INDEX:
+            self.cache[name] = data
+        return data
 
 
 @dataclass(frozen=True)
@@ -352,6 +392,7 @@ class _Database:
     faults: list[str] = field(default_factory=list)
     modified: str = ""
     skipped: set[str] = field(default_factory=set)  # members too large or unreadable, each named once
+    past_total: bool = False  # CopyTooLarge named once; every later read skipped
 
 
 def _database(read: Callable[[str], bytes | None], names: Sequence[str]) -> _Database:
@@ -369,6 +410,11 @@ def _database(read: Callable[[str], bytes | None], names: Sequence[str]) -> _Dat
         except MemberUnreadable as e:
             if name not in out.skipped:
                 out.faults.append(f"vulns: member {name} cannot be read: {e.why}")
+            out.skipped.add(name)
+        except CopyTooLarge as e:
+            if not out.past_total:
+                out.faults.append(f"vulns: {e}: run make vulndb")
+            out.past_total = True
             out.skipped.add(name)
         return None
 
@@ -445,10 +491,11 @@ def check_db(
 ) -> list[str]:
     """Every fault of the copy and of the database, one named line each; [] when the copy is usable.
 
-    `read(name)` returns a zip member's bytes (None when absent; it raises MemberTooLarge past MEMBER_CAP and
-    MemberUnreadable for bytes it cannot read); `names` is the zip's member list; `stamp` is the parsed stamp.json
-    (None when the file is missing); `root` is the copy's directory, for the texts; `zip_sha256` is the zip's own
-    digest; `now` is timezone-aware. Ages count UTC calendar days."""
+    `read(name)` returns a zip member's bytes (None when absent; it raises MemberTooLarge past MEMBER_CAP,
+    MemberUnreadable for bytes it cannot read and CopyTooLarge once the copy's members pass TOTAL_CAP); `names` is
+    the zip's member list; `stamp` is the parsed stamp.json (None when the file is missing); `root` is the copy's
+    directory, for the texts; `zip_sha256` is the zip's own digest; `now` is timezone-aware. Ages count UTC calendar
+    days."""
     faults = _stamp_faults(stamp, root, zip_sha256, now)
     fetched = _time(stamp.get("fetched")) if isinstance(stamp, Mapping) else None
     db = _database(read, names)

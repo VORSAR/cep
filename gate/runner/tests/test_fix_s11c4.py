@@ -340,3 +340,66 @@ class TidyExitCode(support.GateTest):
         code, out = gomods.run_status(self.run_dir, dict(os.environ), self.root, "probe", ["git", "--version"])
         self.assertEqual(code, 0)
         self.assertTrue(out.startswith("git version "), out)
+
+
+def _bulky(entries: int, size: int) -> bytes:
+    """A consistent database of `entries` entries, each padded with whitespace to `size` decompressed bytes."""
+    ids = [f"GO-2099-{n:04d}" for n in range(entries)]
+    body = io.BytesIO()
+    with zipfile.ZipFile(body, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(vulndb.DB_JSON, json.dumps({"modified": "2026-11-12T00:00:00Z"}))
+        z.writestr(
+            vulndb.MODULES_JSON,
+            json.dumps(
+                [{"path": "example.com/x", "vulns": [{"id": i, "modified": "2026-11-12T00:00:00Z"} for i in ids]}]
+            ),
+        )
+        z.writestr(vulndb.VULNS_JSON, json.dumps([{"id": i, "modified": "2026-11-12T00:00:00Z"} for i in ids]))
+        for i in ids:
+            text = json.dumps(
+                {"id": i, "modified": "2026-11-12T00:00:00Z", "affected": [{"package": {"name": "example.com/x"}}]}
+            )
+            z.writestr(f"ID/{i}.json", text + " " * (size - len(text)))
+    return body.getvalue()
+
+
+class TotalCap(support.GateTest):
+    """BK2-S3: the decompressed bytes read across one copy are bounded, a named fault past the bound."""
+
+    STAMP = {"fetched": "2026-11-12T08:00:00Z", "sha256": SHA, "url": vulndb.CANONICAL_URL}
+
+    def copy(self, body: bytes) -> vulns.Copy:
+        return vulns.Copy("/x", zip=zipfile.ZipFile(io.BytesIO(body)))
+
+    def check(self, copy: vulns.Copy) -> list[str]:
+        names = sorted(copy.zip.namelist())
+        return vulndb.check_db(copy.read, names, self.STAMP, root=ROOT, zip_sha256=SHA, now=NOW)
+
+    def test_the_total_cap_is_eight_fetch_caps(self):
+        self.assertEqual(vulndb.TOTAL_CAP, 8 * vulndb.FETCH_CAP)  # 512 MiB: the lane's choice, BK2-S3's example
+
+    def test_a_copy_under_the_cap_is_clean_the_witness(self):
+        copy = self.copy(_bulky(4, 1 << 19))  # 2 MiB of entries
+        with mock.patch.object(vulndb, "TOTAL_CAP", 3 << 20):
+            self.assertEqual(self.check(copy), [])
+            self.assertEqual(len(vulns.entries_of(copy)[0]), 4)
+
+    def test_a_copy_past_the_cap_is_one_named_fault_and_an_incomplete_scan(self):
+        copy = self.copy(_bulky(8, 1 << 19))  # 4 MiB of entries
+        with mock.patch.object(vulndb, "TOTAL_CAP", 3 << 20):
+            faults = self.check(copy)
+            self.assertEqual(faults.count("vulns: the copy decompresses past 3 MiB: run make vulndb"), 1, faults)
+            self.assertFalse(vulns.entries_of(copy)[1])
+
+    def test_each_member_counts_once(self):
+        copy = self.copy(_bulky(4, 1 << 19))
+        with mock.patch.object(vulndb, "TOTAL_CAP", 3 << 20):
+            for _ in range(3):  # check_db and entries_of each read every entry; the copy is still 2 MiB
+                self.assertEqual(self.check(copy), [])
+                self.assertEqual(vulns.entries_of(copy)[1], True)
+
+    def test_only_the_indexes_are_cached(self):
+        copy = self.copy(_bulky(2, 1 << 10))
+        self.check(copy)
+        vulns.entries_of(copy)
+        self.assertEqual(sorted(copy.cache), sorted(vulndb.INDEX))
