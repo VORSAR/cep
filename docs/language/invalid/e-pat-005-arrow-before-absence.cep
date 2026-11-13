@@ -1,0 +1,13 @@
+-- expect: E-PAT-005 (an absence follows its step directly: drop the -> before and not) @ 8:36
+language cep/0.1;
+stream R (a string, ts timestamp) time ts watermark bounded 1 min idle after 5 min;
+stream T (a string, ts timestamp);
+rule ArrowBeforeAbsence
+  intent 'x'
+  partition by a of R ttl 1 hour
+  from every r = R[a == 'read'] -> and not R[a == 'ok'] for 5 min
+  within 5 min
+  after match skip past last
+  late events drop
+  select r.a as a
+  insert into T;
