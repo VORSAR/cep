@@ -45,12 +45,12 @@ class Failed(Exception):
     """A go command that could not run: its argv and the first line of its stderr."""
 
 
-def run(
+def run_status(
     row_dir: str, env: Mapping[str, str], cwd: str, name: str, argv: Sequence[str], *, ok: Sequence[int] = (0,)
-) -> str:
-    """Run one command in `cwd`, keeping <name>.stdout and <name>.stderr in `row_dir`, and return its stdout; an
-    exit code outside `ok` raises Failed (review DA-S4: `go mod tidy -diff` exits 1 for "differs", its diff on
-    stdout, so the tidy line passes ok=(0, 1) and reads the text)."""
+) -> tuple[int, str]:
+    """Run one command in `cwd`, keeping <name>.stdout and <name>.stderr in `row_dir`, and return its exit code and
+    stdout; an exit code outside `ok` raises Failed (review DA-S4: `go mod tidy -diff` exits 1 for "differs", its
+    diff on stdout, so the tidy line passes ok=(0, 1) and reads the code with the text; review CA-L3)."""
     out, err = os.path.join(row_dir, f"{name}.stdout"), os.path.join(row_dir, f"{name}.stderr")
     with open(out, "wb") as o, open(err, "wb") as e:
         code = subprocess.run(
@@ -59,7 +59,14 @@ def run(
     if code not in ok:
         lines = rows.read_text(err).splitlines()
         raise Failed(f"{' '.join(argv)}: {lines[0] if lines else f'exit {code}'}")
-    return rows.read_text(out)
+    return code, rows.read_text(out)
+
+
+def run(
+    row_dir: str, env: Mapping[str, str], cwd: str, name: str, argv: Sequence[str], *, ok: Sequence[int] = (0,)
+) -> str:
+    """run_status's stdout alone: an exit code outside `ok` raises Failed."""
+    return run_status(row_dir, env, cwd, name, argv, ok=ok)[1]
 
 
 def _tag(mod: str) -> str:
