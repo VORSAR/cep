@@ -80,7 +80,7 @@ Rule: SEMANTICS §2.1 — derived streams carry propagated watermarks; re-declar
 Fix: remove the clause; declare clocks on source streams only.
 
 ### E-TIME-003 Time attribute is not a timestamp, or is optional **[static]**
-Rule: SPEC §4.2 (rev 3) — `time <attr>` names the stream's event-time attribute, so `<attr>` is declared `timestamp`; (rev 10) and never `optional`: every event needs a time, and live ingest refuses an event without one.
+Rule: SPEC §4.2 (rev 3) — a time clause names the stream's event-time attribute, so that attribute is declared `timestamp`; (rev 10) and never `optional`: every event needs a time, and live ingest refuses an event without one.
 Message names the attribute and its declared type, or that it is optional. Fix: declare the attribute `timestamp` without `optional`, or name the stream's timestamp attribute.
 
 ### E-IDLE-001 Missing `idle after` on a timer-feeding stream **[static]**
@@ -97,11 +97,11 @@ Fix: add `, <key> of <ThatStream>` to the partition clause.
 
 ### E-PART-003 Partition keys of different types **[static]**
 Rule: SPEC §4.4 (rev 3) — one partition block keys every stream on the same value, so its keys share one type.
-Message names both streams and both types; for a key of two or more parts it names the position (rev 5: `part 2 of the partition key: session of B is int, but sessionId of A is string`). Fix: key each position with attributes of one type, or declare them with one type.
+Message names both streams and both types; for a key of two or more parts it names the position (rev 5: “part 2 of the partition key: session of B is int, but sessionId of A is string”). Fix: key each position with attributes of one type, or declare them with one type.
 
 ### E-PART-004 A stream keyed twice in one partition clause **[static]**
 Rule: SEMANTICS §9 — a partition clause names one key for every stream the rule consumes; naming a stream twice (`k of S, j of S`) would leave all but one key unused, and a rule keyed on fewer attributes than written merges keys and loses alerts *(owner, 2026-11-06, S3.2b-1, break-it B1; multi-part keys are written `(k, j) of S` from S3.2b-2, owner decision)*.
-Message names the stream and the repeated key, and shows the grouped form (rev 5: `to key it on both, write (k, j) of S, and give every stream the same number of parts`). Fix: key each stream once; group its attributes, `(k, j) of S`, and give every stream's key the same number of parts.
+Message names the stream and the repeated key, and shows the grouped form (rev 5: “to key it on both, write (k, j) of S, and give every stream the same number of parts”). Fix: key each stream once; group its attributes, `(k, j) of S`, and give every stream's key the same number of parts.
 
 ### E-PART-005 A single key in brackets **[static]**
 Rule: SPEC §4.4 (rev 5) — one spelling for each key: brackets group two or more attributes; one attribute is written bare.
@@ -113,10 +113,10 @@ Message names the attribute and the stream. Fix: name each attribute once: `(k, 
 
 ### E-PART-007 Partition keys with different numbers of parts **[static]**
 Rule: SPEC §4.4 (rev 5), SEMANTICS §9 — key parts correspond by position across streams, so every stream's key has the same number of parts.
-Reported once per rule, at `partition`; the message lists every stream's count (a one-attribute group counts 1), e.g. `the partition keys of rule R have different numbers of parts: S 2, T 1`. Checked before E-PART-005, so the first fix offered is the one that settles the clause. Fix: give every stream's key the same number of parts, matched by position: `(k, j) of S, (k2, j2) of T`.
+Reported once per rule, at `partition`; the message lists every stream's count (a one-attribute group counts 1), e.g. “the partition keys of rule R have different numbers of parts: S 2, T 1”. Checked before E-PART-005, so the first fix offered is the one that settles the clause. Fix: give every stream's key the same number of parts, matched by position: `(k, j) of S, (k2, j2) of T`.
 
 ### E-PART-008 Partition key of type object **[static]**
-Rule: SPEC §4.4 (rev 7), SEMANTICS §9 — a partition key part is a scalar attribute; an `object` attribute cannot key a partition (S3.2a-1's D7, 2026-11-05; the engine's `partition.NewRule` refuses it as its own guard).
+Rule: SPEC §4.4 (rev 7), SEMANTICS §9 — a partition key part is a scalar attribute; an `object` attribute cannot key a partition (S3.2a-1's D7, 2026-11-05; the engine's `NewRule` in `internal/partition` refuses it as its own guard).
 Reported at the key (a single attribute) or the part (a group), once per key. Fix: key the partition by a scalar attribute.
 
 ### E-TTL-002 TTL smaller than a contained bound **[static]**
@@ -128,7 +128,7 @@ Rule: SPEC §3.3 — attributes, functions, window kinds, annotation keys and si
 Message carries the nearest valid name. Fix: use the suggestion or declare the name.
 
 ### E-NULL-001 Null-hazard comparison in an absence predicate **[static]**
-Rule: SEMANTICS §1.1/§11.12 — comparisons over schema-`optional` attributes inside `and not …` require explicit null handling.
+Rule: SEMANTICS §1.1/§11.12 — comparisons over schema-`optional` attributes inside `and not <Stream>[…] for <duration>` require explicit null handling.
 Fix: wrap with `coalesce(attr, '<sentinel>')`, or guard with `attr is not null`.
 
 ### E-NULL-002 Null-blind predicate over a nullable attribute (lint) **[static]**
@@ -234,7 +234,7 @@ Rule: SEMANTICS §8 — legal pairs: cron→close, sort→change, delay→due, b
 Fix: the message names the kind's mode.
 
 ### E-TYPE-001 Ill-typed expression **[static]**
-Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, arithmetic outside §5.10's list (`timestamp + timestamp`, `duration × float`), any operator on `object` except `is [not] null`; an integer literal outside 64 bits (SPEC §2.4); and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
+Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, arithmetic outside §5.10's list (`<timestamp> + <timestamp>`, `duration × float`), any operator on `object` except `is null` and `is not null`; an integer literal outside 64 bits (SPEC §2.4); and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
 Message names the operand and expected type. Fix: cast explicitly, or restructure.
 
 ### E-FN-001 Unknown function arity or argument kind **[static]**
@@ -242,7 +242,7 @@ Rule: SPEC Appendix F — e.g. `chain()` needs at least one capture argument; `c
 Fix: the message cites the signature.
 
 ### E-WIN-004 sort size must be a positive integer **[static]**
-Rule: SPEC §6.3 — `sort(n, …)` with n ≥ 1.
+Rule: SPEC §6.3 — `sort(<n>, <attr>, <dir>)` with n ≥ 1.
 Fix: use a positive integer literal.
 
 ### E-GRAPH-001 Cycle in the rule–stream graph **[static]**
