@@ -1,6 +1,7 @@
 """The deps row's proofs (S1.1c-1, plan check v2 section 6 "deps"; ADR-0009 section 1, ADR-0001 section 1): a
 module in the graph that the allowlist does not list, a listed module whose licence file is unknown, missing or
-disagrees with its `license` field, an allowlist entry in no graph, and a third tracked go.mod are each red, named.
+disagrees with its `license` field, an allowlist entry in no graph, a third tracked go.mod, and (S1.1c-4) a wrong
+licence on the module of a second `tool` line that the apidiff tool never reaches are each red, named.
 
 One world per case. The world holds the gate, copies of go.mod, go.sum, gate/proofs/go.mod and go.sum and of
 tools/deps-allowlist.json (edited per case), a package in each module, and a planted module `example.com/planted`
@@ -61,6 +62,16 @@ PLANTED_GO = (
 )
 GONE = {**ENTRY, "module": "example.com/gone", "why": "the deps proof's stale entry"}
 TOOL = "golang.org/x/exp/cmd/apidiff"
+# S1.1c-4 design §2.1, §2.7 (plan check §6 "The register" (2)): a second `tool` line in gate/proofs/go.mod, its module
+# a directory beside the repository that the apidiff tool never reaches; the licence fingerprint covers every module
+# the tool lines build, so its register entry's wrong licence field is red.
+SECOND_TOOL = "example.com/plantedtool"
+SECOND_TOOL_ENTRY = {
+    **ENTRY,
+    "module": SECOND_TOOL,
+    "why": "the deps proof's second tool line",
+    "replace": "../../../plantedtool",  # from gate/proofs, the directory beside the repository
+}
 
 
 def without_tool(gomod: str) -> str:
@@ -139,6 +150,29 @@ class DepsPlanted(support.DriverTest):
             self.run_row(),
             "deps: stale entry example.com/gone: not in the module graph of go.mod or gate/proofs/go.mod",
         )
+
+    def test_a_second_tool_lines_module_has_its_licence_read(self):
+        # The world's gate/proofs/go.mod gets the apidiff line back and a second tool line; the second tool's module
+        # holds a BSD-3-Clause LICENSE while its entry says MIT. Red on today's rows/deps.py, which reads one TOOL
+        # constant (the apidiff package), so the second tool's module stays graph-only and its licence unread.
+        self.deps_world(license_text=MIT, entries=[ENTRY, SECOND_TOOL_ENTRY])
+        w = self.world
+        tool_dir = os.path.join(w.root, "plantedtool")
+        os.makedirs(os.path.join(tool_dir, "cmd", "t"))
+        for rel, text in (
+            ("go.mod", f"module {SECOND_TOOL}\n\ngo 1.27.0\n"),
+            ("LICENSE", BSD3),
+            ("cmd/t/main.go", "// Command t is the proof's second tool.\npackage main\n\nfunc main() {}\n"),
+        ):
+            with open(os.path.join(tool_dir, rel), "w", encoding="utf-8") as f:
+                f.write(text)
+        gomod = support.read_text(os.path.join(w.repo, "gate/proofs/go.mod"))
+        w.write(
+            "gate/proofs/go.mod",
+            f"{gomod}\ntool {TOOL}\n\ntool {SECOND_TOOL}/cmd/t\n\nrequire {SECOND_TOOL} {VERSION}\n\n"
+            f"replace {SECOND_TOOL} => ../../../plantedtool\n",
+        )
+        self.assertRedLine(self.run_row(), f"deps: {SECOND_TOOL}: license field MIT, file reads BSD-3-Clause")
 
     def test_a_third_tracked_go_mod_is_red(self):
         self.deps_world(license_text=MIT, entries=[ENTRY])

@@ -33,7 +33,14 @@ RUN_CAP_S = 600  # one nested gate run
 GRACE_S = 5
 NESTED_GRACE_S = 2  # under the runner's 5 s grace, so the driver's own cleanups run after it
 RECOVER = "run make clean-tools tools"  # the fix every parity reason but "not installed" names (Lane B's strings)
-HIDDEN = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "VORSAR_CEP_WORKERS", "VORSAR_CEP_TOOLS_CACHE")
+HIDDEN = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "VORSAR_CEP_WORKERS",
+    "VORSAR_CEP_TOOLS_CACHE",
+    "VORSAR_CEP_VULNDB",  # S1.1c-4 design §2.3: a world reads only the copy it plants
+)
 GIT_IDENTITY = ("-c", "user.name=gate proofs", "-c", "user.email=proofs@gate.invalid", "-c", "commit.gpgsign=false")
 # git's own config, through its environment, for every git a world starts (the nested runner's too): a commit
 # otherwise starts `git maintenance run --auto --detach`, which outlives it and writes into .git during cleanup.
