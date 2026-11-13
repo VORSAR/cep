@@ -127,7 +127,10 @@ def _entries(text: str) -> list[dict[str, str]]:
         raise PinTestsError(f"{FILE}: note is not a string")
     if not isinstance(doc["entries"], list):
         raise PinTestsError(f"{FILE}: entries is not a list")
-    seen: set[str] = set()
+    # One test may run in several rows (pytests under 3.15, pyfloor under 3.12), so one id may sit under several rows
+    # with one pattern; the sort keys pins by id, so a second pattern for an id is refused (the W2 combine).
+    seen: set[tuple[str, str]] = set()
+    patterns: dict[str, str] = {}
     out = []
     for n, entry in enumerate(doc["entries"], 1):
         if not isinstance(entry, dict):
@@ -143,9 +146,16 @@ def _entries(text: str) -> list[dict[str, str]]:
             raise PinTestsError(f"{FILE}: {name}: pattern {entry['pattern']!r} does not compile: {e}") from None
         if pattern.search("") is not None:
             raise PinTestsError(f"{FILE}: {name}: pattern {entry['pattern']!r} matches the empty text (any failure)")
-        if name in seen:
-            raise PinTestsError(f"{FILE}: {name}: the id appears twice")
-        seen.add(name)
+        if (entry["row"], name) in seen:
+            raise PinTestsError(f"{FILE}: {name}: the id appears twice in row {entry['row']}")
+        seen.add((entry["row"], name))
+        if name in patterns:
+            if patterns[name] != entry["pattern"]:
+                raise PinTestsError(
+                    f"{FILE}: {name}: two patterns for one id ({patterns[name]!r}, {entry['pattern']!r})"
+                )
+            continue  # the same pin red in another row: the sort keys pins by id, one entry serves
+        patterns[name] = entry["pattern"]
         out.append(entry)
     return sorted(out, key=lambda entry: entry["id"])
 
