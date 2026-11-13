@@ -1,6 +1,8 @@
 """The weekly canary's candidate tools.json (S1.1c-4 plan check §2 S4; design note §4.3, §4.4; owner 2026-11-12,
-S1.1c-3's plan check, decision 6, and 2026-11-13, S1.1c-4's plan check, confirm (c), and its design, G1-Q1). Pure over
-recorded or live feeds: the network is feeds.py's, the archives come through the injected `archive` seam.
+S1.1c-3's plan check, decision 6, and 2026-11-13, S1.1c-4's plan check, confirm (c), and its design, G1-Q1). Reading
+the feeds and choosing each pin's release is pure over recorded or live feeds (the network is feeds.py's); the
+archives come through the injected `archive` seam (a local path, its digest checked), and each is then extracted,
+sealed and hashed on disk by install.archive_pins in a directory of its own, removed afterwards (review CA-L7).
 
 The line rule (G1-Q1): each pin moves only to the newest stable release on its own line (major.minor); a release on a
 newer line is listed in Candidate.newer_lines and never downloaded.
