@@ -653,5 +653,13 @@ class RealCache(support.ToolchainTest):
         self.assertEqual(support.sha256_of(os.path.join(real_home, vet)), go.exec_sha256[vet])
 
 
+class TreeCap(unittest.TestCase):
+    def test_the_tree_cap_is_at_least_ten_times_the_slowest_measured_parity(self):
+        # Owner, 2026-11-13 (S1.1c-4's plan check, decision 3): TREE_CAP_S >= 10 x the slowest measured run, its
+        # figures cited beside SLOWEST_PARITY_S in parity.py (design note §3.4).
+        self.assertGreater(parity.SLOWEST_PARITY_S, 0)
+        self.assertGreaterEqual(parity.TREE_CAP_S, 10 * parity.SLOWEST_PARITY_S)
+
+
 if __name__ == "__main__":
     unittest.main()
