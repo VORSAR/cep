@@ -174,8 +174,13 @@ def _run(argv: list[str], deps: Deps) -> int:
 ERROR_TXT = "error.txt"
 PIN_TESTS = os.path.join("gate", "canary", "pin_tests.json")
 _ATTEMPT = re.compile(r"[0-9]{1,9}")
-# unittest's report of one failing test: `FAIL: <name> (<id>)`, a subtest's parameters after it (S1.1c-4 design §4.5).
-_FAILURE = re.compile(r"(?:FAIL|ERROR): \S+ \(([^()\s]+)\)(?: \(.*\))?")
+# unittest's report of one failing test: `FAIL: <name> (<id>)`, then any tail — a subtest's `(<params>)`, its
+# `[<msg>]`, or both (S1.1c-4 design §4.5; break-it 2, BK2-S1): the id is the first parenthesised group.
+_FAILURE = re.compile(r"(?:FAIL|ERROR): \S+ \(([^()\s]+)\)(?: .*)?")
+# unittest's closing count for a failed module: `FAILED (failures=N, errors=M, …)`; an unexpected success fails the
+# module too and prints no block, so it counts as one more failure reported.
+_FAILED = re.compile(r"FAILED \((.*)\)")
+_COUNTED = re.compile(r"(failures|errors|unexpected successes)=([0-9]+)")
 _RULE = "=" * 70
 _THIN_RULE = "-" * 70
 _EXCEPTION = re.compile(r"[A-Za-z_][\w.]*: .*|[A-Za-z_][\w.]*")
@@ -375,11 +380,25 @@ def _failures(row_dir: str, row: str) -> list[list[str]]:
         path = text.split(": ", 1)[0]
         blocks: list[list[str]] = []
         if path.endswith(".py"):
-            stderr = os.path.join(row_dir, "py", path.removesuffix(".py").replace("/", ".") + ".stderr")
+            module = path.removesuffix(".py").replace("/", ".")
+            stderr = os.path.join(row_dir, "py", module + ".stderr")
             if os.path.isfile(stderr):
-                blocks = _failure_blocks(_read(stderr))
+                said = _read(stderr)
+                blocks = _failure_blocks(said)
+                out += _miscounted(row, module, said, len(blocks))
         out += blocks or [[row, text]]
     return out
+
+
+def _miscounted(row: str, module: str, stderr: str, read: int) -> list[list[str]]:
+    """A break when the blocks read are not the failures the module's unittest reported (break-it 2, BK2-S1): a block
+    no header pattern reads can then never hide behind a pin red beside it. No `FAILED (…)` line with blocks read is
+    a break too; neither, nothing (the `failed:` line itself names the module)."""
+    counts = [m.group(1) for line in stderr.splitlines() if (m := _FAILED.fullmatch(line))]
+    if not counts:
+        return [[row, f"{module}: no FAILED count reported, {read} read"]] if read else []
+    reported = sum(int(n) for _, n in _COUNTED.findall(counts[-1]))
+    return [] if reported == read else [[row, f"{module}: {reported} failures reported, {read} read"]]
 
 
 def _job_records(artifacts: str, job: str, attempt: str) -> list[dict]:
