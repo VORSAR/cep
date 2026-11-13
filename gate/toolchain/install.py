@@ -205,6 +205,14 @@ class _Extraction:
                 raise _Rejected(self.strip + rel, f"it resolves outside the tree: {os.readlink(link)!r}")
 
 
+def _extract(archive: str, strip: str, dest: str) -> dict[str, int]:
+    """Extract `archive` into the empty directory `dest` under §3 step 4's rules and return the modes to seal with
+    (S1.1c-4 design §4.1). It never seals: the installer writes its stamp inside `dest` first (review DA-B2)."""
+    extraction = _Extraction(strip, dest)
+    extraction.extract(archive)
+    return extraction.modes
+
+
 def _seal(tree: str, modes: Mapping[str, int]) -> None:
     """Clear every write bit, deepest first. Symlinks are not in `modes`: they are never chmod-ed."""
     for rel in sorted(modes, key=lambda path: (-path.count("/"), path)):
@@ -269,16 +277,15 @@ def _install_tool(tool: manifest.Tool, cache: str, home: str, fetch: Fetch, rena
             )
         tmp = tempfile.mkdtemp(prefix=f"tmp.{os.getpid()}.", dir=cache)
         try:
-            extraction = _Extraction(tool.strip, tmp)
             try:
-                extraction.extract(download)
+                modes = _extract(download, tool.strip, tmp)
             except _Rejected as e:
                 raise InstallError(
                     f"{tool.name}: {tool.url}: {e}: this archive cannot be installed: check its pin in tools.json"
                 ) from e
             with os.fdopen(os.open(os.path.join(tmp, _STAMP), _NEW_FILE, 0o600), "w", encoding="ascii") as stamp:
                 stamp.write(f"{digest}\n")
-            _seal(tmp, {**extraction.modes, _STAMP: 0o444})
+            _seal(tmp, {**modes, _STAMP: 0o444})
             return _publish(tmp, home, digest, rename)
         finally:
             if os.path.lexists(tmp):
@@ -302,8 +309,19 @@ def archive_pins(archive: str, strip: str, executables: Sequence[str]) -> Archiv
     installer's own hostile-archive rules, sealed, then hashed (S1.1c-4 plan check §2 S4; review A-L1: one helper
     shared with _install_tool, so the canary's hashes cannot drift from the installer's).
 
-    W0 stub: the signature is agreed and the body raises; lane F1 builds it against QA's tests."""
-    raise NotImplementedError("install.archive_pins: not built yet (S1.1c-4 lane F1)")
+    The tree is extracted into a directory of its own, sealed without the installer's stamp (tree_sha256 skips the
+    root's .complete by name, so both hash the same tree), hashed, and removed whatever happens (review DQ-L5). A
+    refused member raises _Rejected, naming it; a listed executable that is not a regular file raises OSError."""
+    tmp = tempfile.mkdtemp(prefix="archive-pins.")
+    try:
+        _seal(tmp, _extract(archive, strip, tmp))
+        return ArchivePins(
+            manifest.tree_sha256(tmp),
+            {rel: manifest.sha256_file(os.path.join(tmp, rel)) for rel in sorted(executables)},
+        )
+    finally:
+        _restore_write(tmp)
+        shutil.rmtree(tmp)
 
 
 def _load(tools_json: str, platform: str) -> list[manifest.Tool]:
