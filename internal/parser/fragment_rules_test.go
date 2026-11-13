@@ -292,6 +292,10 @@ var fragBindings = []struct {
 	{"sort(<n>, <attr>, <dir>)", kindWindowKind},
 	{"cron('0 0 * * *', <tz>)", kindWindowKind},
 	{"cron(<cron>, <tz>)", kindWindowKind}, // SPEC:170's corrected form (§5): <cron> binds to a cron string (DQ-S2)
+	// Two notations errors.md's pinned fix texts use (owner, 2026-11-13, during S1.1c-3's build): a list continued
+	// with a bare … before ttl, and a clause shown with its leading comma.
+	{"partition by <key> of <Stream> … ttl <duration>", kindPartition},
+	{", <key> of <ThatStream>", kindPartKey},
 	{"rule <Name>", kindRuleHead},
 	{"intent '<one sentence>'", kindIntent}, // inside quotes a placeholder stays a string
 	{"ttl <duration>", kindTTL},
