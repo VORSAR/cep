@@ -72,6 +72,7 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
 | W1-F1 | the W1 combine's proofs run | should-fix | `test_vulns_planted.py`'s own built-module reading ran `go list -deps -test` over the `tool` pattern too, so x/tools' tests' go-cmp counted as built and the per-module case expected a red the row rightly does not give (design §2.1 reads a tool line with `-deps tool`, no `-test`) | fixed: the driver reads the tool line without `-test` (the case green alone, 8.3 s; the row unchanged) |
+| W2-F1 | lane F2's dry run | blocker | lane F1's measured `pin_tests.json` holds the same test id under two rows (`pytests`, `pyfloor` — one test, two interpreters), and lane F1b's loader refused any repeated id, so every real canary summary would exit 2; no test loaded the committed file | fixed: the loader takes one id under several rows when its pattern is the same, refuses a second pattern or the same row twice; `test_the_committed_pin_tests_json_loads` and two rule tests, each red first |
 | W1-F2 | the W1 combine's T2 | later | `gate/canary/tests/feedsupport.py` is not a name a tests directory may hold (the `pytests` row) | fixed in 3121f14: renamed `support.py` |
 
 ## Done-done

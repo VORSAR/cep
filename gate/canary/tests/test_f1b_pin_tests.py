@@ -112,6 +112,24 @@ class LoadPinTests(unittest.TestCase):
     def test_a_duplicate_id_is_refused(self):
         self.refused(text(doc(entry(PIN, "a"), entry(PIN, "b"))), PIN, "twice")
 
+    # The W2 combine (2026-11-13): one test runs in two rows (pytests under 3.15, pyfloor under 3.12), so lane F1
+    # measured the same pin red in both and wrote one entry per row; the sort keys pins by test id, so one id may sit
+    # under several rows when its pattern is the same in each, and a pattern that differs is refused.
+    def test_one_id_under_two_rows_with_one_pattern_loads_once(self):
+        two_rows = doc(entry(PIN, "a"), {**entry(PIN, "a"), "row": "pyfloor"})
+        self.assertEqual(self.sort.load_pin_tests(text(two_rows)), {PIN: "a"})
+
+    def test_one_id_under_two_rows_with_two_patterns_is_refused(self):
+        self.refused(text(doc(entry(PIN, "a"), {**entry(PIN, "b"), "row": "pyfloor"})), PIN, "two patterns")
+
+    def test_the_committed_pin_tests_json_loads(self):
+        with open("gate/canary/pin_tests.json", encoding="utf-8") as f:
+            pins = self.sort.load_pin_tests(f.read())
+        self.assertIn(
+            "gate.toolchain.tests.test_manifest.Load.test_the_committed_tools_json_loads_in_file_order_for_both_platforms",
+            pins,
+        )
+
 
 class Unmeasured(unittest.TestCase):
     def setUp(self) -> None:
