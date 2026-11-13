@@ -660,6 +660,13 @@ class TreeCap(unittest.TestCase):
         self.assertGreater(parity.SLOWEST_PARITY_S, 0)
         self.assertGreaterEqual(parity.TREE_CAP_S, 10 * parity.SLOWEST_PARITY_S)
 
+    def test_the_slowest_is_the_largest_measured_run(self):
+        # Design note §3.4 (review DQ-L1): the slowest figure is read from the measured runs, never written beside
+        # them, so lowering it together with the cap cannot pass the ratio guard; the table names CI and local runs.
+        self.assertTrue(any(key.startswith("ci-") for key in parity.PARITY_MEASURED_S), parity.PARITY_MEASURED_S)
+        self.assertTrue(any(key.startswith("local-") for key in parity.PARITY_MEASURED_S), parity.PARITY_MEASURED_S)
+        self.assertEqual(parity.SLOWEST_PARITY_S, max(parity.PARITY_MEASURED_S.values()))
+
 
 if __name__ == "__main__":
     unittest.main()

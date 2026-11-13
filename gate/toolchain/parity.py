@@ -30,12 +30,77 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # BA10 (S1.1c-3 design §3.6; owner, S1.1c-3's plan check, decision 10): the tree hash runs in a child of its own, so a
 # stop can end it and a cap bounds it. Both names are read when tree_digest is called, never bound at import (DA-S12).
 TREE_CHILD: tuple[str, ...] = (sys.executable, "-I", "-B", os.path.join(REPO, "gate", "toolchain", "treehash.py"))
-# Measured 2026-11-12 on an M-series Mac (macOS, APFS SSD), the cache in the page cache, three rounds per tool, each in
-# a fresh process: go 2.51-2.64 s (15,660 files), python 0.14-0.15 s (1,771), python-floor 0.13-0.14 s (1,666),
-# golangci-lint, ruff and lark 0.02-0.03 s. A cold page cache on a CI runner's network disk is assumed ten to fifty
-# times slower; the cap sits about a hundred times above go's warm hash. Refine from CI: parity's duration at T2+
-# on each OS's cold runner (records/<job>/parity.json, started_ms to ended_ms), over several runs.
-TREE_CAP_S: float = 300
+# Parity's measured durations in seconds (S1.1c-4 design note §3.4; owner, 2026-11-13, S1.1c-4's plan check, decision
+# 3). `ci-<run>/<job>`: parity's whole duration (every tool's probe and tree hash; records/<job>/parity.json,
+# started_ms to ended_ms) in the 24 jobs of runs 43415818780 and 43417233168 (PR #38) and 43416445889 and 43417289965
+# (main), the trees just restored by actions/cache. `local-<round>/<n>`: gate/toolchain/treehash.py over go's tree
+# alone (the slowest tool, 15,660 files; 2.51-2.64 s on a quiet machine, 2026-11-12), each a fresh process, on an
+# M-series Mac (macOS, APFS SSD), 2026-11-13, ten rounds each, all with four agents' full gates loading the machine
+# (load average 12-19 on 14 cores): `idle` with nothing more of ours; `during-proofs` beside a local
+# `--tier T4 --job proofs` run; `load` beside fourteen `yes` processes, one per core, as that proofs run went on.
+# `local-T4-proofs/parity`: that proofs run's own parity record. A slower CI figure from a later run raises
+# SLOWEST_PARITY_S and the cap (decision 3; design note §3.4, after the push).
+PARITY_MEASURED_S: dict[str, float] = {
+    "ci-43415818780/determinism": 4.125,
+    "ci-43415818780/determinism-macos": 10.357,
+    "ci-43415818780/lint": 4.646,
+    "ci-43415818780/proofs": 2.858,
+    "ci-43415818780/race": 3.581,
+    "ci-43415818780/test": 4.839,
+    "ci-43416445889/determinism": 2.93,
+    "ci-43416445889/determinism-macos": 5.119,
+    "ci-43416445889/lint": 4.647,
+    "ci-43416445889/proofs": 4.086,
+    "ci-43416445889/race": 3.614,
+    "ci-43416445889/test": 4.491,
+    "ci-43417233168/determinism": 3.399,
+    "ci-43417233168/determinism-macos": 5.672,
+    "ci-43417233168/lint": 4.635,
+    "ci-43417233168/proofs": 4.502,
+    "ci-43417233168/race": 4.577,
+    "ci-43417233168/test": 3.741,
+    "ci-43417289965/determinism": 4.184,
+    "ci-43417289965/determinism-macos": 8.306,
+    "ci-43417289965/lint": 4.544,
+    "ci-43417289965/proofs": 3.545,
+    "ci-43417289965/race": 2.904,
+    "ci-43417289965/test": 3.679,
+    "local-T4-proofs/parity": 9.514,
+    "local-idle/1": 5.74,
+    "local-idle/2": 4.58,
+    "local-idle/3": 5.88,
+    "local-idle/4": 3.31,
+    "local-idle/5": 3.86,
+    "local-idle/6": 3.17,
+    "local-idle/7": 2.43,
+    "local-idle/8": 2.83,
+    "local-idle/9": 6.29,
+    "local-idle/10": 2.82,
+    "local-during-proofs/1": 3.14,
+    "local-during-proofs/2": 4.7,
+    "local-during-proofs/3": 5.3,
+    "local-during-proofs/4": 4.7,
+    "local-during-proofs/5": 5.95,
+    "local-during-proofs/6": 9.59,
+    "local-during-proofs/7": 5.4,
+    "local-during-proofs/8": 6.33,
+    "local-during-proofs/9": 9.39,
+    "local-during-proofs/10": 5.62,
+    "local-load/1": 6.49,
+    "local-load/2": 4.98,
+    "local-load/3": 3.42,
+    "local-load/4": 3.78,
+    "local-load/5": 4.05,
+    "local-load/6": 4.87,
+    "local-load/7": 5.1,
+    "local-load/8": 5.75,
+    "local-load/9": 3.66,
+    "local-load/10": 3.13,
+}
+SLOWEST_PARITY_S: float = max(PARITY_MEASURED_S.values())
+# At least ten times the slowest measured parity (decision 3; test_parity.TreeCap guards both the ratio and that the
+# slowest is read from the table): ceil(10 x 10.357 / 60) x 60 = ceil(1.726) x 60 = 120 s.
+TREE_CAP_S: float = 120
 TREE_GRACE_S = 5  # after the cap's KILL, how long to wait for the child to be reaped before giving up on it
 TREE_UNREADABLE = 3  # treehash.UNREADABLE: the child could not read the tree (an OSError), the one damaged-tool exit
 
