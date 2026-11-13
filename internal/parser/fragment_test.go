@@ -4,6 +4,8 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"html"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/alecthomas/participle/v2"
@@ -81,8 +84,59 @@ const (
 )
 
 // incidentPattern is the incident's shape (design note v2 §2.3, DQ-L8; §10 C3), declared once: an arrow, then
-// `not` or `and not`, word-bounded. fragment_research_test.go's incidentRe is this one.
-var incidentPattern = regexp.MustCompile(`(->|→)\s*(and\s+)?not\b`)
+// `not` or `and not`, word-bounded, in any case, with any white space between — ASCII, every Unicode space
+// separator, the zero-width space (break-it BK-B1, BK-S7). fragment_research_test.go's incidentRe is this one.
+var incidentPattern = regexp.MustCompile(`(?i)(->|→)[\s\p{Zs}\x{200B}]*(and[\s\p{Zs}\x{200B}]+)?not\b`)
+
+// entityAt is an HTML entity at the head of a text: named, decimal or hexadecimal.
+var entityAt = regexp.MustCompile(`^&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});`)
+
+// rendered is s as a reader sees it, for the incident's shape (break-it BK-B1): emphasis markers (`*`, `_`, `~~`)
+// dropped, HTML entities decoded, every Unicode space (and the zero-width space) a plain space. at[i] is the byte
+// of s that gave byte i of the result.
+func rendered(s string) (string, []int) {
+	b := make([]byte, 0, len(s))
+	at := make([]int, 0, len(s))
+	put := func(text string, from int) {
+		for _, r := range text {
+			if unicode.Is(unicode.Zs, r) || r == '\u200B' {
+				r = ' '
+			}
+			for range utf8.RuneLen(r) {
+				at = append(at, from)
+			}
+			b = utf8.AppendRune(b, r)
+		}
+	}
+	for i := 0; i < len(s); {
+		if e := entityAt.FindString(s[i:]); e != "" {
+			put(html.UnescapeString(e), i)
+			i += len(e)
+			continue
+		}
+		switch {
+		case s[i] == '*' || s[i] == '_':
+			i++
+		case strings.HasPrefix(s[i:], "~~"):
+			i += 2
+		default:
+			_, size := utf8.DecodeRuneInString(s[i:])
+			put(s[i:i+size], i)
+			i += size
+		}
+	}
+	return string(b), at
+}
+
+// incidentIn finds the incident's shape in text as rendered: the byte of text it starts at and the shape as read.
+func incidentIn(text string) (int, string, bool) {
+	r, at := rendered(text)
+	m := incidentPattern.FindStringIndex(r)
+	if m == nil {
+		return 0, "", false
+	}
+	return at[m[0]], r[m[0]:m[1]], true
+}
 
 // fragError is a fragment's failure: the kind it was parsed at, the stage, and the parser's or lowerer's own
 // position and message (never parseError's catalogue rewording).
@@ -307,11 +361,14 @@ func bindPlaceholders(src string) (string, error) {
 		t := s.text
 		if s.code {
 			for _, f := range bareForms {
-				if f.lead && i != 0 {
-					continue
-				}
-				for next := f.re.ReplaceAllString(t, f.with); next != t; next = f.re.ReplaceAllString(t, f.with) {
-					t = next
+				switch {
+				case f.lead && i != 0:
+				case f.lead: // once: a second leading comma is a mistake, not notation (break-it BK-L4)
+					t = f.re.ReplaceAllString(t, f.with)
+				default:
+					for next := f.re.ReplaceAllString(t, f.with); next != t; next = f.re.ReplaceAllString(t, f.with) {
+						t = next
+					}
 				}
 			}
 		}
@@ -401,42 +458,56 @@ func fragTokens(s string) []fragTok {
 
 // spanTraits is the detector's reading of one span.
 type spanTraits struct {
-	ruleLike bool // ≥ 2 tokens, a keyword, not path-like
-	exempt   bool // rule-like, keyword-only, no ->: a mention
-	notation bool // a notation token after binding (or a placeholder that does not bind)
+	ruleLike bool  // ≥ 2 tokens, a keyword, not path-like
+	exempt   bool  // rule-like, keyword-only, no ->: a mention
+	notation bool  // a notation token after binding; an angle name is never one (break-it BK-B2)
+	unbound  error // the binding's error: an angle name outside the table
 }
+
+// keywordTok reports whether t is a reserved word in any case: a keyword written in capitals is still one to a
+// reader (break-it BK-S7), and the language refuses it (E-KW-002).
+func keywordTok(t fragTok) bool { return t.typ == tokKeyword || t.typ == tokMixedKeyword }
+
+// minMixedKeywords is how many reserved words in another case make a span rule-like on their own: one capitalised
+// word is an acronym, a catalogue code's segment or a placeholder (`TTL ≥ D`, `E-TIME-001`, `name = Stream[filter]`
+// in the documents); rule text in capitals holds several (`FROM S[x == 1] SELECT a INSERT INTO Out`).
+const minMixedKeywords = 2
 
 var (
 	pathLike = regexp.MustCompile(`^[\w.\-]+(/[\w.\-*]+)+/?$`)
 	fileLike = regexp.MustCompile(`^[\w\-]+(\.[\w\-]+)*\.(go|md|py|json|jsonl|cep|lark|ebnf|txt|yaml|yml|toml)$`)
 )
 
-// detect reads a span (design note v2 §2.3): rule-like when it holds ≥ 2 tokens, one a keyword, and is not
-// path-like; an exempt mention when its bound tokens are keywords only and it holds no ->; text-able when a
-// notation token survives binding.
+// detect reads a span (design note v2 §2.3): rule-like when it holds ≥ 2 tokens, one a keyword (or
+// minMixedKeywords in another case: BK-S7), and is not path-like; an exempt mention when its bound tokens are
+// keywords, in any case, only and it holds no ->; text-able when a notation token survives binding. A placeholder
+// that does not bind is unbound, never notation (BK-B2).
 func detect(span string) spanTraits {
 	raw := fragTokens(span)
-	kw := 0
+	kw, mixed := 0, 0
 	for _, t := range raw {
-		if t.typ == tokKeyword {
+		switch t.typ {
+		case tokKeyword:
 			kw++
+		case tokMixedKeyword:
+			mixed++
 		}
 	}
 	trimmed := strings.TrimSpace(span)
 	path := !strings.ContainsAny(trimmed, " \t\n") && (pathLike.MatchString(trimmed) || fileLike.MatchString(trimmed))
-	tr := spanTraits{ruleLike: len(raw) >= 2 && kw >= 1 && !path}
+	tr := spanTraits{ruleLike: len(raw) >= 2 && (kw >= 1 || mixed >= minMixedKeywords) && !path}
 	toks := raw
 	if bound, err := bindPlaceholders(span); err == nil {
 		toks = fragTokens(bound)
 	} else {
-		tr.notation = true
+		tr.unbound = err
 	}
 	kwOnly := len(toks) > 0
 	for _, t := range toks {
-		if t.notation || t.angle {
+		if t.notation {
 			tr.notation = true
 		}
-		if t.typ != tokKeyword && t.typ != tokArrow {
+		if !keywordTok(t) && t.typ != tokArrow {
 			kwOnly = false
 		}
 	}
@@ -466,12 +537,39 @@ type codeSpan struct {
 }
 
 var (
-	fenceOpen  = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})[ \t]*([^`\\s]*)")
+	fenceRun   = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
 	markerAt   = regexp.MustCompile(`^<!--([\s\S]*?)-->`)
 	commentAny = regexp.MustCompile(`<!--[\s\S]*?-->`)
 	markerForm = regexp.MustCompile(`^(cep|cep-meta|cep-invalid):([a-z]+)$`)
 	htmlOpen   = regexp.MustCompile(`^ {0,3}</?[A-Za-z][A-Za-z0-9-]*(\s|>|/>|$)`)
+	// the lines after which CommonMark may start an indented code block, besides a blank line and a closed fence
+	// (break-it BK-S2): an ATX heading, a thematic break, a setext underline
+	headingLine = regexp.MustCompile(`^ {0,3}#{1,6}([ \t]|$)`)
+	breakLine   = regexp.MustCompile(`^ {0,3}((-[ \t]*){3,}|(\*[ \t]*){3,}|(_[ \t]*){3,}|=+[ \t]*|-+[ \t]*)$`)
+	// the prose lines that begin a text of their own (break-it BK-B1): a list item; and the one-line texts, a table
+	// row and a heading
+	listItem    = regexp.MustCompile(`^[ \t]*([-+*]|[0-9]{1,9}[.)])([ \t]|$)`)
+	oneLineText = regexp.MustCompile(`^[ \t]*(\||#{1,6}([ \t]|$))`)
 )
+
+// openFence reads a fence's opening line (CommonMark 4.5): its run and its tag, the info string's first word. A
+// backtick fence's info string holds no backtick, or the line is not a fence (break-it BK-S3).
+func openFence(l string) (mark, tag string, ok bool) {
+	m := fenceRun.FindStringSubmatch(l)
+	if m == nil || m[1][0] == '`' && strings.Contains(m[2], "`") {
+		return "", "", false
+	}
+	if f := strings.Fields(m[2]); len(f) > 0 {
+		tag, _, _ = strings.Cut(f[0], "`")
+	}
+	return m[1], tag, true
+}
+
+// closesFence reports whether l closes a fence opened by mark: a run of its character, at least as long, alone.
+func closesFence(l, mark string) bool {
+	m := fenceRun.FindStringSubmatch(l)
+	return m != nil && strings.HasPrefix(m[1], mark) && strings.TrimSpace(m[2]) == ""
+}
 
 // checkMarkdown judges one Markdown document: every fence and every rule-like inline span, its marker, its parse,
 // and the invalid examples listed for this file. One fault per line, each naming file:line; none when it is clean.
@@ -480,20 +578,20 @@ func checkMarkdown(file, markdown string, invalid []invalidExample) []string {
 	add := func(line, prec int, format string, args ...any) {
 		faults = append(faults, fault{line, prec, fmt.Sprintf(format, args...)})
 	}
-	listed := map[string]string{}
+	listed := map[string][]string{} // a span's stages, one per entry: each entry covers one occurrence (BK-S6)
 	for _, e := range invalid {
 		if e.File != file {
 			continue
 		}
 		switch e.Stage {
 		case stageGrammar, stageLowering, stageValidator:
-			listed[e.Span] = e.Stage
+			listed[e.Span] = append(listed[e.Span], e.Stage)
 		default:
 			add(0, 1, "unknown stage %s (%s)", e.Stage, e.Span)
 		}
 	}
 	prose, lineAt, html := readBlocks(markdown, add)
-	found := map[string]bool{}
+	found := map[string]int{}
 	text := []byte(prose)
 	for _, s := range readSpans(prose, lineAt) {
 		blankOut(text, s.start, s.end-s.start)
@@ -504,31 +602,32 @@ func checkMarkdown(file, markdown string, invalid []invalidExample) []string {
 		judgeSpan(s, listed, found, add)
 	}
 	// a comment not written straight after a span is a malformed marker; then the incident's shape on every prose
-	// line with its code spans removed (§10 C1)
+	// text — a paragraph, a list item, a table row, a heading, its lines joined — with its code spans removed
+	// (§10 C1; break-it BK-B1)
 	for _, m := range commentAny.FindAllIndex(text, -1) {
 		add(lineAt[m[0]], 2, "malformed marker %s: write it straight after its span", text[m[0]:m[1]])
 		blankOut(text, m[0], m[1]-m[0])
 	}
-	for n, l := range strings.Split(string(text), "\n") {
-		checkIncident(l, n+1, add)
+	for _, u := range proseTexts(string(text)) {
+		checkIncident(u.text, lineAt[u.start], add)
 	}
-	for _, span := range slices.Sorted(func(yield func(string) bool) {
-		for s := range listed {
-			if !yield(s) {
-				return
-			}
-		}
-	}) {
-		if !found[span] {
+	for _, span := range slices.Sorted(maps.Keys(listed)) {
+		switch n, want := found[span], len(listed[span]); {
+		case n == 0:
 			add(0, 2, "listed invalid example not found: %s", span)
+		case n < want:
+			add(0, 2, "listed invalid example not found: %s (listed %d times, found %d)", span, want, n)
 		}
 	}
 	return formatFaults(file, faults)
 }
 
-// readBlocks reads the block structure: it judges each fence and refuses each indented code block, and gives the
-// prose (fences blanked, blockquote markers spaced out, byte offsets kept), each byte's line, and the lines of an
-// HTML block.
+// readBlocks reads the block structure: it judges each fence, refuses each indented code block and each HTML block
+// by name, and gives the prose (fences and indented blocks blanked, blockquote markers spaced out, byte offsets
+// kept), each byte's line, and the lines of an HTML block. An indented block starts where CommonMark starts one:
+// after a blank line, a heading, a thematic break or a closed fence, never inside a paragraph (BK-S2); an HTML
+// block where one may start, on its first line (BK-S1); a fence still open at the end of the file is a fault
+// (BK-S3).
 func readBlocks(markdown string, add addFault) (string, []int, map[int]bool) {
 	masked := []byte(markdown)
 	lineAt := make([]int, 0, len(markdown)+1)
@@ -536,7 +635,7 @@ func readBlocks(markdown string, add addFault) (string, []int, map[int]bool) {
 	lines := strings.SplitAfter(markdown, "\n")
 	inFence, mark, tag, at := false, "", "", 0
 	var body []string
-	prevBlank, inHTML, offset := true, false, 0
+	mayStart, inIndent, inHTML, offset := true, false, false, 0
 	for n, raw := range lines {
 		ln := n + 1
 		for range len(raw) {
@@ -544,42 +643,84 @@ func readBlocks(markdown string, add addFault) (string, []int, map[int]bool) {
 		}
 		l := strings.TrimRight(raw, "\n")
 		blank := strings.TrimSpace(l) == ""
-		m := fenceOpen.FindStringSubmatch(l)
+		fMark, fTag, opens := openFence(l)
 		switch {
 		case inFence:
-			if m != nil && strings.HasPrefix(m[1], mark) && strings.TrimSpace(l) == m[1] {
+			if closesFence(l, mark) {
 				judgeFence(tag, at, body, add)
-				inFence = false
+				inFence, mayStart = false, true
 			} else {
 				body = append(body, l)
 			}
 			blankOut(masked, offset, len(l))
-		case m != nil:
-			inFence, mark, tag, at, body, inHTML = true, m[1], m[2], ln, nil, false
-			blankOut(masked, offset, len(l))
-		case !blank && prevBlank && !inHTML && (strings.HasPrefix(l, "    ") || strings.HasPrefix(l, "\t")):
-			add(ln, 2, "indented code block: fence it with a tag")
+		case blank:
+			inHTML, inIndent, mayStart = false, false, true
+		case !inHTML && (inIndent || mayStart) && (strings.HasPrefix(l, "    ") || strings.HasPrefix(l, "\t")):
+			if !inIndent {
+				add(ln, 2, "indented code block: fence it with a tag")
+			}
+			inIndent = true
 			checkIncident(l, ln, add)
 			blankOut(masked, offset, len(l))
+		case opens:
+			inFence, mark, tag, at, body, inHTML, inIndent = true, fMark, fTag, ln, nil, false, false
+			blankOut(masked, offset, len(l))
 		default:
-			if blank {
-				inHTML = false
-			} else if prevBlank && htmlOpen.MatchString(l) {
+			if !inHTML && mayStart && htmlOpen.MatchString(l) {
 				inHTML = true
+				add(ln, 2, "HTML block: write rule text in a tagged fence")
 			}
 			if inHTML {
 				html[ln] = true
 			}
+			inIndent = false
+			mayStart = !inHTML && (headingLine.MatchString(l) || breakLine.MatchString(l))
 			blankOut(masked, offset, blockquote(l))
 		}
-		prevBlank = blank && !inFence
 		offset += len(raw)
 	}
 	if inFence {
+		add(at, 2, "fence never closes: close it, or it hides every line after it")
 		judgeFence(tag, at, body, add)
 	}
 	lineAt = append(lineAt, len(lines)+1)
 	return string(masked), lineAt, html
+}
+
+// proseText is one text a reader reads as one, and its first byte in the prose.
+type proseText struct {
+	start int
+	text  string
+}
+
+// proseTexts splits the prose into its texts (break-it BK-B1): a paragraph or a list item, its lines joined; a
+// table row; a heading. A blank line ends each.
+func proseTexts(prose string) []proseText {
+	var out []proseText
+	start, off := -1, 0
+	flush := func(end int) {
+		if start >= 0 {
+			out = append(out, proseText{start, prose[start:end]})
+			start = -1
+		}
+	}
+	for line := range strings.SplitAfterSeq(prose, "\n") {
+		switch {
+		case strings.TrimSpace(line) == "":
+			flush(off)
+		case listItem.MatchString(line) || oneLineText.MatchString(line):
+			flush(off)
+			start = off
+		case start < 0:
+			start = off
+		}
+		off += len(line)
+		if oneLineText.MatchString(line) {
+			flush(off)
+		}
+	}
+	flush(len(prose))
+	return out
 }
 
 func blankOut(b []byte, from, n int) {
@@ -674,24 +815,47 @@ func closingRun(prose string, j, n int) int {
 	return -1
 }
 
-// checkIncident gives the incident's fault for a line holding its shape.
-func checkIncident(line string, ln int, add addFault) {
-	if m := incidentPattern.FindString(line); m != "" {
-		add(ln, 0, "-> before and/not: %s", m)
+// checkIncident gives the incident's fault for each place text, which starts at line ln, holds its shape as
+// rendered (incidentIn), at the line the shape starts on.
+func checkIncident(text string, ln int, add addFault) {
+	for off := 0; off < len(text); {
+		at, m, ok := incidentIn(text[off:])
+		if !ok {
+			return
+		}
+		add(ln+strings.Count(text[:off+at], "\n"), 0, "-> before and/not: %s", strings.Join(strings.Fields(m), " "))
+		_, size := utf8.DecodeRuneInString(text[off+at:])
+		off += at + size
 	}
 }
 
-// judgeSpan judges one inline span: the incident's shape, its marker, its parse and its listing.
-func judgeSpan(s codeSpan, listed map[string]string, found map[string]bool, add addFault) {
+// parsesAt is the first kind, in name order, src parses at; "" when it fails at every kind.
+func parsesAt(src string) fragmentKind {
+	for _, k := range append(slices.Sorted(maps.Keys(fragEntries)), kindTrivia) {
+		if parseFragment(k, src) == nil {
+			return k
+		}
+	}
+	return ""
+}
+
+// judgeSpan judges one inline span: the incident's shape, its marker, its parse and its listing. A listed span's
+// k-th cep-invalid occurrence takes the span's k-th entry; one more occurrence than entries is not listed (BK-S6).
+func judgeSpan(s codeSpan, listed map[string][]string, found map[string]int, add addFault) {
 	tr := detect(s.text)
 	quoted := "`" + s.text + "`"
-	incident := incidentPattern.MatchString(s.text)
+	_, _, incident := incidentIn(s.text)
 	if !s.hasMarker || s.marker == "text" {
 		if incident {
 			add(s.line, 0, "-> before and/not: %s", quoted)
 		}
+		if !tr.ruleLike || tr.exempt {
+			return
+		}
+		if tr.unbound != nil { // bound and judged on the bound tokens, as the marked forms are (BK-B2)
+			add(s.line, 2, "%v: %s", tr.unbound, quoted)
+		}
 		switch {
-		case !tr.ruleLike || tr.exempt:
 		case !s.hasMarker:
 			add(s.line, 2, "unmarked rule-like span: mark its kind: %s", quoted)
 		case !tr.notation:
@@ -719,47 +883,66 @@ func judgeSpan(s codeSpan, listed map[string]string, found map[string]bool, add 
 		src = bound
 	}
 	err := parseFragment(kind, src)
-	stage, isListed := listed[s.text]
-	switch {
-	case form != "cep-invalid" && incident && err != nil:
-		add(s.line, 0, "-> before and/not: %v", err)
-	case form != "cep-invalid" && incident:
-		add(s.line, 0, "-> before and/not: %s", quoted)
-	case form != "cep-invalid" && err != nil:
-		add(s.line, 1, "%v", err)
-	case form != "cep-invalid":
-	case !isListed:
+	if form != "cep-invalid" {
+		switch {
+		case incident && err != nil:
+			add(s.line, 0, "-> before and/not: %v", err)
+		case incident:
+			add(s.line, 0, "-> before and/not: %s", quoted)
+		case err != nil:
+			add(s.line, 1, "%v", err)
+		}
+		return
+	}
+	stages := listed[s.text]
+	found[s.text]++
+	n := found[s.text]
+	if n > len(stages) {
 		if incident {
 			add(s.line, 0, "-> before and/not: %s", quoted)
 		}
 		if err == nil {
 			add(s.line, 1, "documented as invalid, but parses: %s", quoted)
 		}
-		add(s.line, 2, "not a listed invalid example: %s", quoted)
+		if len(stages) == 0 {
+			add(s.line, 2, "not a listed invalid example: %s", quoted)
+		} else {
+			add(s.line, 2, "not a listed invalid example: %s is listed %d times and this is occurrence %d: list each", quoted, len(stages), n)
+		}
+		return
+	}
+	switch stage := stages[n-1]; {
 	case err == nil && stage != stageValidator:
-		found[s.text] = true
 		add(s.line, 1, "documented as invalid, but parses: %s", quoted)
 	case err != nil && stageOf(err) != stage:
-		found[s.text] = true
 		add(s.line, 1, "fails at %s, listed at %s: %s (%v)", stageOf(err), stage, quoted, err)
+	case stage == stageValidator:
+		// §10 C1: a listed span stands, the incident's shape included
 	default:
-		found[s.text] = true // §10 C1: a listed span stands, the incident's shape included
+		if k := parsesAt(src); k != "" { // invalid at every kind, not only its marker's (BK-L3)
+			add(s.line, 1, "documented as invalid, but parses at %s: %s", k, quoted)
+		}
 	}
 }
 
 // judgeFence judges one fence by its tag (DA-B1): cep is a program, cep-<kind> a kind, text line by line under the
-// inline text rule, go not read; any other tag is refused. The incident's shape is checked on every line.
+// inline text rule, go not read; any other tag is refused. The incident's shape is checked on the whole body.
 func judgeFence(tag string, at int, body []string, add addFault) {
-	for i, l := range body {
-		checkIncident(l, at+1+i, add)
-	}
+	checkIncident(strings.Join(body, "\n"), at+1, add) // the body as one text (BK-B1)
 	switch {
 	case tag == "":
 		add(at, 2, "untagged fence: tag it cep, cep-<kind>, text or go")
 	case tag == "go":
 	case tag == "text":
 		for i, l := range body {
-			if tr := detect(l); tr.ruleLike && !tr.exempt && !tr.notation && !incidentPattern.MatchString(l) {
+			tr := detect(l)
+			if !tr.ruleLike || tr.exempt {
+				continue
+			}
+			if tr.unbound != nil { // bound and judged on the bound tokens (BK-B2)
+				add(at+1+i, 2, "%v: `%s`", tr.unbound, strings.TrimSpace(l))
+			}
+			if _, _, incident := incidentIn(l); !tr.notation && !incident {
 				add(at+1+i, 2, "text marker on grammar tokens: mark its kind: `%s`", strings.TrimSpace(l))
 			}
 		}
@@ -879,6 +1062,7 @@ func FragmentValidatorCases(root, registerFile string) ([]FragmentValidatorCase,
 		return nil, err
 	}
 	var out []FragmentValidatorCase
+	taken := map[invalidExample]int{} // the occurrences earlier entries for the same span took (BK-S6)
 	for _, e := range entries {
 		if e.Stage != stageValidator {
 			continue
@@ -891,7 +1075,13 @@ func FragmentValidatorCases(root, registerFile string) ([]FragmentValidatorCase,
 		if err != nil {
 			return nil, err
 		}
-		_, after, ok := strings.Cut(string(doc), "`"+e.Span+"`<!--cep-invalid:")
+		after, ok := string(doc), true
+		for range taken[e.invalidExample] + 1 { // this entry's occurrence: its kind is read there
+			if _, after, ok = strings.Cut(after, "`"+e.Span+"`<!--cep-invalid:"); !ok {
+				break
+			}
+		}
+		taken[e.invalidExample]++
 		kind, _, closed := strings.Cut(after, "-->")
 		if !ok || !closed {
 			return nil, fmt.Errorf("%s: %s: no <!--cep-invalid:<kind>--> marker after the span", e.File, e.Span)
@@ -930,8 +1120,8 @@ func censusOf(md string) docCensus {
 		}
 	}
 	for l := range strings.Lines(md) {
-		if m := fenceOpen.FindStringSubmatch(strings.TrimRight(l, "\n")); m != nil && m[2] != "" {
-			c.markers["fence "+m[2]]++
+		if _, tag, ok := openFence(strings.TrimRight(l, "\n")); ok && tag != "" {
+			c.markers["fence "+tag]++
 		}
 	}
 	return c
