@@ -34,6 +34,7 @@ jobs:
       - run: go mod download all
       - run: go mod download all
         working-directory: gate/proofs
+      - run: git checkout -- go.sum gate/proofs/go.sum
       - run: make vulndb
         continue-on-error: true
       - run: python3 -I -B gate/bootstrap.py exec -- --tier nightly --job lint --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/lint

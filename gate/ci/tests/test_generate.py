@@ -15,6 +15,7 @@ def row(row_id, job, tiers=("T2", "T3", "T4")):
 
 ROWS = [row("gofmt", "lint"), row("unit", "test"), row("proofs", "proofs", ("T4",)), row("t0only", "early", ("T0",))]
 NIGHTLY = [*ROWS, row("fuzz-parser", "nightly", ("nightly",))]
+RESTORE = "      - run: git checkout -- go.sum gate/proofs/go.sum\n"
 
 
 def jobs_of(text: str) -> dict[str, str]:
@@ -76,11 +77,14 @@ class Render(unittest.TestCase):
         self.assertIn("      - run: go mod download all\n        working-directory: gate/proofs\n", lint)
         self.assertGreater(lint.index("go mod download"), lint.index("make setup tools"), lint)
         self.assertLess(lint.index("go mod download"), lint.index("bootstrap.py exec"), lint)
+        # Form D (owner, 2026-11-13, during S1.1c-4's build, decision 2): both go.sum files restored right after.
+        self.assertIn(generate.MODULE_DOWNLOAD + "\n        working-directory: gate/proofs\n" + RESTORE, lint)
         # A job holding a NEEDS_MODULES row downloads modules (lint: deps; proofs: the deps driver); no other does.
         for job, body in jobs_of(text).items():
             self.assertEqual(
                 body.count("      - run: go mod download all\n"), 2 if job in ("lint", "proofs") else 0, job
             )
+            self.assertEqual(body.count(RESTORE), 1 if job in ("lint", "proofs") else 0, job)
         default = jobs_of(self.text)  # no deps row: only the proofs job warms (the driver reads the real modules)
         self.assertNotIn("go mod download", default["lint"])
         self.assertEqual(default["proofs"].count("      - run: go mod download all\n"), 2)
@@ -182,6 +186,17 @@ class Scans(unittest.TestCase):
         self.assertIn(f"          restore-keys: go-${{{{ runner.os }}}}-${{{{ {files} }}}}-", lint)
 
     def test_the_download_step_is_not_the_form_that_writes_go_sum(self):
-        # `go mod download all` writes 14 lines into the root go.sum in CI (plan check §0.7, R-V2 §1); lane E2
-        # measures the form that leaves both go.sum files unchanged (design §3.2) and pins it here.
-        self.assertNotIn("go mod download all", generate.render([*ROWS, row("deps", "lint", ("T4",))]))
+        # `go mod download all` writes 14 lines into the root go.sum in CI (plan check §0.7, R-V2 §1); lane E2a
+        # measured that no single form both leaves go.sum unchanged and lets every offline go read run, so the
+        # download is followed by restoring both go.sum files, in the root (form D: owner, 2026-11-13, during
+        # S1.1c-4's build, decision 2). No go.sum-writing step may follow the restore.
+        text = generate.render([*ROWS, row("deps", "lint", ("T4",))])
+        for job, body in jobs_of(text).items():
+            with self.subTest(job):
+                if "go mod download" not in body:
+                    continue
+                self.assertEqual(body.count(RESTORE), 1, body)
+                restore = body.index(RESTORE)
+                self.assertGreater(restore, body.rindex("go mod download all"), body)
+                self.assertLess(restore, body.index("bootstrap.py exec"), body)
+                self.assertNotIn("working-directory", body[restore : body.index("bootstrap.py exec")], body)
