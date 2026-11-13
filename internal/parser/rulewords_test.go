@@ -82,9 +82,11 @@ func ute(found string, typ lexer.TokenType, expect string) error {
 	return &participle.UnexpectedTokenError{Unexpected: lexer.Token{Type: typ, Value: found}, Expect: expect}
 }
 
-// TestRuleWords: the token found is kept as written, even when it is spelled like a type; in the expected part a
-// production's name becomes its rule words — whole unquoted names only, the longest name winning, every name in the
-// set replaced (DA-S5, DQ-S6, DQ-S8).
+// TestRuleWords: the token found is kept as written, even when it is spelled like a type; what is expected is named
+// by its first item only, in rule words — a production by its productionWords entry, a literal as written without
+// its quotes, a token type by its words, a group by its own first item — with no grammar operator, quote or
+// quantifier (DA-S5, DQ-S6, DQ-S8; decision 2 of "S1.1c-3's review and break-it": `unexpected token "x"; expected a
+// duration`).
 func TestRuleWords(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -94,19 +96,34 @@ func TestRuleWords(t *testing.T) {
 	}{
 		{"a quoted token spelled like a type stays as written",
 			ute("DurationOrParam", 1, "DurationOrParam"),
-			`unexpected token "DurationOrParam" (expected a duration or ${param})`},
+			`unexpected token "DurationOrParam"; expected a duration or ${param}`},
 		{"the longest name wins",
 			ute("min", 1, "DurationOrParam"),
-			`unexpected token "min" (expected a duration or ${param})`},
-		{"two names in one set, both replaced",
+			`unexpected token "min"; expected a duration or ${param}`},
+		{"only the first of two names is named",
 			ute("keep", 1, `DurationOrParam ("after" "match") LateClause`),
-			`unexpected token "keep" (expected a duration or ${param} ("after" "match") drop or allow <duration>)`},
-		{"a quoted literal spelled like a type is not a name",
+			`unexpected token "keep"; expected a duration or ${param}`},
+		{"a literal is written without its quotes, never replaced",
 			ute("x", 1, `"Duration" Duration`),
-			`unexpected token "x" (expected "Duration" a duration)`},
+			`unexpected token "x"; expected Duration`},
 		{"a name that only begins like a type is not that type",
 			ute("x", 1, `Durations`),
-			`unexpected token "x" (expected Durations)`},
+			`unexpected token "x"; expected Durations`},
+		{"a quantified first item is named without its quantifier",
+			ute("partition", 1, `Body Extra* SelectClause RateClause? "insert" "into" NameTok ";"`),
+			`unexpected token "partition"; expected from`},
+		{"a starred first item",
+			ute("x", 1, `Extra* SelectClause`),
+			`unexpected token "x"; expected expect or todo`},
+		{"a group's first item",
+			ute("first", 1, `("after" "match" "skip" "past" "last")? "late"`),
+			`unexpected token "first"; expected after`},
+		{"an alternation's first branch, a token type in words",
+			ute("<EOF>", 1, `(<ident> | <backticked>)`),
+			`unexpected token "<EOF>"; expected a name`},
+		{"a literal holding a quote",
+			ute("x", 1, `"\"" ";"`),
+			`unexpected token "x"; expected "`},
 		{"no expected part", &participle.UnexpectedTokenError{Unexpected: lexer.Token{Type: 1, Value: "Step"}},
 			`unexpected token "Step"`},
 		{"not participle's unexpected-token error: names outside quotes replaced, quoted text kept",
