@@ -76,6 +76,18 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
 | W1-F1 | the W1 combine's proofs run | should-fix | `test_vulns_planted.py`'s own built-module reading ran `go list -deps -test` over the `tool` pattern too, so x/tools' tests' go-cmp counted as built and the per-module case expected a red the row rightly does not give (design §2.1 reads a tool line with `-deps tool`, no `-test`) | fixed: the driver reads the tool line without `-test` (the case green alone, 8.3 s; the row unchanged) |
+| BK-B1, CA-B1 | break-it, architect | blocker | a zip member failing its CRC or deflate crashes the `vulns` row (`Copy.read` catches only `KeyError`; the fetch validates only `db.json`) | fix round |
+| BK-B2 | break-it | blocker | a replacement whose path is also in the build list is never scanned (one version per path) | fix round |
+| BK-S1 | break-it | should-fix | a `withdrawn` that is not a time silently drops the entry | fix round |
+| BK-S2, CA-L8 | break-it, architect | should-fix | `make vulndb`'s stamp write after the zip is replaced, outside the failure handler | fix round |
+| BK-S3, CA-L6 (reason) | break-it, architect | should-fix | the canary sorts a record red for left-running processes (or a kill) by its failed lines only | fix round |
+| CA-S1 | architect | should-fix | a Go patch upgrade would be filed as a break: the toolchain-line tests hard-code go1.27.4 and are not in `pin_tests.json`; the design's unmeasured pins missing | fix round |
+| CA-S2 | architect | should-fix | the row demands an exact `db.json` and layout, the fetch accepts any: an upstream format change reds every PR with no exemption path | fix round |
+| CA-S3 | architect | should-fix | ADR-0015 §3.2/§3.9 describe a canary issue that ages; DEVELOPMENT.md never names `make vulndb` | fix round (coordinator) |
+| QA (undone) | break-it | should-fix | `make vulndb` follows a redirect from https to http (no digest on the database) | fix round: refused (owner, decision 3) |
+| BK-L1, CA-L3, CA-L5, CA-L7, CA-L9 | break-it, architect | later | UTC calendar days; the tidy line's exit code; "no stamp" beside a zip; the candidate's docstring; one fault for a bad Go version | fix round |
+| CA-L1, CA-L2, CA-L4, CA-L6 (rows) | architect | later | the toolchain-to-runner import; the canary's commands in `main.py`; the `vulns` row's own one-version and never-built checks; pins keyed by row | backlog (owner, decision 2) |
+| RACE-1 | the PR's CI | blocker (flake) | `TestSinkHighIsTheLongestQueue` (S3.2b-2) released its held sink before the queue filled | fixed in its own PR #41 from `main` (owner, decision 1); 37/200 red at `-cpu 2` before, 200/200 green after |
 | W2-F1 | lane F2's dry run | blocker | lane F1's measured `pin_tests.json` holds the same test id under two rows (`pytests`, `pyfloor` — one test, two interpreters), and lane F1b's loader refused any repeated id, so every real canary summary would exit 2; no test loaded the committed file | fixed: the loader takes one id under several rows when its pattern is the same, refuses a second pattern or the same row twice; `test_the_committed_pin_tests_json_loads` and two rule tests, each red first |
 | W1-F2 | the W1 combine's T2 | later | `gate/canary/tests/feedsupport.py` is not a name a tests directory may hold (the `pytests` row) | fixed in 3121f14: renamed `support.py` |
 
