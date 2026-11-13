@@ -89,6 +89,7 @@
 | 2026-11-13 | [S1.1c-3's close-out](#owner-decisions-2026-11-13--s11c-3s-close-out) |
 | 2026-11-13 | [S1.1c-4's plan check](#owner-decisions-2026-11-13--s11c-4s-plan-check) |
 | 2026-11-13 | [S1.1c-4's design, after the reviews](#owner-decisions-2026-11-13--s11c-4s-design-after-the-reviews) |
+| 2026-11-13 | [during S1.1c-4's build](#owner-decisions-2026-11-13--during-s11c-4s-build) |
 
 ## The decisions
 
@@ -853,3 +854,7 @@ The design note ([s1-1c-4-design.md](s1-1c-4-design.md), v2 at df24a18) was revi
 3. **The `deps` row's `go.sum` line runs at every T4, local and CI alike** (as recommended; S1.1c-3-2): a tracked `go.sum` that differs from `HEAD` at T4 is red, naming the file — a local strict gate on an uncommitted `go.sum` included; DEVELOPMENT.md's T4 line says so. Rejected: only when the runner is given `--commit`; no row line.
 
 Confirmed as recommended: the card's acceptance line 2 names as its proof `test_gomods.py`'s load-level test and the `test_deps_planted.py` tool-line case (`test_deps.py` cannot see the wiring); the card's in-scope line names `tools/allowlists/vulns.json`.
+
+### Owner decisions, 2026-11-13 — during S1.1c-4's build
+
+1. **More than two agents at once, by the owner's word, for this wave** (≠ the sprint model's "at most two at once unless the owner says otherwise", §6 step 4 and §11; ground rule 17's limit lifted by the owner, not changed): an explicit one-time instruction let a third agent run beside lane E1 and QA's W0c — lane E2a, the part of lane E2 that shares no file with E1 (the generator's steps, `gate/proofs` tidy, the download step's form, the cap); a second instruction let a fourth run — lane F1, the canary's code, beginning with the measurement of its pin reds. Lane E2's two lines in `rows/deps.py` (E1's file this wave) wait as lane E2b. Not a standing rule: the next wave returns to two unless the owner says otherwise.

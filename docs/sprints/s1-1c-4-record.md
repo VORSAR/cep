@@ -41,6 +41,7 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 | Design ‖ W0 | **Coordinator:** the design note `s1-1c-4-design.md`, then its blind reviews | **QA** (qa-expert): §6's tables, drivers and red tests against the coordinator's stubs; the agreement table measured |
 | W1 | **E1** (python-engineer): the loader, the matcher, the copy, the `vulns` row, the register's field, the tool lines | **F1** (python-engineer): `gate/canary/`, `install.archive_pins` |
 | W2 | **E2** (python-engineer): tidy, the download step, the CI steps, the cap | F1 if still running |
+| *As run (owner, 2026-11-13, [during the build](decisions.md#owner-decisions-2026-11-13--during-s11c-4s-build))* | W1 ran four agents at once: **E1** ‖ **QA W0c** (the canary's tests; the driver's review cases) ‖ **E2a** (the generator's steps, `gate/proofs` tidy, the download form, the cap — no shared file with E1) ‖ **F1** (the canary's code, its pin reds measured first) | **E2b** (the tidy and `go.sum` lines in `rows/deps.py`) after E1; **F2** (the workflow) after E2a and F1 |
 | W3 | **F2** (python-engineer): the canary workflow with `ci-fresh`'s scope | — |
 | Close-out | T3 → `proofs` alone → the push: the nightly on the branch, the draft PR (the canary's first run) → review + break-it → one fix round → T4 → owner's check → **PR** | — |
 
