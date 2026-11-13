@@ -49,6 +49,9 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 *(filled as lanes land)*
 
 - **Parity on CI, trees restored from cache (2026-11-13, runs 43415818780, 43417233168, 43416445889, 43417289965):** Linux 2.86–4.84 s over 20 jobs, macOS 5.12–10.36 s over 4 jobs (the plan check §0.5).
+- **G0 (6d83a65):** the `proofs` row alone at T4 exit 0 (81.2 s); T2 exit 0 (22 rows, 81.6 s) with the W0 stubs in the tree.
+- **W0a/W0b (QA, `s1-1c-4/qa`):** `test_vulndb.py` 54 tests with a 39-row agreement table over 8 real entries (byte-identical to the database's `ID/` members; `NOTICE.md`), each verdict measured with govulncheck v1.9.0 outside the repository (query mode over one-entry planted databases; source mode for withdrawn and GOVERSION rows); `test_gomods.py` 20; `test_generate.py`'s `Scans` 4; `test_parity.py`'s `TreeCap`; all red on the stubs for their stated reasons (re-run by the coordinator: `test_vulndb` errors=160, `test_gomods` failures=7 errors=17).
+- **W0 commit (e5f8250):** T2 green but `test_allowlists.Load.test_rules`, the pin on the rule set, red on the new `vulns` rule — the pin updated with it, its module green. The `proofs` row alone at T4 (run 20261113T132602Z-0678c4, 277.4 s): covered 36 of 38, red only on `test_vulns_planted` (20 failures, on the stub) and `test_deps_planted`'s new `test_a_second_tool_lines_module_has_its_licence_read` (today's row reads only the `TOOL` constant) — by design, until lane E1.
 
 ## Test material
 
