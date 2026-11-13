@@ -10,6 +10,7 @@ from gate.runner.tests import support
 ROWS = os.path.join(support.GATE, "runner", "rows")
 WORKFLOW = ".github/workflows/gate.yml"
 NIGHTLY = ".github/workflows/nightly.yml"
+CANARY = ".github/workflows/canary.yml"  # rendered beside the gate (S1.1c-4 design §4.7)
 
 
 class CiFresh(support.GateTest):
@@ -27,11 +28,11 @@ class CiFresh(support.GateTest):
 
     def ci_fresh(self):
         command = (sys.executable, "-I", "-B", "-X", "utf8", os.path.join(ROWS, "ci_fresh.py"))
-        self.run_rows([self.row("ci-fresh", command=command, expected_scope=("git", WORKFLOW, NIGHTLY))])
+        self.run_rows([self.row("ci-fresh", command=command, expected_scope=("git", WORKFLOW, NIGHTLY, CANARY))])
         return self.reason("ci-fresh")
 
     def test_fresh_workflows_pass(self):
-        self.assertEqual(self.ci_fresh(), "covered 2")
+        self.assertEqual(self.ci_fresh(), "covered 3")
 
     def test_a_stale_nightly_workflow_fails(self):
         with open(os.path.join(self.repo, NIGHTLY), "a", encoding="utf-8") as f:
