@@ -1,6 +1,6 @@
 """`make vulndb`'s fetch (S1.1c-4 design note §2.3, §5 W0c; review DQ-S5): validated before it replaces anything.
 
-Driven through the `fetch` seam with `get` and `now` injected, and `main` with the installer's `_fetch` patched: no
+Driven through the `fetch` seam with `get` and `now` injected, and `main` with its https-only `_get` patched: no
 test reads the network or the real ~/.cache. Every body is built in the test; expected digests come from the body's
 own bytes through hashlib, never from the code under test.
 """
@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from unittest import mock
 
 from gate.runner import vulndb
-from gate.toolchain import install, vulndb_fetch
+from gate.toolchain import vulndb_fetch
 
 NOW = datetime(2026, 11, 13, 9, 30, 15, tzinfo=UTC)
 NOW_TEXT = "2026-11-13T09:30:15Z"
@@ -34,11 +34,20 @@ def database(members: dict[str, bytes]) -> bytes:
     return buf.getvalue()
 
 
+# A consistent one-entry database: the fetch runs the row's format check before it replaces anything (review CA-S2),
+# so the indexes are non-empty and agree with the entry, as vuln.go.dev's do.
 GOOD = database(
     {
-        "index/db.json": b'{"modified":"2026-11-11T02:51:11Z"}',
-        "index/modules.json": b"[]",
-        "index/vulns.json": b"[]",
+        "index/db.json": b'{"modified": "2026-11-11T02:51:11Z"}',
+        "index/modules.json": (
+            b'[{"path": "example.com/a", "vulns": [{"id": "GO-2099-0001", "modified": "2026-11-11T02:51:11Z"}]}]'
+        ),
+        "index/vulns.json": b'[{"id": "GO-2099-0001", "modified": "2026-11-11T02:51:11Z", "aliases": []}]',
+        "ID/GO-2099-0001.json": (
+            b'{"id": "GO-2099-0001", "modified": "2026-11-11T02:51:11Z", "affected": [{"package": {"name": '
+            b'"example.com/a", "ecosystem": "Go"}, "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, '
+            b'{"fixed": "1.0.1"}]}]}]}'
+        ),
     }
 )
 NO_DB_JSON = database({"index/modules.json": b"[]", "ID/GO-2099-0001.json": b"{}"})
@@ -157,7 +166,7 @@ class Main(unittest.TestCase):
     def main(self, body: bytes) -> tuple[int, str]:
         get, _ = serving(body)
         out = io.StringIO()
-        with mock.patch.object(install, "_fetch", get), contextlib.redirect_stdout(out):
+        with mock.patch.object(vulndb_fetch, "_get", get), contextlib.redirect_stdout(out):  # decision 3's getter
             code = vulndb_fetch.main([], self.environ)
         return code, out.getvalue()
 
