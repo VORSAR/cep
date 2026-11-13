@@ -10,7 +10,7 @@ import unittest
 
 from gate.canary import candidate, feeds
 from gate.canary.candidate import CanaryError, DigestMismatch
-from gate.canary.tests import feedsupport as fs
+from gate.canary.tests import support as fs
 
 BODY = b"an archive's bytes\n"
 URL = "https://example.invalid/tool.tar.gz"

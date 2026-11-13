@@ -565,6 +565,7 @@
         "gate/runner/deps.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/deps.py",
+        "gate/runner/rows/gomods.py",
         "gate/runner/sprintid.py"
       ],
       "proofs": [
@@ -719,7 +720,7 @@
       "proofs": [
         {
           "path": "gate/proofs/drivers/test_vulns_planted.py",
-          "cases": 20
+          "cases": 31
         }
       ],
       "tiers": [

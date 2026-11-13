@@ -6,7 +6,7 @@ import copy
 import unittest
 
 from gate.canary import candidate
-from gate.canary.tests import feedsupport as fs
+from gate.canary.tests import support as fs
 
 
 class FloorHasNoNewerLine(unittest.TestCase):
