@@ -951,9 +951,18 @@ func TestEveryQuotedRuleFragmentParses(t *testing.T) {
 		invalid = append(invalid, e.invalidExample)
 	}
 	pins := map[string]docCensus{
-		"docs/language/SPEC.md":      {ruleLike: 88, markers: map[string]int{"fence go": 1}},
-		"docs/language/SEMANTICS.md": {ruleLike: 70, markers: map[string]int{}},
-		"docs/language/errors.md":    {ruleLike: 68, markers: map[string]int{}},
+		// The corrections and markers commits (S1.1c-3) moved these, as the corpus pin moves (design §2.3).
+		"docs/language/SPEC.md": {ruleLike: 84, markers: map[string]int{
+			"cep": 15, "cep-meta": 22, "cep-invalid": 4, "text": 13,
+			"fence go": 1, "fence cep": 2, "fence cep-body": 1, "fence cep-patternbody": 1, "fence cep-rule": 1,
+			"fence cep-trivia": 1, "fence text": 2,
+		}},
+		"docs/language/SEMANTICS.md": {ruleLike: 62, markers: map[string]int{
+			"cep": 16, "cep-meta": 17, "cep-invalid": 3, "text": 15,
+		}},
+		"docs/language/errors.md": {ruleLike: 63, markers: map[string]int{
+			"cep": 19, "cep-meta": 16, "cep-invalid": 9, "text": 1,
+		}},
 	}
 	for _, file := range fragmentDocs {
 		data, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(file)))

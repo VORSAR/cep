@@ -3,16 +3,16 @@
 Normative companion to [SPEC.md](SPEC.md) §7. Every static rule has a stable code; every diagnostic carries: code, violated rule (SPEC §), location (line/col), and one to three concrete fixes. Codes marked **[parse]** are enforced by the grammar itself (each has a counter-example in [invalid/](invalid/)); codes marked **[static]** are deploy-time checks after parsing (enforced by the engine's validator; semantics in SEMANTICS.md).
 
 ### E-PRAG-001 Missing version pragma **[parse]**
-Rule: SPEC §3.1 — `language cep/0.1;` is the first statement of every file.
-Fix: add `language cep/0.1;` as line 1.
+Rule: SPEC §3.1 — `language cep/0.1;`<!--cep:program--> is the first statement of every file.
+Fix: add `language cep/0.1;`<!--cep:program--> as line 1.
 
 ### E-INT-001 Missing intent **[parse]**
 Rule: SPEC §4 (rule-decl) — every rule states its purpose.
-Fix: add `intent '<one sentence>'` immediately after `rule <Name>`.
+Fix: add `intent '<one sentence>'`<!--cep:intent--> immediately after `rule <Name>`<!--cep-meta:rulehead-->.
 
 ### E-PAT-001 Missing `within` **[parse]**
 Rule: SPEC §5.5 — every pattern states its whole-match bound.
-Fix: add `within <duration>` after the last pattern element (e.g. `within 5 min`).
+Fix: add `within <duration>`<!--cep-meta:within--> after the last pattern element (e.g. `within 5 min`<!--cep:within-->).
 
 ### E-PAT-002 Missing after-match policy **[parse]**
 Rule: SPEC §5.4 — every pattern states what happens after a match.
@@ -20,11 +20,11 @@ Fix: add `after match skip past last`.
 
 ### E-PAT-003 Missing restart marker **[parse]**
 Rule: SPEC §5.4 — every pattern begins `every` (a match per qualifying start) or `once` (at most one per partition instance).
-Fix: write `from every <step>…` or `from once <step>…`.
+Fix: write `from every <step>…`<!--cep-meta:from--> or `from once <step>…`<!--cep-meta:from-->.
 
 ### E-PAT-004 Absence without a bound **[parse]**
-Rule: SPEC §5.5 — `and not <Stream>[…]` requires `for <duration>`.
-Fix: add `for <duration>` (e.g. `for 5 min`).
+Rule: SPEC §5.5 — `and not <Stream>[…]`<!--cep-invalid:chainelem--> requires `for <duration>`<!--cep-meta:for-->.
+Fix: add `for <duration>`<!--cep-meta:for--> (e.g. `for 5 min`<!--cep:for-->).
 
 ### E-LATE-001 Missing late-events policy **[parse]**
 Rule: SPEC §5.4 — every pattern and window rule states one.
@@ -36,15 +36,15 @@ Fix: add the kind's mode: `emit on close` (cron) | `emit on change` (sort) | `em
 
 ### E-WIN-001 cron without timezone **[parse]**
 Rule: SPEC §6.3 — cron windows name an explicit IANA timezone; there is no UTC default.
-Fix: `window cron('0 0 * * *', 'America/New_York')`.
+Fix: `window cron('0 0 * * *', 'America/New_York')`<!--cep:window-->.
 
 ### E-TTL-001 Partition without TTL **[parse]**
 Rule: SPEC §5.5 — every partition block states its idle-key TTL.
-Fix: append `ttl <duration>` to the partition clause.
+Fix: append `ttl <duration>`<!--cep-meta:ttl--> to the partition clause.
 
 ### E-DUR-001 Bare number in a time position **[parse]**
 Rule: SPEC §2.4 — durations carry units.
-Fix: `5 min`, `1 hour 30 min`, `250 ms` — never `5`.
+Fix: `5 min`<!--cep:expr-->, `1 hour 30 min`<!--cep:expr-->, `250 ms`<!--cep:expr--> — never `5`.
 
 ### E-TXT-001 Unsuffixed text operator **[parse]**
 Rule: SPEC §2.5/§5.3 — case mode is part of the operator name; no default exists.
@@ -59,7 +59,7 @@ Rule: SPEC §4.4 — clause order is fixed; there are no alternative orders.
 Fix: reorder to: intent, partition, from…, within, after match, late events, expect/todo, select, output, insert into.
 
 ### E-SYN-001 Synonym keyword **[parse]**
-Rule: SPEC §4 — one way per construct; e.g. the sequence connector is `->`, never `followed by`/`then`. Also SPEC §2.3 (rev 8): a malformed or unclosed backticked name, at its opening backtick.
+Rule: SPEC §4 — one way per construct; e.g. the sequence connector is `->`, never `followed by`<!--cep-invalid:expr-->/`then`. Also SPEC §2.3 (rev 8): a malformed or unclosed backticked name, at its opening backtick.
 Fix: the message names the canonical form for the construct it found.
 
 ### E-KW-001 Keyword used as identifier **[parse]**
@@ -72,7 +72,7 @@ Fix: the message names the lowercase form (`FROM` → `from`).
 
 ### E-TIME-001 Source stream without a time clause **[static]**
 Rule: SPEC §5.4 / SEMANTICS §2 — every source stream names its clock and watermark.
-Fix: `time <attr> watermark bounded <duration>` | `time <attr> watermark ascending` | `time arrival`.
+Fix: `time <attr> watermark bounded <duration>`<!--cep-meta:timeclause--> | `time <attr> watermark ascending`<!--cep-meta:timeclause--> | `time arrival`.
 
 ### E-TIME-002 Time clause on a derived stream **[static]**
 Rule: SEMANTICS §2.1 — derived streams carry propagated watermarks; re-declaring is an error.
@@ -85,35 +85,35 @@ Message names the attribute and its declared type, or that it is optional. Fix: 
 
 ### E-IDLE-001 Missing `idle after` on a timer-feeding stream **[static]**
 Rule: SEMANTICS §2.1 / SPEC §4.2 — every stream consumed by a rule that holds timers (any pattern with an absence, any window rule, any multi-stream rule) declares idleness, or a quiet stream stalls that rule's clock. A plain rule — partitioned and rate-limited or not — holds no such timer: its keys expire on its own stream's admission watermark (SEMANTICS §9), so it needs no `idle after`.
-Fix: append `idle after <duration>` to the stream's time clause.
+Fix: append `idle after <duration>`<!--cep-meta:idle--> to the stream's time clause.
 
 ### E-PART-001 Stateful rule outside a partition **[static]**
 Rule: SEMANTICS §7/§11.2 — patterns and windows require a partition (explicit global is reserved).
-Fix: add `partition by <key> of <Stream> … ttl <duration>`.
+Fix: add `partition by <key> of <Stream> … ttl <duration>`<!--cep-meta:partition-->.
 
 ### E-PART-002 Consumed stream with no partition key **[static]**
 Rule: SEMANTICS §9 — the partition clause keys every stream used in the rule.
-Fix: add `, <key> of <ThatStream>` to the partition clause.
+Fix: add `, <key> of <ThatStream>`<!--cep-meta:partkey--> to the partition clause.
 
 ### E-PART-003 Partition keys of different types **[static]**
 Rule: SPEC §4.4 (rev 3) — one partition block keys every stream on the same value, so its keys share one type.
 Message names both streams and both types; for a key of two or more parts it names the position (rev 5: “part 2 of the partition key: session of B is int, but sessionId of A is string”). Fix: key each position with attributes of one type, or declare them with one type.
 
 ### E-PART-004 A stream keyed twice in one partition clause **[static]**
-Rule: SEMANTICS §9 — a partition clause names one key for every stream the rule consumes; naming a stream twice (`k of S, j of S`) would leave all but one key unused, and a rule keyed on fewer attributes than written merges keys and loses alerts *(owner, 2026-11-06, S3.2b-1, break-it B1; multi-part keys are written `(k, j) of S` from S3.2b-2, owner decision)*.
-Message names the stream and the repeated key, and shows the grouped form (rev 5: “to key it on both, write (k, j) of S, and give every stream the same number of parts”). Fix: key each stream once; group its attributes, `(k, j) of S`, and give every stream's key the same number of parts.
+Rule: SEMANTICS §9 — a partition clause names one key for every stream the rule consumes; naming a stream twice (`k of S, j of S`<!--cep-invalid:keylist-->) would leave all but one key unused, and a rule keyed on fewer attributes than written merges keys and loses alerts *(owner, 2026-11-06, S3.2b-1, break-it B1; multi-part keys are written `(k, j) of S`<!--cep:partkey--> from S3.2b-2, owner decision)*.
+Message names the stream and the repeated key, and shows the grouped form (rev 5: “to key it on both, write (k, j) of S, and give every stream the same number of parts”). Fix: key each stream once; group its attributes, `(k, j) of S`<!--cep:partkey-->, and give every stream's key the same number of parts.
 
 ### E-PART-005 A single key in brackets **[static]**
 Rule: SPEC §4.4 (rev 5) — one spelling for each key: brackets group two or more attributes; one attribute is written bare.
-Reported only when every stream's key has one part (otherwise the clause is E-PART-007). Message names the stream and the attribute. Fix: write `k of S`; brackets group two or more attributes: `(k, j) of S`.
+Reported only when every stream's key has one part (otherwise the clause is E-PART-007). Message names the stream and the attribute. Fix: write `k of S`<!--cep:partkey-->; brackets group two or more attributes: `(k, j) of S`<!--cep:partkey-->.
 
 ### E-PART-006 An attribute named twice in one key group **[static]**
 Rule: SPEC §4.4 (rev 5) — a group names two or more *different* attributes; a repeat adds nothing and hides a missing part.
-Message names the attribute and the stream. Fix: name each attribute once: `(k, j) of S`.
+Message names the attribute and the stream. Fix: name each attribute once: `(k, j) of S`<!--cep:partkey-->.
 
 ### E-PART-007 Partition keys with different numbers of parts **[static]**
 Rule: SPEC §4.4 (rev 5), SEMANTICS §9 — key parts correspond by position across streams, so every stream's key has the same number of parts.
-Reported once per rule, at `partition`; the message lists every stream's count (a one-attribute group counts 1), e.g. “the partition keys of rule R have different numbers of parts: S 2, T 1”. Checked before E-PART-005, so the first fix offered is the one that settles the clause. Fix: give every stream's key the same number of parts, matched by position: `(k, j) of S, (k2, j2) of T`.
+Reported once per rule, at `partition`; the message lists every stream's count (a one-attribute group counts 1), e.g. “the partition keys of rule R have different numbers of parts: S 2, T 1”. Checked before E-PART-005, so the first fix offered is the one that settles the clause. Fix: give every stream's key the same number of parts, matched by position: `(k, j) of S, (k2, j2) of T`<!--cep:keylist-->.
 
 ### E-PART-008 Partition key of type object **[static]**
 Rule: SPEC §4.4 (rev 7), SEMANTICS §9 — a partition key part is a scalar attribute; an `object` attribute cannot key a partition (S3.2a-1's D7, 2026-11-05; the engine's `NewRule` in `internal/partition` refuses it as its own guard).
@@ -128,8 +128,8 @@ Rule: SPEC §3.3 — attributes, functions, window kinds, annotation keys and si
 Message carries the nearest valid name. Fix: use the suggestion or declare the name.
 
 ### E-NULL-001 Null-hazard comparison in an absence predicate **[static]**
-Rule: SEMANTICS §1.1/§11.12 — comparisons over schema-`optional` attributes inside `and not <Stream>[…] for <duration>` require explicit null handling.
-Fix: wrap with `coalesce(attr, '<sentinel>')`, or guard with `attr is not null`.
+Rule: SEMANTICS §1.1/§11.12 — comparisons over schema-`optional` attributes inside `and not <Stream>[…] for <duration>`<!--cep-meta:chainelem--> require explicit null handling.
+Fix: wrap with `coalesce(attr, '<sentinel>')`, or guard with `attr is not null`<!--cep:expr-->.
 
 ### E-NULL-002 Null-blind predicate over a nullable attribute (lint) **[static]**
 Rule: SEMANTICS §1.1 — `!=`, `in` and `not in` evaluate false when the operand is null; over a nullable attribute that is usually a missed event, not an intent.
@@ -185,7 +185,7 @@ Rule: SPEC §5.9 — `in` compares against a single-column primary key in v0.1.
 Fix: restructure the table, or wait for composite-key membership (reserved).
 
 ### E-TBL-002 Primary-key column optional or object **[static]**
-Rule: SPEC §4.3 (rev 7) — a `primary key (…)` column is neither `optional` nor `object`: a null or an object cannot key a row (S3.1-2's D3, 2026-11-04).
+Rule: SPEC §4.3 (rev 7) — a `primary key (…)`<!--cep-meta:primarykey--> column is neither `optional` nor `object`: a null or an object cannot key a row (S3.1-2's D3, 2026-11-04).
 Reported at the column's declaration, once per column. Fix: declare the key column non-optional with a scalar type, or key the table by another column.
 
 ### E-WIN-002 batch() on a non-punctuating source **[static]**
@@ -203,10 +203,10 @@ Message: "reserved for a future version; not available in cep/0.1". Fix: see the
 
 ### E-PRAG-002 Unsupported language version **[static]**
 Rule: SPEC §3.1 — a v0.1 engine accepts `cep/0.1` only; later versions are refused, never half-interpreted.
-Fix: use `language cep/0.1;`, or deploy on an engine supporting the named version.
+Fix: use `language cep/0.1;`<!--cep:program-->, or deploy on an engine supporting the named version.
 
 ### E-DUR-002 Malformed duration **[static]**
-Rule: SPEC §2.4 — duration counts are integers; units strictly descending and distinct (`1 hour 30 min`, never `1.5 min`, `30 sec 5 min`, or `5 min 5 min`).
+Rule: SPEC §2.4 — duration counts are integers; units strictly descending and distinct (`1 hour 30 min`<!--cep:expr-->, never `1.5 min`<!--cep-invalid:duration-->, `30 sec 5 min`<!--cep-invalid:duration-->, or `5 min 5 min`<!--cep-invalid:duration-->).
 Fix: rewrite with integer counts in descending units.
 
 ### E-DUR-003 Zero or negative duration in a bound slot **[static]**
@@ -214,8 +214,8 @@ Rule: SPEC §2.4 — `within`, `for`, `ttl`, `idle after`, `delay`, `allow` and 
 Fix: use a positive duration.
 
 ### E-PAT-005 Pattern without a positive step **[parse]**
-Rule: SPEC §5.2 — every pattern anchors on at least one positive step, and an absence follows its step directly (`-> and not` is not a form); a pure absence ("no heartbeat for D") is not expressible in v0.1.
-Fix: anchor the absence on a positive event, written `… and not S[…] for D` straight after a step with no `->` before it, or use a cron window with a count.
+Rule: SPEC §5.2 — every pattern anchors on at least one positive step, and an absence follows its step directly (`-> and not`<!--cep-invalid:chain--> is not a form); a pure absence ("no heartbeat for D") is not expressible in v0.1.
+Fix: anchor the absence on a positive event, written `… and not S[…] for D`<!--cep-meta:chain--> straight after a step with no `->` before it, or use a cron window with a count.
 
 ### E-PAT-006 Duplicate capture name **[static]**
 Rule: SPEC §5.2 — capture names are unique within a rule.
@@ -234,7 +234,7 @@ Rule: SEMANTICS §8 — legal pairs: cron→close, sort→change, delay→due, b
 Fix: the message names the kind's mode.
 
 ### E-TYPE-001 Ill-typed expression **[static]**
-Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, arithmetic outside §5.10's list (`<timestamp> + <timestamp>`, `duration × float`), any operator on `object` except `is null` and `is not null`; an integer literal outside 64 bits (SPEC §2.4); and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
+Rule: SPEC §5.10 — e.g. a text operator on a non-string, a boolean fed to `in`, `%` on floats, comparisons across unrelated types, arithmetic outside §5.10's list (`<timestamp> + <timestamp>`<!--cep-invalid:expr-->, `duration × float`<!--text-->), any operator on `object` except `is null` and `is not null`; an integer literal outside 64 bits (SPEC §2.4); and a derived stream's `ts` declared other than `timestamp`, since the engine fills it with the output timestamp *(owner, 2026-11-06, S3.2b-1 D3)*.
 Message names the operand and expected type. Fix: cast explicitly, or restructure.
 
 ### E-FN-001 Unknown function arity or argument kind **[static]**
@@ -242,7 +242,7 @@ Rule: SPEC Appendix F — e.g. `chain()` needs at least one capture argument; `c
 Fix: the message cites the signature.
 
 ### E-WIN-004 sort size must be a positive integer **[static]**
-Rule: SPEC §6.3 — `sort(<n>, <attr>, <dir>)` with n ≥ 1.
+Rule: SPEC §6.3 — `sort(<n>, <attr>, <dir>)`<!--cep-meta:windowkind--> with n ≥ 1.
 Fix: use a positive integer literal.
 
 ### E-GRAPH-001 Cycle in the rule–stream graph **[static]**
@@ -269,9 +269,9 @@ Fix: `a == 'x'` / `a != 'x'`.
 
 ### E-SYN-003 Literal IN-list **[parse]**
 Rule: SPEC §2.5 — `in` takes a table name, never a literal list.
-Fix: `a has_any_cs('x', 'y')` for text, or load a table.
+Fix: `a has_any_cs('x', 'y')`<!--cep:expr--> for text, or load a table.
 
-### E-SYN-004 `select *` **[parse]**
+### E-SYN-004 `select *`<!--cep-invalid:select--> **[parse]**
 Rule: SPEC §5.8 — projection is explicit; every select item is named.
 Fix: list the attributes.
 
