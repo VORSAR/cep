@@ -17,13 +17,15 @@ class CanaryError(Exception):
 class Upgrade:
     name: str  # the tool's name in tools.json
     pinned: str
-    latest: str
+    latest: str  # equal to `pinned` for a build-only move
+    note: str = ""  # e.g. "build 20261026 → 20261110" for python-build-standalone (design §4.3; review DQ-S7)
 
 
 @dataclass(frozen=True)
 class Candidate:
     tools: Mapping[str, object]  # the candidate tools.json document, valid for manifest.load
     upgrades: tuple[Upgrade, ...]  # in tools.json's order; empty when every pin is the latest
+    newer_lines: tuple[str, ...] = ()  # releases on a newer line, listed and never tried, e.g. "golangci-lint v2.16.0"
 
 
 def build(
