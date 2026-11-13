@@ -21,11 +21,12 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 
 from gate import wait
 from gate.runner import scheduler
 from gate.runner.tests import support
-from gate.toolchain import manifest
+from gate.toolchain import manifest, parity
 
 ARCHIVE = "ab" * 32
 HARNESS = """import json, os, sys
@@ -197,3 +198,60 @@ class ParityStop(support.GateTest):
             named = f.read()
         self.assertIn(str(pid), named)
         wait.until(f"the TERM-deaf tree child {pid} to be gone after the harness exited", lambda: pid_gone(pid))
+
+
+class HashesThenBreaksTheLoop(support.FakeToolchain):
+    """A parity that starts the planted tree child through the run's parity group (`parity.tree_digest` with the
+    spawn the runner gives), and once the child has written its pid, puts on the runner's queue an event its loop
+    does not know: `_handle` raises, which ends `run` early with no stop (CA-L3)."""
+
+    def __init__(self, argv: tuple[str, ...], marker: str) -> None:
+        super().__init__()
+        self.argv = argv
+        self.marker = marker
+        self.runner: scheduler.Runner | None = None
+        self.outcome = ""
+        self.done = threading.Event()
+
+    def parity(self, env, *, full_tree: bool, spawn, scratch: str) -> list[str]:
+        def spawn_then_break(argv, **kw):
+            proc = spawn(argv, **kw)
+            wait.until(f"the planted tree child to write {self.marker}", lambda: os.path.exists(self.marker))
+            assert self.runner is not None
+            self.runner._q.put_nowait(("not an event",))
+            return proc
+
+        try:
+            home = os.path.dirname(self.marker)
+            parity.tree_digest(home, spawn=spawn_then_break, argv=self.argv, env=env, scratch=scratch)
+            self.outcome = "hashed"
+        except (OSError, parity.TreeStopped) as e:  # the runner is gone: this thread only notes how it ended
+            self.outcome = f"{type(e).__name__}: {e}"
+        finally:
+            self.done.set()
+        return []
+
+
+class ParityEarlyEnd(support.GateTest):
+    def test_an_exception_that_ends_run_during_the_tree_hash_kills_the_tree_child(self):
+        # CA-L3: the parity group's cleanup (kill_left and its probe) runs on any early end of run while a tree child
+        # may be alive, not only after a stop: here a bug's exception ends the loop, and no stop ever came.
+        marker = os.path.join(self.root, "tree-child.pid")
+        planted = os.path.join(self.root, "planted.py")
+        with open(planted, "w", encoding="utf-8") as f:
+            f.write(PLANTED)
+        toolchain = HashesThenBreaksTheLoop((sys.executable, "-I", "-B", planted, marker), marker)
+        runner = self.runner([self.row("x")], toolchain=toolchain)
+        toolchain.runner = runner
+        with self.assertRaises(AssertionError) as caught:
+            runner.run()
+        self.assertIn("unknown event", str(caught.exception))  # the witness: the loop ended by the exception
+        with open(marker, encoding="utf-8") as f:
+            pid = int(f.read())
+        self.addCleanup(kill, pid)
+        wait.until(f"the planted tree child {pid} to be gone after run raised", lambda: pid_gone(pid))
+        wait.until("the parity thread's tree hash to return", toolchain.done.is_set)
+        self.assertEqual(toolchain.outcome, "TreeChildFailed: the tree child exited -9")
+        left = os.path.join(self.run_dir, "parity", "left_running.txt")
+        with open(left, encoding="utf-8") as f:
+            self.assertIn(str(pid), f.read())

@@ -12,6 +12,7 @@ Red today by existence: none of the four names is in gate/toolchain/parity.py, a
 """
 
 import contextlib
+import errno
 import os
 import signal
 import subprocess
@@ -135,7 +136,7 @@ class TreeFailure(ParityTest):
         tool = self.tool("go")
         spawn = Spawner(self, marker=marker)
         with mock.patch.object(parity, "TREE_CHILD", planted), mock.patch.object(parity, "TREE_CAP_S", SMALL_CAP_S):
-            reasons = parity.check([tool], self.cache, self.env, full_tree=True, spawn=spawn)
+            reasons = parity.check([tool], self.cache, self.env, full_tree=True, spawn=spawn, scratch=self.scratch)
         self.assertEqual(reasons, [f"go: tree hash exceeded its cap of {SMALL_CAP_S} s"])
         self.assertNotIn(f"tree differs: {RECOVER}", reasons[0])
         (proc,) = spawn.procs
@@ -147,19 +148,79 @@ class TreeFailure(ParityTest):
         # proc.py: Group.spawn returns None once the group was signalled; that is a stop, not a differing tree.
         tool = self.tool("go")
         spawn = Spawner(self, refuse=True)
-        reasons = parity.check([tool], self.cache, self.env, full_tree=True, spawn=spawn)
+        reasons = parity.check([tool], self.cache, self.env, full_tree=True, spawn=spawn, scratch=self.scratch)
         self.assertEqual(len(reasons), 1, reasons)
         self.assertTrue(reasons[0].startswith("go: "), reasons)
         self.assertIn("stopped before the tree hash", reasons[0])
         self.assertNotIn("tree differs", reasons[0])
         self.assertEqual(len(spawn.argvs), 1)
 
+    def failure(self, spawn) -> list[str]:
+        return parity.check([self.tool("go")], self.cache, self.env, full_tree=True, spawn=spawn, scratch=self.scratch)
+
+    def planted_failure(self, body: str) -> list[str]:
+        planted = child(os.path.join(self.world, "planted.py"), body)
+        with mock.patch.object(parity, "TREE_CHILD", planted):
+            return self.failure(Spawner(self))
+
+    def test_a_tree_the_child_could_not_read_is_a_differing_tree(self):
+        # BK-S5 / CA-L4: treehash's exit 3 (an OSError while reading the tree) is the one child failure that is a
+        # damaged or unreadable tree, so it alone keeps the damaged-tool reason and its advice.
+        reasons = self.planted_failure("import sys\nprint('Permission denied', file=sys.stderr)\nsys.exit(3)\n")
+        self.assertEqual(reasons, [f"go: tree differs: {RECOVER}"])
+
+    def test_the_real_child_on_an_unreadable_file_is_a_differing_tree(self):
+        # The real treehash.py exits 3 on an OSError: the witness is its stderr in the scratch's tree-go.err.
+        tool = self.tool("go")
+        unreadable = os.path.join(self.home("go"), "bin", "unlisted")
+        write_file(unreadable, b"not listed in exec_sha256\n", 0o000)
+        reasons = parity.check([tool], self.cache, self.env, full_tree=True, spawn=Spawner(self), scratch=self.scratch)
+        with open(os.path.join(self.scratch, "tree-go.err"), encoding="utf-8") as f:
+            self.assertIn("Permission denied", f.read())
+        self.assertEqual(reasons, [f"go: tree differs: {RECOVER}"])
+
+    def test_a_child_that_exits_otherwise_is_named_with_its_exit_and_first_stderr_line(self):
+        # BK-S5 / CA-L4: a crash (exit 1, a traceback, an import failure) is not a damaged tool.
+        reasons = self.planted_failure("import sys\nsys.stderr.write('the hasher broke\\nand more\\n')\nsys.exit(1)\n")
+        self.assertEqual(reasons, ["go: tree hash failed (exit 1): the hasher broke"])
+
+    def test_a_child_killed_by_a_signal_is_named_with_its_exit(self):
+        # Popen's returncode for a signal is the signal's number, negated; an empty stderr adds nothing.
+        reasons = self.planted_failure("import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n")
+        self.assertEqual(reasons, ["go: tree hash failed (exit -9)"])
+
+    def test_a_child_that_could_not_start_is_named_with_the_error(self):
+        # BK-S5: the spawner's own OSError (EMFILE, ENOMEM, a missing interpreter): no hash ran.
+        def refuses(argv, **_kw):
+            raise OSError(errno.EMFILE, "Too many open files")
+
+        self.assertEqual(self.failure(refuses), ["go: tree hash could not start: [Errno 24] Too many open files"])
+
+    def test_check_takes_spawn_and_scratch_as_required_keywords(self):
+        # CA-L1 (design §10 C8): a caller that left spawn out would run the tree child outside the run's parity
+        # group, where no stop reaches it (BA10). The witness: given both, an empty tool list passes.
+        given = {"spawn": Spawner(self), "scratch": self.scratch}
+        timing = parity.Timing()
+        self.assertEqual(parity.check([], self.cache, self.env, full_tree=True, **given), [])
+        self.assertEqual(parity._check([], self.cache, self.env, full_tree=True, timing=timing, **given), [])
+        for missing in sorted(given):
+            kw = {k: v for k, v in given.items() if k != missing}
+            with self.subTest(missing=missing):
+                with self.assertRaises(TypeError) as caught:
+                    parity.check([], self.cache, self.env, full_tree=True, **kw)
+                self.assertIn(f"'{missing}'", str(caught.exception))
+                with self.assertRaises(TypeError) as caught:
+                    parity._check([], self.cache, self.env, full_tree=True, timing=timing, **kw)
+                self.assertIn(f"'{missing}'", str(caught.exception))
+
     def test_one_child_per_tool_and_the_real_child_agrees_with_the_pin(self):
         # testing.md rule 2: one child per tool, each given its own home; the real TREE_CHILD (treehash.py) prints
         # the digest the fixture pinned by hand, so check passes.
         tools = [self.tool("go"), self.tool("ruff")]
         spawn = Spawner(self)
-        self.assertEqual(parity.check(tools, self.cache, self.env, full_tree=True, spawn=spawn), [])
+        self.assertEqual(
+            parity.check(tools, self.cache, self.env, full_tree=True, spawn=spawn, scratch=self.scratch), []
+        )
         self.assertEqual(len(spawn.argvs), len(tools))
         self.assertEqual([argv[-1] for argv in spawn.argvs], [self.home("go"), self.home("ruff")])
         self.assertTrue(all(argv[:-1] == list(parity.TREE_CHILD) for argv in spawn.argvs), spawn.argvs)
@@ -167,7 +228,9 @@ class TreeFailure(ParityTest):
     def test_no_child_below_full_tree(self):
         tool = self.tool("go")
         spawn = Spawner(self)
-        self.assertEqual(parity.check([tool], self.cache, self.env, full_tree=False, spawn=spawn), [])
+        self.assertEqual(
+            parity.check([tool], self.cache, self.env, full_tree=False, spawn=spawn, scratch=self.scratch), []
+        )
         self.assertEqual(spawn.argvs, [])
 
 

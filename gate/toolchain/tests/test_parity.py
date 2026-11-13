@@ -60,6 +60,8 @@ class ParityTest(support.ToolchainTest):
     def setUp(self) -> None:
         super().setUp()
         self.env = {"PATH": os.defpath}
+        self.scratch = os.path.join(self.world, "parity")
+        os.makedirs(self.scratch)
 
     def home(self, name: str) -> str:
         return os.path.join(self.cache, f"{name}-1.0-{ARCHIVE_DIGEST[:12]}")
@@ -103,7 +105,9 @@ class ParityTest(support.ToolchainTest):
         return path
 
     def check(self, *tools: manifest.Tool, full_tree: bool = False) -> list[str]:
-        return parity.check(list(tools), self.cache, self.env, full_tree=full_tree)
+        return parity.check(
+            list(tools), self.cache, self.env, full_tree=full_tree, spawn=parity.popen, scratch=self.scratch
+        )
 
 
 class Passing(ParityTest):
@@ -136,9 +140,13 @@ class Passing(ParityTest):
         tool = self.tool()
         link = os.path.join(self.world, "cache-link")
         os.symlink(self.cache, link)
-        self.assertEqual(parity.check([tool], link, self.env, full_tree=True), [])
+        self.assertEqual(
+            parity.check([tool], link, self.env, full_tree=True, spawn=parity.popen, scratch=self.scratch), []
+        )
         via_link = {"PATH": os.path.join(link, os.path.basename(self.home("go")), "bin")}
-        self.assertEqual(parity.check([tool], self.cache, via_link, full_tree=True), [])
+        self.assertEqual(
+            parity.check([tool], self.cache, via_link, full_tree=True, spawn=parity.popen, scratch=self.scratch), []
+        )
 
     def test_a_symlink_inside_the_tool_directory_is_inside(self):
         # bin/python3 -> python3.15 is the normal shape of the Python archives.
@@ -317,7 +325,9 @@ class VersionCheck(ParityTest):
     def test_a_hung_version_is_killed_and_named(self):
         tool = self.tool(source=script("import signal\nsignal.pause()"))
         timing = parity.Timing(cap_s=0.2, grace_s=support.CHILD_CAP_S)
-        reasons = parity._check([tool], self.cache, self.env, full_tree=False, timing=timing)
+        reasons = parity._check(
+            [tool], self.cache, self.env, full_tree=False, timing=timing, spawn=parity.popen, scratch=self.scratch
+        )
         self.assertEqual(reasons, [f"go: version: no answer within 0.2s: {RECOVER}"])
 
     def test_a_hung_version_that_ignores_term_is_killed(self):
@@ -349,7 +359,9 @@ class VersionCheck(ParityTest):
             raise subprocess.TimeoutExpired(proc.args, timeout)
 
         timing = parity.Timing(cap_s=7, grace_s=11, wait=wait)
-        reasons = parity._check([tool], self.cache, self.env, full_tree=False, timing=timing)
+        reasons = parity._check(
+            [tool], self.cache, self.env, full_tree=False, timing=timing, spawn=parity.popen, scratch=self.scratch
+        )
         self.assertEqual(reasons, [f"go: version: no answer within 7s: {RECOVER}"])
         self.assertEqual(waits, [7, 11])
 
@@ -571,6 +583,8 @@ class RealCache(support.ToolchainTest):
     def setUp(self) -> None:
         super().setUp()
         self.real_cache = manifest.cache_root(os.environ)
+        self.scratch = os.path.join(self.world, "parity")
+        os.makedirs(self.scratch)
         self.tools = manifest.load(os.path.join(support.REPO, "tools.json"), manifest.platform_key())
         self.env = {
             "PATH": os.pathsep.join(manifest.path_dirs(self.real_cache, self.tools)),
@@ -583,7 +597,12 @@ class RealCache(support.ToolchainTest):
         }
 
     def test_the_installed_tools_pass_every_check_and_their_whole_trees_match(self):
-        self.assertEqual(parity.check(self.tools, self.real_cache, self.env, full_tree=True), [])
+        self.assertEqual(
+            parity.check(
+                self.tools, self.real_cache, self.env, full_tree=True, spawn=parity.popen, scratch=self.scratch
+            ),
+            [],
+        )
 
     def test_a_users_go_env_file_changes_nothing_under_the_cleaned_environment(self):
         # C25, the Go half, on the real go. GOPROXY=off keeps the witness off the network.
@@ -592,10 +611,20 @@ class RealCache(support.ToolchainTest):
         with open(env_file, "w", encoding="utf-8") as f:
             f.write("GOTOOLCHAIN=go1.27.2+auto\nGOFLAGS=-mod=mod\n")
         planted = {k: v for k, v in self.env.items() if k != "GOTOOLCHAIN"} | {"GOENV": env_file, "GOPROXY": "off"}
-        reasons = parity.check(go, self.real_cache, planted, full_tree=False)
+        reasons = parity.check(go, self.real_cache, planted, full_tree=False, spawn=parity.popen, scratch=self.scratch)
         self.assertEqual(len(reasons), 1, reasons)  # the witness: a live env file does change what go does
         self.assertTrue(reasons[0].startswith("go: version:"), reasons)
-        self.assertEqual(parity.check(go, self.real_cache, {**self.env, "GOPROXY": "off"}, full_tree=False), [])
+        self.assertEqual(
+            parity.check(
+                go,
+                self.real_cache,
+                {**self.env, "GOPROXY": "off"},
+                full_tree=False,
+                spawn=parity.popen,
+                scratch=self.scratch,
+            ),
+            [],
+        )
 
     def test_a_flip_in_a_real_copy_is_named_and_the_real_cache_is_unchanged(self):
         # QA counter-example 9 and DQ24: a real copy, never a hard link, and the original re-hashed after.
@@ -618,7 +647,8 @@ class RealCache(support.ToolchainTest):
         narrowed = dataclasses.replace(go, exec_sha256={rel: go.exec_sha256[rel] for rel in ("bin/go", vet)})
         env = {**self.env, "PATH": os.path.join(home, "bin")}
         self.assertEqual(
-            parity.check([narrowed], cache, env, full_tree=False), [f"go: sha256 of {vet} differs: {RECOVER}"]
+            parity.check([narrowed], cache, env, full_tree=False, spawn=parity.popen, scratch=self.scratch),
+            [f"go: sha256 of {vet} differs: {RECOVER}"],
         )
         self.assertEqual(support.sha256_of(os.path.join(real_home, vet)), go.exec_sha256[vet])
 
