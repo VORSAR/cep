@@ -117,10 +117,11 @@ def _validated(path: str) -> str:
         raise FetchError("the body is not a zip")
     with zipfile.ZipFile(path) as z:
         names = sorted(set(z.namelist()))
-        faults = vulndb.check_format(lambda name: vulndb.read_member(z, name), names)
+        faults = vulndb.check_format(vulndb.Members(z).read, names)  # TOTAL_CAP counted (review BK2-S3)
         if faults:
             more = f" (and {len(faults) - 1} more)" if len(faults) > 1 else ""
-            raise FetchError(f"the body is not the database: {faults[0].removeprefix('vulns: ')}{more}")
+            first = faults[0].removeprefix("vulns: ").removesuffix(": run make vulndb")
+            raise FetchError(f"the body is not the database: {first}{more}")
         try:
             bad = z.testzip()
         except vulndb._UNREADABLE as e:

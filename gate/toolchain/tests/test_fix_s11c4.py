@@ -15,6 +15,7 @@ import urllib.request
 import zipfile
 from unittest import mock
 
+from gate.runner import vulndb
 from gate.toolchain import vulndb_fetch
 from gate.toolchain.tests.test_vulndb_fetch import GOOD, NOW, NOW_TEXT, OLD_STAMP, OLD_ZIP, URL, database, serving
 
@@ -203,6 +204,21 @@ class Fix(unittest.TestCase):
         vulndb_fetch.fetch(self.root, get=get, now=lambda: NOW)
         self.assertEqual(sorted(os.listdir(self.root)), ["stamp.json", "vulndb.zip"])
         self.assertEqual(self.read("vulndb.zip"), GOOD)
+
+    # ------------------------------------------------------------------ BK2-S3: the decompressed total bounded
+
+    def test_a_body_past_the_total_cap_replaces_nothing(self):
+        padded = {**ENTRY, "note": " " * (2 << 20)}  # one 2 MiB entry
+        get, _ = serving(database(members(**{"ID/GO-2099-0001.json": padded})))
+        with mock.patch.object(vulndb, "TOTAL_CAP", 1 << 20):
+            self.assertRefused(get, "the copy decompresses past 1 MiB")
+
+    def test_the_same_body_under_the_total_cap_is_accepted_the_witness(self):
+        padded = {**ENTRY, "note": " " * (2 << 20)}
+        get, _ = serving(database(members(**{"ID/GO-2099-0001.json": padded})))
+        with mock.patch.object(vulndb, "TOTAL_CAP", 3 << 20):
+            vulndb_fetch.fetch(self.root, get=get, now=lambda: NOW)
+        self.assertEqual(sorted(os.listdir(self.root)), ["stamp.json", "vulndb.zip"])
 
 
 if __name__ == "__main__":

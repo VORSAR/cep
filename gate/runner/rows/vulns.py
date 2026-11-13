@@ -56,16 +56,18 @@ class Copy:
     zip: zipfile.ZipFile | None = None
     sha256: str = ""
     stamp: object = None
-    cache: dict[str, bytes | None] = field(default_factory=dict)
+    cache: dict[str, bytes | None] = field(default_factory=dict)  # the three index members only (review BK2-S3)
+    members: vulndb.Members | None = None
 
     def read(self, name: str) -> bytes | None:
         """A member's bytes, None when absent; MemberTooLarge past MEMBER_CAP decompressed bytes; MemberUnreadable
-        when its bytes cannot be read (reviews BK-B1, CA-B1)."""
-        if name not in self.cache:
-            if self.zip is None:
-                return None
-            self.cache[name] = vulndb.read_member(self.zip, name)
-        return self.cache[name]
+        when its bytes cannot be read (reviews BK-B1, CA-B1); CopyTooLarge once the members read pass TOTAL_CAP,
+        each counted once (review BK2-S3). Only the indexes are kept; an entry's bytes are the caller's to drop."""
+        if self.zip is None:
+            return None
+        if self.members is None or self.members.zip is not self.zip:
+            self.members = vulndb.Members(self.zip, self.cache)
+        return self.members.read(name)
 
 
 def _json_file(path: str) -> tuple[bool, object]:
@@ -132,7 +134,7 @@ def entries_of(copy: Copy) -> tuple[list[dict], bool]:
     try:
         index = _parsed(copy.read(vulndb.VULNS_JSON))
         modules = _parsed(copy.read(vulndb.MODULES_JSON))
-    except vulndb.MemberTooLarge, vulndb.MemberUnreadable:  # named by check_db
+    except vulndb.MemberTooLarge, vulndb.MemberUnreadable, vulndb.CopyTooLarge:  # named by check_db
         return [], False
     if not isinstance(index, list) or not index:
         return [], False
@@ -140,10 +142,12 @@ def entries_of(copy: Copy) -> tuple[list[dict], bool]:
     complete = isinstance(modules, list) and bool(modules)
     for item in index:
         entry_id = item.get("id") if isinstance(item, dict) else None
-        try:
+        try:  # read, parsed and dropped: one entry's bytes held at a time (review BK2-S3)
             entry = _parsed(copy.read(f"ID/{entry_id}.json")) if isinstance(entry_id, str) else None
         except vulndb.MemberTooLarge, vulndb.MemberUnreadable:  # named by check_db; the scan incomplete
             entry = None
+        except vulndb.CopyTooLarge:  # named by check_db; the scan incomplete
+            return entries, False
         if isinstance(entry, dict):
             entries.append(entry)
         else:
