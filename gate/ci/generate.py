@@ -52,6 +52,11 @@ NEEDS_HISTORY = frozenset({"apidiff", "lawdelta"})
 # proofs: the deps driver fingerprints the real modules from the cache; vulns: the scan loads both modules' builds.
 NEEDS_MODULES = frozenset({"deps", "proofs", "vulns"})
 MODULE_DOWNLOAD = "      - run: go mod download all"
+# `go mod download all` writes go.sum lines for modules no build needs; no other form measured both leaves go.sum
+# unchanged and lets every offline go read run, so the download is followed by restoring both files (owner,
+# 2026-11-13, during S1.1c-4's build, decision 2: form D). The deps row's T4 go.sum line proves nothing is left.
+GO_SUM_RESTORE = "      - run: git checkout -- go.sum gate/proofs/go.sum"
+MODULE_STEPS = [MODULE_DOWNLOAD, MODULE_DOWNLOAD, "        working-directory: gate/proofs", GO_SUM_RESTORE]
 # Rows that read the vulnerability database's local copy: their job fetches it at setup (S1.1c-4 design §3.3). The
 # step never fails the job: with no fresh copy the vulns row itself is red, naming why (a failed fetch is a verdict
 # of the row, never of setup).
@@ -79,7 +84,7 @@ def _setup_steps(history: bool = False, modules: bool = False, vulndb: bool = Fa
         f"          key: go-${{{{ runner.os }}}}-${{{{ {MODULE_FILES} }}}}-${{{{ github.sha }}}}",
         f"          restore-keys: go-${{{{ runner.os }}}}-${{{{ {MODULE_FILES} }}}}-",
         "      - run: make setup tools",
-        *([MODULE_DOWNLOAD, MODULE_DOWNLOAD, "        working-directory: gate/proofs"] if modules else []),
+        *(MODULE_STEPS if modules else []),
         *(VULNDB_FETCH if vulndb else []),
     ]
 
