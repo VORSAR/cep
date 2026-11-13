@@ -18,6 +18,12 @@ can list. No package of the world imports anything but the plant; the tool's fou
 asserts the row's `failed:` lines are exactly its one planted line (design note section 5.4). Each entry names its
 sprint and a ref into docs/sprints/decisions.md (S1.1c-2 design section 4.6a), so the world copies that document;
 the planted entries borrow the first real entry's sprint and ref.
+
+The tidy line (S1.1c-4 design §3.1, review DQ-S2) is red in every world: the world's root has no package importing
+participle, goleak or x/text, and its gate/proofs loses the tool line, so `go mod tidy` would drop requires in both.
+The cases above filter it out by its prefix; the tidy case plants an unused require at the top of go.mod, the first
+change in the diff's order, and asserts the root's tidy line names it. The T4 case edits go.sum after the world's
+commit and is red by the `go.sum` line (design §3.2; owner, 2026-11-13, the design's decision 3).
 """
 
 import json
@@ -62,6 +68,8 @@ PLANTED_GO = (
 )
 GONE = {**ENTRY, "module": "example.com/gone", "why": "the deps proof's stale entry"}
 TOOL = "golang.org/x/exp/cmd/apidiff"
+TIDY = "deps: go mod tidy "  # the tidy line's prefix (design §3.1)
+TIDY_PROOFS = "deps: go mod tidy would change gate/proofs: "
 # S1.1c-4 design §2.1, §2.7 (plan check §6 "The register" (2)): a second `tool` line in gate/proofs/go.mod, its module
 # a directory beside the repository that the apidiff tool never reaches; the licence fingerprint covers every module
 # the tool lines build, so its register entry's wrong licence field is red.
@@ -114,18 +122,21 @@ class DepsPlanted(support.DriverTest):
         data["modules"].extend({**e, "sprint": first["sprint"], "ref": first["ref"]} for e in entries)
         w.write(ALLOWLIST, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
-    def run_row(self) -> support.Run:
-        self.world.commit()
-        return self.world.run(registry=self.world.registry(support.registry_row("deps")), tier="T2")
+    def run_row(self, *, tier: str = "T2", commit: bool = True) -> support.Run:
+        if commit:
+            self.world.commit()
+        return self.world.run(registry=self.world.registry(support.registry_row("deps")), tier=tier)
 
-    def assertRedLine(self, run: support.Run, expected: str) -> None:
-        """Red, the row FAIL, and its `failed:` lines exactly the one planted line, which is the row's reason."""
+    def assertRedLine(self, run: support.Run, expected: str, *, drop: str = TIDY) -> None:
+        """Red, the row FAIL, and its `failed:` lines, the world's tidy lines (`drop`) aside, exactly the one planted
+        line; the row's reason is its first line."""
         self.assertGateFailed(run)
         record = run.record("lint", "deps")
         self.assertEqual(record["verdict"], "fail", run.stdout)
         out = run.row_stdout("lint", "deps")
         failed = [line.removeprefix("failed: ") for line in out.split("\n") if line.startswith("failed: ")]
-        self.assertEqual(failed, [expected], record["reason"])
+        self.assertTrue(any(line.startswith(drop) for line in failed), f"the world's tidy line: {failed}")
+        self.assertEqual([line for line in failed if not line.startswith(drop)], [expected], record["reason"])
         self.assertParityPassed(run, "lint")
 
     def test_an_unlisted_module_is_red(self):
@@ -181,4 +192,27 @@ class DepsPlanted(support.DriverTest):
             self.run_row(),
             "deps: tracked go.mod files: gate/proofs/go.mod, go.mod, internal/x/go.mod; "
             "ADR-0001 \u00a71 allows two: go.mod, gate/proofs/go.mod",
+        )
+
+    def test_an_unused_require_is_red_by_the_tidy_line(self):
+        # The plant's require moves to the top of go.mod and no package imports it: tidy drops it, and it is the
+        # first change in the root's diff (the world's other untidy requires come after it).
+        self.deps_world(license_text=MIT, entries=[ENTRY])
+        w = self.world
+        w.write("internal/planted/planted.go", "// Package planted imports nothing.\npackage planted\n")
+        gomod = support.read_text(os.path.join(w.repo, "go.mod"))
+        gomod = gomod.replace(f"\nrequire {PLANTED} {VERSION}\n", "\n")
+        w.write("go.mod", gomod.replace("\ntoolchain ", f"\nrequire {PLANTED} {VERSION}\n\ntoolchain ", 1))
+        self.assertRedLine(
+            self.run_row(), f"deps: go mod tidy would change .: go.mod: -{PLANTED} {VERSION}", drop=TIDY_PROOFS
+        )
+
+    def test_a_go_sum_edited_after_the_commit_is_red_at_T4(self):
+        self.deps_world(license_text=MIT, entries=[ENTRY])
+        self.world.commit()
+        path = os.path.join(self.world.repo, "go.sum")
+        self.world.write("go.sum", support.read_text(path) + "example.com/written v1.0.0/go.mod h1:written=\n")
+        self.assertRedLine(
+            self.run_row(tier="T4", commit=False),
+            "deps: go.sum differs from HEAD at T4: commit it, or fix the step that wrote it",
         )
