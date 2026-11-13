@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from gate.toolchain import manifest
 
-UNREADABLE = 3
+UNREADABLE = 3  # parity.TREE_UNREADABLE: the one failed exit parity reads as a damaged tree
 
 
 def main(argv: list[str]) -> int:

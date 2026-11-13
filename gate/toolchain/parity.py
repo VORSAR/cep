@@ -37,6 +37,7 @@ TREE_CHILD: tuple[str, ...] = (sys.executable, "-I", "-B", os.path.join(REPO, "g
 # on each OS's cold runner (records/<job>/parity.json, started_ms to ended_ms), over several runs.
 TREE_CAP_S: float = 300
 TREE_GRACE_S = 5  # after the cap's KILL, how long to wait for the child to be reaped before giving up on it
+TREE_UNREADABLE = 3  # treehash.UNREADABLE: the child could not read the tree (an OSError), the one damaged-tool exit
 
 
 class TreeCapExceeded(OSError):
@@ -49,6 +50,20 @@ class TreeCapExceeded(OSError):
 
 class TreeStopped(Exception):
     """The spawner refused to start the tree child: the run's parity group was already signalled (a stop)."""
+
+
+class TreeStartFailed(OSError):
+    """The spawner raised while starting the tree child (EMFILE, ENOMEM, a missing interpreter): no hash ran (BK-S5)."""
+
+
+class TreeChildFailed(OSError):
+    """The tree child ran and exited non-zero or died by a signal (`code` as Popen gives it, negative for a signal);
+    `first_line` is the first line of its stderr, "" when it wrote none (BK-S5, CA-L4)."""
+
+    def __init__(self, code: int, first_line: str) -> None:
+        super().__init__(f"the tree child exited {code}" + (f": {first_line}" if first_line else ""))
+        self.code = code
+        self.first_line = first_line
 
 
 type Spawn = Callable[..., subprocess.Popen[bytes] | None]
@@ -77,8 +92,10 @@ def tree_digest(
     """The digest the tree child prints for `home`: `[*argv, home]` started through `spawn` (TREE_CHILD and
     TREE_CAP_S when not given, read now), its output in `<scratch>/tree-<name>.out` and `.err`.
 
-    Raises TreeStopped when `spawn` returns None, TreeCapExceeded past the cap (after killing the child's own process
-    group, never through the runner's Group, which would refuse every later spawn), and OSError when the child fails.
+    Raises TreeStopped when `spawn` returns None, TreeStartFailed when it raises OSError, TreeCapExceeded past the cap
+    (after killing the child's own process group, never through the runner's Group, which would refuse every later
+    spawn), and TreeChildFailed when the child exits non-zero or by a signal. The runner's Group forgets a leader once
+    anyone has reaped it, so the capped wait here leaves it no live group to signal (BK-L2).
     """
     cap = TREE_CAP_S if cap_s is None else cap_s
     command = [*(TREE_CHILD if argv is None else argv), home]
@@ -87,7 +104,10 @@ def tree_digest(
             scratch = stack.enter_context(tempfile.TemporaryDirectory(prefix="gate-tree-"))
         out = os.path.join(scratch, f"tree-{name}.out")
         err = os.path.join(scratch, f"tree-{name}.err")
-        proc = spawn(command, cwd=REPO, env=os.environ if env is None else env, stdout=out, stderr=err)
+        try:
+            proc = spawn(command, cwd=REPO, env=os.environ if env is None else env, stdout=out, stderr=err)
+        except OSError as e:
+            raise TreeStartFailed(str(e)) from e
         if proc is None:
             raise TreeStopped(name)
         try:
@@ -100,11 +120,12 @@ def tree_digest(
             with contextlib.suppress(subprocess.TimeoutExpired):
                 proc.wait(timeout=TREE_GRACE_S)
             raise TreeCapExceeded(cap) from None
-        with open(out, "rb") as f:
-            digest = f.read().decode("utf-8", errors="replace").strip()
         if code != 0:
-            raise OSError(f"the tree child exited {code}")
-        return digest
+            with open(err, "rb") as f:
+                first = f.read().split(b"\n", 1)[0].decode("utf-8", errors="replace").strip()
+            raise TreeChildFailed(code, first)
+        with open(out, "rb") as f:
+            return f.read().decode("utf-8", errors="replace").strip()
 
 
 @dataclass(frozen=True)
@@ -125,8 +146,8 @@ def check(
     env: Mapping[str, str],
     *,
     full_tree: bool,
-    spawn: Spawn = popen,
-    scratch: str | None = None,
+    spawn: Spawn,
+    scratch: str,
 ) -> list[str]:
     """Check every tool; return one reason per failing tool, in tools.json order ([] means pass).
 
@@ -137,7 +158,8 @@ def check(
     inside its home, and its version is `<module>.__version__` imported by the pinned interpreter.
 
     The tree hash runs in a child per tool started through `spawn` (the runner passes its parity group's spawn,
-    so a stop ends it), its output in `scratch` (the runner's run directory's parity/; a temporary one if None).
+    so a stop ends it), its output in `scratch` (the runner's run directory's parity/). Both are required (design
+    §10 C8; CA-L1): a default would let a caller run the tree child outside the parity group, where no stop reaches it.
     """
     return _check(tools, cache, env, full_tree=full_tree, timing=Timing(), spawn=spawn, scratch=scratch)
 
@@ -149,14 +171,14 @@ def _check(
     *,
     full_tree: bool,
     timing: Timing,
-    spawn: Spawn = popen,
-    scratch: str | None = None,
+    spawn: Spawn,
+    scratch: str,
 ) -> list[str]:
     goos, goarch = manifest.platform_key().split("-")
     python = next((tool for tool in tools if tool.name == manifest.GATE_PYTHON), None)
     reasons = []
     with tempfile.TemporaryDirectory(prefix="gate-parity-") as probes:
-        tree = Tree(spawn=spawn, env=env, scratch=probes if scratch is None else scratch)
+        tree = Tree(spawn=spawn, env=env, scratch=scratch)
         for tool in tools:
             home = manifest.tool_home(cache, tool)
             if not os.path.isdir(home):
@@ -302,6 +324,13 @@ def _tree_failure(tool: Tool, home: str, tree: Tree) -> str | None:
         return f"{tool.name}: stopped before the tree hash"
     except TreeCapExceeded as e:  # a slow disk is not a damaged tool: clean-tools would not help (DA-S13e)
         return f"{tool.name}: tree hash exceeded its cap of {e.cap_s} s"
+    except TreeStartFailed as e:  # no hash ran: clean-tools would not help either (BK-S5)
+        return f"{tool.name}: tree hash could not start: {e}"
+    except TreeChildFailed as e:  # only an unreadable tree is a damaged tool; a crash or a signal is not (CA-L4)
+        if e.code != TREE_UNREADABLE:
+            line = f": {e.first_line}" if e.first_line else ""
+            return f"{tool.name}: tree hash failed (exit {e.code}){line}"
+        digest = ""
     except OSError:
         digest = ""
     return None if digest == tool.tree_sha256 else f"{tool.name}: tree differs: {RECOVER}"

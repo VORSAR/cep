@@ -20,9 +20,17 @@ type Spawn = Callable[..., subprocess.Popen[bytes] | None]
 class Group:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._pgid: int | None = None
+        self._leader: subprocess.Popen[bytes] | None = None  # the last process started; its pid is its group's id
         self._signalled = False
         self.left_detail = ""  # after a positive probe: which answer fired and the group's members (S1.1c-1-1)
+
+    @property
+    def _pgid(self) -> int | None:
+        """The live group's id: the last leader's pid until that leader is reaped, by `reap` or by any wait on it
+        (parity.tree_digest's capped wait, BK-L2), so no later signal, probe or KILL reaches a pid the kernel may
+        have reused. Residue (design note §4): the instant between the reap and Popen setting its returncode."""
+        leader = self._leader
+        return None if leader is None or leader.returncode is not None else leader.pid
 
     def spawn(
         self, argv: Sequence[str], *, cwd: str, env: Mapping[str, str], stdout: str, stderr: str
@@ -41,7 +49,7 @@ class Group:
                     stderr=err,
                     start_new_session=True,
                 )
-            self._pgid = proc.pid
+            self._leader = proc
             return proc
 
     def reap(self, proc: subprocess.Popen[bytes]) -> tuple[int, bool]:
@@ -53,7 +61,8 @@ class Group:
         """
         code = proc.wait()
         with self._lock:
-            self._pgid = None
+            if self._leader is proc:
+                self._leader = None
         left, self.left_detail = probe(proc.pid)
         if left:
             with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -77,9 +86,10 @@ class Group:
         """Signal the live group, if any, and forbid any later spawn in this step."""
         with self._lock:
             self._signalled = True
-            if self._pgid is not None:
+            pgid = self._pgid
+            if pgid is not None:
                 with contextlib.suppress(ProcessLookupError, PermissionError):
-                    os.killpg(self._pgid, signum)
+                    os.killpg(pgid, signum)
 
 
 def probe(pgid: int) -> tuple[bool, str]:
