@@ -39,6 +39,7 @@ from gate.runner import vulndb
 TESTDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "testdata", "vulndb")
 NOW = datetime(2026, 11, 13, 12, 0, 0, tzinfo=UTC)
 SHA = "ab" * 32
+ROOT = "/home/dev/.cache/vorsar/cep/vulndb"  # the copy's directory, for the texts (design §2.4)
 
 
 def real(entry_id: str) -> dict:
@@ -232,14 +233,22 @@ class Affected(unittest.TestCase):
             vulndb.affected("1.0.0", semver({"introduced": "0"}, {"fixed": "1.0"}))
 
 
+def scan(modules: dict[str, str], go: str, entries: list[dict], never_built: frozenset[str] = frozenset()) -> list:
+    """findings() where no entry is bad: its faults asserted empty, its findings returned."""
+    found, faults = vulndb.findings(modules, never_built, go, entries)
+    if faults:
+        raise AssertionError(f"unexpected faults: {faults}")
+    return found
+
+
 class Findings(unittest.TestCase):
-    """design §2.2 findings(modules, never_built, go_version, entries)."""
+    """design §2.2 findings(modules, never_built, go_version, entries) -> (findings, faults)."""
 
     def test_withdrawn_entries_are_skipped(self):
         withdrawn = entry(
             "GO-2099-0010", ("example.com/a", semver({"introduced": "0"})), withdrawn="2026-01-01T00:00:00Z"
         )
-        self.assertEqual(vulndb.findings({"example.com/a": "v1.0.0"}, frozenset(), "go1.27.4", [withdrawn]), [])
+        self.assertEqual(scan({"example.com/a": "v1.0.0"}, "go1.27.4", [withdrawn]), [])
 
     def test_two_blocks_for_one_module_give_one_finding(self):
         e = entry(
@@ -247,7 +256,7 @@ class Findings(unittest.TestCase):
             ("example.com/a", semver({"introduced": "0"}, {"fixed": "1.1.0"})),
             ("example.com/a", semver({"introduced": "0"}, {"fixed": "1.2.0"})),
         )
-        got = vulndb.findings({"example.com/a": "v1.0.0"}, frozenset(), "go1.27.4", [e])
+        got = scan({"example.com/a": "v1.0.0"}, "go1.27.4", [e])
         self.assertEqual([(f.id, f.module) for f in got], [("GO-2099-0011", "example.com/a")])
 
     def test_one_entry_naming_two_modules_gives_a_finding_each(self):
@@ -256,7 +265,7 @@ class Findings(unittest.TestCase):
             ("example.com/b", semver({"introduced": "0"}, {"fixed": "2.0.0"})),
             ("example.com/a", semver({"introduced": "0"}, {"fixed": "2.0.0"})),
         )
-        got = vulndb.findings({"example.com/a": "v1.0.0", "example.com/b": "v1.5.0"}, frozenset(), "go1.27.4", [e])
+        got = scan({"example.com/a": "v1.0.0", "example.com/b": "v1.5.0"}, "go1.27.4", [e])
         self.assertEqual(
             got,
             [
@@ -267,7 +276,7 @@ class Findings(unittest.TestCase):
 
     def test_a_never_built_module_gives_a_finding_not_built(self):
         e = entry("GO-2099-0013", ("golang.org/x/net", semver({"introduced": "0"}, {"fixed": "0.62.0"})))
-        got = vulndb.findings({"golang.org/x/net": "v0.61.0"}, frozenset({"golang.org/x/net"}), "go1.27.4", [e])
+        got = scan({"golang.org/x/net": "v0.61.0"}, "go1.27.4", [e], frozenset({"golang.org/x/net"}))
         self.assertEqual(got, [vulndb.Finding("GO-2099-0013", "golang.org/x/net", "v0.61.0", "0.62.0", False)])
 
     def test_stdlib_and_toolchain_are_read_at_the_go_version(self):
@@ -276,7 +285,7 @@ class Findings(unittest.TestCase):
             ("stdlib", semver({"introduced": "0"}, {"fixed": "1.27.5"})),
             ("toolchain", semver({"introduced": "0"}, {"fixed": "1.27.5"})),
         )
-        got = vulndb.findings({}, frozenset(), "go1.27.4", [e])
+        got = scan({}, "go1.27.4", [e])
         self.assertEqual(
             [(f.module, f.version, f.fixed, f.built) for f in got],
             [
@@ -284,7 +293,7 @@ class Findings(unittest.TestCase):
                 ("toolchain", "go1.27.4", "1.27.5", True),
             ],
         )
-        self.assertEqual(vulndb.findings({}, frozenset(), "go1.27.5", [e]), [])
+        self.assertEqual(scan({}, "go1.27.5", [e]), [])
 
     def test_fixed_is_the_smallest_fix_above_the_version_in_the_holding_range(self):
         e = entry(
@@ -294,12 +303,10 @@ class Findings(unittest.TestCase):
                 semver({"introduced": "0"}, {"fixed": "1.1.0"}, {"introduced": "1.5.0"}, {"fixed": "1.7.0"}),
             ),
         )
-        got = vulndb.findings({"example.com/a": "v1.6.0"}, frozenset(), "go1.27.4", [e])
+        got = scan({"example.com/a": "v1.6.0"}, "go1.27.4", [e])
         self.assertEqual([f.fixed for f in got], ["1.7.0"])
         open_ = entry("GO-2099-0016", ("example.com/a", semver({"introduced": "0"})))
-        self.assertEqual(
-            [f.fixed for f in vulndb.findings({"example.com/a": "v1.6.0"}, frozenset(), "go1.27.4", [open_])], [""]
-        )
+        self.assertEqual([f.fixed for f in scan({"example.com/a": "v1.6.0"}, "go1.27.4", [open_])], [""])
 
     def test_findings_are_sorted_by_module_then_id(self):
         es = [
@@ -307,7 +314,7 @@ class Findings(unittest.TestCase):
             entry("GO-2099-0021", ("example.com/b", semver({"introduced": "0"}))),
             entry("GO-2099-0023", ("example.com/a", semver({"introduced": "0"}))),
         ]
-        got = vulndb.findings({"example.com/a": "v1.0.0", "example.com/b": "v1.0.0"}, frozenset(), "go1.27.4", es)
+        got = scan({"example.com/a": "v1.0.0", "example.com/b": "v1.0.0"}, "go1.27.4", es)
         self.assertEqual(
             [(f.module, f.id) for f in got],
             [("example.com/a", "GO-2099-0023"), ("example.com/b", "GO-2099-0021"), ("example.com/b", "GO-2099-0022")],
@@ -317,25 +324,78 @@ class Findings(unittest.TestCase):
         other = entry("GO-2099-0024", ("example.com/a", semver({"introduced": "0"})))
         other["affected"][0]["package"]["ecosystem"] = "npm"
         absent = entry("GO-2099-0025", ("example.com/zzz", semver({"introduced": "0"})))
-        self.assertEqual(vulndb.findings({"example.com/a": "v1.0.0"}, frozenset(), "go1.27.4", [other, absent]), [])
+        self.assertEqual(scan({"example.com/a": "v1.0.0"}, "go1.27.4", [other, absent]), [])
 
-    def test_an_unknown_event_names_the_entry(self):
+    def test_an_unknown_event_is_a_fault_naming_the_entry(self):
         e = entry("GO-2099-0026", ("example.com/a", semver({"introduced": "0"}, {"last_affected": "1.0.0"})))
-        with self.assertRaisesRegex(ValueError, r"vulns: GO-2099-0026: unknown range event last_affected"):
-            vulndb.findings({"example.com/a": "v1.0.0"}, frozenset(), "go1.27.4", [e])
+        found, faults = vulndb.findings({"example.com/a": "v1.0.0"}, frozenset(), "go1.27.4", [e])
+        self.assertEqual(found, [])
+        self.assertEqual(
+            faults, [("GO-2099-0026", "example.com/a", "vulns: GO-2099-0026: unknown range event last_affected")]
+        )
 
-    def test_an_invalid_version_names_the_entry_and_module(self):
+    def test_an_invalid_version_is_a_fault_naming_the_entry_and_module(self):
         e = entry("GO-2099-0027", ("example.com/a", semver({"introduced": "0"}, {"fixed": "1.0"})))
-        with self.assertRaisesRegex(ValueError, r"vulns: GO-2099-0027 example.com/a: version 1\.0 cannot be ordered"):
-            vulndb.findings({"example.com/a": "v0.5.0"}, frozenset(), "go1.27.4", [e])
+        found, faults = vulndb.findings({"example.com/a": "v0.5.0"}, frozenset(), "go1.27.4", [e])
+        self.assertEqual(found, [])
+        self.assertEqual(
+            faults,
+            [("GO-2099-0027", "example.com/a", "vulns: GO-2099-0027 example.com/a: version 1.0 cannot be ordered")],
+        )
         ok = entry("GO-2099-0028", ("example.com/a", semver({"introduced": "0"})))
-        with self.assertRaisesRegex(ValueError, r"vulns: GO-2099-0028 example.com/a: version banana cannot be ordered"):
-            vulndb.findings({"example.com/a": "banana"}, frozenset(), "go1.27.4", [ok])
+        found, faults = vulndb.findings({"example.com/a": "banana"}, frozenset(), "go1.27.4", [ok])
+        self.assertEqual(found, [])
+        self.assertEqual(
+            faults,
+            [("GO-2099-0028", "example.com/a", "vulns: GO-2099-0028 example.com/a: version banana cannot be ordered")],
+        )
 
-    def test_an_invalid_go_version_is_a_named_red(self):
+    def test_a_bad_entry_between_two_good_ones_never_stops_the_walk(self):
+        # Review DA-S1: the walk goes on past a bad entry; both good entries give their findings, the bad one a fault.
+        first = entry("GO-2099-0031", ("example.com/a", semver({"introduced": "0"}, {"fixed": "2.0.0"})))
+        bad = entry("GO-2099-0032", ("example.com/a", semver({"introduced": "0"}, {"limit": "3.0.0"})))
+        last = entry("GO-2099-0033", ("example.com/b", semver({"introduced": "0"})))
+        found, faults = vulndb.findings(
+            {"example.com/a": "v1.0.0", "example.com/b": "v1.0.0"}, frozenset(), "go1.27.4", [first, bad, last]
+        )
+        self.assertEqual(
+            found,
+            [
+                vulndb.Finding("GO-2099-0031", "example.com/a", "v1.0.0", "2.0.0", True),
+                vulndb.Finding("GO-2099-0033", "example.com/b", "v1.0.0", "", True),
+            ],
+        )
+        self.assertEqual(faults, [("GO-2099-0032", "example.com/a", "vulns: GO-2099-0032: unknown range event limit")])
+
+    def test_faults_are_sorted_by_module_then_id(self):
+        es = [
+            entry("GO-2099-0042", ("example.com/b", semver({"introduced": "0"}, {"fixed": "1"}))),
+            entry("GO-2099-0041", ("example.com/b", semver({"introduced": "0"}, {"fixed": "1"}))),
+            entry("GO-2099-0043", ("example.com/a", semver({"introduced": "0"}, {"fixed": "1"}))),
+        ]
+        found, faults = vulndb.findings(
+            {"example.com/a": "v1.0.0", "example.com/b": "v1.0.0"}, frozenset(), "go1.27.4", es
+        )
+        self.assertEqual(found, [])
+        self.assertEqual(
+            [(m, i) for i, m, _ in faults],
+            [("example.com/a", "GO-2099-0043"), ("example.com/b", "GO-2099-0041"), ("example.com/b", "GO-2099-0042")],
+        )
+
+    def test_an_invalid_go_version_is_a_fault_never_a_finding_or_a_crash(self):
+        # design §2.2: go_version() raises InvalidVersion for a tag it cannot convert; findings() collects it as the
+        # stdlib entry's fault (the tag as given), the walk going on.
         e = entry("GO-2099-0029", ("stdlib", semver({"introduced": "0"}, {"fixed": "1.27.5"})))
-        with self.assertRaises(vulndb.InvalidVersion):
-            vulndb.findings({}, frozenset(), "devel go1.28-0123abcd", [e])
+        found, faults = vulndb.findings({}, frozenset(), "devel go1.28-0123abcd", [e])
+        self.assertEqual(found, [])
+        self.assertEqual(
+            faults,
+            [("GO-2099-0029", "stdlib", "vulns: GO-2099-0029 stdlib: version devel go1.28-0123abcd cannot be ordered")],
+        )
+
+    def test_the_cap_constants(self):
+        self.assertEqual((vulndb.FETCH_CAP, vulndb.MEMBER_CAP), (64 << 20, 4 << 20))  # design §2.3, §2.4
+        self.assertTrue(issubclass(vulndb.UnknownEvent, ValueError) and issubclass(vulndb.MemberTooLarge, ValueError))
 
 
 # (module, version, entry id, verdict, mode) — every verdict measured as the header says. The stdlib rows give the
@@ -421,10 +481,7 @@ class Agreement(unittest.TestCase):
         for module, version, entry_id, verdict, mode in AGREEMENT:
             e = PLANTED[entry_id] if entry_id in PLANTED else real(entry_id)
             with self.subTest(f"{module}@{version} {entry_id} ({mode})"):
-                if module == "stdlib":
-                    got = vulndb.findings({}, frozenset(), version, [e])
-                else:
-                    got = vulndb.findings({module: version}, frozenset(), "go1.27.4", [e])
+                got = scan({}, version, [e]) if module == "stdlib" else scan({module: version}, "go1.27.4", [e])
                 hit = any(f.id == entry_id and f.module == module for f in got)
                 self.assertEqual(AFFECTED if hit else NOT, verdict)
 
@@ -460,8 +517,26 @@ def stamp(**over: object) -> dict:
 class CheckDb(unittest.TestCase):
     """design §2.4: every fault one line, all collected."""
 
-    def check(self, members: dict[str, bytes], st: dict | None, *, now: datetime = NOW, sha: str = SHA) -> list[str]:
-        return vulndb.check_db(members.get, st, zip_sha256=sha, now=now)
+    def check(
+        self,
+        members: dict[str, bytes],
+        st: dict | None,
+        *,
+        now: datetime = NOW,
+        sha: str = SHA,
+        names: list[str] | None = None,
+        too_large: frozenset[str] = frozenset(),
+    ) -> list[str]:
+        """check_db over `members` as the zip: `names` its member list (the members' own by default); `read` as the
+        row's, raising MemberTooLarge for a name in `too_large`."""
+
+        def read(name: str) -> bytes | None:
+            if name in too_large:
+                raise vulndb.MemberTooLarge(name)
+            return members.get(name)
+
+        listed = sorted(members) if names is None else names
+        return vulndb.check_db(read, listed, st, root=ROOT, zip_sha256=sha, now=now)
 
     def assertFault(self, faults: list[str], text: str) -> None:
         self.assertTrue(any(text in f for f in faults), f"no fault holding {text!r} in {faults}")
@@ -470,10 +545,7 @@ class CheckDb(unittest.TestCase):
         self.assertEqual(self.check(member_db(), stamp()), [])
 
     def test_no_stamp(self):
-        faults = self.check(member_db(), None)
-        self.assertTrue(
-            any(f.startswith("vulns: no stamp.json at ") and f.endswith(": run make vulndb") for f in faults), faults
-        )
+        self.assertIn(f"vulns: no stamp.json at {ROOT}: run make vulndb", self.check(member_db(), None))
 
     def test_a_malformed_stamp(self):
         for bad in (
@@ -591,12 +663,59 @@ class CheckDb(unittest.TestCase):
         )
 
     def test_a_member_past_4_mib_is_red(self):
-        # The row's read is bounded at MEMBER_CAP + 1 decompressed bytes (design §2.4); check_db sees the overflow.
-        cap = 4 * 1024 * 1024
-        big = b"[" + b" " * cap + b"]"
-        faults = self.check(member_db(**{"index/modules.json": big[: cap + 1]}), stamp())
-        self.assertIn("vulns: member index/modules.json exceeds 4 MiB", faults)
-        self.assertEqual(vulndb.MEMBER_CAP, cap)
+        # The row's read raises MemberTooLarge past MEMBER_CAP decompressed bytes (design §2.4, §2.5); check_db names
+        # the member and goes on.
+        for name in ("index/modules.json", "ID/GO-2099-0100.json"):
+            with self.subTest(name):
+                faults = self.check(member_db(), stamp(), too_large=frozenset({name}))
+                self.assertIn(f"vulns: member {name} exceeds 4 MiB", faults)
+        self.assertEqual(vulndb.MEMBER_CAP, 4 * 1024 * 1024)
+
+    def test_the_layout_is_an_exact_list(self):
+        # Reviews DA-S10, DA-L3: index/db.json, index/modules.json, index/vulns.json and ID/<GO-YYYY-NNNN…>.json only.
+        for name in (
+            "README",
+            "index/",
+            "ID/",
+            "index/extra.json",
+            "index/db.json.bak",
+            "ID/GO-2099-0100.json.bak",
+            "ID/notes.txt",
+            "ID/GO-2099-100.json",  # three digits: the number is four or more
+            "ID/GO-99-0100.json",
+            "ID/go-2099-0100.json",
+            "ID/GHSA-xxxx-yyyy-zzzz.json",
+            "ID/sub/GO-2099-0101.json",
+            "../GO-2099-0101.json",
+            "/ID/GO-2099-0101.json",
+            "id/GO-2099-0101.json",
+        ):
+            with self.subTest(name):
+                db = member_db()
+                faults = self.check(db, stamp(), names=[*sorted(db), name])
+                self.assertIn(f"vulns: member {name} is not in the database's layout", faults)
+
+    def test_a_long_id_is_in_the_layout(self):
+        e = entry("GO-2099-12345", ("golang.org/x/net", semver({"introduced": "0"}, {"fixed": "0.62.0"})))
+        db = member_db(
+            **{
+                "index/modules.json": [
+                    {
+                        "path": "golang.org/x/net",
+                        "vulns": [
+                            {"id": "GO-2099-0100", "modified": "2026-11-01T00:00:00Z", "fixed": "0.62.0"},
+                            {"id": "GO-2099-12345", "modified": "2026-11-01T00:00:00Z", "fixed": "0.62.0"},
+                        ],
+                    }
+                ],
+                "index/vulns.json": [
+                    {"id": "GO-2099-0100", "modified": "2026-11-01T00:00:00Z", "aliases": []},
+                    {"id": "GO-2099-12345", "modified": "2026-11-01T00:00:00Z", "aliases": []},
+                ],
+                "ID/GO-2099-12345.json": e,
+            }
+        )
+        self.assertEqual(self.check(db, stamp()), [])
 
     def test_every_fault_is_collected_never_the_first_only(self):
         faults = self.check(
