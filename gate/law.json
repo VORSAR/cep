@@ -571,7 +571,7 @@
       "proofs": [
         {
           "path": "gate/proofs/drivers/test_deps_planted.py",
-          "cases": 7
+          "cases": 9
         }
       ],
       "tiers": [
