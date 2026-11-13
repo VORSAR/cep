@@ -88,6 +88,7 @@
 | 2026-11-13 | [S1.1c-3's review and break-it](#owner-decisions-2026-11-13--s11c-3s-review-and-break-it) |
 | 2026-11-13 | [S1.1c-3's close-out](#owner-decisions-2026-11-13--s11c-3s-close-out) |
 | 2026-11-13 | [S1.1c-4's plan check](#owner-decisions-2026-11-13--s11c-4s-plan-check) |
+| 2026-11-13 | [S1.1c-4's design, after the reviews](#owner-decisions-2026-11-13--s11c-4s-design-after-the-reviews) |
 
 ## The decisions
 
@@ -842,3 +843,13 @@ The plan check ([s1-1c-4-plan-check.md](s1-1c-4-plan-check.md), v2 at 41d32e4) w
 5. **The pinned Go tools' own build information is read by the scan from S1.1c-5** (as recommended), the sprint that first runs golangci-lint: its findings red like any module, with dated exemptions while no fixed release exists; until then the row's reason names it as not yet read, and ruff and CPython as outside the Go database. Rejected: now (15 dated exemptions on day one for a tool nothing runs); listed, never red; never read.
 
 Confirmed as recommended: (a) the root keeps its two recorded pins (S1.1c-1's design 7) and the tidy check allows exactly that difference; `gate/proofs` is made tidy; (b) the database's zip is read in place, never unpacked; (c) the weekly canary is its own generated workflow outside the tiers — every T4 job on both systems under one candidate, caches restored never saved, the read-only token on the feeds step only; (d) a vulnerability exemption is always temporary, with an expiry and a known issue, naming one advisory in one module; (e) govulncheck is used once, outside the repository, to measure the agreement table; (f) the canary is a weekly report, not a required check: its red on `main` is not "red main" under ground rule 11; (g) `actions/cache/restore`, from the pinned `actions/cache`, falls under decision 3 of "S1.1a-2 plan check (G0)"; (h) the card is re-sized from 8 to 13 (items about 7.75), S1.1c-3-3 named in its item 3, and its acceptance line 1 reworded to decisions 1 and 2.
+
+### Owner decisions, 2026-11-13 — S1.1c-4's design, after the reviews
+
+The design note ([s1-1c-4-design.md](s1-1c-4-design.md), v2 at df24a18) was reviewed blind by the architect with the-fool on v1 ([review](../reviews/s1-1c-4-design-architecture.md): 3 blockers, 14 should-fix, 7 later) and by QA for testability on v1.1 ([review](../reviews/s1-1c-4-design-qa.md): 1 blocker, 13 should-fix, 5 later); every finding is placed in the note's §8, the coordinator having verified each claim that changed the design (the loader's missing `dir` and per-module versions; the installer's stamp sealed with the tree; an offline `go mod tidy -diff` exiting 1 with nothing on stdout; the canary's per-tool url and `strip` forms). Three questions at G1 and one confirmation; all as recommended.
+
+1. **The weekly canary tries only patch releases on each tool's pinned line** (as recommended): a newer line (a new minor of golangci-lint or ruff, a new Go) is listed in the summary, never tried. Rejected: trying the newest stable release whatever its line.
+2. **The canary runs the T4 jobs exactly as the gate runs them** (as recommended; clarifies confirm (c) of "S1.1c-4's plan check"): the four Linux jobs and the macOS determinism job, which installs every candidate tool and checks its parity on macOS. Rejected: every job on both systems.
+3. **The `deps` row's `go.sum` line runs at every T4, local and CI alike** (as recommended; S1.1c-3-2): a tracked `go.sum` that differs from `HEAD` at T4 is red, naming the file — a local strict gate on an uncommitted `go.sum` included; DEVELOPMENT.md's T4 line says so. Rejected: only when the runner is given `--commit`; no row line.
+
+Confirmed as recommended: the card's acceptance line 2 names as its proof `test_gomods.py`'s load-level test and the `test_deps_planted.py` tool-line case (`test_deps.py` cannot see the wiring); the card's in-scope line names `tools/allowlists/vulns.json`.

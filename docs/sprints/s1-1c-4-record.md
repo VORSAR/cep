@@ -23,6 +23,14 @@ The full plan is [s1-1c-4-plan-check.md](s1-1c-4-plan-check.md) (v2 at 41d32e4),
 
 **Confirmed as recommended:** (a) the root's two recorded pins stay, the tidy check allows exactly that; `gate/proofs` made tidy; (b) the zip read in place; (c) the canary its own workflow, every T4 job on both systems under one candidate, caches restored never saved, the token on the feeds step only; (d) exemptions always temporary, one advisory in one module; (e) govulncheck used once, outside the repository; (f) the canary a weekly report, not "red main"; (g) `actions/cache/restore` under decision 3 of S1.1a-2's plan check; (h) the card re-sized 8 → 13, S1.1c-3-3 in item 3, acceptance line 1 reworded.
 
+**The design — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--s11c-4s-design-after-the-reviews); all as recommended; the note v2 at df24a18 after the architect's review of v1 — 3 blockers, 14 should-fix, 7 later — and QA's of v1.1 — 1 blocker, 13 should-fix, 5 later — every finding placed in its §8):
+
+1. **The canary tries patch releases on each pinned line only**; newer lines listed, never tried.
+2. **The canary runs the T4 jobs as the gate runs them** (four Linux jobs, the macOS determinism job).
+3. **The `go.sum` line runs at every T4, local and CI alike.**
+
+Confirmed: acceptance line 2's proof as built (`test_gomods.py`, the `test_deps_planted.py` tool-line case); the card names `tools/allowlists/vulns.json`.
+
 ## How it runs (revised after the plan check)
 
 At most two agents at once. The plan check §1 and §4 hold the waves and the owners; one change at G0 is recorded under Scope changes.
@@ -67,8 +75,8 @@ Entry (G0)   ☑ card complete and approved (re-sized and reworded at the plan c
                43417289965 success) ☑ fits the cap, lanes ≤ 8 days
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-13)
              ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit after the plan check's
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
+Design (G1)  ☑ architecture + the-fool findings resolved (design §8) ☑ QA testability findings resolved (design §8)
+             ☑ owner decisions recorded (2026-11-13) ☐ ADRs written for lasting decisions (ADR-0015 annotated as built after W3)
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
              ☐ tests on the real code ☐ every breaker's red test committed
