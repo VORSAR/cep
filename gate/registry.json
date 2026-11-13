@@ -254,9 +254,10 @@
       "expected_scope": [
         "git",
         ".github/workflows/gate.yml",
-        ".github/workflows/nightly.yml"
+        ".github/workflows/nightly.yml",
+        ".github/workflows/canary.yml"
       ],
-      "min_wants": 2,
+      "min_wants": 3,
       "lands_in": "S1.1a-2",
       "exclusive": false,
       "command": [
