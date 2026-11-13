@@ -19,6 +19,7 @@ import stat
 import sys
 import tarfile
 import tempfile
+import typing
 import urllib.request
 import zlib
 from collections.abc import Callable, Mapping, Sequence
@@ -286,6 +287,23 @@ def _install_tool(tool: manifest.Tool, cache: str, home: str, fetch: Fetch, rena
     finally:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(download)
+
+
+class ArchivePins(typing.NamedTuple):
+    """What tools.json pins from an archive's tree (S1.1c-4 plan check §2 S4): the sealed tree's hash and each
+    listed executable's hash, by its path relative to the tree."""
+
+    tree_sha256: str
+    exec_sha256: Mapping[str, str]
+
+
+def archive_pins(archive: str, strip: str, executables: Sequence[str]) -> ArchivePins:
+    """The pins the installer would publish for `archive` (already checked against its sha256): extracted with the
+    installer's own hostile-archive rules, sealed, then hashed (S1.1c-4 plan check §2 S4; review A-L1: one helper
+    shared with _install_tool, so the canary's hashes cannot drift from the installer's).
+
+    W0 stub: the signature is agreed and the body raises; lane F1 builds it against QA's tests."""
+    raise NotImplementedError("install.archive_pins: not built yet (S1.1c-4 lane F1)")
 
 
 def _load(tools_json: str, platform: str) -> list[manifest.Tool]:
