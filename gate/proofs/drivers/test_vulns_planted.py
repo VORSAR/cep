@@ -210,10 +210,16 @@ class VulnsPlanted(support.DriverTest):
         """Every module a package, a test or a tool line compiles on either platform, by the pinned go itself."""
         template = "{{if .Module}}{{if not .Module.Main}}{{.Module.Path}}{{end}}{{end}}"
         paths: set[str] = set()
+        # The packages and their tests; a tool line's packages without their tests (design §2.1: `-deps tool`) —
+        # x/tools' own tests import go-cmp, which nothing in the repository compiles.
         for goos, goarch in PLATFORMS:
-            for mod, patterns in ((".", ["./..."]), ("gate/proofs", ["./...", "tool"])):
+            for mod, flags, patterns in (
+                (".", ["-test"], ["./..."]),
+                ("gate/proofs", ["-test"], ["./..."]),
+                ("gate/proofs", [], ["tool"]),
+            ):
                 listing = self.go(
-                    mod, ["list", "-e", "-deps", "-test", "-f", template, *patterns], GOOS=goos, GOARCH=goarch
+                    mod, ["list", "-e", "-deps", *flags, "-f", template, *patterns], GOOS=goos, GOARCH=goarch
                 )
                 paths |= set(listing.split())
         versions = self.versions()
