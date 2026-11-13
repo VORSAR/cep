@@ -213,7 +213,7 @@ class HashesThenBreaksTheLoop(support.FakeToolchain):
         self.outcome = ""
         self.done = threading.Event()
 
-    def parity(self, env, *, full_tree: bool, spawn, scratch: str) -> list[str]:
+    def parity(self, env, *, full_tree: bool, spawn, scratch: str, run_id: str, handoff_in: str | None):
         def spawn_then_break(argv, **kw):
             proc = spawn(argv, **kw)
             wait.until(f"the planted tree child to write {self.marker}", lambda: os.path.exists(self.marker))
@@ -229,7 +229,7 @@ class HashesThenBreaksTheLoop(support.FakeToolchain):
             self.outcome = f"{type(e).__name__}: {e}"
         finally:
             self.done.set()
-        return []
+        return parity.Outcome(reasons=(), covered=5, taken=0, taken_from="")
 
 
 class ParityEarlyEnd(support.GateTest):

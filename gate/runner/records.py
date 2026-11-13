@@ -8,6 +8,10 @@ from collections.abc import Callable, Sequence
 
 SCHEMA = 2  # 2 (S1.1c-1): every record carries `law`, the LAW Δ block's lines (the lawdelta row's; [] elsewhere)
 REASON_MAX = 300
+# A run's id (gate design §12.3): `--run-id`'s grammar, also held by parity against a hand-off's run id (proof-world
+# speed-up design note §3.5), so it lives here rather than in main, which gate.toolchain does not import. "." and ".."
+# match and are refused beside it: a run id names a directory.
+RUN_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
 
 

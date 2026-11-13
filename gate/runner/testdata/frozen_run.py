@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
 from gate.runner import clock, main
+from gate.toolchain.parity import Outcome
 
 
 class StandIn:
@@ -24,8 +25,10 @@ class StandIn:
     def tool_count(self) -> int:
         return 5
 
-    def parity(self, env: dict[str, str], *, full_tree: bool, spawn: object, scratch: str) -> list[str]:
-        return []
+    def parity(
+        self, env: dict[str, str], *, full_tree: bool, spawn: object, scratch: str, run_id: str, handoff_in: str | None
+    ) -> Outcome:
+        return Outcome(reasons=(), covered=5, taken=0, taken_from="")
 
 
 if __name__ == "__main__":

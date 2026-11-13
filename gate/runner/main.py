@@ -1,6 +1,7 @@
 """The gate's command line (plan check S4; design note §4).
 
     gate/run.py --tier T0..T4 [--job NAME] [--run-dir DIR] [--registry PATH] [--commit SHA] [--run-id ID]
+                [--parity-handoff PATH]   (a proof driver's nested run only: its outer run's parity/handoff.json)
     gate/run.py summarize ...      (gate/runner/summarize.py)
     gate/run.py generate-ci        (gate/ci/generate.py)
     gate/run.py fetch-vulndb       (gate/toolchain/vulndb_fetch.py: make vulndb)
@@ -28,6 +29,7 @@ from dataclasses import dataclass
 from gate.runner import clock, env, registry, scheduler, summary, workers
 from gate.runner.clock import Clock, Timers
 from gate.runner.proc import Group
+from gate.runner.records import RUN_ID
 from gate.toolchain import manifest, parity
 
 DEFAULT_REGISTRY = os.path.join("gate", "registry.json")
@@ -51,8 +53,26 @@ class RealToolchain:
     def tool_count(self) -> int:
         return len(self._tools)
 
-    def parity(self, env: Mapping[str, str], *, full_tree: bool, spawn: scheduler.Spawn, scratch: str) -> list[str]:
-        return parity.check(self._tools, self._cache, env, full_tree=full_tree, spawn=spawn, scratch=scratch)
+    def parity(
+        self,
+        env: Mapping[str, str],
+        *,
+        full_tree: bool,
+        spawn: scheduler.Spawn,
+        scratch: str,
+        run_id: str,
+        handoff_in: str | None,
+    ) -> parity.Outcome:
+        return parity.check(
+            self._tools,
+            self._cache,
+            env,
+            full_tree=full_tree,
+            spawn=spawn,
+            scratch=scratch,
+            run_id=run_id,
+            handoff_in=handoff_in,
+        )
 
 
 def read_commit(repo: str, environ: Mapping[str, str], run_dir: str, tier: str) -> str:
@@ -100,12 +120,17 @@ def _parse(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--run-dir", dest="run_dir")
     parser.add_argument("--registry")
     parser.add_argument("--commit", type=_matching(_SHA, "--commit", "40 or 64 lowercase hex digits"))
-    parser.add_argument("--run-id", dest="run_id", type=_matching(_RUN_ID, "--run-id", "1-64 of [A-Za-z0-9._-]"))
+    parser.add_argument("--run-id", dest="run_id", type=_matching(RUN_ID, "--run-id", "1-64 of [A-Za-z0-9._-]"))
+    # The proof-world speed-up (design note §3.3; owner, 2026-11-14, its design reviews, decision 2): an option, so
+    # it cannot be inherited or set by a profile or an earlier CI step; only a proof driver passes it.
+    parser.add_argument(
+        "--parity-handoff", dest="parity_handoff", type=_matching(_ABSOLUTE, "--parity-handoff", "an absolute path")
+    )
     return parser.parse_args(argv)
 
 
 _SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-_RUN_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_ABSOLUTE = re.compile(r"/[^\n\x00]*")  # absolute, one line, no NUL; never empty
 
 
 def _matching(pattern: re.Pattern[str], option: str, want: str):
@@ -161,6 +186,7 @@ def _run(argv: list[str], deps: Deps) -> int:
         timers=deps.timers,
         record_go_env=deps.record_go_env,
         install_signals=True,
+        parity_handoff=args.parity_handoff,
     )
     result = runner.run()
     sys.stdout.write(result.summary)
