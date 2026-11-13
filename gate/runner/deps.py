@@ -28,6 +28,7 @@ LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING", "COPYING.md"
 DROPPED_NODES = frozenset({"go", "toolchain"})  # go mod graph's version nodes (review: architect S7)
 TOP_KEYS = frozenset({"schema", "note", "modules"})
 ENTRY_KEYS = frozenset({"module", "version", "scope", "license", "approved", "why", "sprint", "ref"})
+OPTIONAL_KEYS = frozenset({"replace", "built"})  # `built` is false or absent (S1.1c-4 design §2.6; decision 1)
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ class Entry:
     replace: str = ""  # the one replace target this entry approves (owner, 2026-11-11, the fix round)
     sprint: str = ""  # the sprint whose approval added the entry (design §4.6a)
     ref: str = ""  # the deciding section, <path>#<heading-anchor>
+    built: bool = True  # False: the register marks the module never built (S1.1c-4's plan check, decision 1)
 
 
 def _keys(value: object, keys: frozenset[str], where: str) -> dict:
@@ -64,7 +66,8 @@ def _keys(value: object, keys: frozenset[str], where: str) -> dict:
 
 
 def load_allowlist(text: str) -> tuple[Entry, ...]:
-    """{"schema": 1, "note": str, "modules": [{the eight keys, non-empty strings}, ...]}: non-empty, modules unique."""
+    """{"schema": 1, "note": str, "modules": [{the eight keys, non-empty strings, and optionally `replace` (a
+    non-empty string) and `built` (false only)}, ...]}: non-empty, modules unique."""
     try:
         data = json.loads(text)
     except ValueError as e:
@@ -81,11 +84,15 @@ def load_allowlist(text: str) -> tuple[Entry, ...]:
     entries: list[Entry] = []
     for i, item in enumerate(data["modules"]):
         where = f"{ALLOWLIST}: modules[{i}]"
-        optional = isinstance(item, dict) and "replace" in item
-        item = _keys(item, ENTRY_KEYS | frozenset({"replace"}) if optional else ENTRY_KEYS, where)
-        if optional and (not isinstance(item["replace"], str) or not item["replace"]):
+        optional = OPTIONAL_KEYS & set(item) if isinstance(item, dict) else frozenset()
+        item = _keys(item, ENTRY_KEYS | optional, where)
+        if "replace" in optional and (not isinstance(item["replace"], str) or not item["replace"]):
             fault = "replace is empty" if item["replace"] == "" else "replace is not a string"
             raise ValueError(f"{where}: {fault}")
+        if "built" in optional and item["built"] is not False:
+            if item["built"] is True:
+                raise ValueError(f'deps: {item["module"]}: "built": true is the default: remove it')
+            raise ValueError(f"deps: {item['module']}: built must be false")
         for key in sorted(ENTRY_KEYS):
             if not isinstance(item[key], str) or not item[key]:
                 raise ValueError(f"{where}: {key} is not a non-empty string")
@@ -102,6 +109,7 @@ def load_allowlist(text: str) -> tuple[Entry, ...]:
                 item.get("replace", ""),
                 sprint=item["sprint"],
                 ref=item["ref"],
+                built=item.get("built", True),
             )
         )
     return tuple(entries)
@@ -243,6 +251,10 @@ def compare(
             failures.append(f"deps: {path}: unknown licence text in {module.dir}")
         elif path in parts and classified not in parts[path]:
             failures.append(f"deps: {path}: license field {by_module[path].license}, file reads {classified}")
+    for module in sorted(by_module):  # decision 1: a never-built mark is red once a package compiles the module
+        found = by_path.get(module)
+        if not by_module[module].built and found is not None and found.imported:
+            failures.append(f'deps: {module} is marked never built, but a package compiles it: remove "built": false')
     for module in sorted(by_module):
         entry = by_module[module]
         for why in (allowlists.sprint_fault(entry.sprint, ctx), allowlists.ref_fault(entry.ref, ctx)):

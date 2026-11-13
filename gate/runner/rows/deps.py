@@ -85,8 +85,8 @@ def main(argv: list[str]) -> int:
     tracked = sorted({path for path in listed.split("\0") if path})
     try:
         entries = deps.load_allowlist(rows.read_text(deps.ALLOWLIST))
-    except (OSError, ValueError) as e:
-        return rows.finish([f"deps: {e}"])
+    except (OSError, ValueError) as e:  # the `built` mark's faults already name the row (design §2.6)
+        return rows.finish([str(e) if str(e).startswith("deps: ") else f"deps: {e}"])
     rows.covered(3)
     return rows.finish(failures + deps.compare(modules, graph, entries, tracked, read_license, ctx))
 
