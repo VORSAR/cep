@@ -16,6 +16,7 @@ def row(row_id, job, tiers=("T2", "T3", "T4")):
 ROWS = [row("gofmt", "lint"), row("unit", "test"), row("proofs", "proofs", ("T4",)), row("t0only", "early", ("T0",))]
 NIGHTLY = [*ROWS, row("fuzz-parser", "nightly", ("nightly",))]
 RESTORE = "      - run: git checkout -- go.sum gate/proofs/go.sum\n"
+CANARY = ".github/workflows/canary.yml"
 
 
 def jobs_of(text: str) -> dict[str, str]:
@@ -99,7 +100,7 @@ class Render(unittest.TestCase):
     def test_a_nightly_tier_gives_a_second_scheduled_workflow_with_only_its_rows(self):
         # Owner, 2026-11-04 (S2.2a): the nightly workflow is generated like the gate's, from the registry.
         targets = dict(generate.targets(NIGHTLY))
-        self.assertEqual(sorted(targets), [".github/workflows/gate.yml", ".github/workflows/nightly.yml"])
+        self.assertEqual(sorted(targets), [CANARY, ".github/workflows/gate.yml", ".github/workflows/nightly.yml"])
         gate, nightly = targets[".github/workflows/gate.yml"], targets[".github/workflows/nightly.yml"]
         self.assertEqual(gate, generate.render(ROWS))  # the pull-request workflow never sees a nightly row
         jobs = re.findall(r"^  ([a-z][a-z0-9-]*):$", nightly[nightly.index("\njobs:\n") :], re.M)
@@ -140,8 +141,8 @@ class Render(unittest.TestCase):
             },
         )
 
-    def test_without_nightly_rows_there_is_one_workflow(self):
-        self.assertEqual([p for p, _ in generate.targets(ROWS)], [".github/workflows/gate.yml"])
+    def test_without_nightly_rows_there_is_the_gate_and_its_canary(self):
+        self.assertEqual([p for p, _ in generate.targets(ROWS)], [".github/workflows/gate.yml", CANARY])
 
     def test_the_posture(self):
         needles = (
@@ -200,3 +201,123 @@ class Scans(unittest.TestCase):
                 self.assertGreater(restore, body.rindex("go mod download all"), body)
                 self.assertLess(restore, body.index("bootstrap.py exec"), body)
                 self.assertNotIn("working-directory", body[restore : body.index("bootstrap.py exec")], body)
+
+
+class Canary(unittest.TestCase):
+    """The weekly canary's workflow (S1.1c-4 design §4.7; reviews A-S4, A-S5, DA-S7, DA-S8, DQ-S9; owner 2026-11-13,
+    S1.1c-4's design, decision 2: the T4 jobs exactly as the gate runs them; plan check confirms (c), (f), (g))."""
+
+    ROWS = [*ROWS, row("deps", "lint", ("T4",)), row("determinism-macos", "determinism-macos", ("T4",))]
+
+    def setUp(self):
+        targets = dict(generate.targets(self.ROWS))
+        self.gate, self.text = targets[".github/workflows/gate.yml"], targets[CANARY]
+        self.jobs = jobs_of(self.text)
+
+    def steps(self, job: str) -> list[str]:
+        return self.jobs[job].split("\n      - ")[1:]
+
+    def test_the_canary_is_a_target_beside_the_gate(self):
+        self.assertEqual([p for p, _ in generate.targets(self.ROWS)], [".github/workflows/gate.yml", CANARY])
+        self.assertEqual(self.text, generate.render_canary(list(self.ROWS)))
+
+    def test_triggers_permissions_and_concurrency(self):
+        head = self.text[: self.text.index("\njobs:\n")]
+        self.assertIn(
+            "on:\n  schedule:\n    - cron: '0 6 * * 1'\n  workflow_dispatch:\n"
+            "  pull_request:\n    paths: ['gate/canary/**']\npermissions:\n  contents: read\n"
+            "concurrency:\n  group: canary-${{ github.ref }}\n  cancel-in-progress: false\n",
+            head,
+        )
+        self.assertNotIn("push:", head)
+
+    def test_its_t4_jobs_are_the_gates_on_the_same_runners_each_after_the_candidate(self):
+        gate = jobs_of(self.gate)
+        t4 = [j for j in gate if j != "strict-gate"]
+        self.assertEqual(list(self.jobs), ["candidate", *t4, "summary"])
+        for job in t4:
+            with self.subTest(job):
+                body = self.jobs[job]
+                self.assertIn(gate[job].split("\n")[1] + "\n", body)  # runs-on
+                self.assertIn(gate[job].split("\n")[2] + "\n    needs: candidate\n", body)  # timeout-minutes
+                self.assertIn(f"--tier T4 --job {job} ", body)
+                self.assertIn(f"name: records-{job}-${{{{ github.run_attempt }}}}", body)
+
+    def test_each_t4_job_swaps_in_the_candidate_before_setup(self):
+        for job in [j for j in self.jobs if j not in ("candidate", "summary")]:
+            with self.subTest(job):
+                body = self.jobs[job]
+                download = body.index("download-artifact@")
+                self.assertIn("          name: candidate\n          path: candidate\n", body[download:])
+                cp = body.index("      - run: cp candidate/tools.json tools.json\n")
+                self.assertLess(download, cp)
+                self.assertLess(cp, body.index("actions/cache/restore@"))  # the tool cache keyed by the candidate
+                self.assertLess(cp, body.index("make setup tools"))
+
+    def test_the_gates_setup_steps_survive_in_the_canarys_jobs(self):
+        self.assertEqual(self.jobs["lint"].count(RESTORE), 1)
+        self.assertEqual(self.jobs["proofs"].count(RESTORE), 1)
+        self.assertNotIn("go mod download", self.jobs["test"])
+
+    def test_caches_are_restored_never_saved(self):
+        _, sha, _ = generate.ACTIONS["cache"]
+        self.assertNotIn("actions/cache@", self.text)
+        self.assertNotIn("actions/cache/save", self.text)
+        uses = re.findall(r"uses: (actions/cache\S*)", self.text)
+        self.assertTrue(uses)
+        self.assertEqual(set(uses), {f"actions/cache/restore@{sha}"})
+
+    def test_every_action_is_pinned_by_a_full_sha(self):
+        for ref in re.findall(r"uses: (\S+)", self.text):
+            self.assertRegex(ref, r"^actions/(checkout|cache/restore|upload-artifact|download-artifact)@[0-9a-f]{40}$")
+
+    def test_the_token_is_on_the_feeds_step_only(self):
+        # Reviews A-S5, DA-S7: the step holding the token runs no downloaded binary; the build step has none.
+        self.assertEqual(self.text.count("GITHUB_TOKEN"), 1, self.text)
+        self.assertNotIn("secrets.", self.text)
+        feeds = [s for s in self.steps("candidate") if "GITHUB_TOKEN" in s]
+        self.assertEqual(len(feeds), 1)
+        self.assertEqual(
+            feeds[0],
+            "name: feeds\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n"
+            "        run: python3 -I -B gate/bootstrap.py exec -- canary-feeds --out candidate/feeds.json",
+        )
+        build = [s for s in self.steps("candidate") if "canary-candidate" in s]
+        self.assertEqual(
+            build,
+            [
+                "name: build\n        run: python3 -I -B gate/bootstrap.py exec -- canary-candidate "
+                "--feeds candidate/feeds.json --out candidate/"
+            ],
+        )
+        self.assertNotIn("env:", build[0])
+
+    def test_the_candidate_job_uploads_its_artifact_always(self):
+        body = self.jobs["candidate"]
+        self.assertIn("    runs-on: ubuntu-latest\n", body)  # python-build-standalone's archives need Linux
+        self.assertLess(body.index("make setup tools"), body.index("name: feeds"))
+        self.assertLess(body.index("name: feeds"), body.index("name: build"))
+        upload = body[body.index("upload-artifact@") :]
+        self.assertIn("        if: always()\n        with:\n          name: candidate\n", upload)
+        self.assertIn("          path: candidate/\n", upload)
+        self.assertIn("          overwrite: true\n", upload)
+
+    def test_the_summary_needs_every_job_runs_always_and_reads_needs(self):
+        body = self.jobs["summary"]
+        t4 = [j for j in self.jobs if j not in ("candidate", "summary")]
+        self.assertIn(f"    needs: [{', '.join(['candidate', *t4])}]\n    if: always()\n", body)
+        for job in t4:
+            with self.subTest(job):
+                self.assertIn(f"          name: records-{job}-${{{{ github.run_attempt }}}}\n", body)
+                self.assertIn(f"          path: .gate/artifacts/records-{job}-${{{{ github.run_attempt }}}}\n", body)
+        self.assertIn("          name: candidate\n          path: candidate\n", body)
+        last = self.steps("summary")[-1]
+        self.assertEqual(
+            last,
+            "if: always()\n        env:\n          NEEDS: ${{ toJSON(needs) }}\n"
+            "        run: python3 -I -B gate/bootstrap.py exec -- canary-summary --artifacts .gate/artifacts "
+            '--candidate candidate --attempt ${{ github.run_attempt }} --summary "$GITHUB_STEP_SUMMARY"\n',
+        )
+
+    def test_the_same_registry_gives_the_same_bytes(self):
+        self.assertEqual(generate.render_canary(list(reversed(list(reversed(self.ROWS))))), self.text)

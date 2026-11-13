@@ -7,6 +7,10 @@ One job per registry `job` at T4, each running that job's rows with the same run
 That job is the one required check. The `ci-fresh` row fails when the tracked file differs from this output, so the
 workflow can never drift from the registry. Only the four actions the owner approved are used, each pinned by full
 commit SHA (owner, 2026-11-03).
+
+Beside the gate, the weekly canary (S1.1c-4 design §4.7): the same T4 jobs run on a candidate tools.json of each pin's
+newest patch release, then a summary that sorts the reds into pins to update and breaks. It is a report, never a
+required check, and restores caches without saving them (S1.1c-4's plan check, confirms (f), (g)).
 """
 
 import os
@@ -22,6 +26,11 @@ TIER = "T4"
 # Each tier with rows of its own gets a workflow: the gate on pull requests and main, nightly on a schedule
 # (owner, 2026-11-04: rows marked nightly never run on a pull request).
 WORKFLOWS = {"T4": WORKFLOW, "nightly": ".github/workflows/nightly.yml"}
+# The weekly canary, rendered beside the gate's workflow from the same T4 jobs (S1.1c-4 design §4.7).
+CANARY = ".github/workflows/canary.yml"
+CANARY_CRON = "0 6 * * 1"  # Mondays, 06:00 UTC
+# The candidate job's directory and artifact: feeds.json, tools.json, upgrades.json, or error.txt (design §4.7).
+CANDIDATE = "candidate"
 
 # name: (repository, full commit SHA, the release it is). Licences: all MIT (checked 2026-11-04).
 ACTIONS = {
@@ -38,9 +47,15 @@ RUNNERS = {"determinism-macos": "macos-latest"}
 TOOLS_CACHE = "~/.cache/vorsar/cep/tools"
 
 
-def _uses(name: str) -> str:
+def _uses(name: str, sub: str = "") -> str:
+    """An approved action at its pinned SHA; `sub` names an action inside its repository (actions/cache/restore)."""
     repo, sha, version = ACTIONS[name]
-    return f"uses: {repo}@{sha}  # {version}"
+    return f"uses: {repo}{sub}@{sha}  # {version}"
+
+
+def _cache(restore_only: bool) -> str:
+    """The canary restores caches and never saves one (confirm (g)): actions/cache/restore at the pinned SHA."""
+    return _uses("cache", "/restore" if restore_only else "")
 
 
 # Rows that compare against the merge base with main: their job checks out the full history (a shallow checkout has
@@ -66,17 +81,36 @@ VULNDB_FETCH = ["      - run: make vulndb", "        continue-on-error: true"]
 MODULE_FILES = "hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum')"
 
 
-def _setup_steps(history: bool = False, modules: bool = False, vulndb: bool = False) -> list[str]:
+def _candidate_download(continue_on_error: bool = False) -> list[str]:
+    return [
+        f"      - {_uses('download')}",
+        *(["        continue-on-error: true"] if continue_on_error else []),
+        "        with:",
+        f"          name: {CANDIDATE}",
+        f"          path: {CANDIDATE}",
+    ]
+
+
+def _setup_steps(
+    history: bool = False,
+    modules: bool = False,
+    vulndb: bool = False,
+    *,
+    restore_only: bool = False,
+    swap: bool = False,
+) -> list[str]:
+    """`swap`: the canary's T4 job puts the candidate tools.json in place before anything reads tools.json."""
     return [
         f"      - {_uses('checkout')}",
         "        with:",
         "          persist-credentials: false",
         *(["          fetch-depth: 0"] if history else []),
-        f"      - {_uses('cache')}",
+        *([*_candidate_download(), f"      - run: cp {CANDIDATE}/tools.json tools.json"] if swap else []),
+        f"      - {_cache(restore_only)}",
         "        with:",
         f"          path: {TOOLS_CACHE}",
         "          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}",
-        f"      - {_uses('cache')}",
+        f"      - {_cache(restore_only)}",
         "        with:",
         "          path: |",
         "            ~/.cache/go-build",
@@ -90,15 +124,22 @@ def _setup_steps(history: bool = False, modules: bool = False, vulndb: bool = Fa
 
 
 def _job(
-    job: str, timeout_min: int, tier: str, history: bool = False, modules: bool = False, vulndb: bool = False
+    job: str,
+    timeout_min: int,
+    tier: str,
+    history: bool = False,
+    modules: bool = False,
+    vulndb: bool = False,
+    canary: bool = False,
 ) -> list[str]:
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
         f"    runs-on: {RUNNERS.get(job, 'ubuntu-latest')}",
         f"    timeout-minutes: {timeout_min}",
+        *([f"    needs: {CANDIDATE}"] if canary else []),
         "    steps:",
-        *_setup_steps(history, modules, vulndb),
+        *_setup_steps(history, modules, vulndb, restore_only=canary, swap=canary),
         f"      - run: python3 -I -B gate/bootstrap.py exec -- --tier {tier} --job {job} "
         f"--run-id {RUN_ID} --commit ${{{{ github.sha }}}} --run-dir {run_dir}",
         f"      - {_uses('upload')}",
@@ -170,23 +211,117 @@ def render(rows: Sequence[Row], tier: str = TIER) -> str:
         "  CGO_ENABLED: '0'",
         "jobs:",
     ]
-    for job in jobs:
-        # A job's cap: its rows' watchdogs summed, plus a margin for setup (ADR-0015 §1.2: + 20%, at least 60 s).
-        seconds = sum(r.timeout_s for r in chosen if r.job == job)
-        history = any(r.id in NEEDS_HISTORY for r in chosen if r.job == job)
-        modules = any(r.id in NEEDS_MODULES for r in chosen if r.job == job)
-        vulndb = any(r.id in NEEDS_VULNDB for r in chosen if r.job == job)
-        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier, history, modules, vulndb)
+    lines += _jobs(chosen, tier)
     lines += _strict_gate(jobs, tier)
     return "\n".join(lines) + "\n"
 
 
+def _jobs(chosen: Sequence[Row], tier: str, canary: bool = False) -> list[str]:
+    lines: list[str] = []
+    for job in dict.fromkeys(r.job for r in chosen):
+        mine = [r for r in chosen if r.job == job]
+        # A job's cap: its rows' watchdogs summed, plus a margin for setup (ADR-0015 §1.2: + 20%, at least 60 s).
+        seconds = sum(r.timeout_s for r in mine)
+        history = any(r.id in NEEDS_HISTORY for r in mine)
+        modules = any(r.id in NEEDS_MODULES for r in mine)
+        vulndb = any(r.id in NEEDS_VULNDB for r in mine)
+        timeout_min = max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10)
+        lines += _job(job, timeout_min, tier, history, modules, vulndb, canary)
+    return lines
+
+
+def _exec(command: str) -> str:
+    return f"python3 -I -B gate/bootstrap.py exec -- {command}"
+
+
+def _candidate_job() -> list[str]:
+    """Reads the feeds with the read-only token, then builds the candidate with none (reviews A-S5, DA-S7), on Linux:
+    python-build-standalone's Linux archives hold names that differ only by case (lane F1). Its directory uploads
+    whatever happened, error.txt included (review DQ-S9)."""
+    return [
+        f"  {CANDIDATE}:",
+        "    runs-on: ubuntu-latest",
+        "    timeout-minutes: 30",
+        "    steps:",
+        *_setup_steps(restore_only=True),
+        "      - name: feeds",
+        "        env:",
+        "          GITHUB_TOKEN: ${{ github.token }}",
+        f"        run: {_exec(f'canary-feeds --out {CANDIDATE}/feeds.json')}",
+        "      - name: build",
+        f"        run: {_exec(f'canary-candidate --feeds {CANDIDATE}/feeds.json --out {CANDIDATE}/')}",
+        f"      - {_uses('upload')}",
+        "        if: always()",
+        "        with:",
+        f"          name: {CANDIDATE}",
+        f"          path: {CANDIDATE}/",
+        "          if-no-files-found: ignore",
+        "          overwrite: true",
+    ]
+
+
+def _canary_summary(jobs: Sequence[str]) -> list[str]:
+    """Always runs, after every job, and reads each job's result from toJSON(needs) (review DA-S8)."""
+    command = (
+        f"canary-summary --artifacts .gate/artifacts --{CANDIDATE} {CANDIDATE} --attempt ${{{{ github.run_attempt }}}} "
+        '--summary "$GITHUB_STEP_SUMMARY"'
+    )
+    return [
+        "  summary:",
+        "    runs-on: ubuntu-latest",
+        "    timeout-minutes: 15",
+        f"    needs: [{', '.join([CANDIDATE, *jobs])}]",
+        "    if: always()",
+        "    steps:",
+        *_setup_steps(restore_only=True),
+        *_downloads(jobs),
+        *_candidate_download(continue_on_error=True),
+        "      - if: always()",
+        "        env:",
+        "          NEEDS: ${{ toJSON(needs) }}",
+        f"        run: {_exec(command)}",
+    ]
+
+
+def render_canary(rows: Sequence[Row]) -> str:
+    """The weekly canary's exact bytes (S1.1c-4 design §4.7): the candidate job, the gate's T4 jobs each on the
+    candidate tools.json, and the summary. The T4 jobs are the gate's exactly, on the same runners (owner,
+    2026-11-13, S1.1c-4's design, decision 2)."""
+    chosen = registry.select(list(rows), TIER, None)
+    jobs = list(dict.fromkeys(r.job for r in chosen))
+    lines = [
+        f"# Generated from {REGISTRY} by make ci-workflow. Do not edit: the ci-fresh row checks it.",
+        "name: canary",
+        "on:",
+        "  schedule:",
+        f"    - cron: '{CANARY_CRON}'",
+        "  workflow_dispatch:",
+        "  pull_request:",
+        "    paths: ['gate/canary/**']",
+        "permissions:",
+        "  contents: read",
+        "concurrency:",
+        "  group: canary-${{ github.ref }}",
+        "  cancel-in-progress: false",
+        "env:",
+        "  CGO_ENABLED: '0'",
+        "jobs:",
+        *_candidate_job(),
+        *_jobs(chosen, TIER, canary=True),
+        *_canary_summary(jobs),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def targets(rows: Sequence[Row]) -> list[tuple[str, str]]:
-    """Every workflow the registry calls for, as (path, bytes): one per tier in WORKFLOWS that has rows."""
+    """Every workflow the registry calls for, as (path, bytes): one per tier in WORKFLOWS that has rows, and the
+    canary after the gate's."""
     out = []
     for tier, path in WORKFLOWS.items():
         if any(tier in r.tiers for r in rows):
             out.append((path, render(rows, tier)))
+            if tier == TIER:
+                out.append((CANARY, render_canary(rows)))
     return out
 
 
