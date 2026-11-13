@@ -1,7 +1,9 @@
 # S1.1c-4 — sprint record
 
+> **Historical — S1.1c-4, the scans; merged in PR #40.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-13--s11c-4s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1c-4-plan-check.md) · [design](s1-1c-4-design.md) · [record](s1-1c-4-record.md) · reviews: [plan check architecture](../reviews/s1-1c-4-plan-check-architecture.md), [plan check qa](../reviews/s1-1c-4-plan-check-qa.md), [design architecture](../reviews/s1-1c-4-design-architecture.md), [design qa](../reviews/s1-1c-4-design-qa.md), [combined architecture](../reviews/s1-1c-4-combined-architecture.md), [breakit qa](../reviews/s1-1c-4-breakit-qa.md). **← [S1.1c-3](s1-1c-3-record.md) · [S1.1c-5 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S1.1c-4 — the scans · **Routine:** the full loop without the semantics panel · **Size:** 13 SP (items ≈ 7.75) as sized against the 2-week cap · **Branch:** `s1-1c-4/integration`
-**What to build and how each item is proven:** [sprint plan — S1.1c-4](sprint-plan.md#s11c-4--the-scans) · **How it runs:** [the plan check §1](s1-1c-4-plan-check.md#1-routine-shape-waves) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [the S1.1c-4 card](history.md#s11c-4--the-scans) · **How it runs:** [the plan check §1](s1-1c-4-plan-check.md#1-routine-shape-waves) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -65,6 +67,8 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 
 *To come from W0: the agreement table's real entries (with their notice) and the commands that measured govulncheck's verdicts; the planted databases of `test_vulns_planted.py`; the canary's recorded feeds.*
 
+**Points and duration.** Card 13 (re-sized from 8 at the plan check; items ≈ 4.75 → ≈ 7.75, + the toolchain-line test 0.25). As built: about 12 — the design reviews' blockers, the fix round's 3 blockers and 12 should-fix or later items, and the second break-it's three; the runtime flake (#41) outside it. From the plan check (2026-11-13) to the merge (2026-11-14): two calendar days, with one evening's pause; the build ran up to four agents at once by the owner's word.
+
 ## Scope changes
 
 - **2026-11-13, at the W1 combine** ([owner](decisions.md#owner-decisions-2026-11-13--during-s11c-4s-build), 3): a test pinning both `go.mod` toolchain lines to `tools.json`'s Go joins lane E2b (≈ 0.25; items ≈ 8 against the card's 13).
@@ -116,14 +120,18 @@ Review (G3)  ☑ architecture review of the combined diff: no drift (1 blocker, 
              ☑ QA break-it run (two passes) ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☑ T4 strict-gate exit 0, run complete (35526c0) ☑ owner's check passed (2026-11-14, [owner](decisions.md#owner-decisions-2026-11-14--s11c-4s-owners-check))
              ☑ every acceptance line met by its named proof (lines 1–2: the agreement table, `test_vulns_planted` 31/31, `test_gomods`, the deps tool-line case; 3: `gate/canary/tests/`, `ci-fresh` covered 3, the first canary run; 4: the nightly 43443592904; 5: T4, `proofs` covered 38)
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☑ known issues (S1.1c-3-1, -2, -3 closed before the push; seven open) ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
-             ☐ the row closed in gate/sprints.json as in the plan table (S1.1c stays open: S1.1c-5 follows)
+Exit (G5)    ☑ one PR, ≤ 100 commits, merged by the owner (PR #40, 77 commits, rebase-merged as main 9b923ab, 2026-11-14; the runtime flake's root fix it met merged first as #41)
+             ☑ main CI green on the merge commit (run 43488210685 at 9b923ab, every job; checked at the owner's request)
+             ☑ sprint record + five-line retro ☑ known issues (S1.1c-3-1, -2, -3 closed before the push; seven open) ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only; the card to history, banners, the records row) ☑ memory updated
+             ☑ worktrees removed (the 11 worktrees and 12 branches — `s1-1c-4/integration` local and remote — deleted, every commit on main by patch; [owner](decisions.md#owner-decisions-2026-11-14--s11c-4s-close-out)) ☑ points and duration recorded
+             ☑ the row closed in gate/sprints.json as in the plan table — n/a: S1.1c stays open, S1.1c-5 follows
 ```
 
 ## Retro
 
-*At close-out.*
+1. **Worked — re-measuring before planning.** The plan check's re-measure found the scan as decided red on landing (x/net and goldmark, graph-only) and upstream pauses longer than the age rule; both became owner questions before a line was built, and the fail-closed register mark came out of the architect's review of that plan.
+2. **Worked — two blind design reviews and two break-it passes.** The design reviews found 4 blockers on paper (the loader's missing inputs, the installer's stamp, the `vulndb` exemption, an offline tidy reading as clean); the break-it passes found 12 more in the built code, each a committed red test, all fixed in one batched round.
+3. **Missed — a committed data file no test loaded.** `pin_tests.json`, measured by one lane and read by another's strict loader, held one id under two rows; every real canary summary would have exited 2, and only lane F2's dry run saw it (W2-F1). The lasting rule below.
+4. **Friction — four agents on one machine, and a T4-only row's time.** Four agents running full gates at once saturated the machine (load 14 on 14 cores) until the coordinator serialised the heavy runs; the `proofs` row grew to 480 s of its 600 s cap, found only on CI — most of it nested worlds re-hashing the tool trees.
+5. **Change next sprint.** A committed data file that code parses is loaded by a test (sprint model §10, [owner, 2026-11-14](decisions.md#owner-decisions-2026-11-14--s11c-4s-close-out)); heavy gate runs stay one at a time when more than two agents run; the proof worlds reuse the outer run's tool check (the next PR).
