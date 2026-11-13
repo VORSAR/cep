@@ -3,25 +3,9 @@
   "note": "The machine-readable side of docs/product/known-issues.md (owner, 2026-11-12, S1.1c-2's plan check, decisions 5, 6, 13): per entry, the plan sprint it was first seen in (the table's Found cell begins with it), the sprint it is forwarded to (empty when the forward names no sprint), and the section that decides it (a path and heading anchor, the form of an allowlist's ref: docs/sprints/decisions.md#…) and names its id (empty when none). Since S1.1c-3 (owner, 2026-11-12, S1.1c-3's plan check, decision 9) each entry also says whether it is a correctness bug (correctness: a wrong or missed detection, a wrong emitted value, lost state, or a replay that differs; its Issue cell then begins **Correctness.**) and the day it was opened (opened: the UTC date of the first commit holding its table row, as the run's today is a UTC date: TZ=UTC git log -S'| <id> |' --reverse --date=format-local:%Y-%m-%d --format=%ad -- docs/product/known-issues.md, its first line; owner, 2026-11-13, S1.1c-3's review and break-it, decision 1). A T2 test pins the ids to the table; S1.1c-3's aging row reads the clock from gate/sprints.json.",
   "entries": [
     {
-      "id": "QB10",
-      "first_seen": "S1.1a-1",
-      "forward": "S1.1c-3",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check",
-      "correctness": false,
-      "opened": "2026-11-03"
-    },
-    {
       "id": "BA9",
       "first_seen": "S1.1a-1",
       "forward": "",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check",
-      "correctness": false,
-      "opened": "2026-11-03"
-    },
-    {
-      "id": "BA10",
-      "first_seen": "S1.1a-1",
-      "forward": "S1.1c-3",
       "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-2s-plan-check",
       "correctness": false,
       "opened": "2026-11-03"

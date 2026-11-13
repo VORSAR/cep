@@ -86,6 +86,7 @@
 | 2026-11-12 | [S1.1c-3's design, after the reviews](#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews) |
 | 2026-11-13 | [during S1.1c-3's build](#owner-decisions-2026-11-13--during-s11c-3s-build) |
 | 2026-11-13 | [S1.1c-3's review and break-it](#owner-decisions-2026-11-13--s11c-3s-review-and-break-it) |
+| 2026-11-13 | [S1.1c-3's close-out](#owner-decisions-2026-11-13--s11c-3s-close-out) |
 
 ## The decisions
 
@@ -818,3 +819,13 @@ The combined build (`s1-1c-3/integration` @ 523cc39; T2 and T3 exit 0, `proofs` 
 6. **The tree-hash cap stays 300 s and is re-sized in S1.1c-4** (as recommended): known issue S1.1c-3-3 forwarded to S1.1c-4, whose draft PR runs CI on both systems and reads cold parity times; item (f) leaves ADR-0015 §3.6's residue. Rejected: accepting the warm figures as residue.
 7. **Go code in a ```` ```go ```` fence is a named residue** (as recommended): it is not parsed as rule text; the `-> and not` shape is still checked there. Rejected: checking the Go snippets now.
 8. **The test-only import edge `internal/parser → internal/validate` is confirmed** (as recommended; the validator re-run of listed wrong examples; an external test package, no cycle); the rules file's note cites this decision. Rejected: moving the test into `internal/validate`.
+
+### Owner decisions, 2026-11-13 — S1.1c-3's close-out
+
+After PR #38's merge (rebase; `main` 1fec29a); four questions.
+
+1. **`main`'s CI is green on the merge commit 1fec29a** (the owner's report).
+2. **The sprint's branches and worktrees are deleted** (as recommended): `s1-1c-3/integration` local and remote, the eight lane, QA, break-it, fix and owner's-check branches local, their worktrees — every commit on `main` by patch, the four squashed on combine (the aging driver's two; fix lane E's two) by content.
+3. **The close-out goes up as its own docs PR** (`docs/s1-1c-3-close-out`), as at S3.3-1, S3.3-2, S1.1c-1 and S1.1c-2 (as recommended).
+4. **One lasting rule from the retro** (as recommended): a documentation-correction list is dry-run against every test that reads those documents before the owner approves it (sprint model §10).
+5. **The commit-budget rule is not taken** (**≠ R**: the recommendation had the plan check state the sprint's commit budget against the 100-per-PR limit and the lanes squashed into topical commits on combine).

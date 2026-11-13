@@ -1,7 +1,9 @@
 # S1.1c-3 — sprint record
 
+> **Historical — S1.1c-3, the documents and the clocks; merged in PR #38.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1c-3-plan-check.md) · [design](s1-1c-3-design.md) · [record](s1-1c-3-record.md) · reviews: [research fragments](../reviews/s1-1c-3-research-fragments.md), [research fragments angle](../reviews/s1-1c-3-research-fragments-angle.md), [research vuln canary](../reviews/s1-1c-3-research-vuln-canary.md), [plan check architecture](../reviews/s1-1c-3-plan-check-architecture.md), [plan check qa](../reviews/s1-1c-3-plan-check-qa.md), [design architecture](../reviews/s1-1c-3-design-architecture.md), [design qa](../reviews/s1-1c-3-design-qa.md), [combined architecture](../reviews/s1-1c-3-combined-architecture.md), [breakit qa](../reviews/s1-1c-3-breakit-qa.md). **← [S1.1c-2](s1-1c-2-record.md) · [S1.1c-4 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S1.1c-3 — the documents and the clocks · **Routine:** the full loop without the semantics panel ([owner, 2026-11-10](decisions.md#owner-decisions-2026-11-10--s11cs-scope-before-its-plan-check), decision 7) · **Size:** 13 SP (items ≈ 8.25) against the 2-week cap · **Branch:** `s1-1c-3/integration`
-**What to build and how each item is proven:** [sprint plan — S1.1c-3](sprint-plan.md#s11c-3--the-documents-and-the-clocks) · **The plan check:** [s1-1c-3-plan-check.md](s1-1c-3-plan-check.md) (the [3] items) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [sprint plan — S1.1c-3](history.md#s11c-3--the-documents-and-the-clocks) · **The plan check:** [s1-1c-3-plan-check.md](s1-1c-3-plan-check.md) (the [3] items) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -18,6 +20,8 @@ The full draft is [s1-1c-3-plan-check.md](s1-1c-3-plan-check.md), drafted read-o
 **The design (G1) — the owner, 2026-11-12** ([decisions](decisions.md#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews); after both design reviews of v1.1, every finding placed in the note's §9): the corrections list approved as recommended (1); the two E-PAT-005 messages as proposed (2); F3 fixed now in lane B (3); F5 and F7 fixed now in lane B (4, ≠ R).
 
 **During the build — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--during-s11c-3s-build)): SPEC §4.4's template written with ⟨⟩ placeholders (1); E-PART-001's and E-PART-002's fix texts kept word for word, the placeholder table learning two notations instead (2).
+
+**Close-out — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--s11c-3s-close-out)): main's CI green on the merge commit 1fec29a (1); the sprint's branches and worktrees deleted, every commit on `main` by patch or, for the four squashed on combine, by content (2); the close-out as its own docs PR (3); one lasting rule from the retro, the correction list's dry run (4); the commit-budget rule not taken (5, ≠ R).
 
 **The owner's check (G4) — the owner, 2026-11-13: passed** ("pass"), on the coordinator's runs at 02f32e8 (the incident sentence red three ways; a planted overdue known issue red in `aging`; a stop during parity ended in 0.04 s) and the LAW Δ block read.
 
@@ -110,14 +114,20 @@ Review (G3)  ☑ architecture review of the combined diff (1 blocker, fixed; dri
 Verify (G4)  ☑ T4 strict-gate exit 0, run complete (02f32e8) ☑ owner's check passed (2026-11-13)
              ☑ every acceptance line met by its named proof (lines 1–6: the fragment tests red first; the contract,
                29 invalid files, the differential at 74; test_aging_planted; BA10's red tests; QB10's; T4 with proofs 37)
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
-             ☐ the row closed in gate/sprints.json as in the plan table (n/a: S1.1c stays open for S1.1c-4 and S1.1c-5)
+Exit (G5)    ☑ one PR (#38), 93 commits, merged by the owner (2026-11-13)
+             ☑ main CI green on the merge commit (1fec29a; the owner)
+             ☑ sprint record + five-line retro ☑ known issues (BA10, QB10 fixed and removed) ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only) ☑ memory updated
+             ☑ worktrees removed ☑ points and duration recorded
+             ☑ the row closed in gate/sprints.json as in the plan table (n/a: S1.1c stays open for S1.1c-4 and S1.1c-5)
 ```
 
 ## Retro
 
-*(at close-out: five lines)*
+1. **What held.** The plan check's re-measure on `main` found before any code that the decided fragment rule would land red on 63 spans and that `govulncheck -scan module` misses test and tool modules; QA's tables written before the lanes made every lane's "done" mechanical, and lanes sized to one window each (B1/B2, E2a/E2b) finished.
+2. **What surprised.** Every review found another way an author's marker could silence the fragment test (`cep-invalid`, angle placeholders, `text` fences, line wraps and emphasis): the rule took four rounds to close. Two approved document edits were fix texts users see, pinned by a test the research had not run, and one span was missed — found only at integration.
+3. **Process.** One batched fix round cleared three blockers and eleven should-fix items; squashing the fix lanes on combine held the PR at 93 commits against the 100 limit.
+4. **Coordinator errors.** Two residue items written into ADR-0015 as owner-accepted without asking (review CA-S4, put to the owner); a corrections script that met one of two spans on a line.
+5. **Lasting change.** Sprint model §10: a documentation-correction list is dry-run against every test that reads those documents before the owner approves it.
+
+**Points and duration.** Card: 13 SP (items ≈ 8.25; ≈ 9.75 after G1's scope change). As built: about 12 (the fix round's blockers and should-fix items). From the plan check (2026-11-12) to the merge (2026-11-13 11:21 UTC): two calendar days.
