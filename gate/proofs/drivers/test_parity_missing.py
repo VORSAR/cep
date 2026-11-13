@@ -19,6 +19,6 @@ class ParityMissing(support.ParityDriver):
         cache = self.world.link_cache(*others)
         self.assertFalse(os.path.lexists(support.home(cache, "go")))
 
-        run = self.world.run(cache_dir=cache)
+        run = self.world.run(cache_dir=cache, handoff=False)
 
-        self.assertParityStops(run, "go: not installed: run make tools")
+        self.assertParityStops(run, "go: not installed: run make tools", planted="go")

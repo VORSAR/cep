@@ -29,8 +29,8 @@ class ParityVersion(support.ParityDriver):
             f.write("\n")
         self.world.commit()
 
-        run = self.world.run()
+        run = self.world.run(handoff=False)
 
         goos, goarch = support.goos_goarch()
         want, got = PLANTED.format(goos=goos, goarch=goarch), real.format(goos=goos, goarch=goarch)
-        self.assertParityStops(run, f"go: version: want {want!r}, got {got!r}: {support.RECOVER}")
+        self.assertParityStops(run, f"go: version: want {want!r}, got {got!r}: {support.RECOVER}", planted="go")

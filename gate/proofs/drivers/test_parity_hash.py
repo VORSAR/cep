@@ -42,9 +42,9 @@ class ParityHash(support.ParityDriver):
         flip_one_byte(os.path.join(go_home, compile_rel))
         self.assertNotEqual(manifest.sha256_file(os.path.join(go_home, compile_rel)), go.exec_sha256[compile_rel])
 
-        run = self.world.run(cache_dir=cache)
+        run = self.world.run(cache_dir=cache, handoff=False)
 
-        self.assertParityStops(run, f"go: sha256 of {compile_rel} differs: {support.RECOVER}")
+        self.assertParityStops(run, f"go: sha256 of {compile_rel} differs: {support.RECOVER}", planted="go")
         real = support.home(support.real_cache(), "go")
         for rel, want in sorted(go.exec_sha256.items()):
             self.assertEqual(manifest.sha256_file(os.path.join(real, rel)), want, f"the real cache's {rel} changed")
@@ -64,7 +64,7 @@ class ParityHash(support.ParityDriver):
             f.write("\n")
         self.world.commit()
 
-        run = self.world.run()
+        run = self.world.run(handoff=False)
 
         lines = run.stdout.split("\n")[:-1]
         self.assertEqual((run.code, lines[-2:]), (2, ["GATE FAILED", "exit: 2"]), run.stdout)
