@@ -21,6 +21,7 @@ import tarfile
 import tempfile
 import unittest
 
+from gate import wait
 from gate.toolchain import manifest
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -35,6 +36,24 @@ def sha256(data: bytes) -> str:
 def sha256_of(path: str) -> str:
     with open(path, "rb") as f:
         return sha256(f.read())
+
+
+def past_the_ctime_of(path: str, probe: str) -> int:
+    """Wait until the clock that stamps change times has ticked past `path`'s own change time; return that time.
+
+    On Linux without multigrain timestamps a change time moves once per clock tick (1-10 ms), and a test changes a
+    tree it built microseconds ago (design note §3.1, CA-S3). Each poll rewrites `probe`, a file outside the tree, so
+    its change time is the clock's now: once it exceeds `path`'s, a change made next lands on a newer tick.
+    """
+    before = os.lstat(path).st_ctime_ns
+
+    def ticked() -> bool:
+        with open(probe, "wb") as f:
+            f.write(b"tick\n")
+        return os.lstat(probe).st_ctime_ns > before
+
+    wait.until(f"the change-time clock to pass {path}'s change time {before}", ticked)
+    return before
 
 
 def restore_write(root: str) -> None:

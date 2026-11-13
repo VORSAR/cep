@@ -91,11 +91,11 @@ class FinishedTreeHashLeavesNoLiveGroup(unittest.TestCase):
             got = parity.tree_digest(
                 home,
                 spawn=group.spawn,
-                argv=(sys.executable, "-I", "-B", "-c", f"print({DIGEST!r})"),
+                argv=(sys.executable, "-I", "-B", "-c", f"print({home!r}); print({DIGEST!r}); print({DIGEST!r})"),
                 env={"PATH": os.defpath},
                 scratch=d,
             )
-            self.assertEqual(got, DIGEST)
+            self.assertEqual(got.digest, DIGEST)
             self.assertIsNone(
                 group._pgid, "BK-L2: the parity group still names the reaped tree child's pid as its live group"
             )

@@ -284,6 +284,42 @@ def tree_sha256(root: str, *, workers: int | None = None) -> str:
     return _tree_sha256(root, _default_workers() if workers is None else workers, sha256_file)
 
 
+def tree_details(root: str) -> str:
+    """The sha256 of the lines `<path>\\0<st_mode>\\0<st_size>\\0<st_dev>\\0<st_ino>\\0<st_mtime_ns>\\0<st_ctime_ns>\\n`
+    (decimal integers; <path> bytes as stored) for root itself (path b".") and every entry below it, from os.lstat
+    (nothing followed), `.complete` included, the lines sorted bytewise. `root` must already be resolved (the caller
+    passes a realpath). Raises OSError as the walk meets it.
+
+    The proof-world speed-up's details digest (design note §3.1; owner, 2026-11-14, the speed-up's measurement,
+    decision 2): a tree whose every entry's details match what an earlier check read before hashing it is the tree
+    that check hashed. The change time is the anchor: a write, chmod, rename, link or unlink moves it, and a user
+    cannot set it back; the device and inode catch a tree swapped for a copy, or a mount over it. Below the root the
+    paths are relative, as in tree_sha256 (`bin/go`).
+    """
+    top = os.fsencode(root)
+    lines = [_details_line(b".", os.lstat(top))]
+    pending = [(top, b"")]
+    while pending:
+        directory, prefix = pending.pop()
+        with os.scandir(directory) as listing:
+            entries = list(listing)
+        for entry in entries:
+            rel = prefix + entry.name
+            st = os.lstat(entry.path)
+            lines.append(_details_line(rel, st))
+            if stat.S_ISDIR(st.st_mode):
+                pending.append((entry.path, rel + b"/"))
+    digest = hashlib.sha256()
+    for line in sorted(lines):
+        digest.update(line)
+    return digest.hexdigest()
+
+
+def _details_line(rel: bytes, st: os.stat_result) -> bytes:
+    fields = (st.st_mode, st.st_size, st.st_dev, st.st_ino, st.st_mtime_ns, st.st_ctime_ns)
+    return rel + b"".join(b"\0%d" % value for value in fields) + b"\n"
+
+
 def _tree_sha256(root: str, workers: int, hash_file: Callable[[bytes], str]) -> str:
     """Walk serially, hash in parallel, then assemble the lines in walk order and sort them.
 
