@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "id": "gate.toolchain.tests.test_manifest.Load.test_the_committed_tools_json_loads_in_file_order_for_both_platforms",
+      "measured": "2026-11-13, ruff 0.17.5 + python-build-standalone 20261110",
+      "pattern": "AssertionError: Lists differ: \\[(?:\\('py|'/c/py)",
+      "row": "pyfloor"
+    },
+    {
+      "id": "gate.toolchain.tests.test_manifest.Load.test_the_committed_tools_json_loads_in_file_order_for_both_platforms",
+      "measured": "2026-11-13, ruff 0.17.5 + python-build-standalone 20261110",
+      "pattern": "AssertionError: Lists differ: \\[(?:\\('py|'/c/py)",
+      "row": "pytests"
+    }
+  ],
+  "note": "The canary's expected pin reds (design §4.5), measured by one local T4 run in a scratch clone with tools.json swapped for the full candidate of 2026-11-13 (ruff 0.17.3 -> 0.17.5, python 3.15.2 and python-floor 3.12.16 build 20261026 -> 20261110), plus that test module alone under the python-build-standalone half only (its second text, masked by the first under the full candidate); a failure's id is the test's without unittest's subtest suffix (platform='...'), and go, golangci-lint and lark moves, which today's feeds cannot produce, are unmeasured: by reading they red this same test with the same two text shapes, and no row reads go.mod's toolchain lines or census.md.",
+  "schema": 1
+}
