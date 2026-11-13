@@ -12,6 +12,7 @@ from unittest import mock
 
 from gate.runner import main
 from gate.runner.tests import support
+from gate.toolchain.parity import Outcome
 
 
 class Cli(support.GateTest):
@@ -185,6 +186,26 @@ class Cli(support.GateTest):
             with self.subTest(argv):
                 self.assertRefused(self.cli("--tier", "T2", "--registry", self.reg(), *argv), needle)
 
+    def test_parity_handoff_must_be_an_absolute_path(self):
+        # Proof-world speed-up design note §3.3 (owner, 2026-11-14, its design reviews, decision 2): the hand-off is
+        # an option only a proof driver passes, naming its outer run's file by an absolute path.
+        for value in ("relative/handoff.json", "", "/runs/a\nb/handoff.json", "/runs/a\x00b/handoff.json"):
+            with self.subTest(value=value):
+                argv = ("--tier", "T2", "--registry", self.reg(), "--parity-handoff", value)
+                self.assertRefused(self.cli(*argv), "--parity-handoff must be an absolute path")
+        self.assertEqual(self.toolchain.calls, [])
+
+    def test_an_absolute_parity_handoff_reaches_parity(self):
+        # The witness for the refusals above: the option exists, and its value is what parity is given.
+        path = os.path.join(self.root, "outer", "parity", "handoff.json")
+        code = self.cli("--tier", "T2", "--registry", self.reg(), "--run-dir", self.run_dir, "--parity-handoff", path)
+        self.assertEqual(code, 0, self.output)
+        self.assertEqual(self.toolchain.handoffs, [(support.RUN_ID, path)])
+
+    def test_without_parity_handoff_parity_is_given_none(self):
+        self.assertEqual(self.cli("--tier", "T2", "--registry", self.reg(), "--run-dir", self.run_dir), 0)
+        self.assertEqual(self.toolchain.handoffs, [(support.RUN_ID, None)])
+
     def test_t1_rows_run_at_t1(self):
         reg = self.reg(self.row("x", tiers=("T1", "T2")))
         self.assertEqual(self.cli("--tier", "T1", "--registry", reg, "--run-dir", self.run_dir), 0)
@@ -288,10 +309,11 @@ class RealParts(support.GateTest):
     def test_the_real_toolchain_calls_the_seam(self):
         # The seam of gate.toolchain, faked at its own boundary: the names and arguments Lane B's code must honour.
         calls = {}
+        outcome = Outcome(reasons=("go: x",), covered=1, taken=0, taken_from="")
 
-        def check(tools, cache, env, *, full_tree, spawn, scratch):
-            calls["check"] = (tools, cache, env, full_tree, spawn, scratch)
-            return ["go: x"]
+        def check(tools, cache, env, *, full_tree, spawn, scratch, run_id, handoff_in):
+            calls["check"] = (tools, cache, env, full_tree, spawn, scratch, run_id, handoff_in)
+            return outcome
 
         def spawn(argv, **kw):  # the runner's parity group's spawn, passed through untouched (S1.1c-3 C8)
             return None
@@ -306,10 +328,19 @@ class RealParts(support.GateTest):
             real = main.RealToolchain("/repo", {"A": "1"})
             self.assertEqual(real.path_dirs(), ["/c/t1/bin"])
             self.assertEqual(real.tool_count(), 2)
-            self.assertEqual(real.parity({"E": "1"}, full_tree=True, spawn=spawn, scratch="/run/parity"), ["go: x"])
+            given = real.parity(
+                {"E": "1"},
+                full_tree=True,
+                spawn=spawn,
+                scratch="/run/parity",
+                run_id="r1",
+                handoff_in="/h/handoff.json",
+            )
+            self.assertIs(given, outcome)
         load.assert_called_once_with(os.path.join("/repo", "tools.json"), "p")
         path_dirs.assert_called_once_with("/c", ["t1", "t2"])
-        self.assertEqual(calls["check"], (["t1", "t2"], "/c", {"E": "1"}, True, spawn, "/run/parity"))
+        want = (["t1", "t2"], "/c", {"E": "1"}, True, spawn, "/run/parity", "r1", "/h/handoff.json")
+        self.assertEqual(calls["check"], want)
 
     def test_a_manifest_error_is_exit_2(self):
         out = io.StringIO()

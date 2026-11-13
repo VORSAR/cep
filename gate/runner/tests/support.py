@@ -14,6 +14,7 @@ import unittest
 
 from gate import wait
 from gate.runner import clock, main, records, registry, scheduler
+from gate.toolchain.parity import Outcome
 
 GATE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPO = os.path.dirname(GATE)
@@ -172,12 +173,17 @@ class FakeTimers:
 
 
 class FakeToolchain:
-    """Stands in for gate.toolchain: its PATH prefix and a scripted parity result."""
+    """Stands in for gate.toolchain: its PATH prefix and a scripted parity result. `reasons` are the failing tools'
+    (each of the five is covered unless it failed); `taken` and `taken_from` are the trees a hand-off gave, whatever
+    the reasons (proof-world speed-up design note §3.3). `handoffs` records each call's run id and hand-off."""
 
     def __init__(self, dirs: list[str] | None = None, reasons: list[str] | None = None) -> None:
         self.dirs = [os.path.dirname(sys.executable)] if dirs is None else dirs
         self.reasons = reasons or []
+        self.taken = 0
+        self.taken_from = ""
         self.calls: list[tuple[dict[str, str], bool]] = []
+        self.handoffs: list[tuple[str, str | None]] = []
         self.hold: threading.Event | None = None
 
     def path_dirs(self) -> list[str]:
@@ -186,11 +192,13 @@ class FakeToolchain:
     def tool_count(self) -> int:
         return 5
 
-    def parity(self, env, *, full_tree: bool, spawn, scratch: str) -> list[str]:
+    def parity(self, env, *, full_tree: bool, spawn, scratch: str, run_id: str, handoff_in: str | None) -> Outcome:
         self.calls.append((dict(env), full_tree))
+        self.handoffs.append((run_id, handoff_in))
         if self.hold is not None:
             self.hold.wait()
-        return self.reasons
+        reasons = tuple(self.reasons)
+        return Outcome(reasons=reasons, covered=5 - len(reasons), taken=self.taken, taken_from=self.taken_from)
 
 
 FROZEN = clock.Clock(wall_ms=lambda: 0, mono_ns=lambda: 0)

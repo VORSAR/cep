@@ -25,6 +25,7 @@ from gate.runner import env, records, step, summary, verdict
 from gate.runner.clock import NS_PER_MS, Clock, Timer, Timers
 from gate.runner.proc import Group, Spawn
 from gate.runner.registry import PARITY_ID, Row
+from gate.toolchain.parity import Outcome
 
 CEILING_MARGIN_S = 60
 GRACE_S = 5
@@ -48,9 +49,20 @@ class Toolchain(Protocol):
 
     def tool_count(self) -> int: ...
 
-    def parity(self, env: Mapping[str, str], *, full_tree: bool, spawn: Spawn, scratch: str) -> list[str]:
+    def parity(
+        self,
+        env: Mapping[str, str],
+        *,
+        full_tree: bool,
+        spawn: Spawn,
+        scratch: str,
+        run_id: str,
+        handoff_in: str | None,
+    ) -> Outcome:
         """`spawn` is the parity group's: a tree hash started through it ends with a stop (BA10); `scratch` is the
-        run directory's parity/ (S1.1c-3 design §3.6, C8)."""
+        run directory's parity/ (S1.1c-3 design §3.6, C8). `run_id` is the run's, named in any hand-off parity writes
+        there; `handoff_in` is the hand-off it may take trees from, given only at the full-tree tiers (proof-world
+        speed-up design note §3.3)."""
         ...
 
 
@@ -128,6 +140,7 @@ class Runner:
         observer: Callable[[dict], None] | None = None,
         grace_s: int = GRACE_S,
         install_signals: bool = False,
+        parity_handoff: str | None = None,
     ) -> None:
         self._rows = list(rows)
         self._tier = tier
@@ -147,6 +160,7 @@ class Runner:
         self._observer = observer
         self._grace_s = grace_s
         self._install_signals = install_signals
+        self._parity_handoff = parity_handoff  # --parity-handoff: an outer run's verified trees (design note §3.3)
         self._clean = env.clean_env(environ, toolchain.path_dirs())
         self._context = step.Context(repo, run_dir, tier, self._clean)
         self._q: queue.SimpleQueue[tuple] = queue.SimpleQueue()
@@ -232,8 +246,8 @@ class Runner:
                 self._on_watchdog(row_id)
             case ("grace", row_id):
                 self._kill(row_id)
-            case ("parity", reasons):
-                self._parity_end(reasons)
+            case ("parity", outcome):
+                self._parity_end(outcome)
             case ("crash", row_id, text):
                 self._on_crash(row_id, text)
             case ("signal", signum):
@@ -264,15 +278,20 @@ class Runner:
             full_tree = self._tier in FULL_TREE_TIERS
             scratch = os.path.join(self._run_dir, PARITY_SCRATCH)
             os.makedirs(scratch, exist_ok=True)
-            reasons = self._toolchain.parity(
-                self._clean, full_tree=full_tree, spawn=self._parity_group.spawn, scratch=scratch
+            outcome = self._toolchain.parity(
+                self._clean,
+                full_tree=full_tree,
+                spawn=self._parity_group.spawn,
+                scratch=scratch,
+                run_id=self._run_id,
+                handoff_in=self._parity_handoff if full_tree else None,  # below T2 the hand-off is never read
             )
-            if not reasons and self._record_go_env:
+            if not outcome.reasons and self._record_go_env:
                 self._write_go_env()
         except BaseException as e:
             self._q.put_nowait(("crash", PARITY_ID, f"{type(e).__name__}: {e}"))
             raise
-        self._q.put_nowait(("parity", reasons))
+        self._q.put_nowait(("parity", outcome))
 
     def _write_go_env(self) -> None:
         """Describes the run; never a verdict, so a go that cannot report leaves a note and nothing else."""
@@ -289,17 +308,22 @@ class Runner:
             self._parity_group.reap(proc)
             os.rename(partial, os.path.join(self._run_dir, "go-env.json"))
 
-    def _parity_end(self, reasons: list[str]) -> None:
+    def _parity_end(self, outcome: Outcome) -> None:
+        """A failure's reason is its reasons joined and never names a reuse; a pass reads `covered <n>`, and when trees
+        were taken from a hand-off, `; <taken> trees taken from run <id>` (owner, 2026-11-14, the proof-world
+        speed-up's design reviews, decision 3)."""
         if self._parity is not None:
             return  # an interrupt already gave up on it
-        if reasons:
-            self._settle_parity(False, "; ".join(reasons), 1, self._toolchain.tool_count() - len(reasons))
+        if outcome.reasons:
+            self._settle_parity(False, "; ".join(outcome.reasons), 1, outcome.covered)
             for row in self._pending:
                 self._not_run(row, verdict.decide(verdict.Facts(cap_s=0, parity_failed=True)).reason)
             self._pending = []
         else:
-            count = self._toolchain.tool_count()
-            self._settle_parity(True, f"covered {count}", 0, count)
+            reason = f"covered {outcome.covered}"
+            if outcome.taken > 0:
+                reason += f"; {outcome.taken} trees taken from run {outcome.taken_from}"
+            self._settle_parity(True, reason, 0, outcome.covered)
 
     def _settle_parity(self, ok: bool, reason: str, exit_code: int, covered: int) -> None:
         end_ns, end_ms = self._stamp("end", PARITY_ID, self._label)
@@ -513,7 +537,8 @@ class Runner:
         self._internal = True
         reason = f"internal error: {text}"
         if row_id == PARITY_ID:
-            self._parity_end([reason])
+            covered = self._toolchain.tool_count() - 1  # as a one-reason failure always counted
+            self._parity_end(Outcome(reasons=(reason,), covered=covered, taken=0, taken_from=""))
             return
         live = self._running[row_id]
         live.group.signal(signal.SIGKILL)

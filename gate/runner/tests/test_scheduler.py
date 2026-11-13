@@ -7,6 +7,7 @@ from unittest import mock
 
 from gate.runner import clock, scheduler
 from gate.runner.tests import support
+from gate.toolchain import parity
 
 
 class Rendezvous(support.GateTest):
@@ -364,7 +365,7 @@ class Crash(support.GateTest):
         self.assertIn("planted executor bug", self.reason("a"))
 
     def test_a_parity_crash_is_an_internal_error(self):
-        def boom(env, *, full_tree, spawn, scratch):
+        def boom(env, *, full_tree, spawn, scratch, run_id, handoff_in):
             raise RuntimeError("planted parity bug")
 
         self.toolchain.parity = boom
@@ -372,6 +373,59 @@ class Crash(support.GateTest):
             result = self.run_rows([self.row("a")])
         self.assertEqual(result.exit_code, 2)
         self.assertIn("planted parity bug", self.reason("parity"))
+
+
+class ParityHandoff(support.GateTest):
+    """The runner's side of the parity hand-off (proof-world speed-up design note §3.3; owner, 2026-11-14, the
+    speed-up's design reviews, decisions 2-3): the reuse is named in the parity reason, never on a failure, and the
+    hand-off is given to parity only at the full-tree tiers."""
+
+    OUTER = "20261114T000000Z-aaaaaa"
+
+    def parity_record(self) -> tuple[str, str, int]:
+        record = self.record("lint", "parity")
+        return record["verdict"], record["reason"], record["covered"]
+
+    def test_a_pass_with_nothing_taken_reads_covered_n(self):
+        self.assertEqual(self.run_rows([self.row("a")]).exit_code, 0)
+        self.assertEqual(self.parity_record(), ("pass", "covered 5", 5))
+
+    def test_a_pass_with_taken_trees_reads_covered_n_and_the_run(self):
+        self.toolchain.taken, self.toolchain.taken_from = 3, self.OUTER
+        result = self.run_rows([self.row("a")])
+        self.assertEqual(result.exit_code, 0)
+        want = f"covered 5; 3 trees taken from run {self.OUTER}"
+        self.assertEqual(self.parity_record(), ("pass", want, 5))
+        line = next(x for x in result.summary.splitlines() if " parity " in x)
+        self.assertEqual(line.split(" | ", 4)[4], want)
+
+    def test_a_failure_reason_never_carries_the_taken_suffix(self):
+        reason = "go: tree differs: run make clean-tools tools"
+        self.toolchain.reasons = [reason]
+        self.toolchain.taken, self.toolchain.taken_from = 4, self.OUTER
+        self.assertEqual(self.run_rows([self.row("a")]).exit_code, 1)
+        self.assertEqual(self.parity_record(), ("fail", reason, 4))
+
+    def test_a_hand_off_fault_covers_nothing(self):
+        # CA-L4: the fault is parity's one reason, and no tool was checked, so the record covers none (not 4).
+        reason = "parity: tree hand-off /h/handoff.json: not a regular file"
+        self.toolchain.parity = lambda env, **kw: parity.Outcome(reasons=(reason,), covered=0, taken=0, taken_from="")
+        self.run_rows([self.row("a")])
+        self.assertEqual(self.parity_record(), ("fail", reason, 0))
+
+    def test_the_hand_off_is_given_only_at_full_tree(self):
+        path = os.path.join(self.root, "outer", "parity", "handoff.json")
+        for tier in ("T0", "T1", "T2", "T3", "T4", "nightly"):
+            with self.subTest(tier=tier):
+                self.toolchain.handoffs.clear()
+                run_dir = os.path.join(self.root, f"run-{tier}")
+                self.run_rows([self.row("a")], tier=tier, run_dir=run_dir, parity_handoff=path)
+                want = path if tier in scheduler.FULL_TREE_TIERS else None
+                self.assertEqual(self.toolchain.handoffs, [(support.RUN_ID, want)])
+
+    def test_no_hand_off_is_given_when_the_run_has_none(self):
+        self.run_rows([self.row("a")], tier="T4")
+        self.assertEqual(self.toolchain.handoffs, [(support.RUN_ID, None)])
 
 
 class LawDelta(support.GateTest):

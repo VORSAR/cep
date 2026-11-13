@@ -5,15 +5,18 @@ cache, and nothing here runs a binary that resolves outside its own tool directo
 """
 
 import contextlib
+import json
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from gate.runner import records
 from gate.toolchain import manifest
 from gate.toolchain.manifest import Tool
 
@@ -103,6 +106,18 @@ SLOWEST_PARITY_S: float = max(PARITY_MEASURED_S.values())
 TREE_CAP_S: float = 120
 TREE_GRACE_S = 5  # after the cap's KILL, how long to wait for the child to be reaped before giving up on it
 TREE_UNREADABLE = 3  # treehash.UNREADABLE: the child could not read the tree (an OSError), the one damaged-tool exit
+DETAILS = "--details"  # treehash.DETAILS: the child's second form, each root's realpath and details
+
+# The tree hand-off (proof-world speed-up design note §3.4-§3.5; owner, 2026-11-14, the speed-up's measurement,
+# decision 2, and its design reviews, decisions 2-3): a full-tree check whose every tool passed lists the trees it
+# hashed in its scratch (the run's parity/), and a nested run given that file with --parity-handoff takes a tree
+# without hashing it only when its name, realpath, this run's own pin and a fresh details digest all match.
+HANDOFF = "handoff.json"
+HANDOFF_MAX = 64 * 1024  # bytes: six tools take about 1 KiB
+HANDOFF_SCHEMA = 1
+DETAILS_FORMAT = 1  # manifest.tree_details's line format
+_HANDOFF_KEYS = frozenset({"details_format", "run_id", "schema", "tools"})
+_ENTRY_KEYS = frozenset({"details", "home", "name", "tree_sha256"})
 
 
 class TreeCapExceeded(OSError):
@@ -129,6 +144,34 @@ class TreeChildFailed(OSError):
         super().__init__(f"the tree child exited {code}" + (f": {first_line}" if first_line else ""))
         self.code = code
         self.first_line = first_line
+
+
+class HandoffFault(Exception):
+    """The hand-off given is not one parity reads: unopenable, not a regular file, too large, not canonical JSON, or
+    outside its grammar. Parity fails naming it, before any tool is checked (design note §3.5, QB-S10)."""
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """A check's result (design note §3.3). The runner's parity reason is the reasons joined, or `covered <n>` and,
+    when trees were taken, `; <taken> trees taken from run <taken_from>`."""
+
+    reasons: tuple[str, ...]  # one per failing tool or a single hand-off fault; () means pass
+    covered: int  # tools that passed (a hand-off fault: 0) — CA-L4
+    taken: int  # trees taken from the hand-off (0 when none was given or none matched)
+    taken_from: str  # the hand-off's run id when taken > 0, else ""
+
+
+@dataclass(frozen=True)
+class Entry:
+    """One tool of a hand-off: the tree an earlier check hashed, as its child resolved and read it before the hash,
+    and the run that wrote it."""
+
+    name: str
+    home: str  # the realpath the tree child resolved
+    tree_sha256: str
+    details: str
+    run_id: str
 
 
 type Spawn = Callable[..., subprocess.Popen[bytes] | None]
@@ -217,6 +260,23 @@ def _capped(
         return f.read().decode("utf-8", errors="replace")
 
 
+def tree_details_of(
+    homes: Sequence[str], *, spawn: Spawn, env: Mapping[str, str], scratch: str
+) -> list[tuple[str, str]]:
+    """Each home's realpath and details digest, in order, from one capped child (CA-L2, QB-S9):
+    `[*TREE_CHILD, "--details", *homes]` started through `spawn` with TREE_CAP_S as its cap (both read now), its
+    output in `<scratch>/details.out` and `.err`. Raises as tree_digest does. A child that printed other than two
+    lines per home gives ("", "") for every home, which matches no entry: each is then hashed for real."""
+    command = [*TREE_CHILD, DETAILS, *homes]
+    out = os.path.join(scratch, "details.out")
+    err = os.path.join(scratch, "details.err")
+    text = _capped(command, spawn=spawn, env=env, out=out, err=err, cap=TREE_CAP_S, name="details")
+    lines = text.removesuffix("\n").split("\n")
+    if len(lines) != 2 * len(homes):
+        return [("", "")] * len(homes)
+    return [(lines[2 * i], lines[2 * i + 1]) for i in range(len(homes))]
+
+
 @dataclass(frozen=True)
 class Timing:
     """How long a version probe may run. Time only breaks a hang: a version line takes milliseconds.
@@ -229,6 +289,17 @@ class Timing:
     wait: Callable[[subprocess.Popen, float], int] = subprocess.Popen.wait
 
 
+@dataclass(frozen=True)
+class Tree:
+    """Where the tree children start and write: the spawner, the run's clean env and the scratch directory; and
+    `listed`, each tree hashed for real that matched its pin, as the hand-off lists it (design note §3.4)."""
+
+    spawn: Spawn
+    env: Mapping[str, str]
+    scratch: str
+    listed: list[dict[str, str]] = field(default_factory=list)
+
+
 def check(
     tools: list[Tool],
     cache: str,
@@ -237,8 +308,10 @@ def check(
     full_tree: bool,
     spawn: Spawn,
     scratch: str,
-) -> list[str]:
-    """Check every tool; return one reason per failing tool, in tools.json order ([] means pass).
+    run_id: str,
+    handoff_in: str | None,
+) -> Outcome:
+    """Check every tool; the outcome holds one reason per failing tool, in tools.json order (none means pass).
 
     Per tool, short-circuit in order: not installed → path (shutil.which(command) under env["PATH"],
     realpath-compared) → version (version_argv run in `env`, first stdout line exact) → sha256 of every
@@ -249,8 +322,25 @@ def check(
     The tree hash runs in a child per tool started through `spawn` (the runner passes its parity group's spawn,
     so a stop ends it), its output in `scratch` (the runner's run directory's parity/). Both are required (design
     §10 C8; CA-L1): a default would let a caller run the tree child outside the parity group, where no stop reaches it.
+
+    At full tree (proof-world speed-up design note §3.4-§3.5): `handoff_in`, when given, is read first, and a fault
+    in it fails parity alone, naming it. A tool whose entry matches its name, this run's own pin and its home's
+    realpath is a candidate; one capped details child reads every candidate, and each whose realpath and details
+    match its entry is taken, with no tree child. Every other tool is hashed for real. When every tool passed and at
+    least one tree was hashed, `<scratch>/handoff.json` lists those, naming `run_id`. Below full tree the hand-off is
+    never read and none is written. Both are required too: a default would drop the run's id or a hand-off silently.
     """
-    return _check(tools, cache, env, full_tree=full_tree, timing=Timing(), spawn=spawn, scratch=scratch)
+    return _check(
+        tools,
+        cache,
+        env,
+        full_tree=full_tree,
+        timing=Timing(),
+        spawn=spawn,
+        scratch=scratch,
+        run_id=run_id,
+        handoff_in=handoff_in,
+    )
 
 
 def _check(
@@ -262,28 +352,168 @@ def _check(
     timing: Timing,
     spawn: Spawn,
     scratch: str,
-) -> list[str]:
+    run_id: str,
+    handoff_in: str | None,
+) -> Outcome:
+    entries: dict[str, Entry] = {}
+    if full_tree and handoff_in is not None:
+        try:
+            entries = _read_handoff(handoff_in)
+        except HandoffFault as e:
+            return Outcome(reasons=(f"parity: tree hand-off {handoff_in}: {e}",), covered=0, taken=0, taken_from="")
     goos, goarch = manifest.platform_key().split("-")
     python = next((tool for tool in tools if tool.name == manifest.GATE_PYTHON), None)
-    reasons = []
+    homes = [manifest.tool_home(cache, tool) for tool in tools]
     with tempfile.TemporaryDirectory(prefix="gate-parity-") as probes:
-        tree = Tree(spawn=spawn, env=env, scratch=scratch)
-        for tool in tools:
-            home = manifest.tool_home(cache, tool)
-            if not os.path.isdir(home):
-                reasons.append(f"{tool.name}: not installed: run make tools")
-                continue
-            want = tool.version_line.replace("{goos}", goos).replace("{goarch}", goarch)
-            if tool.kind == manifest.PYTHON_PACKAGE:
-                first = _package_path_failure(tool, home) or _import_failure(
-                    tool, home, want, python, cache, env, probes, timing
-                )
-            else:
-                first = _path_failure(tool, home, env) or _version_failure(tool, home, want, env, probes, timing)
-            reason = first or _hash_failure(tool, home) or (_tree_failure(tool, home, tree) if full_tree else None)
-            if reason is not None:
-                reasons.append(reason)
-    return reasons
+        firsts = [
+            _first_failure(tool, home, goos, goarch, python, cache, env, probes, timing)
+            for tool, home in zip(tools, homes, strict=True)
+        ]
+    tree = Tree(spawn=spawn, env=env, scratch=scratch)
+    taken: set[int] = set()
+    if full_tree:
+        candidates = [
+            i
+            for i, (tool, home) in enumerate(zip(tools, homes, strict=True))
+            if firsts[i] is None and _matches(entries.get(tool.name), tool, os.path.realpath(home))
+        ]
+        taken = _taken(candidates, [homes[i] for i in candidates], [entries[tools[i].name] for i in candidates], tree)
+    reasons = []
+    for i, (tool, home) in enumerate(zip(tools, homes, strict=True)):
+        reason = firsts[i]
+        if reason is None and full_tree and i not in taken:
+            reason = _tree_failure(tool, home, tree)
+        if reason is not None:
+            reasons.append(reason)
+    if not reasons and tree.listed:
+        _write_handoff(scratch, run_id, tree.listed)
+    taken_from = next(iter(entries.values())).run_id if taken else ""
+    return Outcome(reasons=tuple(reasons), covered=len(tools) - len(reasons), taken=len(taken), taken_from=taken_from)
+
+
+def _first_failure(
+    tool: Tool,
+    home: str,
+    goos: str,
+    goarch: str,
+    python: Tool | None,
+    cache: str,
+    env: Mapping[str, str],
+    probes: str,
+    timing: Timing,
+) -> str | None:
+    """Every check before the tree hash, short-circuit in order: installed, path, version, exec_sha256."""
+    if not os.path.isdir(home):
+        return f"{tool.name}: not installed: run make tools"
+    want = tool.version_line.replace("{goos}", goos).replace("{goarch}", goarch)
+    if tool.kind == manifest.PYTHON_PACKAGE:
+        first = _package_path_failure(tool, home) or _import_failure(
+            tool, home, want, python, cache, env, probes, timing
+        )
+    else:
+        first = _path_failure(tool, home, env) or _version_failure(tool, home, want, env, probes, timing)
+    return first or _hash_failure(tool, home)
+
+
+def _matches(entry: Entry | None, tool: Tool, real: str) -> bool:
+    """A candidate to take: an entry for this tool, at this run's own pin, for the tree its home resolves to now."""
+    return entry is not None and entry.tree_sha256 == tool.tree_sha256 and entry.home == real
+
+
+def _taken(candidates: list[int], homes: list[str], entries: list[Entry], tree: Tree) -> set[int]:
+    """The candidates whose fresh details, from one capped child, match their entries; none if that child failed."""
+    if not candidates:
+        return set()
+    try:
+        read = tree_details_of(homes, spawn=tree.spawn, env=tree.env, scratch=tree.scratch)
+    except TreeStopped, OSError:  # every candidate is hashed for real, and a stop names itself there
+        return set()
+    return {
+        i
+        for i, entry, (real, details) in zip(candidates, entries, read, strict=True)
+        if real == entry.home and details == entry.details
+    }
+
+
+def _read_handoff(path: str) -> dict[str, Entry]:
+    """The hand-off's entries by tool name, read once (design note §3.5); HandoffFault names what is wrong.
+
+    Opened without blocking and without following a link, as manifest.sha256_file does, and refused unless it is a
+    regular file of at most HANDOFF_MAX bytes: a FIFO planted at the path would otherwise block parity for ever.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as e:
+        raise HandoffFault(e.strerror or str(e)) from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise HandoffFault("not a regular file")
+        data = b""
+        while len(data) <= HANDOFF_MAX:
+            chunk = os.read(fd, HANDOFF_MAX + 1 - len(data))
+            if not chunk:
+                break
+            data += chunk
+    except OSError as e:
+        raise HandoffFault(e.strerror or str(e)) from None
+    finally:
+        os.close(fd)
+    if len(data) > HANDOFF_MAX:
+        raise HandoffFault(f"larger than {HANDOFF_MAX} bytes")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HandoffFault("not UTF-8") from None
+    try:
+        doc = json.loads(text)
+        canonical = records.json_bytes(doc) == data
+    except ValueError, RecursionError:
+        raise HandoffFault("not JSON") from None
+    if not canonical:
+        raise HandoffFault("not canonical JSON")
+    return _entries(doc)
+
+
+def _entries(doc: object) -> dict[str, Entry]:
+    if type(doc) is not dict or doc.keys() != _HANDOFF_KEYS:
+        raise HandoffFault(f"keys must be {', '.join(sorted(_HANDOFF_KEYS))}")
+    for key, want in (("schema", HANDOFF_SCHEMA), ("details_format", DETAILS_FORMAT)):
+        if type(doc[key]) is not int or doc[key] != want:
+            raise HandoffFault(f"{key} must be {want}, not {doc[key]!r}")
+    run_id = doc["run_id"]
+    if type(run_id) is not str or not records.RUN_ID.fullmatch(run_id) or run_id in (".", ".."):
+        raise HandoffFault(f"run_id {run_id!r} is not a run id")
+    if type(doc["tools"]) is not list:
+        raise HandoffFault("tools must be a list")
+    entries: dict[str, Entry] = {}
+    for i, item in enumerate(doc["tools"]):
+        where = f"tools[{i}]"
+        if type(item) is not dict or item.keys() != _ENTRY_KEYS:
+            raise HandoffFault(f"{where} keys must be {', '.join(sorted(_ENTRY_KEYS))}")
+        name, home = item["name"], item["home"]
+        if type(name) is not str:
+            raise HandoffFault(f"{where} name must be a string")
+        if name in entries:
+            raise HandoffFault(f"{where} name {name!r} is listed twice")
+        if type(home) is not str or not os.path.isabs(home):
+            raise HandoffFault(f"{where} home must be an absolute path")
+        for key in ("tree_sha256", "details"):
+            if type(item[key]) is not str or not manifest._DIGEST.fullmatch(item[key]):
+                raise HandoffFault(f"{where} {key} must be 64 lowercase hex digits")
+        entries[name] = Entry(name, home, item["tree_sha256"], item["details"], run_id)
+    return entries
+
+
+def _write_handoff(scratch: str, run_id: str, listed: Sequence[Mapping[str, str]]) -> None:
+    """`<scratch>/handoff.json`, canonical, read-only before it takes its name (QB-L3): a reader sees it whole or
+    not at all. Exclusive creation: nothing planted at the temporary name is followed or reused."""
+    doc = {"details_format": DETAILS_FORMAT, "run_id": run_id, "schema": HANDOFF_SCHEMA, "tools": list(listed)}
+    path = os.path.join(scratch, HANDOFF)
+    tmp = f"{path}.tmp"
+    with open(tmp, "xb") as f:
+        f.write(records.json_bytes(doc))
+    os.chmod(tmp, 0o444)
+    os.rename(tmp, path)
 
 
 def _inside(resolved: str, home: str) -> bool:
@@ -397,18 +627,9 @@ def _hash_failure(tool: Tool, home: str) -> str | None:
     return None
 
 
-@dataclass(frozen=True)
-class Tree:
-    """Where the tree children start and write: the spawner, the run's clean env and the scratch directory."""
-
-    spawn: Spawn
-    env: Mapping[str, str]
-    scratch: str
-
-
 def _tree_failure(tool: Tool, home: str, tree: Tree) -> str | None:
     try:
-        digest = tree_digest(home, spawn=tree.spawn, env=tree.env, scratch=tree.scratch, name=tool.name).digest
+        result = tree_digest(home, spawn=tree.spawn, env=tree.env, scratch=tree.scratch, name=tool.name)
     except TreeStopped:
         return f"{tool.name}: stopped before the tree hash"
     except TreeCapExceeded as e:  # a slow disk is not a damaged tool: clean-tools would not help (DA-S13e)
@@ -419,7 +640,13 @@ def _tree_failure(tool: Tool, home: str, tree: Tree) -> str | None:
         if e.code != TREE_UNREADABLE:
             line = f": {e.first_line}" if e.first_line else ""
             return f"{tool.name}: tree hash failed (exit {e.code}){line}"
-        digest = ""
+        result = NO_RESULT
     except OSError:
-        digest = ""
-    return None if digest == tool.tree_sha256 else f"{tool.name}: tree differs: {RECOVER}"
+        result = NO_RESULT
+    if result.digest != tool.tree_sha256:
+        return f"{tool.name}: tree differs: {RECOVER}"
+    # The home is the realpath the child resolved and hashed, never what the link names now (QB-S9).
+    tree.listed.append(
+        {"details": result.details, "home": result.real, "name": tool.name, "tree_sha256": result.digest}
+    )
+    return None
