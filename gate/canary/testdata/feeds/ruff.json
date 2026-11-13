@@ -1,0 +1,512 @@
+[
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:4ffadabec5c5fee1ddb2eecac0787ffe6fa18c665b73da9258b84211f40c5829",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:7d261fc981a784668e19e9fa6ad437bfd95b67f2dc263fc1eab87d54d72fcc90",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.17.5"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.4/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:6ef8b3a7fd5294f5e8384ceb29784a6f5657da0853824312b1d2cef53aef17af",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.4/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:3ab2b34aeacdbc1ea5c529cdbda3e05792633d587228123fd09f3b5a0facb27a",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.17.4"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:118f7121aa838785672bf612487f755a89108bb5f44e0f3df96c5967a72614f9",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:2b0890f5a55900af741f133918c2656919bbf18c2ab7741b4ca8403a90e647a9",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.17.3"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:94fbca85f19e8b6bb068adb7cbc9a74e3e6c01004cc67c6b00246a094ad4ccd9",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:7b2e6a6e132ecf7b5fe726163b186d5d209befe93bb25f83767b2d97fbdf14e5",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.17.2"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:1c8e6e36538eaa0b996378a20c226403c4ca6369ac24884751b024d3a9530b86",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:a293ac937715ae6fb6b64da86761598379e6149f40fbc00fde9ba8a2a562ac65",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.17.1"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.0/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:59afe64c227e5f9a39d85c4d6be6e2d8e9a85c55f0887baad9c9e2f775a1c119",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.17.0/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:c94fc1dc71f054d06d9f1149442dcb471516aa2b7d4b7e8124e05d082d4c91d3",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.17.0"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.10/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:f051cd306de2691262a0574f8857cd1f4d6bfcd448084ea23d61b9c1c37df510",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.10/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:9567ff1201e2fb3da31ff04c35587d768c66d6cb42dfa84de474e2bfe360b608",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.10"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.9/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:33d35394499094cf6eb90f730dc82f11c0fab05d176378ae4f67de985ecc4146",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.9/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:1bfbb819b5d4f9af501748862276b60e412d336034d99387691a4d4bce7a6f13",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.9"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.8/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:0ffa53899f2970d24f14fbed8d8265c87180b159b7100794d97a1527dc60fa79",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.8/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:c4a8c7c152532bcb7e7ede4bd6ccd440dcacddffcdcdd79b90090ac6021f41c2",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.8"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.7/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:80221a5e0b1ae29262a74496f2ad1380c1ab52b3edd8cee13ec76d8acff406ca",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.7/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:73894c7b7c9a53fd66ed715eb3a1ec65077f316328e377057a98bdb7fcba0326",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.7"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:77513748c833b435b82453ba20e07db808ef6c5121945ede80a6cf21bee468a4",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:0696335ef16615d8c7445ad438750eb0f55b3da6f153df21265a7c6d5750254f",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.6"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.5/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:ed142f8656e0092828c103dd058b55b871c88e13a801cade8f860d8a9ca8943e",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.5/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:65b8bae7e43f12a91b71036a52176012b3aefb725d5ae263e2771474110a0983",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.5"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:b4ad832b7734592aa1c6710dbc15277ed9d3d54c8bd44bb25bb7b14ae9098b88",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:9cb1234804ddb0f7f57cef3f81623ce5acb990e40af7cce08dc7778c9d7ee96c",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.4"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.3/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:136a4db6512d9b16dda56ac8604696ed65c3b1a914a142de029e7f8d5006f1d9",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.3/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:7ab3b978d2c0b1c96b2323d4e5c4f35284ae1cdf35d2f7399595c74c805f5fa3",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.3"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.2/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:fbf6cbc23d254b0bc03a6fb2b1b04efb917fe5ce068d027e735ce7ed65b9bed6",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.2/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:3d2c355e641ceb5b608a158c603768fcc908c5009c56c6e78da7487da033b92a",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.2"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.1/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:a8df4e8e9f22e3b0ae0b9f165ddaafb7e34df692197a6c1a361e7426f90681d5",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.1/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:7e1cc9b3da4911bb2c98c076302fd8997d822fac74dd8f1e30371701e70a4c56",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.1"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.0/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:ce6564491a2cc4b0659f45ee174dbef17e4dec24e03a9c03d313b5430bc21099",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.16.0/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.16.0"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.22/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:a2881af26fd1d19f4932c4ddf1e70b4e0efcf48513c5dae082564e03f0b467a3",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.22/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:d535a4be6504146e757eff67b992f11a293a7a108be22e2a5898b32c32565996",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.22"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:0452f9d5da6e8051d332cf21ae82a608d8e2cfeec5a71a46ffa9e50adbb2381d",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.21/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:7ddba1886f39ba918587f9ca37de9651008726834811c19ee83991705bd3e56b",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.21"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.20/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:cb41c48690c113dc08470e64103ce65ca15249c6ce3495d3ac792b329a83e8c1",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.20/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:df8e74862d4cd4fdac11faf3048789896ff9898a0cacb98497df20d0a1cc7bb4",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.20"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.19/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:c7253342f2ffbe2a0eaadaacd3424c3a24331b0307e57cc54031bc7ccd35d83a",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.19/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:0bfabff71f317e0e3b8c363043b888f045eff092073d5d9bd0ac7f8ede465711",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.19"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:f0cc66c2df37f2a11c99a85b59b8fde21b37f61df062404a0afaed387b56dad0",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.18/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:1ffb1d5e04e60347be17c514cbb19303d6d8c75f629060ed481a150337dbf060",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.18"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.17/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:81f372886fb7a0056949356c615fa689a091cf79b0b54ed914c810cdbc6d85e9",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.17/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:7bca4641db4b0256d20f3a8c38057725e0982965639f5f9a0fb2f9aece4b7c4f",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.17"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.16/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:9deb6c4c38c9324bfd98ea4efb40946aae99a987e7f9d1308a1291f14f6b46e2",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.16/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:b949a853b208b0f818a150fb06490487db585a15becaeda28483dd662939030a",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.16"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.15/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:2f7063e09d3c2af019b56f4fc6548199851e9387f359d696111af312adfe7619",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.15/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:2c50f95a0f553731c87f8dc413465aa06059a0dc21dfe16786682db95ffeb9dc",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.15"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.14/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:953243859467ed3f4f2bc6c11e241cd42a11ed42605b33d971dc2b174772da7d",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.14/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:e9fe1bb63fb8950cf8596d069f5c61b5a962bdd6c75edbdd2c8320871c40d6dd",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.14"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.13/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:66ab3abeeba319266612e675dfbe0ca9c63f1e5f6ca3c6174482b0b088b8f6ff",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.13/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:fd09d74c60963714b9b0fbda226c669e85624e5a8488398b3e0d0b5ee7684dd1",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.13"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:bd59107e125f9c9f64a75be13b6ff21bf7cbc61c4b9529bbb75c8184e3dd6c3c",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:5e26a7811f7db364864ace00cced53003556a37b63f3c987e340b18207776f1c",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.12"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.11/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:89cd4370b5c5d7ab01f436bd5d878293c9858e4e964a3da3013c49549198dc8b",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.11/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:8018f4c746c98e3a4128295c5da294d8b04c2bb14e1868e2da6fd02faf93ebe4",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.11"
+ },
+ {
+  "assets": [
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.10/ruff-aarch64-apple-darwin.tar.gz",
+    "digest": "sha256:77c1df502dcfaaec52c6ce203b504b8554c88ab66ac01313410fa68ad9aafd5b",
+    "name": "ruff-aarch64-apple-darwin.tar.gz"
+   },
+   {
+    "browser_download_url": "https://github.com/astral-sh/ruff/releases/download/0.15.10/ruff-x86_64-unknown-linux-gnu.tar.gz",
+    "digest": "sha256:e3e9e5c791542f00d95edc74a506e1ac24efc0af9574de01ab338187bf1ff9f6",
+    "name": "ruff-x86_64-unknown-linux-gnu.tar.gz"
+   }
+  ],
+  "draft": false,
+  "prerelease": false,
+  "tag_name": "0.15.10"
+ }
+]
