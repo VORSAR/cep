@@ -19,6 +19,8 @@ The full draft is [s1-1c-3-plan-check.md](s1-1c-3-plan-check.md), drafted read-o
 
 **During the build — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--during-s11c-3s-build)): SPEC §4.4's template written with ⟨⟩ placeholders (1); E-PART-001's and E-PART-002's fix texts kept word for word, the placeholder table learning two notations instead (2).
 
+**The owner's check (G4) — the owner, 2026-11-13: passed** ("pass"), on the coordinator's runs at 02f32e8 (the incident sentence red three ways; a planted overdue known issue red in `aging`; a stop during parity ended in 0.04 s) and the LAW Δ block read.
+
 **Review and break-it — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--s11c-3s-review-and-break-it); all eight as recommended): one batched fix round, blockers, should-fix and the cheap later items (1); the generic message names only what comes next (2); `-> and S[…]` gets E-PAT-005 (3); SPEC §4.4's `from ⟨body⟩` (4); table-driven proof cases a named residue (5); the tree-hash cap known issue S1.1c-3-3, forwarded to S1.1c-4 (6); go fences a named residue (7); the test-only import edge confirmed (8).
 
 **G0 — the owner, 2026-11-12:** "main is green on c87942d" — the dependency (the Go 1.27.4 bump, PR #37) merged with main's CI green; the card was written from the owner's plan-check answers the same day.
@@ -98,15 +100,16 @@ Entry (G0)   ☑ card complete and approved (written from the owner's plan-check
              ☑ fits the cap, lanes ≤ 8 days (≈ 8.25; lanes B ≈ 5.5, E2 ≈ 2.75)
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-12)
              ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
-             ☐ conformance cases for every construct shipped or changed
-             ☐ tests on the real code ☐ every breaker's red test committed
-Review (G3)  ☐ architecture review of the combined diff: no drift
-             ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 strict-gate / CI exit 0, run complete ☐ owner's check passed
-             ☐ every acceptance line met by its named proof
+Design (G1)  ☑ architecture + the-fool findings resolved ☑ QA testability findings resolved (design §9, §10)
+             ☑ owner decisions recorded (2026-11-12, design) ☑ ADRs: ADR-0015 §3.6 annotated
+Build (G2)   ☑ every lane at T2 (its own scope; the other lane's reds only) ☑ T3 combine-check exit 0 (c78c2cb; 02f32e8)
+             ☑ conformance cases: n/a (no construct shipped or changed; the -> and not counter-example added)
+             ☑ tests on the real code ☑ every breaker's red test committed (127cd17..5826cf4)
+Review (G3)  ☑ architecture review of the combined diff (1 blocker, fixed; drift placed)
+             ☑ QA break-it run ☑ every finding fixed, forwarded or decided (the findings table; owner, 2026-11-13)
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (02f32e8) ☑ owner's check passed (2026-11-13)
+             ☑ every acceptance line met by its named proof (lines 1–6: the fragment tests red first; the contract,
+               29 invalid files, the differential at 74; test_aging_planted; BA10's red tests; QB10's; T4 with proofs 37)
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main CI green on the merge commit
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
