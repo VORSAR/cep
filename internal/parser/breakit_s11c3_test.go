@@ -192,3 +192,23 @@ func TestBreakitInvalidMarkerAtAWrongKind(t *testing.T) {
 		t.Errorf("BK-L3: a span valid at another kind, marked cep-invalid at a kind it fails at, passes as documented-invalid: %q", md)
 	}
 }
+
+// BK-S7: a span whose keywords are written in capitals is not rule-like (the detector counts lowercase keywords
+// only), so it needs no marker and is never parsed, though the language refuses it (E-KW-002, "keywords are
+// lowercase"); and the incident's shape is matched in lowercase only, so `-> AND NOT` passes everywhere. A doc
+// quoting SQL-style capitals shows a reader a rule that does not parse, and the incident in capitals.
+func TestBreakitCapitalKeywordsEscapeTheDetector(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, md, want string }{
+		{"capital keywords", "Write `FROM S[x == 1] SELECT a INSERT INTO Out` for a filter.\n", "mark its kind"},
+		{"the incident in capitals", "Write `EVERY a = A -> AND NOT B[x == 1] FOR 5 MIN` for an absence.\n", "-> before and/not"},
+		{"the incident in capitals, prose", "Write EVERY a = A -> NOT B[x == 1] FOR 5 MIN for an absence.\n", "-> before and/not"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			if f := breakitFaults(c.md); !breakitHas(f, c.want) {
+				t.Errorf("BK-S7: %s gives no %q fault: %q -> %q", c.name, c.want, c.md, f)
+			}
+		})
+	}
+}
