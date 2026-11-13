@@ -1,6 +1,7 @@
 """The weekly canary's sort (S1.1c-4 design §4.5; review DQ-S8): each red record of the T4 jobs run on the candidate
-tools.json is either "pins to update" — every failure in it is a known pin test failing on its pin, and the candidate
-has no structural fault — or a break, named. Pure: the workflow's command reads the files and calls these.
+tools.json is either "pins to update" — every failure in it is a known pin test failing on its pin, the row is red by
+its own exit code (not a timeout, a kill or a leak; break-it BK-S3), and the candidate has no structural fault — or a
+break, named. Pure: the workflow's command reads the files and calls these.
 
 pin_tests.json (lane F1 writes it): {"schema": 1, "note": "…", "entries": [{"id": "<test id or a non-test red's
 name>", "row": "<registry row id>", "pattern": "<Python regex searched in the failure text>", "measured": "<date,
@@ -17,6 +18,7 @@ from gate.canary.candidate import CanaryError
 FILE = "pin_tests.json"
 SCHEMA = 1
 UNMEASURED = "unmeasured"
+EXIT_REASON = "exit "  # verdict.decide's reason for a row red by its own exit code: `exit N` or `exit N: …`
 _TOP_KEYS = frozenset({"schema", "note", "entries"})
 _ENTRY_KEYS = frozenset({"id", "row", "pattern", "measured"})
 _IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*")
@@ -40,24 +42,30 @@ def sort(
     unmeasured: Collection[str] = (),
 ) -> Sorted:
     """A red record is pins only when every failure in it is a test of `pin_tests` whose text its pattern finds
-    (re.search) and `structural` is empty; otherwise each failure no pattern found is a break, or, when all were
-    found, each failure of the record (a structural fault makes every pin a break). A red record with no failures read
-    is a break by its reason. An id in `unmeasured` is named so wherever it fails."""
+    (re.search), its reason is the exit-code kind and `structural` is empty; otherwise each failure no pattern found
+    is a break, or, when all were found and `structural` is not empty, each failure of the record (a structural fault
+    makes every pin a break). A red record with no failures read, or whose reason is not the exit-code kind, is a break
+    by its reason, and the pins it printed are not listed as pins. An id in `unmeasured` is named so wherever it
+    fails."""
     patterns = {test: re.compile(pattern) for test, pattern in pin_tests.items()}
     pins: set[str] = set()
     breaks: set[str] = set()
     for record in records:
         row = str(record["id"])
         failures = [_pair(row, failure) for failure in record.get("failures") or ()]
-        if not failures:
-            if record["verdict"] != "pass":
-                breaks.add(f"{row}: {_flat(str(record['reason']))}")
-            continue
+        reason = str(record["reason"])
+        # verdict.decide ranks a stop, a timeout, left-running processes, a kill by signal and a coverage fault above
+        # the row's exit code, so the failed lines such a row printed are not all that went wrong (break-it BK-S3).
+        by_reason = record["verdict"] != "pass" and (not failures or not reason.startswith(EXIT_REASON))
+        if by_reason:
+            breaks.add(f"{row}: {_flat(reason)}")
         unmatched = [(test, text) for test, text in failures if not _found(patterns, test, text)]
-        if not unmatched and not structural:
+        if unmatched:
+            breaks.update(_break_line(row, test, text, unmeasured) for test, text in unmatched)
+        elif structural:
+            breaks.update(_break_line(row, test, text, unmeasured) for test, text in failures)
+        elif not by_reason:
             pins.update(_pin_line(test, unmeasured) for test, _ in failures)
-            continue
-        breaks.update(_break_line(row, test, text, unmeasured) for test, text in unmatched or failures)
     return Sorted(tuple(sorted(pins)), tuple(sorted(set(structural))) + tuple(sorted(breaks)))
 
 

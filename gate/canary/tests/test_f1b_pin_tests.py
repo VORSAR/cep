@@ -34,7 +34,8 @@ def text(obj: object) -> str:
 
 
 def record(row: str, failures: list[list[str]]) -> dict:
-    return {"id": row, "job": "test", "verdict": "fail", "reason": "x", "failures": failures}
+    # verdict.decide's reason for a row red by its own exit code; any other reason is a break (break-it BK-S3).
+    return {"id": row, "job": "test", "verdict": "fail", "reason": "exit 1: x", "failures": failures}
 
 
 class LoadPinTests(unittest.TestCase):
