@@ -3,6 +3,7 @@
     gate/run.py --tier T0..T4 [--job NAME] [--run-dir DIR] [--registry PATH] [--commit SHA] [--run-id ID]
     gate/run.py summarize ...      (gate/runner/summarize.py)
     gate/run.py generate-ci        (gate/ci/generate.py)
+    gate/run.py fetch-vulndb       (gate/toolchain/vulndb_fetch.py: make vulndb)
 
 Exit 0: pass. Exit 1: the gate failed, or was interrupted. Exit 2: usage or internal error. The last two stdout
 lines are always `GATE PASSED|GATE FAILED` and `exit: <n>`: main catches everything, because an uncaught exception
@@ -171,6 +172,10 @@ def main(argv: list[str], *, deps: Deps | None = None) -> int:
             from gate.ci import generate
 
             return generate.main(argv[1:])
+        if argv[:1] == ["fetch-vulndb"]:
+            from gate.toolchain import vulndb_fetch
+
+            return vulndb_fetch.main(argv[1:], os.environ)
         return _run(argv, deps if deps is not None else default_deps())
     except (UsageError, registry.RegistryError, workers.WorkersError, manifest.ManifestError) as e:
         print(e)
