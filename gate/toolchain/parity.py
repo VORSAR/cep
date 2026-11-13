@@ -144,6 +144,19 @@ def popen(
         )
 
 
+@dataclass(frozen=True)
+class TreeResult:
+    """What the tree child prints for one home: the realpath it resolved once, that tree's details digest (read
+    before the hash) and its tree hash (proof-world speed-up design note §3.2)."""
+
+    real: str
+    details: str
+    digest: str
+
+
+NO_RESULT = TreeResult("", "", "")  # a child that printed fewer than three lines: it matches no pin
+
+
 def tree_digest(
     home: str,
     *,
@@ -153,9 +166,11 @@ def tree_digest(
     env: Mapping[str, str] | None = None,
     scratch: str | None = None,
     name: str = "tool",
-) -> str:
-    """The digest the tree child prints for `home`: `[*argv, home]` started through `spawn` (TREE_CHILD and
-    TREE_CAP_S when not given, read now), its output in `<scratch>/tree-<name>.out` and `.err`.
+) -> TreeResult:
+    """What the tree child prints for `home`: `[*argv, home]` started through `spawn` (TREE_CHILD and TREE_CAP_S when
+    not given, read now), its output in `<scratch>/tree-<name>.out` and `.err`. The three lines are read from the
+    end, so a realpath holding a newline is still read whole; fewer than three is NO_RESULT, which matches no pin, as
+    a garbled digest never did.
 
     Raises TreeStopped when `spawn` returns None, TreeStartFailed when it raises OSError, TreeCapExceeded past the cap
     (after killing the child's own process group, never through the runner's Group, which would refuse every later
@@ -169,28 +184,37 @@ def tree_digest(
             scratch = stack.enter_context(tempfile.TemporaryDirectory(prefix="gate-tree-"))
         out = os.path.join(scratch, f"tree-{name}.out")
         err = os.path.join(scratch, f"tree-{name}.err")
-        try:
-            proc = spawn(command, cwd=REPO, env=os.environ if env is None else env, stdout=out, stderr=err)
-        except OSError as e:
-            raise TreeStartFailed(str(e)) from e
-        if proc is None:
-            raise TreeStopped(name)
-        try:
-            code = proc.wait(timeout=cap)
-        except subprocess.TimeoutExpired:
-            # The leader is not reaped yet, so its group id is still its own; a group left with only a zombie answers
-            # EPERM on macOS, which means there is nothing left to kill.
-            with contextlib.suppress(ProcessLookupError, PermissionError):
-                os.killpg(proc.pid, signal.SIGKILL)
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.wait(timeout=TREE_GRACE_S)
-            raise TreeCapExceeded(cap) from None
-        if code != 0:
-            with open(err, "rb") as f:
-                first = f.read().split(b"\n", 1)[0].decode("utf-8", errors="replace").strip()
-            raise TreeChildFailed(code, first)
-        with open(out, "rb") as f:
-            return f.read().decode("utf-8", errors="replace").strip()
+        text = _capped(command, spawn=spawn, env=env, out=out, err=err, cap=cap, name=name)
+    lines = text.removesuffix("\n").rsplit("\n", 2)
+    return TreeResult(*lines) if len(lines) == 3 else NO_RESULT
+
+
+def _capped(
+    command: Sequence[str], *, spawn: Spawn, env: Mapping[str, str] | None, out: str, err: str, cap: float, name: str
+) -> str:
+    """Start one tree child through `spawn`, wait at most `cap`, and return its stdout; raise as tree_digest says."""
+    try:
+        proc = spawn(command, cwd=REPO, env=os.environ if env is None else env, stdout=out, stderr=err)
+    except OSError as e:
+        raise TreeStartFailed(str(e)) from e
+    if proc is None:
+        raise TreeStopped(name)
+    try:
+        code = proc.wait(timeout=cap)
+    except subprocess.TimeoutExpired:
+        # The leader is not reaped yet, so its group id is still its own; a group left with only a zombie answers
+        # EPERM on macOS, which means there is nothing left to kill.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=TREE_GRACE_S)
+        raise TreeCapExceeded(cap) from None
+    if code != 0:
+        with open(err, "rb") as f:
+            first = f.read().split(b"\n", 1)[0].decode("utf-8", errors="replace").strip()
+        raise TreeChildFailed(code, first)
+    with open(out, "rb") as f:
+        return f.read().decode("utf-8", errors="replace")
 
 
 @dataclass(frozen=True)
@@ -384,7 +408,7 @@ class Tree:
 
 def _tree_failure(tool: Tool, home: str, tree: Tree) -> str | None:
     try:
-        digest = tree_digest(home, spawn=tree.spawn, env=tree.env, scratch=tree.scratch, name=tool.name)
+        digest = tree_digest(home, spawn=tree.spawn, env=tree.env, scratch=tree.scratch, name=tool.name).digest
     except TreeStopped:
         return f"{tool.name}: stopped before the tree hash"
     except TreeCapExceeded as e:  # a slow disk is not a damaged tool: clean-tools would not help (DA-S13e)

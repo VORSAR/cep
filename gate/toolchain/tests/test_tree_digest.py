@@ -2,7 +2,7 @@
 DA-S13, DQ-S11, DQ-S12).
 
 The seam: `parity.TREE_CHILD` (the argv of the child that hashes one tool's tree), `parity.TREE_CAP_S` (how long it
-may run), both read when called; `parity.tree_digest(home, *, spawn, cap_s=None, argv=None) -> str` starts
+may run), both read when called; `parity.tree_digest(home, *, spawn, cap_s=None, argv=None) -> TreeResult` starts
 `[*argv, home]` through `spawn` and reads the digest the child prints; `parity.TreeCapExceeded(OSError)` past the
 cap, after the child's own process group is killed. `spawn` has the shape of the runner's `Group.spawn` (argv, then
 cwd, env, stdout and stderr by keyword; a Popen, or None once the group was signalled): the fake here accepts any
@@ -25,9 +25,13 @@ from gate.toolchain import parity
 from gate.toolchain.tests import support
 from gate.toolchain.tests.test_parity import RECOVER, ParityTest, write_file
 
-# A child that prints a fixed line, as the hashing child prints its digest.
+# A child that prints fixed lines, as the hashing child prints the realpath it hashed, its details and its digest
+# (proof-world speed-up design note §3.2); one whose realpath holds a newline, read from the end.
+REAL = "/the/real/home"
+DETAILS = "d0" * 32
 DIGEST = "c0" * 32
-PRINTS = f"import sys\nprint({DIGEST!r})\n"
+PRINTS = f"print({REAL!r})\nprint({DETAILS!r})\nprint({DIGEST!r})\n"
+PRINTS_NEWLINE = f"print('/a\\nb')\nprint({DETAILS!r})\nprint({DIGEST!r})\n"
 # A child that starts a grandchild in its own process group, writes both pids to the marker (argv[1]), then waits
 # on an event nothing sets. The grandchild does the same wait. Neither ever answers.
 BLOCKS = """import os, subprocess, sys, threading
@@ -96,15 +100,29 @@ class TreeDigest(ParityTest):
         with mock.patch.object(parity, "TREE_CHILD", planted):
             got = parity.tree_digest(home, spawn=spawn)
         self.assertEqual(spawn.argvs, [[*planted, home]])
-        self.assertEqual(got, DIGEST)
+        self.assertEqual(got, parity.TreeResult(real=REAL, details=DETAILS, digest=DIGEST))
 
     def test_an_argv_given_is_the_child_spawned(self):
         planted = child(os.path.join(self.world, "prints.py"), PRINTS)
         home = self.home("go")
         os.makedirs(home)
         spawn = Spawner(self)
-        self.assertEqual(parity.tree_digest(home, spawn=spawn, argv=planted), DIGEST)
+        self.assertEqual(parity.tree_digest(home, spawn=spawn, argv=planted), parity.TreeResult(REAL, DETAILS, DIGEST))
         self.assertEqual(spawn.argvs, [[*planted, home]])
+
+    def test_the_lines_are_read_from_the_end_so_a_realpath_may_hold_a_newline(self):
+        planted = child(os.path.join(self.world, "prints.py"), PRINTS_NEWLINE)
+        home = self.home("go")
+        os.makedirs(home)
+        got = parity.tree_digest(home, spawn=Spawner(self), argv=planted)
+        self.assertEqual(got, parity.TreeResult("/a\nb", DETAILS, DIGEST))
+
+    def test_a_child_that_printed_fewer_than_three_lines_matches_no_pin(self):
+        # A garbled answer is read as no digest at all, as a garbled digest always was: the tree differs.
+        planted = child(os.path.join(self.world, "prints.py"), f"print({DIGEST!r})\n")
+        home = self.home("go")
+        os.makedirs(home)
+        self.assertEqual(parity.tree_digest(home, spawn=Spawner(self), argv=planted), parity.TreeResult("", "", ""))
 
     def test_a_child_past_its_cap_is_killed_with_its_group_and_the_cap_named(self):
         # DQ-S12: the cap fires, the child's own process group is killed (never Group.signal), the error names it.
