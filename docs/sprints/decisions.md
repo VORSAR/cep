@@ -85,6 +85,7 @@
 | 2026-11-12 | [S1.1c-3's plan check](#owner-decisions-2026-11-12--s11c-3s-plan-check) |
 | 2026-11-12 | [S1.1c-3's design, after the reviews](#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews) |
 | 2026-11-13 | [during S1.1c-3's build](#owner-decisions-2026-11-13--during-s11c-3s-build) |
+| 2026-11-13 | [S1.1c-3's review and break-it](#owner-decisions-2026-11-13--s11c-3s-review-and-break-it) |
 
 ## The decisions
 
@@ -804,3 +805,16 @@ Two questions met while landing the corrections and markers on the integration b
 
 1. **SPEC §4.4's rule template is written with its placeholders in ⟨⟩** (as recommended; SPEC's own notation, as in `⟨rule-decl⟩`): `rule ⟨Name⟩`, `intent ⟨'one sentence'⟩`, `[partition by ⟨k⟩ of ⟨S⟩, … ttl ⟨D⟩]`, `[expect given ⟨…⟩ then ⟨…⟩]`, `[todo ⟨'open question'⟩]`, `select ⟨item⟩ [as ⟨name⟩], …`, `[output first every ⟨D⟩]`, `insert into ⟨Target⟩;` — meaning unchanged, and every line of the ```` ```text ```` fence stays checked (8 of its 12 lines were rule words only). Rejected: judging a text fence as a whole.
 2. **E-PART-001's and E-PART-002's fix texts users see stay word for word** (as recommended; decision 2 of "S1.1c-3's plan check" kept such texts): the two approved errors.md edits of those Fix lines are reverted — they are pinned verbatim to `internal/validate`'s catalogue, which the research's pinned-line list missed — and the fragment test's placeholder table learns two notations instead: a list continued with a bare `…` before `ttl`, and a clause shown with its leading comma. Rejected: changing the two diagnostics.
+
+### Owner decisions, 2026-11-13 — S1.1c-3's review and break-it
+
+The combined build (`s1-1c-3/integration` @ 523cc39; T2 and T3 exit 0, `proofs` alone PASS 37) was reviewed blind by the architect with the-fool ([review](../reviews/s1-1c-3-combined-architecture.md): 1 blocker, 5 should-fix, 7 later) and broken by QA ([break-it](../reviews/s1-1c-3-breakit-qa.md): 2 blockers, 7 should-fix, 4 later, each a committed red test on `s1-1c-3/breakit`). The coordinator re-ran the break-it's tests (11 Go, 4 Python red) and confirmed the shared blocker in the code (a failed binding sets `notation`, so an unknown placeholder made `text` legal). Eight questions; all as recommended.
+
+1. **One batched fix round: every blocker and should-fix fixed test-first, plus the cheap later items** (as recommended): `parity.check`'s `spawn` and `scratch` required; the finished tree child forgotten by the parity group; the parity-group cleanup on any early end of `run`; a `cep-invalid` span must fail at every kind; a doubled leading comma not bound away; `opened` dates taken in UTC. Two later items to the backlog: one source for the marker forms; checking that a validator entry's cited test exists. Rejected: blockers and should-fix only; blockers only.
+2. **The generic syntax message names only what comes next, in rule words** (as recommended): `unexpected token "x"; expected a duration` — the full grammar set dropped. Rejected: the full set made readable; leaving it as built.
+3. **`-> and S[…]` gets E-PAT-005 "a step must follow ->"** at the token after the `->`, like `-> ->` and a trailing `->` (as recommended; extends decision 4 of "S1.1c-3's design, after the reviews"). Rejected: leaving today's E-ORD-001.
+4. **SPEC §4.4's template line `from <body>` is written `from ⟨body⟩`** (as recommended; extends decision 1 of "during S1.1c-3's build"). Rejected: adding `<body>` to the placeholder table.
+5. **Table-driven Go test cases stay uncounted, a named residue** (as recommended): the fragment test's QA tables are law paths, so any edit is a LAW Δ line by file; counting their rows needs the teeth's case counter rebuilt (backlog). Rejected: building the counting now. *(This decision supplies the owner acceptance ADR-0015 §3.6's 2026-11-13 annotation, item (d), had claimed without one — review CA-S4.)*
+6. **The tree-hash cap stays 300 s and is re-sized in S1.1c-4** (as recommended): known issue S1.1c-3-3 forwarded to S1.1c-4, whose draft PR runs CI on both systems and reads cold parity times; item (f) leaves ADR-0015 §3.6's residue. Rejected: accepting the warm figures as residue.
+7. **Go code in a ```` ```go ```` fence is a named residue** (as recommended): it is not parsed as rule text; the `-> and not` shape is still checked there. Rejected: checking the Go snippets now.
+8. **The test-only import edge `internal/parser → internal/validate` is confirmed** (as recommended; the validator re-run of listed wrong examples; an external test package, no cycle); the rules file's note cites this decision. Rejected: moving the test into `internal/validate`.

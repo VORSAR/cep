@@ -87,7 +87,7 @@ rule ⟨Name⟩
                                      -- a key is one attribute, or two or more in brackets:
                                      -- (k, j) of S (rev 5); same number of parts on every
                                      -- stream (E-PART-007); part i one type (E-PART-003)
-  from <body>                        -- §5
+  from ⟨body⟩                        -- §5
   [expect given ⟨…⟩ then ⟨…⟩]        -- optional; executed (E-EXP-001)
   [todo ⟨'open question'⟩]           -- always fails compile (E-TODO-001)
   select ⟨item⟩ [as ⟨name⟩], …
