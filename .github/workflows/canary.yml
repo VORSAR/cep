@@ -1,0 +1,311 @@
+# Generated from gate/registry.json by make ci-workflow. Do not edit: the ci-fresh row checks it.
+name: canary
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths: ['gate/canary/**']
+permissions:
+  contents: read
+concurrency:
+  group: canary-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CGO_ENABLED: '0'
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - name: feeds
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I -B gate/bootstrap.py exec -- canary-feeds --out candidate/feeds.json
+      - name: build
+        run: python3 -I -B gate/bootstrap.py exec -- canary-candidate --feeds candidate/feeds.json --out candidate/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: candidate
+          path: candidate/
+          if-no-files-found: ignore
+          overwrite: true
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 51
+    needs: candidate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: candidate
+          path: candidate
+      - run: cp candidate/tools.json tools.json
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: go mod download all
+      - run: go mod download all
+        working-directory: gate/proofs
+      - run: git checkout -- go.sum gate/proofs/go.sum
+      - run: make vulndb
+        continue-on-error: true
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier T4 --job lint --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/lint
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-lint-${{ github.run_attempt }}
+          path: .gate/ci/lint/
+          if-no-files-found: ignore
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 64
+    needs: candidate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: candidate
+          path: candidate
+      - run: cp candidate/tools.json tools.json
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier T4 --job test --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-test-${{ github.run_attempt }}
+          path: .gate/ci/test/
+          if-no-files-found: ignore
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    needs: candidate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: candidate
+          path: candidate
+      - run: cp candidate/tools.json tools.json
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier T4 --job race --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/race
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-race-${{ github.run_attempt }}
+          path: .gate/ci/race/
+          if-no-files-found: ignore
+  determinism:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    needs: candidate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: candidate
+          path: candidate
+      - run: cp candidate/tools.json tools.json
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier T4 --job determinism --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/determinism
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-determinism-${{ github.run_attempt }}
+          path: .gate/ci/determinism/
+          if-no-files-found: ignore
+  determinism-macos:
+    runs-on: macos-latest
+    timeout-minutes: 17
+    needs: candidate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: candidate
+          path: candidate
+      - run: cp candidate/tools.json tools.json
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier T4 --job determinism-macos --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/determinism-macos
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-determinism-macos-${{ github.run_attempt }}
+          path: .gate/ci/determinism-macos/
+          if-no-files-found: ignore
+  proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    needs: candidate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: candidate
+          path: candidate
+      - run: cp candidate/tools.json tools.json
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: go mod download all
+      - run: go mod download all
+        working-directory: gate/proofs
+      - run: git checkout -- go.sum gate/proofs/go.sum
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier T4 --job proofs --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/proofs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-proofs-${{ github.run_attempt }}
+          path: .gate/ci/proofs/
+          if-no-files-found: ignore
+  summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [candidate, lint, test, race, determinism, determinism-macos, proofs]
+    if: always()
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-lint-${{ github.run_attempt }}
+          path: .gate/artifacts/records-lint-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-test-${{ github.run_attempt }}
+          path: .gate/artifacts/records-test-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-race-${{ github.run_attempt }}
+          path: .gate/artifacts/records-race-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-determinism-${{ github.run_attempt }}
+          path: .gate/artifacts/records-determinism-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-determinism-macos-${{ github.run_attempt }}
+          path: .gate/artifacts/records-determinism-macos-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-proofs-${{ github.run_attempt }}
+          path: .gate/artifacts/records-proofs-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: candidate
+          path: candidate
+      - if: always()
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 -I -B gate/bootstrap.py exec -- canary-summary --artifacts .gate/artifacts --candidate candidate --attempt ${{ github.run_attempt }} --summary "$GITHUB_STEP_SUMMARY"

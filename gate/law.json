@@ -443,11 +443,12 @@
         "T3",
         "T4"
       ],
-      "min_wants": 2,
+      "min_wants": 3,
       "expected_scope": [
         "git",
         ".github/workflows/gate.yml",
-        ".github/workflows/nightly.yml"
+        ".github/workflows/nightly.yml",
+        ".github/workflows/canary.yml"
       ]
     },
     {
