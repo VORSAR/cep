@@ -4,6 +4,8 @@ package parser
 // checkMarkdown, the function TestEveryQuotedRuleFragmentParses judges the real documents with.
 
 import (
+	"errors"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -112,5 +114,49 @@ func TestBreakitBacktickInfoStringIsNotAFence(t *testing.T) {
 	// control: without the line, the same span is refused
 	if f := breakitFaults("The clause `from every a = A -> b = B within`<!--cep:patternbody--> closes it.\n"); len(f) == 0 {
 		t.Fatalf("control: the wrong span alone should be refused")
+	}
+}
+
+// BK-S4: F3's forward scan (bareDuration) reports a later bare number in the statement in place of the error
+// participle actually stopped at. A stream with a missing comma is E-SYN-001 at the attribute after it; the same
+// stream with a bare `bounded 1` later in the statement is E-DUR-001 at the 1, so the first mistake is never named
+// and the position jumps past it (decision 3 of "S1.1c-3's design, after the reviews" fixed the bare number where
+// participle backs out of its clause; the scan runs from any stop).
+func TestBreakitBareDurationScanMasksEarlierError(t *testing.T) {
+	t.Parallel()
+	const head = "language cep/0.1;\n"
+	_, ctrl := Parse("p.cep", head+"stream S (a string ts timestamp) time ts watermark bounded 1 min;\n")
+	var want *Error
+	if !errors.As(ctrl, &want) {
+		t.Fatalf("control: a missing comma should be a parse error, got %v", ctrl)
+	}
+	for _, src := range []string{
+		"stream S (a string ts timestamp) time ts watermark bounded 1;\n",
+		"stream S (a string ts timestamp) time ts watermark bounded 1 min idle after 5;\n",
+	} {
+		_, err := Parse("p.cep", head+src)
+		var got *Error
+		if !errors.As(err, &got) {
+			t.Fatalf("%q: want a parse error, got %v", src, err)
+		}
+		if got.Line != want.Line || got.Col != want.Col {
+			t.Errorf("BK-S4: %q reports %s at %d:%d (%s); the first mistake, the missing comma, is %s at %d:%d (%s)",
+				src, got.Code, got.Line, got.Col, got.Msg, want.Code, want.Line, want.Col, want.Msg)
+		}
+	}
+}
+
+// BK-L1: ruleWords rewrites a production name into words but keeps participle's grammar quantifier after it, so a
+// user reads `watermark …? ";"` — grammar notation in a message the design says names no grammar type (v2 §2.2).
+func TestBreakitMessageKeepsGrammarQuantifier(t *testing.T) {
+	t.Parallel()
+	_, err := Parse("p.cep", "language cep/0.1;\nstream S (a string ts timestamp) time ts;\n")
+	var got *Error
+	if !errors.As(err, &got) {
+		t.Fatalf("want a parse error, got %v", err)
+	}
+	unquoted := regexp.MustCompile(`"(?:[^"\\]|\\.)*"`).ReplaceAllString(got.Msg, `""`)
+	if strings.ContainsAny(unquoted, "?*+|") {
+		t.Errorf("BK-L1: the message holds a grammar quantifier outside its quoted tokens: %s", got.Msg)
 	}
 }
