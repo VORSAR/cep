@@ -334,8 +334,8 @@ def canary_candidate(
     upgrades = [
         {"latest": u.latest, "name": u.name, "note": u.note, "pinned": u.pinned} for u in built.upgrades
     ]  # tools.json's order, as the summary names them
-    _write_atomic(os.path.join(out, "upgrades.json"), _json_text({"newer_lines": list(built.newer_lines),
-                                                                  "upgrades": upgrades}))  # fmt: skip
+    listed = {"newer_lines": list(built.newer_lines), "upgrades": upgrades}
+    _write_atomic(os.path.join(out, "upgrades.json"), _json_text(listed))
     return _ended(0, f"wrote {os.path.join(out, 'tools.json')}", f"wrote {os.path.join(out, 'upgrades.json')}")
 
 
@@ -419,8 +419,8 @@ def canary_summary(argv: list[str], *, repo: str, environ: Mapping[str, str]) ->
     except ValueError as e:
         return _ended(2, f"canary-summary: NEEDS is not toJSON(needs): {e}")
     try:
-        error = _read(os.path.join(args.candidate, ERROR_TXT)) if os.path.isfile(
-            os.path.join(args.candidate, ERROR_TXT)) else None  # fmt: skip
+        error_txt = os.path.join(args.candidate, ERROR_TXT)
+        error = _read(error_txt) if os.path.isfile(error_txt) else None
         built = None
         tools_path, upgrades_path = (os.path.join(args.candidate, f) for f in ("tools.json", "upgrades.json"))
         if os.path.isfile(tools_path) and os.path.isfile(upgrades_path):

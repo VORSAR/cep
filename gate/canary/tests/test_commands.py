@@ -41,10 +41,14 @@ PIN_TESTS = {
     "schema": 1,
     "note": "the summary tests' own",
     "entries": [
-        {"id": MANIFEST_ID, "row": "pyfloor", "pattern": "AssertionError: Lists differ: \\[(?:\\('py|'/c/py)",
-         "measured": "2026-11-13"},
+        {
+            "id": MANIFEST_ID,
+            "row": "pyfloor",
+            "pattern": "AssertionError: Lists differ: \\[(?:\\('py|'/c/py)",
+            "measured": "2026-11-13",
+        },
     ],
-}  # fmt: skip
+}
 TAIL = """\
 ----------------------------------------------------------------------
 Ran 45 tests in 2.305s
@@ -121,8 +125,13 @@ class Feeds(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.out, "feeds.json")))
 
     def test_no_token_is_an_error_txt(self):
-        code, _ = run(main.canary_feeds, ["--out", os.path.join(self.out, "feeds.json")], repo=self.repo, environ={},
-                      get=recorded_get)  # fmt: skip
+        code, _ = run(
+            main.canary_feeds,
+            ["--out", os.path.join(self.out, "feeds.json")],
+            repo=self.repo,
+            environ={},
+            get=recorded_get,
+        )
         self.assertEqual(code, 2)
         self.assertIn("GITHUB_TOKEN", read(os.path.join(self.out, "error.txt")))
 
@@ -185,17 +194,24 @@ class Candidate(unittest.TestCase):
 
     def test_the_version_line_is_the_archives_answer_with_gos_template_kept(self):
         for name, argv, pinned, answer, want in (
-            ("go", ["bin/go", "version"], "go version go1.27.5 {goos}/{goarch}", "go version go1.27.5 linux/amd64",
-             "go version go1.27.5 {goos}/{goarch}"),
+            (
+                "go",
+                ["bin/go", "version"],
+                "go version go1.27.5 {goos}/{goarch}",
+                "go version go1.27.5 linux/amd64",
+                "go version go1.27.5 {goos}/{goarch}",
+            ),
             ("ruff", ["ruff", "--version"], "ruff 0.17.5", "ruff 0.17.5", "ruff 0.17.5"),
-        ):  # fmt: skip  # cases as a table
+        ):
             with self.subTest(name):
                 script = f"#!/bin/sh\necho '{answer}'\n".encode()
                 archive = support.write_archive(
                     os.path.join(self.tmp, f"{name}.tar.gz"),
-                    [support.Member(f"{name}/", "d", mode=0o755), support.Member(f"{name}/{argv[0]}", data=script,
-                                                                                 mode=0o755)],
-                )  # fmt: skip
+                    [
+                        support.Member(f"{name}/", "d", mode=0o755),
+                        support.Member(f"{name}/{argv[0]}", data=script, mode=0o755),
+                    ],
+                )
                 tool = {"name": name, "version_argv": argv, "version_line": pinned}
                 self.assertEqual(main._version_line(tool, archive, f"{name}/", "linux-amd64", self.tmp), want)
 
@@ -205,8 +221,13 @@ class Candidate(unittest.TestCase):
             [support.Member("bad/", "d", mode=0o755), support.Member("bad/x", data=b"#!/bin/sh\nexit 3\n", mode=0o755)],
         )
         with self.assertRaisesRegex(CanaryError, r"^bad linux-amd64: x --version exit 3"):
-            main._version_line({"name": "bad", "version_argv": ["x", "--version"], "version_line": "x"}, archive,
-                               "bad/", "linux-amd64", self.tmp)  # fmt: skip
+            main._version_line(
+                {"name": "bad", "version_argv": ["x", "--version"], "version_line": "x"},
+                archive,
+                "bad/",
+                "linux-amd64",
+                self.tmp,
+            )
 
 
 class Summary(unittest.TestCase):
