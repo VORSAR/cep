@@ -33,9 +33,9 @@ COVERED = 6  # go.mod, go.sum, gate/proofs/go.mod, gate/proofs/go.sum, the regis
 VULNDB = "vulndb"
 PAIR = re.compile(r"(GO-[0-9]{4}-[0-9]{4,}) (\S+)", re.ASCII)
 # The faults the `vulndb` waiver may silence: the copy's availability and age, never its integrity (review DA-B3).
+# "no stamp.json" is not one: it is named only beside a zip, whose origin it leaves unknown (review CA-L5).
 AVAILABILITY = (
     "vulns: no vulndb.zip at ",
-    "vulns: no stamp.json at ",
     "vulns: the last make vulndb failed at ",
     "vulns: the copy was fetched ",
     "vulns: the database has not changed since ",
@@ -59,18 +59,12 @@ class Copy:
     cache: dict[str, bytes | None] = field(default_factory=dict)
 
     def read(self, name: str) -> bytes | None:
-        """A member's bytes, None when absent; MemberTooLarge past MEMBER_CAP decompressed bytes."""
+        """A member's bytes, None when absent; MemberTooLarge past MEMBER_CAP decompressed bytes; MemberUnreadable
+        when its bytes cannot be read (reviews BK-B1, CA-B1)."""
         if name not in self.cache:
             if self.zip is None:
                 return None
-            try:
-                with self.zip.open(name) as member:
-                    data = member.read(vulndb.MEMBER_CAP + 1)
-            except KeyError:
-                data = None
-            if data is not None and len(data) > vulndb.MEMBER_CAP:
-                raise vulndb.MemberTooLarge(name)
-            self.cache[name] = data
+            self.cache[name] = vulndb.read_member(self.zip, name)
         return self.cache[name]
 
 
@@ -138,7 +132,7 @@ def entries_of(copy: Copy) -> tuple[list[dict], bool]:
     try:
         index = _parsed(copy.read(vulndb.VULNS_JSON))
         modules = _parsed(copy.read(vulndb.MODULES_JSON))
-    except vulndb.MemberTooLarge:
+    except vulndb.MemberTooLarge, vulndb.MemberUnreadable:  # named by check_db
         return [], False
     if not isinstance(index, list) or not index:
         return [], False
@@ -148,7 +142,7 @@ def entries_of(copy: Copy) -> tuple[list[dict], bool]:
         entry_id = item.get("id") if isinstance(item, dict) else None
         try:
             entry = _parsed(copy.read(f"ID/{entry_id}.json")) if isinstance(entry_id, str) else None
-        except vulndb.MemberTooLarge:
+        except vulndb.MemberTooLarge, vulndb.MemberUnreadable:  # named by check_db; the scan incomplete
             entry = None
         if isinstance(entry, dict):
             entries.append(entry)
@@ -181,22 +175,23 @@ def waivers(lst: allowlists.AllowList, today: date) -> tuple[dict[str, Waiver], 
     return live, faults
 
 
-def _module_map(loaded: gomods.Loaded, notes: list[str]) -> dict[str, str]:
-    """path -> version as govulncheck matches it: at the replacement when it has a version (review DA-S2)."""
-    modules: dict[str, str] = {}
+def _module_map(loaded: gomods.Loaded, notes: list[str]) -> dict[str, set[str]]:
+    """path -> the versions govulncheck matches: at the replacement when it has a version (review DA-S2); a path
+    built both as a replacement and at its own version gives both (review BK-B2)."""
+    modules: dict[str, set[str]] = {}
     for m in loaded.modules:
         if m.replace_path and not m.replace_version:
             notes.append(f"replaced by a directory: {m.path} → {m.replace_path}")
         elif m.replace_path:
-            modules[m.replace_path] = m.replace_version
+            modules.setdefault(m.replace_path, set()).add(m.replace_version)
         else:
-            modules[m.path] = m.version
+            modules.setdefault(m.path, set()).add(m.version)
     return modules
 
 
 def _day(text: object) -> str:
     moment = vulndb._time(text)
-    return moment.date().isoformat() if moment is not None else "?"
+    return vulndb._utc_day(moment).isoformat() if moment is not None else "?"
 
 
 def scan(row_dir: str, env: dict[str, str], *, repo: str, copy_root: str, now: datetime) -> tuple[list[str], list[str]]:

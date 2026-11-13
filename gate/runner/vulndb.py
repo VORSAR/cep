@@ -9,9 +9,11 @@ fault, never the lowest version; a bad entry never stops the walk (review DA-S1)
 
 import json
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
-from datetime import datetime
+import zipfile
+import zlib
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 
 CANONICAL_URL = "https://vuln.go.dev/vulndb.zip"
 COPY_MAX_DAYS = 7  # decision 2: the copy fetched at most this many UTC calendar days ago
@@ -47,6 +49,36 @@ class UnknownEvent(ValueError):
 
 class MemberTooLarge(ValueError):
     """A zip member whose decompressed bytes pass MEMBER_CAP; raised by the row's `read` (review DA-S10)."""
+
+
+class MemberUnreadable(ValueError):
+    """A zip member whose bytes cannot be read (a bad CRC, a broken deflate stream, an encrypted member, an unknown
+    method): `vulns: member <name> cannot be read: <why>`, never a traceback (reviews BK-B1, CA-B1)."""
+
+    def __init__(self, name: str, why: str) -> None:
+        super().__init__(f"{name}: {why}")
+        self.name = name
+        self.why = why
+
+
+# What zipfile raises for a member whose bytes are bad (review CA-B1's list); MemberTooLarge is raised outside it.
+_UNREADABLE = (zipfile.BadZipFile, zlib.error, EOFError, RuntimeError, NotImplementedError, ValueError, OSError)
+
+
+def read_member(z: zipfile.ZipFile, name: str) -> bytes | None:
+    """One member's bytes, None when absent; MemberTooLarge past MEMBER_CAP decompressed bytes; MemberUnreadable
+    when its bytes cannot be read. The row's `Copy.read` and the fetch's validation both read through it."""
+    try:
+        with z.open(name) as member:
+            data = member.read(MEMBER_CAP + 1)
+    except KeyError:
+        return None
+    except _UNREADABLE as e:
+        lines = str(e).strip().splitlines()
+        raise MemberUnreadable(name, lines[0] if lines else type(e).__name__) from e
+    if len(data) > MEMBER_CAP:
+        raise MemberTooLarge(name)
+    return data
 
 
 @dataclass(frozen=True)
@@ -90,6 +122,9 @@ def go_version(tag: str) -> str:
     version = f"{major}.{minor}.{patch or 0}" + (f"-{pre}.{number}" if pre else "")
     _parse(version)
     return version
+
+
+_go_version = go_version  # findings' parameter of the same name shadows it
 
 
 def _events(ranges: Sequence[Mapping[str, object]]) -> list[list[tuple[str, str]]] | None:
@@ -152,33 +187,40 @@ def _fixed(version: str, blocks: Sequence[Sequence[Mapping[str, object]]]) -> st
     return ""
 
 
-def _matched(module: str, given: str) -> str:
-    """The version as the matcher reads it: a go tag converted for stdlib and toolchain, a module's as given."""
-    if module in GO_PSEUDO:
-        return go_version(given)
-    _parse(given)
-    return given
+def _shown(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
 def findings(
-    modules: Mapping[str, str],
+    modules: Mapping[str, str | Collection[str]],
     never_built: frozenset[str],
     go_version: str,
     entries: Iterable[Mapping[str, object]],
 ) -> tuple[list[Finding], list[tuple[str, str, str]]]:
-    """Every entry affecting a module of `modules` (path -> version as the build list gives it, a `replace`
-    already applied), `stdlib` and `toolchain` at `go_version` (`go env GOVERSION`, e.g. go1.27.4); withdrawn
-    entries skipped; a module in `never_built` gives findings with built=False; sorted by (module, id). It never
-    stops at a bad entry: each one it cannot judge is a fault (id, module, text), collected (review DA-S1)."""
+    """Every entry affecting a module of `modules` (path -> the version, or the versions, the build lists give it,
+    a `replace` already applied: one path may be built at two versions, review BK-B2), `stdlib` and `toolchain` at
+    `go_version` (`go env GOVERSION`, e.g. go1.27.4, converted once: a tag it cannot convert is one fault, review
+    CA-L9); an entry withdrawn at an RFC 3339 time skipped, any other `withdrawn` but null a fault (review BK-S1);
+    a module in `never_built` gives findings with built=False; sorted by (module, id, version). It never stops at a
+    bad entry: each one it cannot judge is a fault (id, module, text), collected (review DA-S1)."""
     tag = go_version
     found: list[Finding] = []
     faults: list[tuple[str, str, str]] = []
+    try:
+        go: str | None = _go_version(tag)
+    except InvalidVersion:
+        go = None
+        faults.append(("", "", f"vulns: the go version {tag} cannot be ordered: stdlib and toolchain not judged"))
     for entry in entries:
         entry_id = entry.get("id") if isinstance(entry, Mapping) else None
         if not isinstance(entry_id, str) or not isinstance(entry.get("affected"), list):
             faults.append((str(entry_id), "", f"vulns: {entry_id}: the entry is malformed"))
             continue
-        if entry.get("withdrawn"):
+        withdrawn = entry.get("withdrawn")
+        if withdrawn is not None and _time(withdrawn) is not None:
+            continue
+        if withdrawn is not None:
+            faults.append((entry_id, "", f"vulns: {entry_id}: withdrawn {_shown(withdrawn)} is not an RFC 3339 time"))
             continue
         blocks: dict[str, list[Sequence[Mapping[str, object]]]] = {}
         for block in entry["affected"]:
@@ -191,19 +233,26 @@ def findings(
             ranges = block.get("ranges") or []
             blocks.setdefault(name, []).append(ranges if isinstance(ranges, list) else [ranges])
         for module in sorted(blocks):
-            given = tag if module in GO_PSEUDO else modules[module]
-            try:
-                version = _matched(module, given)
-                if any(affected(version, ranges) for ranges in blocks[module]):
-                    fixed = _fixed(version, blocks[module])
-                    found.append(Finding(entry_id, module, given, fixed, module not in never_built))
-            except UnknownEvent as e:
-                faults.append((entry_id, module, f"vulns: {entry_id}: unknown range event {e}"))
-            except InvalidVersion as e:
-                faults.append((entry_id, module, f"vulns: {entry_id} {module}: version {e} cannot be ordered"))
-    found.sort(key=lambda f: (f.module, f.id))
-    faults.sort(key=lambda f: (f[1], f[0], f[2]))
-    return found, faults
+            if module in GO_PSEUDO:
+                if go is None:
+                    continue  # named once above
+                pairs = [(tag, go)]
+            else:
+                versions = modules[module]
+                pairs = [(v, v) for v in ([versions] if isinstance(versions, str) else sorted(versions))]
+            for given, version in pairs:
+                try:
+                    _parse(version)
+                    if any(affected(version, ranges) for ranges in blocks[module]):
+                        fixed = _fixed(version, blocks[module])
+                        found.append(Finding(entry_id, module, given, fixed, module not in never_built))
+                except UnknownEvent as e:
+                    faults.append((entry_id, module, f"vulns: {entry_id}: unknown range event {e}"))
+                    break
+                except InvalidVersion as e:
+                    faults.append((entry_id, module, f"vulns: {entry_id} {module}: version {e} cannot be ordered"))
+    found.sort(key=lambda f: (f.module, f.id, f.version))
+    return found, sorted(set(faults), key=lambda f: (f[1], f[0], f[2]))
 
 
 def _time(text: object) -> datetime | None:
@@ -216,6 +265,11 @@ def _time(text: object) -> datetime | None:
         return None
 
 
+def _utc_day(moment: datetime) -> date:
+    """The UTC calendar day of a zone-aware time (design §2.4; review BK-L1)."""
+    return moment.astimezone(UTC).date()
+
+
 def _json(data: bytes | None) -> object:
     if data is None:
         return None
@@ -226,7 +280,7 @@ def _json(data: bytes | None) -> object:
 
 
 def _stamp_faults(stamp: Mapping[str, object] | None, root: str, zip_sha256: str, now: datetime) -> list[str]:
-    if stamp is None:
+    if stamp is None:  # beside a zip: its origin unknown, an integrity fault (review CA-L5)
         return [f"vulns: no stamp.json at {root}: run make vulndb"]
     if not isinstance(stamp, Mapping):
         return ["vulns: stamp.json is malformed: not a JSON object"]
@@ -245,10 +299,10 @@ def _stamp_faults(stamp: Mapping[str, object] | None, root: str, zip_sha256: str
         faults.append(f"vulns: stamp.json is malformed: fetched {stamp['fetched']} is not an RFC 3339 time")
     elif fetched > now:
         faults.append(f"vulns: the copy's fetched time {stamp['fetched']} is in the future")
-    elif (days := (now.date() - fetched.date()).days) > COPY_MAX_DAYS:
+    elif (days := (_utc_day(now) - _utc_day(fetched)).days) > COPY_MAX_DAYS:
         faults.append(
-            f"vulns: the copy was fetched {days} days ago ({fetched.date().isoformat()}), more than {COPY_MAX_DAYS}:"
-            " run make vulndb"
+            f"vulns: the copy was fetched {days} days ago ({_utc_day(fetched).isoformat()}), more than"
+            f" {COPY_MAX_DAYS}: run make vulndb"
         )
     return faults
 
@@ -272,6 +326,114 @@ def _named(entry: dict) -> set[str]:
     }
 
 
+def _db_json(data: bytes | None) -> tuple[str, str]:
+    """index/db.json's `modified` text, or "" with why it is wrong ("" when absent: the bare text, review CA-S2)."""
+    if data is None:
+        return "", ""
+    db = _json(data)
+    if db is None and data.strip() != b"null":
+        return "", "not JSON"
+    if not isinstance(db, dict):
+        return "", "not a JSON object"
+    extra = sorted(set(db) - {"modified"})
+    if extra:
+        return "", f"unknown key{'s' if len(extra) > 1 else ''} {', '.join(extra)}"
+    if "modified" not in db:
+        return "", "no modified"
+    if _time(db["modified"]) is None:
+        return "", f"modified {_shown(db['modified'])} is not an RFC 3339 time"
+    return db["modified"], ""
+
+
+@dataclass
+class _Database:
+    """What the format check read: its faults, db.json's `modified` ("" when malformed) and the entries' ids."""
+
+    faults: list[str] = field(default_factory=list)
+    modified: str = ""
+    skipped: set[str] = field(default_factory=set)  # members too large or unreadable, each named once
+
+
+def _database(read: Callable[[str], bytes | None], names: Sequence[str]) -> _Database:
+    """The database's format and consistency, every fault one line (design §2.4; review CA-S2): the layout, db.json's
+    shape, the two indexes' shapes, every layout member readable, and the indexes agreeing with the entries."""
+    out = _Database()
+
+    def member(name: str) -> bytes | None:
+        try:
+            return read(name)
+        except MemberTooLarge:
+            if name not in out.skipped:
+                out.faults.append(f"vulns: member {name} exceeds 4 MiB")
+            out.skipped.add(name)
+        except MemberUnreadable as e:
+            if name not in out.skipped:
+                out.faults.append(f"vulns: member {name} cannot be read: {e.why}")
+            out.skipped.add(name)
+        return None
+
+    entry_ids: set[str] = set()
+    for name in sorted(names):
+        match = ENTRY_NAME.fullmatch(name)
+        if match is not None:
+            entry_ids.add(match.group(1))
+        elif name not in INDEX:
+            out.faults.append(f"vulns: member {name} is not in the database's layout")
+
+    out.modified, why = _db_json(member(DB_JSON))
+    if not out.modified and DB_JSON not in out.skipped:
+        out.faults.append(f"vulns: {DB_JSON} is missing or malformed" + (f": {why}" if why else ""))
+
+    index_modules = _index_items(_json(member(MODULES_JSON)), {"path": str, "vulns": list})
+    if index_modules is not None and any(
+        not isinstance(v, dict) or not isinstance(v.get("id"), str) for item in index_modules for v in item["vulns"]
+    ):
+        index_modules = None
+    if index_modules is None and MODULES_JSON not in out.skipped:
+        out.faults.append(f"vulns: {MODULES_JSON} is missing, malformed or empty")
+    index_vulns = _index_items(_json(member(VULNS_JSON)), {"id": str, "modified": str})
+    if index_vulns is None and VULNS_JSON not in out.skipped:
+        out.faults.append(f"vulns: {VULNS_JSON} is missing, malformed or empty")
+
+    if index_vulns is not None:
+        listed = {item["id"] for item in index_vulns}
+        for entry_id in sorted(listed - entry_ids):
+            out.faults.append(f"vulns: {entry_id} is listed in {VULNS_JSON} but ID/{entry_id}.json is missing")
+        for entry_id in sorted(entry_ids - listed):
+            out.faults.append(f"vulns: ID/{entry_id}.json is not listed in {VULNS_JSON}")
+    pairs: dict[str, set[str]] = {}
+    for item in index_modules or []:
+        for v in item["vulns"]:
+            pairs.setdefault(v["id"], set()).add(item["path"])
+    for entry_id in sorted(set(pairs) | entry_ids):
+        name = f"ID/{entry_id}.json"
+        named: set[str] = set()
+        if entry_id in entry_ids:
+            data = member(name)  # every entry read, whether the indexes parsed or not: each one readable
+            if data is None:
+                continue  # too large or unreadable (named above) or absent from the zip
+            entry = _json(data)
+            if (
+                not isinstance(entry, dict)
+                or entry.get("id") != entry_id
+                or not isinstance(entry.get("affected"), list)
+            ):
+                out.faults.append(f"vulns: {name} is malformed")
+                continue
+            named = _named(entry)
+        if index_modules is not None:
+            for module in sorted(named ^ pairs.get(entry_id, set())):
+                out.faults.append(f"vulns: {MODULES_JSON} and {name} disagree on {module}")
+    return out
+
+
+def check_format(read: Callable[[str], bytes | None], names: Sequence[str]) -> list[str]:
+    """The database's own faults, the copy's stamp and ages aside: what `make vulndb` checks before it replaces
+    anything, and the row checks again (review CA-S2), so an upstream format change is a failed fetch, never a red
+    on every run. `read` and `names` as check_db's."""
+    return _database(read, names).faults
+
+
 def check_db(
     read: Callable[[str], bytes | None],
     names: Sequence[str],
@@ -283,85 +445,25 @@ def check_db(
 ) -> list[str]:
     """Every fault of the copy and of the database, one named line each; [] when the copy is usable.
 
-    `read(name)` returns a zip member's bytes (None when absent; it raises MemberTooLarge past MEMBER_CAP); `names`
-    is the zip's member list; `stamp` is the parsed stamp.json (None when the file is missing); `root` is the copy's
-    directory, for the texts; `zip_sha256` is the zip's own digest; `now` is timezone-aware UTC."""
+    `read(name)` returns a zip member's bytes (None when absent; it raises MemberTooLarge past MEMBER_CAP and
+    MemberUnreadable for bytes it cannot read); `names` is the zip's member list; `stamp` is the parsed stamp.json
+    (None when the file is missing); `root` is the copy's directory, for the texts; `zip_sha256` is the zip's own
+    digest; `now` is timezone-aware. Ages count UTC calendar days."""
     faults = _stamp_faults(stamp, root, zip_sha256, now)
     fetched = _time(stamp.get("fetched")) if isinstance(stamp, Mapping) else None
-    too_large: set[str] = set()
-
-    def member(name: str) -> bytes | None:
-        try:
-            return read(name)
-        except MemberTooLarge:
-            too_large.add(name)
-            faults.append(f"vulns: member {name} exceeds 4 MiB")
-            return None
-
-    entry_ids: set[str] = set()
-    for name in sorted(names):
-        match = ENTRY_NAME.fullmatch(name)
-        if match is not None:
-            entry_ids.add(match.group(1))
-        elif name not in INDEX:
-            faults.append(f"vulns: member {name} is not in the database's layout")
-
-    db = _json(member(DB_JSON))
-    modified = _time(db.get("modified")) if isinstance(db, dict) and set(db) == {"modified"} else None
-    if modified is None:
-        if DB_JSON not in too_large:
-            faults.append(f"vulns: {DB_JSON} is missing or malformed")
-    else:
+    db = _database(read, names)
+    faults += db.faults
+    modified = _time(db.modified)
+    if modified is not None:
         if fetched is not None and modified > fetched:
             faults.append(
-                f"vulns: the database's modified {db['modified']} is after the copy's fetched {stamp['fetched']}"
+                f"vulns: the database's modified {db.modified} is after the copy's fetched {stamp['fetched']}"
             )
         if modified > now:
-            faults.append(f"vulns: the database's modified {db['modified']} is in the future")
-        elif (days := (now.date() - modified.date()).days) > SOURCE_MAX_DAYS:
+            faults.append(f"vulns: the database's modified {db.modified} is in the future")
+        elif (days := (_utc_day(now) - _utc_day(modified)).days) > SOURCE_MAX_DAYS:
             faults.append(
-                f"vulns: the database has not changed since {modified.date().isoformat()} ({days} days, more than"
+                f"vulns: the database has not changed since {_utc_day(modified).isoformat()} ({days} days, more than"
                 f" {SOURCE_MAX_DAYS}): check vuln.go.dev, or add a dated vulndb exemption naming a known issue"
             )
-
-    index_modules = _index_items(_json(member(MODULES_JSON)), {"path": str, "vulns": list})
-    if index_modules is not None and any(
-        not isinstance(v, dict) or not isinstance(v.get("id"), str) for item in index_modules for v in item["vulns"]
-    ):
-        index_modules = None
-    if index_modules is None and MODULES_JSON not in too_large:
-        faults.append(f"vulns: {MODULES_JSON} is missing, malformed or empty")
-    index_vulns = _index_items(_json(member(VULNS_JSON)), {"id": str, "modified": str})
-    if index_vulns is None and VULNS_JSON not in too_large:
-        faults.append(f"vulns: {VULNS_JSON} is missing, malformed or empty")
-
-    if index_vulns is not None:
-        listed = {item["id"] for item in index_vulns}
-        for entry_id in sorted(listed - entry_ids):
-            faults.append(f"vulns: {entry_id} is listed in {VULNS_JSON} but ID/{entry_id}.json is missing")
-        for entry_id in sorted(entry_ids - listed):
-            faults.append(f"vulns: ID/{entry_id}.json is not listed in {VULNS_JSON}")
-    if index_modules is not None:
-        pairs: dict[str, set[str]] = {}
-        for item in index_modules:
-            for v in item["vulns"]:
-                pairs.setdefault(v["id"], set()).add(item["path"])
-        for entry_id in sorted(set(pairs) | entry_ids):
-            name = f"ID/{entry_id}.json"
-            named: set[str] = set()
-            if entry_id in entry_ids:
-                data = member(name)
-                if data is None:
-                    continue  # too large (named above) or absent from the zip
-                entry = _json(data)
-                if (
-                    not isinstance(entry, dict)
-                    or entry.get("id") != entry_id
-                    or not isinstance(entry.get("affected"), list)
-                ):
-                    faults.append(f"vulns: {name} is malformed")
-                    continue
-                named = _named(entry)
-            for module in sorted(named ^ pairs.get(entry_id, set())):
-                faults.append(f"vulns: {MODULES_JSON} and {name} disagree on {module}")
     return faults
