@@ -172,6 +172,7 @@ def _run(argv: list[str], deps: Deps) -> int:
 # to <dir>/error.txt, which the candidate job uploads whatever happened and the summary names (review DQ-S9), and
 # exits 2. The summary exits as gate/canary/summary.py says: 0 with no breaks, 1 with any.
 ERROR_TXT = "error.txt"
+CANARY_TIER = "T4"  # the tier every canary job runs, so the rows each job's records are held to (BK2-S2)
 PIN_TESTS = os.path.join("gate", "canary", "pin_tests.json")
 _ATTEMPT = re.compile(r"[0-9]{1,9}")
 # unittest's report of one failing test: `FAIL: <name> (<id>)`, then any tail — a subtest's `(<params>)`, its
@@ -401,6 +402,19 @@ def _miscounted(row: str, module: str, stderr: str, read: int) -> list[list[str]
     return [] if reported == read else [[row, f"{module}: {reported} failures reported, {read} read"]]
 
 
+def _unrecorded(rows: list[registry.Row], records: Mapping[str, list[dict]]) -> tuple[str, ...]:
+    """Each job's records held to the registry's T4 rows for that job plus its parity row, as summarize.py holds CI's
+    (break-it 2, BK2-S2): a row no record names, or a record no row names, is a break, sorted. A job with no records
+    at all is the summary's own `no records from job` line."""
+    out = []
+    for job in sorted(records):
+        want = {registry.PARITY_ID} | {row.id for row in rows if row.job == job}
+        got = {str(record["id"]) for record in records[job]}
+        out += [f"canary: job {job} recorded no {row}" for row in sorted(want - got)]
+        out += [f"canary: job {job} recorded {row}, not in the registry" for row in sorted(got - want)]
+    return tuple(sorted(out))
+
+
 def _job_records(artifacts: str, job: str, attempt: str) -> list[dict]:
     """One T4 job's records from its artifact, each with its failures; [] when the artifact is missing."""
     from gate.canary.candidate import CanaryError
@@ -453,6 +467,7 @@ def canary_summary(argv: list[str], *, repo: str, environ: Mapping[str, str]) ->
         if built is not None:
             pinned = _load_json(os.path.join(repo, "tools.json"), "tools.json")
             structural = candidate.structural_faults(pinned, built.tools, frozenset(u.name for u in built.upgrades))
+        rows = registry.select(registry.load(os.path.join(repo, DEFAULT_REGISTRY)), CANARY_TIER, None)
         records = {job: _job_records(args.artifacts, job, args.attempt) for job in sorted(needs)}
         records = {job: got for job, got in records.items() if got and job != summary.CANDIDATE_JOB}
         text = _read(os.path.join(repo, PIN_TESTS))
@@ -463,9 +478,14 @@ def canary_summary(argv: list[str], *, repo: str, environ: Mapping[str, str]) ->
             unmeasured=sort.unmeasured(text),
         )
         markdown, code = summary.render(
-            candidate=built, error=error, needs=needs, records=records, pins=found.pins, breaks=found.breaks
+            candidate=built,
+            error=error,
+            needs=needs,
+            records=records,
+            pins=found.pins,
+            breaks=_unrecorded(rows, records) + found.breaks,
         )
-    except (CanaryError, KeyError, TypeError) as e:
+    except (CanaryError, KeyError, TypeError, registry.RegistryError) as e:
         return _ended(2, f"canary-summary: {type(e).__name__}: {e}")
     if args.summary:
         with open(args.summary, "a", encoding="utf-8") as f:  # GitHub's file: appended to, never replaced

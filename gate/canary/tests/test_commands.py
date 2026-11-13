@@ -239,6 +239,12 @@ class Summary(unittest.TestCase):
         with open(os.path.join(REPO, "tools.json"), encoding="utf-8") as f:
             self.tools = write(os.path.join(self.repo, "tools.json"), f.read())
         write(os.path.join(self.repo, "gate", "canary", "pin_tests.json"), json.dumps(PIN_TESTS))
+        # The registry the summary holds each job's records to (break-it 2, BK2-S2): the real pyfloor row alone, so
+        # a lint job that records its parity and pyfloor rows recorded every row.
+        with open(os.path.join(REPO, "gate", "registry.json"), encoding="utf-8") as f:
+            law = json.load(f)
+        law["rows"] = [row for row in law["rows"] if row["id"] == "pyfloor"]
+        write(os.path.join(self.repo, "gate", "registry.json"), json.dumps(law))
         self.artifacts = os.path.join(self.tmp, "artifacts")
         self.candidate = os.path.join(self.tmp, "candidate")
         self.summary = write(os.path.join(self.tmp, "step-summary.md"), "# before\n")
@@ -258,7 +264,12 @@ class Summary(unittest.TestCase):
         return run(main.canary_summary, argv, repo=self.repo, environ={"NEEDS": json.dumps(needs)})
 
     def record(self, job: str, row: str, verdict: str, stdout: str, stderr: dict[str, str]) -> None:
+        """`row`'s record and output in `job`'s artifact, and the job's parity record (passed) when it has none yet:
+        every job's runner records parity first."""
         base = os.path.join(self.artifacts, f"records-{job}-1")
+        parity = os.path.join(base, "records", job, "parity.json")
+        if row != "parity" and not os.path.exists(parity):
+            write(parity, json.dumps({"id": "parity", "job": job, "verdict": "pass", "reason": "covered 6"}))
         record = {"id": row, "job": job, "verdict": verdict, "reason": f"exit 1: {row} failed", "blocking": True}
         write(os.path.join(base, "records", job, f"{row}.json"), json.dumps(record))
         write(os.path.join(base, "rows", job, row, "stdout"), stdout)
