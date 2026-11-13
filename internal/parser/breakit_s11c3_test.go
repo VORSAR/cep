@@ -160,3 +160,35 @@ func TestBreakitMessageKeepsGrammarQuantifier(t *testing.T) {
 		t.Errorf("BK-L1: the message holds a grammar quantifier outside its quoted tokens: %s", got.Msg)
 	}
 }
+
+// BK-S6: a register entry covers every occurrence of its span in the file, so a listed wrong form can be written again
+// anywhere in that document, presented as the right one: its marker is invisible when rendered, the incident's shape
+// stands inside a listed span (§10 C1), and no register line changes. SEMANTICS.md lists `→ not B for D` (the
+// 2026-11-07 correction note quotes it); a second sentence recommending it passes.
+func TestBreakitListedSpanCoversEveryOccurrence(t *testing.T) {
+	t.Parallel()
+	listed := []invalidExample{{File: "doc.md", Span: "→ not B for D", Stage: stageGrammar}}
+	note := "*(Corrected: this line showed a `→ not B for D`<!--cep-invalid:chainelem--> form the grammar does not have.)*\n"
+	if f := checkMarkdown("doc.md", note, listed); len(f) != 0 {
+		t.Fatalf("control: the one listed occurrence should be clean: %q", f)
+	}
+	md := note + "\nAn absence is written `→ not B for D`<!--cep-invalid:chainelem--> after its step.\n"
+	if f := checkMarkdown("doc.md", md, listed); len(f) == 0 {
+		t.Errorf("BK-S6: a second occurrence of a listed wrong form (the incident's shape, recommended) gives no fault: %q", md)
+	}
+}
+
+// BK-L3: a cep-invalid span is judged only at its marker's kind, so valid rule text marked invalid at a kind it cannot
+// parse at, and listed at grammar, passes as a documented-invalid example. `within 5 min` parses at within; marked
+// cep-invalid:expr and listed, it is accepted, and the document then shows a valid clause as refused.
+func TestBreakitInvalidMarkerAtAWrongKind(t *testing.T) {
+	t.Parallel()
+	if err := parseFragment(kindWithin, "within 5 min"); err != nil {
+		t.Fatalf("control: within 5 min parses at within: %v", err)
+	}
+	listed := []invalidExample{{File: "doc.md", Span: "within 5 min", Stage: stageGrammar}}
+	md := "Refused: `within 5 min`<!--cep-invalid:expr-->.\n"
+	if f := checkMarkdown("doc.md", md, listed); len(f) == 0 {
+		t.Errorf("BK-L3: a span valid at another kind, marked cep-invalid at a kind it fails at, passes as documented-invalid: %q", md)
+	}
+}
