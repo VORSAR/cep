@@ -84,6 +84,7 @@
 | 2026-11-12 | [S1.1c-2's close-out](#owner-decisions-2026-11-12--s11c-2s-close-out) |
 | 2026-11-12 | [S1.1c-3's plan check](#owner-decisions-2026-11-12--s11c-3s-plan-check) |
 | 2026-11-12 | [S1.1c-3's design, after the reviews](#owner-decisions-2026-11-12--s11c-3s-design-after-the-reviews) |
+| 2026-11-13 | [during S1.1c-3's build](#owner-decisions-2026-11-13--during-s11c-3s-build) |
 
 ## The decisions
 
@@ -796,3 +797,10 @@ The design note ([s1-1c-3-design.md](s1-1c-3-design.md), v2 at 125819d) was revi
 2. **The two E-PAT-005 messages as proposed** (as recommended): `an absence follows its step directly: drop the -> before and not` for `-> and not`; `an absence is written and not, straight after its step: write and not instead of -> not` for `-> not`. Rejected: one shorter message.
 3. **F3 is fixed now, in lane B** (as recommended): a bare number where a duration belongs outside the rule body (`watermark bounded 1`, `idle after 5`, `window delay(5)`) gets E-DUR-001 at the number, not E-SYN-001 at an earlier token. Rejected: a known issue.
 4. **F5 and F7 are fixed now, in lane B** (**≠ R**; the recommendation forwarded both as known issues): `-> ->` and a trailing `->` no longer read "within comes before ->" — they get E-PAT-005 `a step must follow ->` at the token after the `->` (an existing code; the catalogue unchanged); a broken filter such as `S[a == ]` is placed at the `]`. Lane B grows to about 6.5 points and the sprint to about 9.75 items against the 13 cap.
+
+### Owner decisions, 2026-11-13 — during S1.1c-3's build
+
+Two questions met while landing the corrections and markers on the integration branch; both as recommended.
+
+1. **SPEC §4.4's rule template is written with its placeholders in ⟨⟩** (as recommended; SPEC's own notation, as in `⟨rule-decl⟩`): `rule ⟨Name⟩`, `intent ⟨'one sentence'⟩`, `[partition by ⟨k⟩ of ⟨S⟩, … ttl ⟨D⟩]`, `[expect given ⟨…⟩ then ⟨…⟩]`, `[todo ⟨'open question'⟩]`, `select ⟨item⟩ [as ⟨name⟩], …`, `[output first every ⟨D⟩]`, `insert into ⟨Target⟩;` — meaning unchanged, and every line of the ```` ```text ```` fence stays checked (8 of its 12 lines were rule words only). Rejected: judging a text fence as a whole.
+2. **E-PART-001's and E-PART-002's fix texts users see stay word for word** (as recommended; decision 2 of "S1.1c-3's plan check" kept such texts): the two approved errors.md edits of those Fix lines are reverted — they are pinned verbatim to `internal/validate`'s catalogue, which the research's pinned-line list missed — and the fragment test's placeholder table learns two notations instead: a list continued with a bare `…` before `ttl`, and a clause shown with its leading comma. Rejected: changing the two diagnostics.
