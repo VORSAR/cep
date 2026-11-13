@@ -28,6 +28,9 @@ _STABLE = re.compile(r"(?:v|go)?([0-9]+)\.([0-9]+)(?:\.([0-9]+))?")
 _CPYTHON = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _ABSENT = object()
+# python-floor's minor is the bootstrap's floor on purpose (install.FLOOR): a newer CPython minor is never its
+# candidate and never listed; its patch and build-tag moves within its line are upgrades (design §4.3, W0c point 8).
+NO_NEWER_LINES = frozenset({"python-floor"})
 
 
 class CanaryError(Exception):
@@ -286,7 +289,8 @@ def build(
         kind = source(tool)
         pin = _pin_order(tool, kind)
         offers = _offers(tool, kind, feeds[name])
-        newer += _newer_lines(name, offers, pin[0][:2])
+        if name not in NO_NEWER_LINES:
+            newer += _newer_lines(name, offers, pin[0][:2])
         on_line = [o for o in offers if o.key[:2] == pin[0][:2]]
         if not on_line:
             raise CanaryError(f"{name}: no stable release on its line {'.'.join(map(str, pin[0][:2]))}")
