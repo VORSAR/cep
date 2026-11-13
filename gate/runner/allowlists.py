@@ -16,8 +16,8 @@ from datetime import date
 
 from gate.runner import anchors, sprintid
 
-# S1.1c-3 adds "fragments" (with the fragment test's register reader); S1.1c-4 adds "govulncheck".
-RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated"})
+# "fragments" from S1.1c-3 (the fragment test's register); S1.1c-4 adds "govulncheck".
+RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated", "fragments"})
 KINDS = ("PERMANENT", "TEMP")
 TOP_KEYS = ("schema", "note", "rule", "entries")
 REQUIRED = ("target", "kind", "reason", "sprint")

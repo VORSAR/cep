@@ -88,7 +88,9 @@ class Load(unittest.TestCase):
         self.assertEqual(str(caught.exception), want)
 
     def test_rules(self):
-        self.assertEqual(allowlists.RULES, frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated"}))
+        self.assertEqual(
+            allowlists.RULES, frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated", "fragments"})
+        )
 
     def test_a_good_list_loads(self):
         got = allowlists.load(list_text(), "purity")
