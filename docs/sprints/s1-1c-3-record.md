@@ -19,6 +19,8 @@ The full draft is [s1-1c-3-plan-check.md](s1-1c-3-plan-check.md), drafted read-o
 
 **During the build — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--during-s11c-3s-build)): SPEC §4.4's template written with ⟨⟩ placeholders (1); E-PART-001's and E-PART-002's fix texts kept word for word, the placeholder table learning two notations instead (2).
 
+**Review and break-it — the owner, 2026-11-13** ([decisions](decisions.md#owner-decisions-2026-11-13--s11c-3s-review-and-break-it); all eight as recommended): one batched fix round, blockers, should-fix and the cheap later items (1); the generic message names only what comes next (2); `-> and S[…]` gets E-PAT-005 (3); SPEC §4.4's `from ⟨body⟩` (4); table-driven proof cases a named residue (5); the tree-hash cap known issue S1.1c-3-3, forwarded to S1.1c-4 (6); go fences a named residue (7); the test-only import edge confirmed (8).
+
 **G0 — the owner, 2026-11-12:** "main is green on c87942d" — the dependency (the Go 1.27.4 bump, PR #37) merged with main's CI green; the card was written from the owner's plan-check answers the same day.
 
 ## How it runs
@@ -43,6 +45,9 @@ At most two agents at once (plan check §1, §4, §8, §9).
 - **G0, the `proofs` row alone at T4 on 0c0d38b (2026-11-12, after the marker move — sprint model §10):** PASS, covered 36, exit 0 (214.7 s).
 - **G0, T2 on 0c0d38b:** GATE PASSED, exit 0 (125.5 s wall); the LAW Δ block names the marker S1.1c-2 → S1.1c-3, `+S1.1c-3-1` and `+S1.1c-3-2`, ADR-0015 §2 (owner decision required: the annotation of decision 1), `gate/runner/` 3 files and one driver.
 - **W0 stubs on 6417bbe:** T2 GATE PASSED, exit 0 (117.2 s wall).
+- **The fix round (2026-11-13; integration 5826cf4..02f32e8):** the break-it's red tests picked first (6 commits); fix lane B — d425766 (messages naming only the first expected item; `-> and S[…]` → E-PAT-005; F3 only at the clause participle backed out of, and only when a unit mends the parse) and d5991e3 (the checker reads Markdown as CommonMark renders it; the incident shape over whole rendered texts in any case, emphasis stripped, entities decoded, Unicode spaces mapped; an unbound placeholder named, never notation; HTML blocks refused; indented blocks and fences as CommonMark opens them, an unclosed fence a fault; one register entry one occurrence; a listed example fails at every kind; the leading comma bound once; mixed-case keywords count when two or more — counting every one turned 31 document spans red, error codes and `TTL` among them); fix lane E — d65198a (reds) and 02f32e8 (a tree child named for what it did; the parity group forgets a reaped leader and is ended on every way out of `run`; `spawn` and `scratch` required; `opened` the first commit's UTC date, no value changed). All 11 Go and 4 Python break-it tests green; `go test -race ./internal/parser/` exit 0; `test_parity_stop` 20/20 idle and 20/20 under load. **T3 exit 0** at 02f32e8.
+- **T4 (2026-11-13, 02f32e8): GATE PASSED, exit 0** — 30 rows, `proofs` covered 37 (318.9 s), wall 355.0 s.
+- **The owner's-check runs (the coordinator, a scratch worktree at 02f32e8; every plant restored):** the 2026-11-07 incident sentence written back into SEMANTICS — unmarked: `-> before and/not` and `unmarked rule-like span: mark its kind`; marked `cep-meta:chain`: red at the `and` (`chain 1:18: unexpected token "and" (expected PosElem)`); marked `cep-invalid:chain`: `not a listed invalid example` (and the census pins move). A known issue planted first seen S1.1a-1 with no decision: `aging` red — `OWNER-PLANT first seen S1.1a-1 — 11 closed rows since, and no decision names it`. A SIGINT during parity at T2: the run ended 0.04 s after it, parity `interrupted`, exit 1.
 - **Integration and G2 (2026-11-13; `s1-1c-3/integration` at c78c2cb):** both lanes cherry-picked (lane E2: 22 commits; lane B: 34), then the coordinator's — the -> and not counter-example (8:36) and the differential's pin (74, 74); the register (16 entries: grammar 9, lowering 3, validator 4) and the `fragments` rule; two binding notations (decision 2 of 2026-11-13); the corrections; SPEC Appendix C at 29 files; SPEC §5.5's second `is [not] null`; `docsync` (b) stripping markers (red first); the markers (147 by the fragment test's own detector, 3 explicit, 8 fence tags) with the census pins; the `fragments` instrument and six law paths. **T2 exit 0** (79.8 s); **`proofs` alone at T4 PASS, covered 37**; **T3 exit 0, 23 rows** (77.8 s) — G2.
 - **W2, lane E2b (2026-11-12; `s1-1c-3/lane-e2` 6455ffa..a68fe03, 8 commits):** QB10's `collisions` and both call sites (two call-site tests red first); BA10's child process (`treehash.py`, `tree_digest`, `TreeCapExceeded`, the spawn plumbing, the distinct cap reason, `TREE_CAP_S` 300 s from warm macOS hashes — go 2.5 s); C6's kill and probe in `run`'s `finally` (a TERM-ignoring child named, red first); the marker pin. `test_parity_stop` 50/50 idle and 50/50 under load; seen red with `spawn` outside the group. T2 exit 0; `proofs` alone PASS 37.
 - **W2, lane B2 (2026-11-12; `s1-1c-3/lane-b` bcfe18f..a002c26):** the fragment test (36 kinds, the binding table, the detector, fences, `checkMarkdown`, the register reader), the fix-text strip, the classification list, the real-document test last (red on the unmarked documents: 170 unmarked spans, 8 untagged fences, 2 incident shapes). The coordinator then fixed two QA cases lane B2 showed wrong (a trailing `)` inside a `--` comment; a `>` of `->` read as a placeholder) and landed the validator re-run with the test-only import edge `internal/parser → internal/validate`.
@@ -61,9 +66,28 @@ At most two agents at once (plan check §1, §4, §8, §9).
 
 ## Findings
 
+*The combined review ([architecture](../reviews/s1-1c-3-combined-architecture.md): 1 blocker, 5 should-fix, 7 later) and the break-it ([QA](../reviews/s1-1c-3-breakit-qa.md): 2 blockers, 7 should-fix, 4 later), placed after the owner's eight answers of 2026-11-13.*
+
 | # | From | Severity | Finding | Disposition |
 |---|---|---|---|---|
-| — | — | — | *(the combined review and break-it)* | — |
+| CA-B1, BK-B2 | arch, QA | blocker | an unknown angle placeholder made `text` legal | fixed (d5991e3, `TestBreakitUnknownPlaceholderHiddenByTextMarker`); SPEC's `from ⟨body⟩` (decision 4) |
+| BK-B1 | QA | blocker | the incident shape escaped across a line wrap, emphasis or a no-break space | fixed (d5991e3, `TestBreakitIncidentShapeEvadedByRendering`) |
+| CA-S1, BK-S4 | arch, QA | should-fix | F3's forward scan masked an earlier error | fixed (d425766, `TestBreakitBareDurationScanMasksEarlierError`, three contract rows) |
+| CA-S2, BK-L1 | arch, QA | should-fix | rule-word messages kept grammar operators | fixed per decision 2 (d425766, the contract's fallback rows, `TestBreakitMessageKeepsGrammarQuantifier`) |
+| CA-S3 | arch | should-fix | `-> and S[…]` still read "within comes before ->" | fixed per decision 3 (d425766) |
+| CA-S4 | arch | should-fix | two residue items written into ADR-0015 without the owner | decided (5, 6): table counts a named residue; the cap known issue S1.1c-3-3; the ADR annotation corrected (daf4bda) |
+| CA-S5 | arch | should-fix | the test-only import edge without a decision | decided (8); the rules note cites it (daf4bda) |
+| BK-S1, BK-S2, BK-S3 | QA | should-fix | HTML blocks, indented blocks, backtick info strings | fixed (d5991e3, three break-it tests) |
+| BK-S5, CA-L4 | QA, arch | should-fix | a crashed tree child read "tree differs" | fixed (02f32e8, `TreeChildFailureIsNotADamagedTool`, d65198a's pins) |
+| BK-S6 | QA | should-fix | one register entry covered every occurrence | fixed (d5991e3, `TestBreakitListedSpanCoversEveryOccurrence`) |
+| BK-S7 | QA | should-fix | capital keywords escaped the detector | fixed (d5991e3, `TestBreakitCapitalKeywordsEscapeTheDetector`) as two or more mixed-case keywords; the incident shape case-insensitive |
+| CA-L1, CA-L2, BK-L2, CA-L3 | arch, QA | later | `spawn` optional; a stale leader pid; cleanup only after a stop | fixed (02f32e8; d65198a, `FinishedTreeHashLeavesNoLiveGroup`) |
+| BK-L3, BK-L4 | QA | later | `cep-invalid` at a wrong kind; a doubled leading comma | fixed (d5991e3) |
+| CA-L5, CA-L6 | arch | later | the marker forms in four places; validator citations unchecked | backlog (decision 1) |
+| CA-L7 | arch | later | go fences unparsed and unnamed | residue (decision 7) |
+| BK (not filed) | QA | later | `opened` in the author's local date | fixed (02f32e8: the UTC rule; no value changed) |
+| B (lane) | lane B | later | the first expected item can mislead (`expected )` for a missing comma; `expected ;` for a misspelt `watermark`; `partition by of S` at 6:3, older) | known issue S1.1c-3-4, forwarded to the next language sprint |
+| E (lane) | lane E | later | a crash's first stderr line is `Traceback …`; a signal reads `(exit -9)`; a finished child's grandchild is not probed | recorded: treehash.py starts no child; the wording kept as decided (decision 1) |
 
 ## Done-done
 
