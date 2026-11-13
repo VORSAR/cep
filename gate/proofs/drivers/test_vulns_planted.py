@@ -141,6 +141,15 @@ def database(entries: list[dict], *, modified: str, extra: dict[str, bytes] | No
     return buf.getvalue()
 
 
+def zip_of(members: dict[str, bytes]) -> bytes:
+    """A zip holding exactly these members (none: an empty zip)."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in members.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
 def go_binary() -> str:
     go = support.tool("go")
     return os.path.join(support.home(support.real_cache(), "go"), go.path_dir, go.command)
@@ -414,15 +423,50 @@ class VulnsPlanted(support.DriverTest):
         self.plant_copy(self.clean_db(extra={"ID/README.txt": b"not an entry\n"}))
         self.assertRedLines(self.run_row(), ["vulns: member ID/README.txt is not in the database's layout"])
 
-    def test_a_failed_fetch_newer_than_the_stamp_is_red_with_its_text(self):
-        # §2.5, review DA-S11: "newer" is the times inside the files; the copy (2 days old) is otherwise usable.
-        at = stamp_time(self.now - timedelta(days=1))
-        self.plant_copy(self.clean_db())
+    def plant_fetch_error(self, days: int, error: str = "https://vuln.go.dev/vulndb.zip answered 503") -> str:
+        at = stamp_time(self.now - timedelta(days=days))
         with open(os.path.join(self.copy_root, "fetch-error.txt"), "w", encoding="utf-8") as f:
-            json.dump({"at": at, "error": "https://vuln.go.dev/vulndb.zip answered 503"}, f)
+            json.dump({"at": at, "error": error}, f)
+        return at
+
+    def test_a_failed_fetch_newer_than_the_stamp_with_no_zip_is_red_with_its_text(self):
+        # §2.5 (v2; reviews DA-S11, DQ-S11): "newer" is the times inside the files; with no usable zip it is red.
+        self.plant_copy(None)  # the stamp of an earlier fetch (2 days old), its zip gone
+        at = self.plant_fetch_error(1)
         self.assertRedLines(
             self.run_row(), [f"vulns: the last make vulndb failed at {at}: https://vuln.go.dev/vulndb.zip answered 503"]
         )
+
+    def test_a_failed_refetch_with_a_usable_copy_is_green_and_named(self):
+        # §2.5 (v2; review DQ-S11): decision 2 makes the copy's age the red; a failed re-fetch beside a 2-day-old copy
+        # is named in the reason.
+        self.plant_copy(self.clean_db())
+        at = self.plant_fetch_error(1)
+        self.assertScannedGreen(
+            self.run_row(), f"last fetch failed at {at}: https://vuln.go.dev/vulndb.zip answered 503"
+        )
+
+    def test_a_fetch_error_older_than_the_stamp_is_green_and_not_named(self):
+        self.plant_copy(self.clean_db())
+        self.plant_fetch_error(FRESH_DAYS + 1)
+        run = self.run_row()
+        self.assertScannedGreen(run)
+        self.assertNotIn("last fetch failed", run.row_stdout(JOB, ROW))
+
+    def test_an_empty_zip_is_red_index_missing(self):
+        # Card line 1's empty copy (review DQ-S6).
+        self.plant_copy(zip_of({}))
+        self.assertRedLines(self.run_row(), ["vulns: index/db.json is missing or malformed"])
+
+    def test_a_zip_holding_only_an_entry_is_red_index_missing(self):
+        # Card line 1's index-less copy (review DQ-S6).
+        entry = osv("GO-2099-0601", (NOT_IN_TREE, fixed_at("1.0.1")), modified=self.modified())
+        self.plant_copy(zip_of({"ID/GO-2099-0601.json": json.dumps(entry).encode()}))
+        self.assertRedLines(self.run_row(), ["vulns: index/db.json is missing or malformed"])
+
+    def test_a_zero_byte_copy_is_red_not_a_zip(self):
+        self.plant_copy(b"")
+        self.assertRedLines(self.run_row(), [f"vulns: {self.copy_root}/vulndb.zip is not a zip: run make vulndb"])
 
     # ------------------------------------------------------------------------------------------- the waivers
 
@@ -439,6 +483,65 @@ class VulnsPlanted(support.DriverTest):
         self.waive(f"GO-2099-0401 {X_MOD}")
         expected = f"vulns: GO-2099-0401 {X_TOOLS} {versions[X_TOOLS]}: fixed in {next_patch(versions[X_TOOLS])}"
         self.assertRedLines(self.run_row(), [expected], exactly=True)
+
+    def test_an_id_module_waiver_silences_that_pairs_findings_fault(self):
+        # §2.5 (review DA-S1): an unknown range event in one entry for one module is that pair's fault; the waiver
+        # silences it and is named; the same fault in another entry stays red.
+        events = [{"introduced": "0"}, {"last_affected": "9.9.9"}]
+        entries = [
+            osv("GO-2099-0501", (X_MOD, events), modified=self.modified()),
+            osv("GO-2099-0502", (X_TOOLS, events), modified=self.modified()),
+        ]
+        self.plant_copy(database(entries, modified=self.modified()))
+        self.waive(f"GO-2099-0501 {X_MOD}")
+        self.assertRedLines(self.run_row(), ["vulns: GO-2099-0502: unknown range event last_affected"], exactly=True)
+
+    def test_an_id_module_waiver_silencing_a_fault_is_green_and_named(self):
+        events = [{"introduced": "0"}, {"last_affected": "9.9.9"}]
+        entry = osv("GO-2099-0503", (X_MOD, events), modified=self.modified())
+        self.plant_copy(database([entry], modified=self.modified()))
+        self.waive(f"GO-2099-0503 {X_MOD}")
+        self.assertScannedGreen(self.run_row(), f"silenced: GO-2099-0503 {X_MOD} until {self.expiry} ({self.issue})")
+
+    def test_a_malformed_waiver_target_is_red(self):
+        self.plant_copy(self.clean_db())
+        self.waive("GO-2099-0600")  # an id with no module
+        self.assertRedLines(self.run_row(), ['vulns: GO-2099-0600: not "<id> <module>" or "vulndb"'], exactly=True)
+
+    def test_an_expired_waiver_silences_nothing_and_is_not_stale(self):
+        # §2.5 (review DQ-S4c): the row treats an expired entry as absent; the suppressions row reds it.
+        version = self.versions()[X_MOD]
+        entry = osv("GO-2099-0604", (X_MOD, fixed_at(next_patch(version))), modified=self.modified())
+        self.plant_copy(database([entry], modified=self.modified()))
+        self.expiry = (self.today - timedelta(days=1)).isoformat()
+        self.waive(f"GO-2099-0604 {X_MOD}")
+        self.assertRedLines(
+            self.run_row(), [f"vulns: GO-2099-0604 {X_MOD} {version}: fixed in {next_patch(version)}"], exactly=True
+        )
+
+    def test_waivers_are_not_judged_stale_when_the_index_is_malformed(self):
+        # §2.5 (review DQ-S4a): staleness only on a completed scan.
+        members = {
+            "index/db.json": json.dumps({"modified": self.modified()}).encode(),
+            "index/modules.json": json.dumps([{"path": NOT_IN_TREE, "vulns": []}]).encode(),
+            "index/vulns.json": b"{}",
+        }
+        self.plant_copy(zip_of(members))
+        self.waive(f"GO-2099-0605 {X_MOD}")
+        failed = self.assertRedLines(self.run_row(), ["vulns: index/vulns.json is missing, malformed or empty"])
+        self.assertFalse([line for line in failed if "matches nothing" in line], failed)
+
+    def test_a_directory_replacement_is_not_matched_and_is_named(self):
+        # §2.2 (review DA-S2): a replace to a local directory is not matched, and the reason names it. x/net, in both
+        # build lists and compiled by nothing, is replaced in the root by a go.mod-only directory; an entry naming its
+        # build-list version would be red without the replace.
+        version = self.versions()[X_NET]
+        self.world.write("third_party/xnet/go.mod", f"module {X_NET}\n\ngo 1.27\n")
+        gomod = support.read_text(os.path.join(self.world.repo, "go.mod"))
+        self.world.write("go.mod", gomod + f"\nreplace {X_NET} => ./third_party/xnet\n")
+        entry = osv("GO-2099-0606", (X_NET, fixed_at(next_patch(version))), modified=self.modified())
+        self.plant_copy(database([entry], modified=self.modified()))
+        self.assertScannedGreen(self.run_row(), f"replaced by a directory: {X_NET} → ./third_party/xnet")
 
     def test_a_waiver_matching_nothing_is_red_as_stale(self):
         self.plant_copy(self.clean_db())
