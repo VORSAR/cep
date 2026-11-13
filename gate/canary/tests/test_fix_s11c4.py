@@ -11,6 +11,8 @@ import tempfile
 import unittest
 
 from gate.canary import candidate, sort
+from gate.canary.tests import test_commands as commands
+from gate.runner import main
 from gate.toolchain.tests import test_toolchain_lines as lines
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -172,6 +174,135 @@ class CandidateDoc(unittest.TestCase):
         doc = candidate.__doc__ or ""
         self.assertNotIn("Pure over", doc)
         self.assertIn("install.archive_pins", doc)
+
+
+# unittest's header for a subtest given a message, alone and with parameters (break-it 2, BK2-S1), written by hand.
+MSG_BLOCK = """\
+======================================================================
+FAIL: test_shape ({id}) [tools empty]
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/x/gate/a/tests/test_b.py", line 9, in test_shape
+    self.fail("x")
+AssertionError: ManifestError not raised
+"""
+MSG_PARAMS_BLOCK = """\
+======================================================================
+ERROR: test_shape ({id}) [tools empty] (platform='linux-amd64')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/x/gate/a/tests/test_b.py", line 9, in test_shape
+    raise KeyError("go")
+KeyError: 'go'
+"""
+SHAPE_ID = "gate.a.tests.test_b.Shape.test_shape"
+
+
+def counted(failures: int, errors: int = 0) -> str:
+    """unittest's closing lines for a failed module (TextTestRunner, as pyshim runs it)."""
+    said = ", ".join(f"{k}={n}" for k, n in (("failures", failures), ("errors", errors)) if n)
+    return f"{'-' * 70}\nRan 9 tests in 0.1s\n\nFAILED ({said})\n"
+
+
+class FailureBlocks(unittest.TestCase):
+    """Break-it 2, BK2-S1: every failure block unittest prints is read, whatever follows its id; a module whose
+    reported count is not the blocks read is a break naming both, so an unread block can never hide behind a pin."""
+
+    def row(self, stderr: str) -> str:
+        tmp = tempfile.TemporaryDirectory(prefix="fx-c-")
+        self.addCleanup(tmp.cleanup)
+        commands.write(
+            os.path.join(tmp.name, "stdout"), "failed: gate/a/tests/test_b.py: pyshim: gate.a.tests.test_b: failed\n"
+        )
+        commands.write(os.path.join(tmp.name, "py", "gate.a.tests.test_b.stderr"), stderr)
+        return tmp.name
+
+    def test_a_subtest_header_with_a_message_is_read(self):
+        # Red at 4695fe3: _FAILURE refused both headers, so neither block was read (the line itself was the failure).
+        stderr = MSG_BLOCK.format(id=SHAPE_ID) + MSG_PARAMS_BLOCK.format(id=SHAPE_ID) + counted(1, 1)
+        self.assertEqual(
+            main._failures(self.row(stderr), "pytests"),
+            [[SHAPE_ID, "AssertionError: ManifestError not raised"], [SHAPE_ID, "KeyError: 'go'"]],
+        )
+
+    def test_fewer_blocks_read_than_reported_is_a_break_naming_both(self):
+        # Red at 4695fe3: an unreadable header (here one with no id) was skipped and the module's count never read.
+        unreadable = MSG_BLOCK.format(id=SHAPE_ID).replace(f"test_shape ({SHAPE_ID}) [tools empty]", "test_shape")
+        stderr = MSG_BLOCK.format(id=SHAPE_ID) + unreadable + counted(2)
+        self.assertEqual(
+            main._failures(self.row(stderr), "pytests"),
+            [
+                ["pytests", "gate.a.tests.test_b: 2 failures reported, 1 read"],
+                [SHAPE_ID, "AssertionError: ManifestError not raised"],
+            ],
+        )
+
+    def test_blocks_with_no_failed_count_are_a_break(self):
+        # Red at 4695fe3: the blocks were taken as the module's whole story with no count to hold them to.
+        stderr = MSG_BLOCK.format(id=SHAPE_ID)
+        self.assertEqual(
+            main._failures(self.row(stderr), "pytests"),
+            [
+                ["pytests", "gate.a.tests.test_b: no FAILED count reported, 1 read"],
+                [SHAPE_ID, "AssertionError: ManifestError not raised"],
+            ],
+        )
+
+
+class JobRows(unittest.TestCase):
+    """Break-it 2, BK2-S2: each job's records are held to the registry's T4 rows for that job plus its parity row,
+    as gate/runner/summarize.py holds CI's (an absent row is never a pass)."""
+
+    setUp = commands.Summary.setUp
+    summarize = commands.Summary.summarize
+    record = commands.Summary.record
+
+    def candidate_written(self) -> None:
+        os.makedirs(self.candidate)
+        commands.write(os.path.join(self.candidate, "tools.json"), commands.read(self.tools))
+        commands.write(os.path.join(self.candidate, "upgrades.json"), '{"newer_lines":[],"upgrades":[]}\n')
+
+    def registry_of(self, *ids: str) -> None:
+        with open(os.path.join(REPO, "gate", "registry.json"), encoding="utf-8") as f:
+            doc = json.load(f)
+        doc["rows"] = [row for row in doc["rows"] if row["id"] in ids]
+        self.assertEqual(sorted(row["id"] for row in doc["rows"]), sorted(ids))
+        commands.write(os.path.join(self.repo, "gate", "registry.json"), json.dumps(doc))
+
+    def test_a_row_missing_and_a_row_unknown_are_breaks(self):
+        # Red at 4695fe3: canary_summary never read the registry, so the job's missing ruff row and its unknown
+        # ghost row went unnamed: "Breaks: none", exit 0.
+        self.registry_of("pyfloor", "ruff")
+        self.candidate_written()
+        self.record("lint", "parity", "pass", "", {})
+        self.record("lint", "pyfloor", "pass", "", {})
+        self.record("lint", "ghost", "pass", "", {})
+        code, said = self.summarize({"candidate": {"result": "success"}, "lint": {"result": "success"}})
+        self.assertIn(
+            "Breaks: canary: job lint recorded ghost, not in the registry, canary: job lint recorded no ruff\n", said
+        )
+        self.assertEqual(code, 1, said)
+
+    def test_every_row_recorded_is_no_break(self):
+        # The positive witness for the test above: the same world with every row recorded and none unknown.
+        self.registry_of("pyfloor", "ruff")
+        self.candidate_written()
+        for row in ("parity", "pyfloor", "ruff"):
+            self.record("lint", row, "pass", "", {})
+        code, said = self.summarize({"candidate": {"result": "success"}, "lint": {"result": "success"}})
+        self.assertIn("Breaks: none\n", said)
+        self.assertEqual(code, 0, said)
+
+    def test_no_registry_is_the_commands_error(self):
+        # Red at 4695fe3: the summary ran without the registry it must hold the jobs to (exit 0 here).
+        path = os.path.join(self.repo, "gate", "registry.json")
+        if os.path.exists(path):  # the world's own registry, if its setUp wrote one
+            os.remove(path)
+        self.candidate_written()
+        self.record("lint", "parity", "pass", "", {})
+        code, said = self.summarize({"candidate": {"result": "success"}, "lint": {"result": "success"}})
+        self.assertEqual(code, 2, said)
+        self.assertIn("registry.json", said)
 
 
 if __name__ == "__main__":
