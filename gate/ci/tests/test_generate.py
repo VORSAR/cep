@@ -153,3 +153,35 @@ class Render(unittest.TestCase):
             with self.subTest(needle):
                 self.assertIn(needle, self.text)
         self.assertNotIn("paths:", self.text)
+
+
+class Scans(unittest.TestCase):
+    """S1.1c-4 design note §3.3 (plan check §2 S1; reviews A-S3, QA-S8)."""
+
+    def lint(self) -> str:
+        text = generate.render([*ROWS, row("vulns", "lint", ("T4",))])
+        return text[text.index("  lint:") : text.index("  test:")]
+
+    def test_the_vulns_row_needs_modules_and_the_vulndb_copy(self):
+        self.assertIn("vulns", generate.NEEDS_MODULES)
+        self.assertEqual(generate.NEEDS_VULNDB, frozenset({"vulns"}))
+
+    def test_the_vulndb_step_never_fails_the_job_and_comes_before_the_runner(self):
+        lint = self.lint()
+        self.assertIn("      - run: make vulndb\n        continue-on-error: true\n", lint)
+        self.assertGreater(lint.index("make vulndb"), lint.index("make setup tools"), lint)
+        self.assertLess(lint.index("make vulndb"), lint.index("bootstrap.py exec"), lint)
+        for job, body in jobs_of(generate.render(ROWS)).items():
+            with self.subTest(job):
+                self.assertNotIn("make vulndb", body)  # only a job holding the vulns row fetches
+
+    def test_the_module_cache_key_hashes_both_modules(self):
+        files = "hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum')"
+        lint = self.lint()
+        self.assertIn(f"          key: go-${{{{ runner.os }}}}-${{{{ {files} }}}}-", lint)
+        self.assertIn(f"          restore-keys: go-${{{{ runner.os }}}}-${{{{ {files} }}}}-", lint)
+
+    def test_the_download_step_is_not_the_form_that_writes_go_sum(self):
+        # `go mod download all` writes 14 lines into the root go.sum in CI (plan check §0.7, R-V2 §1); lane E2
+        # measures the form that leaves both go.sum files unchanged (design §3.2) and pins it here.
+        self.assertNotIn("go mod download all", generate.render([*ROWS, row("deps", "lint", ("T4",))]))
