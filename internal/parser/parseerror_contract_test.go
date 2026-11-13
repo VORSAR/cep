@@ -190,27 +190,27 @@ var pecContract = []pecRow{
 	// design, after the reviews"): today's answers there were E-ORD-001 at the `->` and E-SYN-001 at 7:25.
 	// the E-SYN-001 fallback (parse.go:201), through each wrapped clause
 	{"E-SYN-001 fallback/within (names a type)", pecEdit(pecPattern, "  within 5 min", "  within min"),
-		"E-SYN-001", 8, 10, `unexpected token "min" (expected a duration or ${param} ("after" "match" "skip" "past" "last") "late" "events" drop or allow <duration>)`},
+		"E-SYN-001", 8, 10, `unexpected token "min"; expected a duration or ${param}`},
 	{"E-SYN-001 fallback/for (names a type)", pecEdit(pecPattern, "-> e2 = S[a == 'y']", "and not S[a == 'y'] for min"),
-		"E-SYN-001", 7, 55, `unexpected token "min" (expected a duration or ${param})`},
+		"E-SYN-001", 7, 55, `unexpected token "min"; expected a duration or ${param}`},
 	{"E-SYN-001 fallback/partition ttl (names a type)", pecEdit(pecPattern, "ttl 1 hour", "ttl hour"),
-		"E-SYN-001", 6, 27, `unexpected token "hour" (expected a duration or ${param})`},
+		"E-SYN-001", 6, 27, `unexpected token "hour"; expected a duration or ${param}`},
 	{"E-SYN-001 fallback/output first every (names a type)", pecEdit(pecPattern, "output first every 1 min", "output first every min"),
-		"E-SYN-001", 12, 22, `unexpected token "min" (expected a duration or ${param})`},
+		"E-SYN-001", 12, 22, `unexpected token "min"; expected a duration or ${param}`},
 	{"E-SYN-001 fallback/output first, no every (names a type)", pecEdit(pecPattern, "output first every 1 min", "output first 1 min"),
-		"E-SYN-001", 12, 3, `unexpected token "output" (expected "insert" "into" a name ";")`},
+		"E-SYN-001", 12, 3, `unexpected token "output"; expected insert`},
 	{"E-SYN-001 fallback/late events (names a type)", pecEdit(pecPattern, "late events drop", "late events keep"),
-		"E-SYN-001", 10, 15, `unexpected token "keep" (expected drop or allow <duration>)`},
+		"E-SYN-001", 10, 15, `unexpected token "keep"; expected drop or allow <duration>`},
 	{"E-SYN-001 fallback/late events allow (names a type)", pecEdit(pecPattern, "late events drop", "late events allow min"),
-		"E-SYN-001", 10, 21, `unexpected token "min" (expected a duration or ${param})`},
+		"E-SYN-001", 10, 21, `unexpected token "min"; expected a duration or ${param}`},
 	{"E-SYN-001 fallback/after match", pecEdit(pecPattern, "after match skip past last", "after match skip past first"),
-		"E-SYN-001", 9, 25, `unexpected token "first" (expected "last")`},
+		"E-SYN-001", 9, 25, `unexpected token "first"; expected last`},
 	{"E-SYN-001 fallback/partition key missing (names a type)", pecEdit(pecPattern, "partition by a of S", "partition by of S"),
-		"E-SYN-001", 6, 3, `unexpected token "partition" (expected from expect or todo* select output first every? "insert" "into" a name ";")`},
+		"E-SYN-001", 6, 3, `unexpected token "partition"; expected from`},
 	{"E-SYN-001 fallback/partition key without of (names a type)", pecEdit(pecPattern, "partition by a of S", "partition by a S"),
-		"E-SYN-001", 6, 18, `unexpected token "S" (expected "of" a name)`},
+		"E-SYN-001", 6, 18, `unexpected token "S"; expected of`},
 	{"E-SYN-001 fallback/partition key group (names a type)", pecEdit(pecPattern, "partition by a of S", "partition by (a, ) of S"),
-		"E-SYN-001", 6, 3, `unexpected token "partition" (expected from expect or todo* select output first every? "insert" "into" a name ";")`},
+		"E-SYN-001", 6, 3, `unexpected token "partition"; expected from`},
 	// Bare integers where a duration is taken outside the rule body moved to pecG1Rows (F3; decision 3 of
 	// "S1.1c-3's design, after the reviews"): today they are E-SYN-001 at an earlier token.
 
@@ -279,8 +279,6 @@ var pecIncidentRows = []pecRow{
 	{"an out-of-order clause, then the incident: the clause wins", pecEdit(pecIncident,
 		"  intent 'x'\n  partition by x of A ttl 1 hour\n", "  partition by x of A ttl 1 hour\n  intent 'x'\n"),
 		"E-ORD-001", 5, 3, "clauses are out of order: intent comes before partition"},
-	{"-> and, no not: today's code", pecEdit(pecIncident, "-> and not B[x == 1] for 5 min", "-> and B[x == 1]"),
-		"E-ORD-001", 7, 28, "clauses are out of order: within comes before ->"},
 }
 
 // TestParseErrorIncidentForms is §6 [3] (18): red at 6417bbe on its first three rows and the two `-> not` rows,
@@ -318,6 +316,19 @@ var pecG1Rows = []pecRow{
 	// F5. Today: E-ORD-001 at 7:31, the same message.
 	{"F5/a trailing -> before within", pecEdit(pecPattern, "-> e2 = S[a == 'y']", "->"),
 		"E-PAT-005", 8, 3, "a step must follow ->"},
+	// `-> and S[…]`, no not (decision 3 of "S1.1c-3's review and break-it"; review CA-S3): the same answer at the and.
+	// Today: E-ORD-001 at 7:28 "clauses are out of order: within comes before ->".
+	{"F5/-> and, no not", pecEdit(pecIncident, "-> and not B[x == 1] for 5 min", "-> and B[x == 1]"),
+		"E-PAT-005", 7, 31, "a step must follow ->"},
+	// F3 only where participle stopped at the clause it backed out of, and only when a unit after the number lets
+	// the parse get past it (break-it BK-S4, review CA-S1): an earlier mistake is named first. Today: E-DUR-001 at
+	// the number.
+	{"F3/a missing comma before bounded 1", pecEdit(pecPattern, "stream S (a string, ts timestamp) time ts watermark bounded 1 min;", "stream S (a string ts timestamp) time ts watermark bounded 1;"),
+		"E-SYN-001", 2, 20, `unexpected token "ts"; expected )`},
+	{"F3/a missing comma before idle after 5", pecEdit(pecPattern, "stream S (a string, ts timestamp) time ts watermark bounded 1 min;", "stream S (a string ts timestamp) time ts watermark bounded 1 min idle after 5;"),
+		"E-SYN-001", 2, 20, `unexpected token "ts"; expected )`},
+	{"F3/a misspelt watermark before bounded 1", pecEdit(pecPattern, "time ts watermark bounded 1 min;", "time ts watermarkk bounded 1;"),
+		"E-SYN-001", 2, 35, `unexpected token "time"; expected ;`},
 }
 
 // TestParseErrorFixedAtG1 pins F3 and F5 (pecG1Rows); red at 6417bbe on every row.
@@ -358,18 +369,18 @@ func TestParseErrorFilterPlacedAtTheBracket(t *testing.T) {
 var pecVerbatimRows = []pecRow{
 	// Today `unexpected token "Step" (expected "of" NameTok)`: red on NameTok.
 	{"Step after a partition key", pecEdit(pecPattern, "partition by a of S", "partition by a Step"),
-		"E-SYN-001", 6, 18, `unexpected token "Step" (expected `},
+		"E-SYN-001", 6, 18, `unexpected token "Step"; expected of`},
 	// Today's message is clean; it must stay as it is.
 	{"Source after skip past", pecEdit(pecPattern, "after match skip past last", "after match skip past Source"),
-		"E-SYN-001", 9, 25, `unexpected token "Source" (expected "last")`},
+		"E-SYN-001", 9, 25, `unexpected token "Source"; expected last`},
 	// A declared stream named Record where a duration belongs. Today the expected part names DurationOrParam and
 	// LateClause: red.
 	{"Record, a declared stream, after within", pecEdit(pecPattern, "stream T (", "stream Record (", "insert into T;", "insert into Record;", "  within 5 min", "  within Record"),
-		"E-SYN-001", 8, 10, `unexpected token "Record" (expected `},
+		"E-SYN-001", 8, 10, `unexpected token "Record"; expected a duration or ${param}`},
 	// A name spelled like the type the expected part names: replacing whole names in the whole message would
 	// rewrite the token too.
 	{"DurationOrParam where a duration belongs", pecEdit(pecPattern, "  within 5 min", "  within DurationOrParam"),
-		"E-SYN-001", 8, 10, `unexpected token "DurationOrParam" (expected `},
+		"E-SYN-001", 8, 10, `unexpected token "DurationOrParam"; expected a duration or ${param}`},
 }
 
 // TestParseErrorKeepsTheTokenVerbatim: pecVerbatimRows (DA-S5).
@@ -385,7 +396,7 @@ func TestParseErrorKeepsTheTokenVerbatim(t *testing.T) {
 			if e.Code != r.code || e.Line != r.line || e.Col != r.col || !strings.HasPrefix(e.Msg, r.msg) {
 				t.Errorf("Parse gave\n  %s at %d:%d %q\nwant\n  %s at %d:%d, the message beginning %q", e.Code, e.Line, e.Col, e.Msg, r.code, r.line, r.col, r.msg)
 			}
-			if !strings.HasSuffix(r.msg, "(expected ") && e.Msg != r.msg {
+			if !strings.HasSuffix(r.msg, "; expected ") && e.Msg != r.msg {
 				t.Errorf("the message %q moved; want %q", e.Msg, r.msg)
 			}
 			if found := pecTypesIn(e.Msg, types); len(found) > 0 {

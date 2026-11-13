@@ -8,6 +8,8 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -171,7 +173,7 @@ func parseError(name string, toks []Token, err error) *Error {
 		return mk(name, "E-RES-001", cur.Pos, cur.Value+" is reserved for a later version")
 	// Decision 19 of S1.1c-2's plan check: an absence after a `->` is E-PAT-005 at what follows the `->`, with the
 	// owner's wording (decision 2 of "S1.1c-3's design, after the reviews"); a `->` with no step after it is too
-	// (F5, decision 4). `-> and` with no not is left to the clause check below.
+	// (F5, decision 4), `-> and` with no not among them (decision 3 of "S1.1c-3's review and break-it").
 	case cur.Value == "->" && next.Value == "and" && tok(at+2).Value == "not":
 		return mk(name, "E-PAT-005", next.Pos, "an absence follows its step directly: drop the -> before and not")
 	case cur.Value == "->" && next.Value == "not":
@@ -211,20 +213,50 @@ func parseError(name string, toks []Token, err error) *Error {
 			return mk(name, c.code, cur.Pos, "the "+c.word+" clause is missing")
 		}
 	}
-	if i := bareDuration(toks, at); i >= 0 {
-		return mk(name, "E-DUR-001", toks[i].Pos, toks[i].Value+" has no unit")
+	if abandonedClause[cur.Value] {
+		if i := bareDuration(toks, at); i >= 0 && unitMends(toks, i) {
+			return mk(name, "E-DUR-001", toks[i].Pos, toks[i].Value+" has no unit")
+		}
 	}
 	return mk(name, "E-SYN-001", cur.Pos, ruleWords(perr))
 }
 
 // endsTheChain reports whether t, the token after a `->`, ends the chain instead of beginning a step: another `->`,
-// the end of the statement, or a keyword other than and (F5).
+// the end of the statement, or a keyword, and included (F5; decision 3 of "S1.1c-3's review and break-it").
 func endsTheChain(t Token) bool {
-	return t.Value == "->" || t.Value == ";" || t.EOF() || typeName(t.Type) == "Keyword" && t.Value != "and"
+	return t.Value == "->" || t.Value == ";" || t.EOF() || typeName(t.Type) == "Keyword"
 }
 
-// bareDuration is the index of a number standing alone in a duration slot participle backed out of, from toks[at]
-// to the statement's end — `bounded 1`, `idle after 5`, `delay(5)`: the optional clause around it was abandoned, so
+// abandonedClause are the first words of the optional clauses whose duration slot F3 reads: participle backs out of
+// the clause and stops at its first word (decision 3 of "S1.1c-3's design, after the reviews"). A stop anywhere
+// else is an earlier mistake, and F3 does not apply (break-it BK-S4, review CA-S1).
+var abandonedClause = map[string]bool{"time": true, "idle": true, "window": true}
+
+// unitMends reports whether the bare number at toks[i] is what stopped the parse: with a unit written after it,
+// the parse gets past it (succeeds, or fails at a later token). A mistake before the number still stops it there.
+func unitMends(toks []Token, i int) bool {
+	unit, _, err := lexAll("", "min")
+	if err != nil || len(unit) != 1 {
+		return false
+	}
+	unit[0].Pos = toks[i].Pos
+	peek, err := lexer.Upgrade(&sliceLexer{toks: slices.Insert(slices.Clone(toks), i+1, unit[0])})
+	if err != nil {
+		return false
+	}
+	if _, err = grammar.ParseFromLexer(peek); err == nil {
+		return true
+	}
+	perr, ok := errors.AsType[participle.Error](err)
+	if !ok {
+		return false
+	}
+	at, n := perr.Position(), toks[i].Pos
+	return at.Line > n.Line || at.Line == n.Line && at.Column > n.Column
+}
+
+// bareDuration is the index of the first number standing alone in a duration slot, from toks[at] to the
+// statement's end — `bounded 1`, `idle after 5`, `delay(5)`: the optional clause around it was abandoned, so
 // participle stopped before the clause (F3, decision 3 of "S1.1c-3's design, after the reviews"); -1 if none.
 func bareDuration(toks []Token, at int) int {
 	value := func(i int) string {
@@ -267,19 +299,66 @@ func isNameChar(c byte) bool {
 	return c == '_' || '0' <= c && c <= '9' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
 }
 
-// ruleWords is err's message in rule words: in what participle expected, each production's name, as a whole
-// unquoted name, becomes its productionWords entry; the token found is kept exactly as written (a stream may be named
-// like a type). Any other error's message gets the same rewrite outside its quoted runs.
+// ruleWords is err's message in rule words (decision 2 of "S1.1c-3's review and break-it"): participle's
+// unexpected token, kept exactly as written (a stream may be named like a type), then what comes next — the first
+// item participle expected, in words (firstExpected): `unexpected token "x"; expected a duration`. Any other error's
+// message gets each whole unquoted production name replaced by its words, its quoted runs kept.
 func ruleWords(err error) string {
 	if ute, ok := errors.AsType[*participle.UnexpectedTokenError](err); ok {
-		// Message is exactly the token found, then what was expected: only the second part is rewritten.
+		// Message is exactly the token found, then " (expected <notation>)" when participle knows what it expected.
 		found := fmt.Sprintf("unexpected token %q", ute.Unexpected)
-		return found + wordsFor(strings.TrimPrefix(ute.Message(), found))
+		expect, ok := strings.CutPrefix(strings.TrimPrefix(ute.Message(), found), " (expected ")
+		if !ok {
+			return found
+		}
+		return found + "; expected " + firstExpected(strings.TrimSuffix(expect, ")"))
 	}
 	if perr, ok := errors.AsType[participle.Error](err); ok {
 		return wordsFor(perr.Message())
 	}
 	return wordsFor(err.Error())
+}
+
+// tokenWords are the words for a token type participle names in angle brackets.
+var tokenWords = map[string]string{
+	"<ident>": "a name", "<backticked>": "a name", "<string>": "a string", "<rawstring>": "a string",
+	"<number>": "a number", "<paramref>": "${param}", "<pragma>": "the language version, cep/0.1",
+}
+
+// firstExpected is the first item of expect, participle's grammar notation for what it expected, in words: a
+// literal without its quotes, a production by its productionWords entry, a token type by tokenWords, a group or an
+// alternation by its own first item. No grammar operator, quote or quantifier is kept.
+func firstExpected(expect string) string {
+	s := strings.TrimLeft(expect, " ~")
+	switch {
+	case s == "":
+		return expect
+	case s[0] == '"':
+		if lit, err := strconv.QuotedPrefix(s); err == nil {
+			if text, err := strconv.Unquote(lit); err == nil {
+				return text
+			}
+		}
+	case s[0] == '(':
+		return firstExpected(s[1:])
+	case s[0] == '<':
+		if name, _, ok := strings.Cut(s, ">"); ok {
+			if words, ok := tokenWords[name+">"]; ok {
+				return words
+			}
+			return name[1:]
+		}
+	case isNameChar(s[0]):
+		j := 0
+		for j < len(s) && isNameChar(s[j]) {
+			j++
+		}
+		if words, ok := productionWords[s[:j]]; ok {
+			return words
+		}
+		return s[:j]
+	}
+	return strings.TrimRight(strings.Fields(s)[0], "?*+!)|")
 }
 
 // wordsFor replaces each whole unquoted production name in s by its rule words; a double-quoted run is copied as
