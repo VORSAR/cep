@@ -69,7 +69,7 @@ class Render(unittest.TestCase):
     def test_the_job_running_deps_downloads_modules(self):
         # owner, 2026-11-11 (design 1): CI warms the module cache by a generated setup step in the deps row's job,
         # in the repository and in gate/proofs, so the offline deps row never fails on a cold cache.
-        self.assertEqual(generate.NEEDS_MODULES, frozenset({"deps", "proofs"}))
+        self.assertEqual(generate.NEEDS_MODULES, frozenset({"deps", "proofs", "vulns"}))
         text = generate.render([*ROWS, row("deps", "lint", ("T4",))])
         lint = text[text.index("  lint:") : text.index("  test:")]
         self.assertEqual(lint.count("      - run: go mod download all\n"), 2, lint)

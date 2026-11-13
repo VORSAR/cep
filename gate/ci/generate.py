@@ -49,11 +49,19 @@ def _uses(name: str) -> str:
 NEEDS_HISTORY = frozenset({"apidiff", "lawdelta"})
 # Rows that read the module cache offline: their job downloads every module of both tracked go.mod files at setup
 # (owner, 2026-11-11, S1.1c-1's design, decision 1), so a cold cache is never a verdict.
-NEEDS_MODULES = frozenset({"deps", "proofs"})  # proofs: the deps driver fingerprints the real modules from the cache
+# proofs: the deps driver fingerprints the real modules from the cache; vulns: the scan loads both modules' builds.
+NEEDS_MODULES = frozenset({"deps", "proofs", "vulns"})
 MODULE_DOWNLOAD = "      - run: go mod download all"
+# Rows that read the vulnerability database's local copy: their job fetches it at setup (S1.1c-4 design §3.3). The
+# step never fails the job: with no fresh copy the vulns row itself is red, naming why (a failed fetch is a verdict
+# of the row, never of setup).
+NEEDS_VULNDB = frozenset({"vulns"})
+VULNDB_FETCH = ["      - run: make vulndb", "        continue-on-error: true"]
+# The module cache's key: both tracked modules, so a change to gate/proofs' requirements is a new key too.
+MODULE_FILES = "hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum')"
 
 
-def _setup_steps(history: bool = False, modules: bool = False) -> list[str]:
+def _setup_steps(history: bool = False, modules: bool = False, vulndb: bool = False) -> list[str]:
     return [
         f"      - {_uses('checkout')}",
         "        with:",
@@ -68,21 +76,24 @@ def _setup_steps(history: bool = False, modules: bool = False) -> list[str]:
         "          path: |",
         "            ~/.cache/go-build",
         "            ~/go/pkg/mod",
-        "          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}",
-        "          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}-",
+        f"          key: go-${{{{ runner.os }}}}-${{{{ {MODULE_FILES} }}}}-${{{{ github.sha }}}}",
+        f"          restore-keys: go-${{{{ runner.os }}}}-${{{{ {MODULE_FILES} }}}}-",
         "      - run: make setup tools",
         *([MODULE_DOWNLOAD, MODULE_DOWNLOAD, "        working-directory: gate/proofs"] if modules else []),
+        *(VULNDB_FETCH if vulndb else []),
     ]
 
 
-def _job(job: str, timeout_min: int, tier: str, history: bool = False, modules: bool = False) -> list[str]:
+def _job(
+    job: str, timeout_min: int, tier: str, history: bool = False, modules: bool = False, vulndb: bool = False
+) -> list[str]:
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
         f"    runs-on: {RUNNERS.get(job, 'ubuntu-latest')}",
         f"    timeout-minutes: {timeout_min}",
         "    steps:",
-        *_setup_steps(history, modules),
+        *_setup_steps(history, modules, vulndb),
         f"      - run: python3 -I -B gate/bootstrap.py exec -- --tier {tier} --job {job} "
         f"--run-id {RUN_ID} --commit ${{{{ github.sha }}}} --run-dir {run_dir}",
         f"      - {_uses('upload')}",
@@ -159,7 +170,8 @@ def render(rows: Sequence[Row], tier: str = TIER) -> str:
         seconds = sum(r.timeout_s for r in chosen if r.job == job)
         history = any(r.id in NEEDS_HISTORY for r in chosen if r.job == job)
         modules = any(r.id in NEEDS_MODULES for r in chosen if r.job == job)
-        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier, history, modules)
+        vulndb = any(r.id in NEEDS_VULNDB for r in chosen if r.job == job)
+        lines += _job(job, max(10, -(-(seconds * 6 // 5 + 60) // 60) + 10), tier, history, modules, vulndb)
     lines += _strict_gate(jobs, tier)
     return "\n".join(lines) + "\n"
 
