@@ -94,6 +94,7 @@
 | 2026-11-14 | [S1.1c-4's owner's check](#owner-decisions-2026-11-14--s11c-4s-owners-check) |
 | 2026-11-14 | [S1.1c-4's close-out](#owner-decisions-2026-11-14--s11c-4s-close-out) |
 | 2026-11-14 | [the proof-world speed-up's measurement](#owner-decisions-2026-11-14--the-proof-world-speed-ups-measurement) |
+| 2026-11-14 | [the proof-world speed-up's design reviews](#owner-decisions-2026-11-14--the-proof-world-speed-ups-design-reviews) |
 
 ## The decisions
 
@@ -903,3 +904,12 @@ After measuring the `proofs` job on `main` ef6731f (one local run, 488 s): the 3
 1. **The speed-up follows a reviewed design in a small PR** (as recommended): a short design note — how the outer run hands its verified tree digests to the `proofs` row's nested runs, and how a forged or stale hand-off is caught — reviewed blind by an architect and a QA break-it before any code; then built test-first, T4, the owner's check. Rejected: the full sprint loop; building first with one review of the finished PR.
 2. **A tree is "unchanged" when every file's details match** (as recommended): the name, type, mode, size, inode, modification and change times of every entry are what the outer run saw when it hashed the tree; any difference means a real hash. Rejected: reuse by path alone for the run.
 3. **The `ruff` row's naming fix goes first, in its own small PR from `main`** (as recommended), test-first with the pinned ruff's real output on lines 9, 10 and 100. Ruff pads `-->` to its line-number gutter and the row's pattern allowed one space, so a finding past line 9 named no file, or, beside a named one, dropped out of the failure lines silently (the row stayed red). Rejected: inside the speed-up PR; the backlog.
+
+### Owner decisions, 2026-11-14 — the proof-world speed-up's design reviews
+
+After the blind architect and QA break-it reviews of the design note's first draft: one blocker, the same in both (the four parity proofs link five tools to the real trees, so they would have taken them from the hand-off and hashed none for real), fixed in the second draft with every other finding. Four answers; all as recommended.
+
+1. **Three local ways past the nested check are accepted as named residue in ADR-0015 §3.6** (as recommended): writes through a writable shared memory mapping opened before the outer hash (they move no time until flushed or closed, reproduced on APFS); a misbehaving row rewriting the hand-off during a local all-jobs run; a hand-written hand-off. Each needs deliberate setup on the developer's own machine; every exec file is still content-hashed in every nested run, the next run's outer check and every CI job hash for real, and the parity line names any reuse. Rejected: dropping the speed-up.
+2. **The hand-off travels as a command-line option, `gate/run.py --parity-handoff <path>`** (as recommended), passed only by the proof driver: it cannot be inherited, set by a shell profile or by an earlier CI step, and a test holds the generated workflows and the Makefile free of it. Rejected: an environment variable dropped from every row's environment.
+3. **The reuse is named in the parity reason** (as recommended; both reviewers' choice): `covered 6; 6 trees taken from run <run id>`, unchanged `covered 6` when nothing was taken, and never on a failure. Rejected: a new record field and a summary line (a records-schema change).
+4. **Naming the four parity proof drivers in `gate/law.json` goes to the backlog** (as recommended): an existing gap, not made by this change, that needs the law pin to accept the built-in parity step. Rejected: naming them in the speed-up's PR.
