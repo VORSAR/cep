@@ -192,6 +192,30 @@
     {
       "path": "gate/runner/tests/test_sprints_pin.py",
       "kind": "code"
+    },
+    {
+      "path": "internal/parser/fragment_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/fragment_rules_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/fragment_research_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/fragment_validator_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/parseerror_contract_test.go",
+      "kind": "code"
+    },
+    {
+      "path": "internal/parser/testdata/fragments/research-spans.jsonl",
+      "kind": "code"
     }
   ],
   "instruments": [
@@ -1161,6 +1185,32 @@
         }
       ],
       "go_test": "internal/parser.TestErrorCountsMatchTheCatalogue"
+    },
+    {
+      "id": "fragments",
+      "row": "unit",
+      "lands_in": "S1.1c-3",
+      "code": [
+        "internal/parser/fragment_test.go",
+        "internal/parser/fragment_rules_test.go",
+        "internal/parser/fragment_research_test.go",
+        "internal/parser/fragment_validator_test.go",
+        "internal/parser/parseerror_contract_test.go",
+        "internal/parser/testdata/fragments/research-spans.jsonl"
+      ],
+      "proofs": [
+        {
+          "path": "internal/parser/fragment_test.go",
+          "cases": 1,
+          "test": "TestEveryQuotedRuleFragmentParses"
+        },
+        {
+          "path": "internal/parser/fragment_validator_test.go",
+          "cases": 1,
+          "test": "TestTheRegistersValidatorEntriesFailAtTheValidator"
+        }
+      ],
+      "go_test": "internal/parser.TestEveryQuotedRuleFragmentParses"
     },
     {
       "id": "nosleep",
