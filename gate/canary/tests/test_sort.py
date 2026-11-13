@@ -16,7 +16,10 @@ STRUCTURAL = ["canary: ruff.path_dir changed: . → bin"]
 
 
 def record(row: str, failures: list[list[str]], verdict: str = "fail") -> dict:
-    reason = "; ".join(f"{test}: {text}" for test, text in failures) or "ok"
+    # A red record's reason is verdict.decide's for a row red by its own exit code (`exit N: …`): any other reason
+    # makes the record a break whatever its failures (break-it BK-S3; test_fix_s11c4.ReasonBreaks).
+    said = "; ".join(f"{test}: {text}" for test, text in failures)
+    reason = "ok" if verdict == "pass" else f"exit 1: {said}" if said else "exit 1"
     return {"id": row, "job": "lint", "verdict": verdict, "reason": reason, "failures": failures}
 
 
