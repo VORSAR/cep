@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "note": "Documented-invalid rule snippets in SPEC, SEMANTICS and errors.md (owner, 2026-11-12, S1.1c-3's plan check, decision 2): each span marked <!--cep-invalid:<kind>--> in its document is listed here by name, its reason beginning with the stage it must fail at - grammar, lowering, or validator: <code> <pkg>.<Test>/<case> - so marking a snippet invalid is never silent. Read by internal/parser's fragment test; validator entries are re-run through Parse and validate.Check.",
+  "rule": "fragments",
+  "entries": [
+    {
+      "target": "docs/language/SPEC.md: select *",
+      "kind": "PERMANENT",
+      "reason": "grammar: SPEC §5.5 shows select * as refused (E-SYN-004)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/SPEC.md: (k) of S",
+      "kind": "PERMANENT",
+      "reason": "validator: E-PART-005 internal/validate.TestGroupedKeyFindings/a single key in brackets",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/SPEC.md: <timestamp> + <timestamp>",
+      "kind": "PERMANENT",
+      "reason": "validator: E-TYPE-001 internal/expr.TestTypingRules/timestamp + timestamp is not defined",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/SPEC.md: <duration> / <duration>",
+      "kind": "PERMANENT",
+      "reason": "validator: E-TYPE-001 internal/expr.TestTypingRules/duration / duration is not defined",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/SEMANTICS.md: timestamp = <attr>",
+      "kind": "PERMANENT",
+      "reason": "grammar: the pre-v0.1 time form a 2026-11-06 annotation quotes",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/SEMANTICS.md: → not B for D",
+      "kind": "PERMANENT",
+      "reason": "grammar: the incident's historical wrong form, quoted in the 2026-11-07 correction note",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/SEMANTICS.md: every D",
+      "kind": "PERMANENT",
+      "reason": "grammar: early firing, a later-version form the sentence says is forbidden now",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: and not <Stream>[…]",
+      "kind": "PERMANENT",
+      "reason": "grammar: an absence without its for bound, as E-PAT-004's rule shows (E-PAT-004)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: followed by",
+      "kind": "PERMANENT",
+      "reason": "grammar: a synonym the language refuses (E-SYN-001)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: k of S, j of S",
+      "kind": "PERMANENT",
+      "reason": "validator: E-PART-004 internal/validate.TestGroupedKeyFindings/a stream keyed twice",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: 1.5 min",
+      "kind": "PERMANENT",
+      "reason": "lowering: a fractional duration (E-DUR-002)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: 30 sec 5 min",
+      "kind": "PERMANENT",
+      "reason": "lowering: duration units out of order (E-DUR-002)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: 5 min 5 min",
+      "kind": "PERMANENT",
+      "reason": "lowering: a repeated duration unit (E-DUR-002)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: -> and not",
+      "kind": "PERMANENT",
+      "reason": "grammar: the incident's form, which E-PAT-005's rule names as not a form",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: <timestamp> + <timestamp>",
+      "kind": "PERMANENT",
+      "reason": "validator: E-TYPE-001 internal/expr.TestTypingRules/timestamp + timestamp is not defined",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    },
+    {
+      "target": "docs/language/errors.md: select *",
+      "kind": "PERMANENT",
+      "reason": "grammar: the refused select form E-SYN-004 names (E-SYN-004)",
+      "ref": "docs/sprints/decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check",
+      "sprint": "S1.1c-3"
+    }
+  ]
+}
