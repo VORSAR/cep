@@ -60,6 +60,8 @@ At most two agents at once. The plan check §1 and §4 hold the waves and the ow
 
 ## Scope changes
 
+- **2026-11-13, at the W1 combine** ([owner](decisions.md#owner-decisions-2026-11-13--during-s11c-4s-build), 3): a test pinning both `go.mod` toolchain lines to `tools.json`'s Go joins lane E2b (≈ 0.25; items ≈ 8 against the card's 13).
+
 - **2026-11-13, at the plan check:** the card re-sized 8 → 13 (items ≈ 4.75 → ≈ 7.75) and S1.1c-3-3 added to item 3 (owner, decision (h)).
 - **2026-11-13, at G0 (no size change):** `tools/allowlists/vulns.json` and `allowlists.RULES` += `vulns` move from the G0 commit to the W0 commit that lands the `vulns` row, as S1.1c-3's `fragments` rule landed with its reader; the register's `built` field lands with lane E1 (it owns `deps.py`), the coordinator's marks right after.
 
