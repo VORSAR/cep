@@ -280,7 +280,7 @@ def main(argv: list[str]) -> int:
     faults = sorted(set(run_faults)) + cover_faults + list_faults + gen_faults
 
     kept, map_faults, dropped = judge(plats, generated, entries)
-    faults += map_faults + sorted(show(issue) for issue in kept)
+    faults += map_faults + [show(issue) for issue in kept]  # kept is in (file, line, column, …) order
     lines: list[str] = []
     if tier == STAGED:
         lines.append("smells: exclusions not judged at T0 (staged packages only)")
