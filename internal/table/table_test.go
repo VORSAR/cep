@@ -289,9 +289,12 @@ func TestKeyEquality(t *testing.T) {
 		if v.Len() != 3 {
 			t.Fatalf("NFC and NFD é must be two keys: Len = %d", v.Len())
 		}
-		for k, want := range map[string]bool{"abc": true, "ABC": false, "abc ": false, "ab": false, "é": true, "é": true, "": false} {
-			if got := v.Has(s(k)); got != want {
-				t.Errorf("Has(%+q) = %v, want %v", k, got, want)
+		for _, c := range []struct {
+			k    string
+			want bool
+		}{{"abc", true}, {"ABC", false}, {"abc ", false}, {"ab", false}, {"é", true}, {"é", true}, {"", false}} {
+			if got := v.Has(s(c.k)); got != c.want {
+				t.Errorf("Has(%+q) = %v, want %v", c.k, got, c.want)
 			}
 		}
 	})
