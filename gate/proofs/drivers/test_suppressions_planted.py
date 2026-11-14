@@ -4,9 +4,11 @@ The world holds the gate with its tests (tools/allowlists/ruff.json names test f
 red for a stale target), tools/allowlists/, ruff.toml and every tracked Markdown file under docs/, which the refs
 resolve against. Each case plants one exemption in that otherwise green world and runs the real row from
 gate/registry.json: a bare `//nolint` and a `// nolint:` with a space (both honoured by golangci-lint, so red with
-the canonical form's text), a canonical `//nolint:errcheck` with full metadata (red: no linter is enabled until
-S1.1c-5), an allowlist entry whose ref names no heading, a TEMP entry 5 days past its expiry (green at T2, red at T4
-and at the nightly), `# fmt: skip -- …` (a form ruff ignores) and an inline `# noqa` (ruff runs --ignore-noqa).
+the canonical form's text), a canonical `//nolint:gosec` with full metadata (red: gosec is not enabled in
+.golangci.toml, S1.1c-5), an allowlist entry whose ref names no heading, a TEMP entry 5 days past its expiry (green
+at T2, red at T4 and at the nightly), `# fmt: skip -- …` (a form ruff ignores) and an inline `# noqa` (ruff runs
+--ignore-noqa). S1.1c-5 (design §4.2, §8 2.10) adds a revive directive, a `#nosec` and a `//line` directive (each
+red: only //nolint waives) and the policy's accepted `//nolint:lll` (green).
 
 Nothing here is a calendar date, the marker or a count of existing exemptions (design DQ-S9, DQ-S10): the expiry is
 computed from today in UTC, 5 days from the expiry boundary, and the marker, a known issue id and a resolving ref
@@ -34,8 +36,11 @@ CLOCK_TARGET = f"{CLOCK_FILE}: time"
 EXPIRED_DAYS = 5  # 5 days from the boundary (expiry == today), so a run across midnight UTC changes nothing
 NO_HEADING = "no-such-heading-planted"
 # design §2.8, exactly
-NOT_CANONICAL = "write //nolint:<linter> (two slashes, no space)"
-NOT_ENABLED = "//nolint:errcheck: errcheck is not enabled (none is until S1.1c-5)"
+NOT_CANONICAL = "write //nolint:<linter> exactly (two slashes, no space, lower case, one list)"  # S1.1c-5 §4.2
+NOT_ENABLED = "//nolint:gosec: gosec is not enabled in .golangci.toml"  # S1.1c-5 design §4.2
+# S1.1c-5 design §4.2: only //nolint waives.
+FOREIGN = "{linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP … (decision 7)"
+LINE_DIRECTIVE = "a //line directive moves findings between files; not allowed (S1.1c-5)"
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 NOQA = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
 
@@ -51,6 +56,8 @@ class SuppressionsPlanted(support.DriverTest):
         self.world.copy_gate(tests=True)
         for rel in self.world.tracked("tools/allowlists"):
             self.world.copy(rel)
+        if os.path.exists(os.path.join(support.REPO, ".golangci.toml")):  # the enabled set (§4.2; lane A's file)
+            self.world.copy(".golangci.toml")
         for rel in self.world.tracked("docs"):
             if rel.endswith(".md"):
                 self.world.copy(rel)
@@ -128,8 +135,8 @@ class SuppressionsPlanted(support.DriverTest):
         spaced = NOT_CANONICAL.replace("<linter>", "errcheck")
         self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {spaced}", f"{GO}:{GO_LINE}: ")
 
-    def test_a_canonical_nolint_with_full_metadata_is_red_while_no_linter_is_enabled(self):
-        self.go(f"//nolint:errcheck // {self.metadata()}")
+    def test_a_canonical_nolint_for_a_linter_not_enabled_is_red(self):
+        self.go(f"//nolint:gosec // {self.metadata()}")
         self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {NOT_ENABLED}", f"{GO}:{GO_LINE}: ")
 
     def test_an_allowlist_ref_naming_no_heading_is_red(self):
@@ -166,3 +173,27 @@ class SuppressionsPlanted(support.DriverTest):
     def test_an_inline_noqa_in_the_gate_is_red(self):
         self.world.write(PY, "import os  # noqa: F401\n")
         self.assertSuppressionsRed(self.run_row(), f"{PY}:{PY_LINE}: {NOQA}", f"{PY}:{PY_LINE}: ")
+
+    # S1.1c-5 design §4.2, §8 2.10: only //nolint waives (9 → 13).
+
+    def test_a_revive_directive_is_red(self):
+        self.go("//revive:disable-line:argument-limit")
+        text = FOREIGN.format(linter="revive")
+        self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {text}", f"{GO}:{GO_LINE}: ")
+
+    def test_a_nosec_is_red(self):
+        self.go("// #nosec G304")
+        text = FOREIGN.format(linter="gosec")
+        self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {text}", f"{GO}:{GO_LINE}: ")
+
+    def test_a_line_directive_is_red(self):
+        self.world.write(GO, "package planted\n\n//line x.go:1\nfunc F() {}\n")
+        self.assertSuppressionsRed(self.run_row(), f"{GO}:{GO_LINE}: {LINE_DIRECTIVE}", f"{GO}:{GO_LINE}: ")
+
+    def test_an_accepted_nolint_with_metadata_passes(self):
+        self.go(f"//nolint:lll // {self.metadata()}")
+        run = self.run_row()
+        files = self.in_scope()
+        self.assertIn(GO, files)
+        self.assertRow(run, "lint", "suppressions", True, f"covered {len(files)}")
+        self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
