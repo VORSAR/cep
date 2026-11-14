@@ -1,0 +1,6 @@
+# Line endings. The rule corpus and the conformance baselines are hashed byte for byte (the baselines' source_sha256),
+# so a CRLF checkout (core.autocrlf on Windows) must never rewrite them: known issue S3.3-2-2 (owner, 2026-11-14).
+*.cep text eol=lf
+conformance/baseline/*.jsonl text eol=lf
+# Kept exactly as committed: the comment-torture corpus file holds CRLF lines on purpose (its "crlf" construct).
+docs/language/examples/torture/comments.cep -text
