@@ -19,12 +19,13 @@ waiver expires 20 days ahead (allowlists.AHEAD_MAX is 90). The row runs at T4, i
 Until lane E1 lands, every red case is red on the W0 stub's `exit 1: vulns: not built yet (S1.1c-4 lane E1)`, which
 names no planted id, and every green case is red on the same line.
 
-Declared binaries (S1.1c-5 design note §6, §8 row 5.6): the world's tools.json declares no Go-built tool unless a case
-says so, since the real golangci-lint's own build lists x/tools, x/mod and others at versions the world does not
-choose, and a planted module entry would hit it too. A case that declares one sets `"go_built": true` on the real
-tools.json's golangci-lint entry; its home is the real tool cache's, which parity checks in the same run, and its
-build information is read by the pinned go itself (`go version`), the oracle for its Go version. A binary without
-build information is the real ruff (a Rust executable) declared Go-built.
+Declared binaries (S1.1c-5 design note §6, §8 row 5.6; owner, 2026-11-14, during S1.1c-5's W1, decision 2): the
+world's tools.json declares no Go-built tool unless a case says so, since the real golangci-lint's own build lists
+x/tools, x/mod and others at versions the world does not choose, and a planted module entry would hit it too; the row
+counts tools.json once, whatever it declares, so every world is covered 7. A case that declares one sets
+`"go_built": true` on the real tools.json's golangci-lint entry; its home is the real tool cache's, which parity checks
+in the same run, and its build information is read by the pinned go itself (`go version`), the oracle for its Go
+version. A binary without build information is the real ruff (a Rust executable) declared Go-built.
 """
 
 import hashlib
@@ -56,13 +57,14 @@ PLANTED_ROW = {
         "gate/proofs/go.sum",
         "tools/deps-allowlist.json",
         "tools/allowlists/vulns.json",
+        "tools.json",
     ],
-    "min_wants": 6,
+    "min_wants": 7,
     "lands_in": "S1.1c-4",
     "exclusive": False,
     "command": ["python3.15", "-I", "-B", "-X", "utf8", "gate/runner/rows/vulns.py"],
 }
-COVERED = 6  # the six files the row reads (§2.5)
+COVERED = 7  # the six files the row reads (§2.5) and tools.json once (owner, 2026-11-14, during S1.1c-5's W1, 2)
 TOOL = "golangci-lint"  # the real tools.json's one declared binary (test_manifest.py GoBuilt)
 WAIVERS = "tools/allowlists/vulns.json"
 REGISTER = "tools/deps-allowlist.json"
@@ -373,9 +375,9 @@ class VulnsPlanted(support.DriverTest):
         self.assertTrue(any(f.startswith(prefix) and f.endswith(suffix) for f in failed), (prefix, suffix, failed))
         self.assertParityPassed(run, JOB)
 
-    def assertScannedGreen(self, run: support.Run, *needles: str, covered: int = COVERED) -> None:
-        """Green at `covered`, the gate passed, and each needle in the row's own output (its reason, §2.5)."""
-        self.assertRow(run, JOB, "vulns", True, f"covered {covered}")
+    def assertScannedGreen(self, run: support.Run, *needles: str) -> None:
+        """Green at covered 7, the gate passed, and each needle in the row's own output (its reason, §2.5)."""
+        self.assertRow(run, JOB, "vulns", True, f"covered {COVERED}")
         self.assertParityPassed(run, JOB)
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
         out = run.row_stdout(JOB, ROW)
@@ -636,7 +638,7 @@ class VulnsPlanted(support.DriverTest):
 
     def test_the_real_tree_with_a_clean_database_is_green(self):
         # (23): the real tree's modules, stdlib and toolchain, and its one declared binary against a clean database:
-        # green, covered 7 (6 + golangci-lint, S1.1c-5 design §6).
+        # green, covered 7 (the six files and tools.json).
         self.world.copy("tools.json")
         self.plant_copy(self.clean_db())
         modified_day = (self.now - timedelta(days=MODIFIED_DAYS)).date().isoformat()
@@ -647,7 +649,6 @@ class VulnsPlanted(support.DriverTest):
             f"stdlib and toolchain at {self.go_version}",
             f"declared binaries, stdlib only: {TOOL} {support.tool(TOOL).version} (",
             "not read: ruff, CPython (outside the Go database)",
-            covered=COVERED + 1,
         )
 
     # ------------------------------------------------------------------------------------ the declared binaries
@@ -671,7 +672,6 @@ class VulnsPlanted(support.DriverTest):
             self.run_row(),
             f"silenced: GO-2099-0702 {TOOL} until {self.expiry} ({self.issue})",
             f"declared binaries, stdlib only: {TOOL} {support.tool(TOOL).version} ({version}, ",
-            covered=COVERED + 1,
         )
 
     def test_a_toolchain_advisory_never_applies_to_a_binary(self):
