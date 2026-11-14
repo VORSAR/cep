@@ -90,7 +90,7 @@ func TestStartRefusesSchemaNameMismatch(t *testing.T) {
 // TestStartRecoversNewBodyPanic: a NewBody that panics makes Start return an error, never panic its caller.
 func TestStartRecoversNewBodyPanic(t *testing.T) {
 	app := fxApp(t, func(event.Event) error { return nil })
-	app.Rules[0].NewBody = func(runtime.Emit) partition.Body { panic("a planner bug") }
+	app.Rules[0].NewBody = func(runtime.Emit) partition.Body { panic("a planner bug") } //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	var err error
 	func() {
 		defer func() {

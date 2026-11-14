@@ -132,7 +132,7 @@ func TestPanicResetsTheKey(t *testing.T) {
 	log, births := newRTLog(), newRTLog()
 	panicky := rtBody{rule: "p", log: log, births: births, onEvent: func(b *rtBody, in *partition.Instance, e event.Event) {
 		if in.Key.First.Str == "boom" {
-			panic("a body's panic on key boom")
+			panic("a body's panic on key boom") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 	}}
 	app := runtime.App{

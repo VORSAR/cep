@@ -530,7 +530,7 @@ func TestAddRollsBackWhenOneShardFails(t *testing.T) {
 	bad := lcApp(t, func(event.Event) error { return nil })
 	bad.Rules[0].NewBody = func(emit runtime.Emit) partition.Body {
 		if calls.Add(1) == 2 {
-			panic("the second shard's body refuses")
+			panic("the second shard's body refuses") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		return &lcFwd{emit: emit}
 	}

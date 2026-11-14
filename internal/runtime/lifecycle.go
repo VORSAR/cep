@@ -237,7 +237,8 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 			return DrainResult{Runs: runs}, ctx.Err()
 		}
 	}
-	if rep.recMarker != nil { // every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
+	// every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
+	if rep.recMarker != nil {
 		if r.recordingWait != nil { // the package's tests only
 			r.recordingWait()
 		}
@@ -291,7 +292,8 @@ func (r *Runtime) awaitRuns(ctx context.Context, a *appState) ([]error, error) {
 		}
 	}
 	if stuck > 0 {
-		return runs, fmt.Errorf("runtime: app %d: %d source goroutine(s) did not return before the deadline: %w", a.id, stuck, ctx.Err())
+		return runs, fmt.Errorf("runtime: app %d: %d source goroutine(s) did not return before the deadline: %w", a.id, stuck,
+			ctx.Err())
 	}
 	return runs, nil
 }
