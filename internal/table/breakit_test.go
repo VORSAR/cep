@@ -74,7 +74,8 @@ func TestBreakitCompositeKeysNeverCollide(t *testing.T) {
 				kept = append(kept, old)
 			}
 		}
-		stored = append(kept, r)
+		kept = append(kept, r)
+		stored = kept
 	}
 	v := tb.Snapshot()
 	if v.Len() != len(stored) {

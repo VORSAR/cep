@@ -61,12 +61,30 @@ func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 	if name == "" {
 		return nil, fmt.Errorf("table: %w", errEmptyName)
 	}
+	own := slices.Clone(attrs)
+	at, err := indexAttrs(name, own)
+	if err != nil {
+		return nil, err
+	}
+	if len(keyCols) == 0 {
+		return nil, fmt.Errorf("table %s: %w", name, errNoKey)
+	}
+	t := &Table{name: name, attrs: own, isKey: make([]bool, len(own))}
+	if err := t.markKey(at, keyCols); err != nil {
+		return nil, err
+	}
+	t.cur.Store(&Version{rows: map[key][]event.Value{}, keyKind: own[t.key[0]].Type, nkey: len(t.key)})
+	return t, nil
+}
+
+// indexAttrs maps each attribute's name to its position, refusing no attributes, an empty or duplicate name and a
+// type outside TString…TObject.
+func indexAttrs(name string, attrs []event.Attr) (map[string]int, error) {
 	if len(attrs) == 0 {
 		return nil, fmt.Errorf("table %s: %w", name, errNoAttrs)
 	}
-	own := slices.Clone(attrs)
-	at := make(map[string]int, len(own))
-	for i, a := range own {
+	at := make(map[string]int, len(attrs))
+	for i, a := range attrs {
 		switch {
 		case a.Name == "":
 			return nil, fmt.Errorf("table %s: attribute %d: empty name", name, i)
@@ -74,29 +92,31 @@ func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 			return nil, fmt.Errorf("table %s: attribute %d %q: invalid type %v", name, i, a.Name, a.Type)
 		}
 		if first, dup := at[a.Name]; dup {
-			return nil, fmt.Errorf("table %s: attribute %d %q: duplicate name, first declared as attribute %d", name, i, a.Name, first)
+			return nil, fmt.Errorf("table %s: attribute %d %q: duplicate name, first declared as attribute %d",
+				name, i, a.Name, first)
 		}
 		at[a.Name] = i
 	}
-	if len(keyCols) == 0 {
-		return nil, fmt.Errorf("table %s: %w", name, errNoKey)
-	}
-	t := &Table{name: name, attrs: own, isKey: make([]bool, len(own))}
+	return at, nil
+}
+
+// markKey records the key columns in `primary key (…)` order, refusing one that is not declared, is named twice or
+// is an object.
+func (t *Table) markKey(at map[string]int, keyCols []string) error {
 	for _, col := range keyCols {
 		i, ok := at[col]
 		switch {
 		case !ok:
-			return nil, fmt.Errorf("table %s: key column %q is not declared", name, col)
+			return fmt.Errorf("table %s: key column %q is not declared", t.name, col)
 		case t.isKey[i]:
-			return nil, fmt.Errorf("table %s: key column %q is named twice", name, col)
-		case own[i].Type == event.TObject:
-			return nil, fmt.Errorf("table %s: key column %q is an object: an object cannot be a key", name, col)
+			return fmt.Errorf("table %s: key column %q is named twice", t.name, col)
+		case t.attrs[i].Type == event.TObject:
+			return fmt.Errorf("table %s: key column %q is an object: an object cannot be a key", t.name, col)
 		}
 		t.isKey[i] = true
 		t.key = append(t.key, i)
 	}
-	t.cur.Store(&Version{rows: map[key][]event.Value{}, keyKind: own[t.key[0]].Type, nkey: len(t.key)})
-	return t, nil
+	return nil
 }
 
 // Name is the table's declared name.
@@ -217,7 +237,7 @@ func (t *Table) checkKey(i int, k []event.Value) error {
 // checkValue holds one value to attribute j's declaration: its type, null only where optional and never in a key
 // column, a float finite (NaN and ±Inf never enter the engine — ADR-0005 §3), and an object its JSON text (P3; the
 // table stores it as a string, so no caller can change a published row — S3.1-2 break-it B5).
-func (t *Table) checkValue(j int, v event.Value) error {
+func (t *Table) checkValue(j int, v event.Value) error { //nolint:gocyclo,lll // PERMANENT reason="kept whole: split into a payload check it measured 12.1-12.6 to 16.4-17.7 ns per row (BenchmarkTableCheckValue, 5 runs each), 0 allocations both; the waiver cannot wrap" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	a := t.attrs[j]
 	switch {
 	case v.Kind != a.Type:
