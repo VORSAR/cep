@@ -99,6 +99,7 @@
 | 2026-11-14 | [S1.1c-5's design, before its reviews](#owner-decisions-2026-11-14--s11c-5s-design-before-its-reviews) |
 | 2026-11-14 | [S1.1c-5's design, after the reviews](#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews) |
 | 2026-11-14 | [during S1.1c-5's W0](#owner-decisions-2026-11-14--during-s11c-5s-w0) |
+| 2026-11-14 | [four known issues placed](#owner-decisions-2026-11-14--four-known-issues-placed) |
 
 ## The decisions
 
@@ -986,3 +987,12 @@ Three answers, all as recommended.
 W0's import-closure test (design §8 L.1, from the architecture review's DA-S5) found that almost every row instrument's `code` list in `gate/law.json` misses modules it imports. Most misses are two shared helpers every row imports, `gate/term.py` and `gate/runner/workers.py`; a few are real (lawdelta, vulns and coverage-inclusion each lack modules they use). One answer, as recommended.
 
 1. **The closure test holds the four instruments this sprint builds or changes** (`aging`, `smells`, `suppressions`, `vulns`), each fixed here. **The other instruments' gaps go to the backlog** as one item with the measured list (ground rule 7). Rejected: widening all 30 instruments' code lists in this sprint.
+
+### Owner decisions, 2026-11-14 — four known issues placed
+
+Brought early, during S1.1c-5's W1. Printing S1.1c-5 to S1.1c-8 as rows would have turned the four undecided known issues red at S1.1c-7's close (S1.1c-5's design after the reviews, decision 2). Four answers, all as recommended.
+
+1. **S3.3-2-1 goes to S5.1** (as recommended). It is the `Start` that races `Close` and returns `ErrStopped` or `ErrUndeployed` instead of `ErrClosed`. S5.1 runs apps live, where start/stop timing is real. There, a step after `Activate` that fails while the runtime is closing returns `ErrClosed`, held by a test seam that pauses `Start` between its steps. Rejected: a small PR now; accepting it as residue.
+2. **S3.3-2-2 is fixed now, in its own tiny PR** (as recommended). The gap is the missing `.gitattributes`. The fix is a `.gitattributes` forcing LF for `*.cep` and the conformance baselines; the gate check on `git check-attr eol` waits for the first Windows build. Rejected: forwarding it to S12; accepting Linux/macOS only.
+3. **S3.3-2-3: an `expect` block that tests nothing is refused, in S6.2** (as recommended). This covers a block with no given event, or one whose given events are all dropped as stream-late. S6.2 is the next language sprint: the refusal is a deploy error with its own code, designed with the language-design skill. Rejected: a warning only; leaving it.
+4. **S1.1c-3-4 goes to S6.2** (as recommended). It is the syntax hint that names only the first expected item. In S6.2, E-SYN-001's hint names the likeliest item, pinned by contract rows for the three known cases. Rejected: S4.1 (at its cap); accepting it as is.
