@@ -73,7 +73,8 @@ func main() {
 	}
 	want, err := os.ReadFile(golden)
 	if err != nil {
-		fmt.Printf("failed: %s: %v (run go run ./tools/apipartition --write %s %s)\n", golden, err, golden, strings.Join(dirs, " "))
+		fmt.Printf("failed: %s: %v (run go run ./tools/apipartition --write %s %s)\n", golden, err, golden, strings.Join(dirs,
+			" "))
 		fmt.Printf("GATE_COVERED %d\n", len(dirs))
 		os.Exit(1)
 	}
@@ -82,7 +83,8 @@ func main() {
 		return
 	}
 	added, removed := delta(parseGolden(string(want)), entries)
-	fmt.Printf("failed: API Δ: +%d/−%d (%s); %s differs: run go run ./tools/apipartition --write %s %s and review the diff\n",
+	fmt.Printf("failed: API Δ: +%d/−%d (%s); %s differs: run go run ./tools/apipartition --write %s %s and review the "+
+		"diff\n",
 		len(added), len(removed), strings.Join(append(added, removed...), ", "), golden, golden, strings.Join(dirs, " "))
 	fmt.Printf("GATE_COVERED %d\n", len(dirs))
 	os.Exit(1)
@@ -140,7 +142,8 @@ func parseGolden(text string) []entry {
 // surface is one package directory's exported declarations.
 func surface(dir string) ([]entry, error) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, parser.SkipObjectResolution)
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") },
+		parser.SkipObjectResolution)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", dir, err)
 	}
@@ -205,7 +208,8 @@ func funcIdent(d *ast.FuncDecl) string {
 	}
 }
 
-func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string, hidden map[string]*ast.TypeSpec) ([]entry, error) {
+func fileSurface(fset *token.FileSet, pkg string, f *ast.File, fname string, hidden map[string]*ast.TypeSpec) ([]entry,
+	error) {
 	var out []entry
 	for _, d := range f.Decls {
 		switch d := d.(type) {
@@ -298,7 +302,9 @@ func exportedOnly(ts *ast.TypeSpec, pkg, fname string) error {
 		var keep []*ast.Field
 		for _, fd := range fl.List {
 			if len(fd.Names) == 0 {
-				return fmt.Errorf("%s: type %s (%s) has an embedded field, whose promoted methods this text cannot see: name the field instead", pkg, ts.Name.Name, fname)
+				return fmt.Errorf(
+					"%s: type %s (%s) has an embedded field, whose promoted methods this text cannot see: name the field instead", pkg,
+					ts.Name.Name, fname)
 			}
 			var names []*ast.Ident
 			for _, n := range fd.Names {
@@ -319,7 +325,9 @@ func exportedOnly(ts *ast.TypeSpec, pkg, fname string) error {
 	case *ast.InterfaceType:
 		for _, m := range t.Methods.List {
 			if len(m.Names) == 0 {
-				return fmt.Errorf("%s: type %s (%s) embeds an interface, whose methods this text cannot see: list the methods instead", pkg, ts.Name.Name, fname)
+				return fmt.Errorf(
+					"%s: type %s (%s) embeds an interface, whose methods this text cannot see: list the methods instead", pkg,
+					ts.Name.Name, fname)
 			}
 		}
 		it := *t
