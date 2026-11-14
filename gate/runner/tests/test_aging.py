@@ -533,7 +533,8 @@ class PrintedParts(unittest.TestCase):
         # The four undecided at S1.1c-5's G1 were placed by the owner the same day ("four known issues placed"), so
         # none ages red at S1.1c-7's close; any undecided issue that would is red here first.
         self.assertEqual(named, [])
-        # Witness: the same order without the decisions file names those four (the rule still bites).
+        # Witness: the same order without the decisions file names the three still open (the rule still bites;
+        # S3.3-2-2 was fixed by #46 and left the file).
         undecided = aging.aged(
             entries,
             order,
@@ -542,6 +543,6 @@ class PrintedParts(unittest.TestCase):
             read=lambda p: None if p.endswith("decisions.md") else (read_repo(p) if p in tracked else None),
         )
         self.assertLessEqual(
-            {"S1.1c-3-4", "S3.3-2-1", "S3.3-2-2", "S3.3-2-3"},
+            {"S1.1c-3-4", "S3.3-2-1", "S3.3-2-3"},
             {line.split()[1] for line in undecided if AGE in line},
         )
