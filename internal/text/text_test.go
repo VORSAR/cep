@@ -180,7 +180,11 @@ func fixture(t *testing.T) (version string, invisible []bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close %s: %v", f.Name(), err)
+		}
+	}()
 	invisible = make([]bool, utf8.MaxRune+1)
 	sc := bufio.NewScanner(f)
 	n := 0
