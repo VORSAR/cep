@@ -483,7 +483,7 @@
         "T4"
       ],
       "blocking": true,
-      "timeout_s": 600,
+      "timeout_s": 180,
       "needs": [],
       "scope": [
         "prod",

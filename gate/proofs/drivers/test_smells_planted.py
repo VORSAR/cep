@@ -1,7 +1,7 @@
 """The smells row's planted proofs (S1.1c-5 design note §2, §8 row 1.13 and "the 30 cases").
 
 Each case is one world: the gate's real files, a go.mod with no requirement, the planted Go files, and a registry
-holding the `smells` row in §2.5's shape (ROW_DEF, copied here until the coordinator stages the real row). The world's
+holding the `smells` row in §2.5's shape (ROW_DEF, read from gate/registry.json). The world's
 tool cache links every pinned tool, so the row's lint cache (`<tool cache>/golangci-lint-cache`) is new per world.
 One real gate run per case at T2: the real pinned golangci-lint under linux and darwin. A red case names the plant
 past the bound by file and line (`smells: <file>:<line>:`) and does not name the one at the bound; a green part of a
@@ -15,20 +15,7 @@ from gate.proofs.drivers import support
 
 ROW = "smells"
 JOB = "lint"
-ROW_DEF = {
-    "id": "smells",
-    "job": "lint",
-    "tiers": ["T0", "T1", "T2", "T3", "T4"],
-    "blocking": True,
-    "timeout_s": 600,
-    "needs": [],
-    "scope": ["prod", "test", "tools", "generated"],
-    "expected_scope": ["git", ":(glob)**/*.go", ":(glob,exclude)gate/proofs/**"],
-    "min_wants": 1,
-    "lands_in": "S1.1c-5",
-    "exclusive": False,
-    "command": ["python3.15", "-I", "-B", "-X", "utf8", "gate/runner/rows/smells.py", "{files}"],
-}
+ROW_DEF = support.registry_row(ROW)  # the row as gate/registry.json registers it
 MODULE = "planted.example"
 GO_MOD = f"module {MODULE}\n\ngo 1.27.0\n"
 LIB = "internal/planted"
