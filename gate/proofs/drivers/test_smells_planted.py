@@ -227,11 +227,13 @@ class SmellsPlanted(support.DriverTest):
         self.assertSmellsRed(self.run_row(), [f"{LIB}/p.go:5:"])
 
     def test_a_waiver_on_the_wrong_line_is_red_and_the_finding_stays(self):
-        # Two lines above the finding: golangci-lint v2.15.0 lets an end-of-line //nolint on the line just above a
-        # finding silence it (measured; an open item in the lane's report), so the wrong line here is one further.
+        # The line just above: golangci-lint v2.15.0 widens the //nolint (column 8) to the next line's node that starts
+        # at column 8, the "x" literal, so the panic is silenced and nolintlint is quiet; the row reads the nolint
+        # filter's record and names the panic (coordinator, during S1.1c-5's W1).
         waiver = '\t_ = 1 //nolint:forbidigo // PERMANENT reason="on the wrong line"'
-        self.go(f"{LIB}/p.go", HEAD + lines("func F() {", waiver, "\t_ = 2", '\tpanic("x")', "}"))
-        self.assertSmellsRed(self.run_row(), [f"{LIB}/p.go:4:", f"{LIB}/p.go:6:"])
+        self.go(f"{LIB}/p.go", HEAD + lines("func F() {", waiver, '\tpanic("x")', "}"))
+        silenced = f"{LIB}/p.go:5:2: forbidigo: silenced by the //nolint on line 4; a //nolint waives only its own line"
+        self.assertSmellsRed(self.run_row(), [silenced])
 
     def test_nolint_spellings_golangci_honours_are_red(self):
         forms = ["// nolint:forbidigo // a reason", "//nolint", "//nolint:forbidigo"]
