@@ -1583,3 +1583,51 @@ func TestFixGenerated(t *testing.T) {
 		})
 	}
 }
+
+// failWriter refuses every write, as a closed pipe or a full disk does.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("the report cannot be written") }
+
+// TestCLIWriteFailureIsExit2: a report the runner cannot read is an internal error, never a verdict. cli gives 2 when
+// a line of its report fails to write, in each mode and whatever the verdict would have been (0 for -cases, 1 with a
+// finding, 0 clean).
+func TestCLIWriteFailureIsExit2(t *testing.T) {
+	t.Parallel()
+	const sleepy = "internal/x/a_test.go"
+	sleepySrc := "package x\n\nimport \"time\"\n\nfunc f() { time.Sleep(1) }\n"
+	cases := []struct {
+		name string
+		args func(t *testing.T) (string, []string)
+	}{
+		{"-cases", func(t *testing.T) (string, []string) {
+			root := cliRoot(t, nil, nil, nil, map[string]string{sleepy: sleepySrc})
+			return root, []string{"-cases", "internal/x/gone_test.go"}
+		}},
+		{"-tests with a finding", func(t *testing.T) (string, []string) {
+			root := cliRoot(t, nil, nil, nil, map[string]string{sleepy: sleepySrc})
+			list := filepath.Join(t.TempDir(), "files.nul")
+			if err := os.WriteFile(list, []byte(sleepy+"\x00"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return root, []string{"-tests", list}
+		}},
+		{"-tests clean", func(t *testing.T) (string, []string) {
+			root := cliRoot(t, nil, nil, nil, map[string]string{"internal/x/b_test.go": "package x\n"})
+			list := filepath.Join(t.TempDir(), "files.nul")
+			if err := os.WriteFile(list, []byte("internal/x/b_test.go\x00"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return root, []string{"-tests", list}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			root, args := c.args(t)
+			if code := cli(root, args, failWriter{}); code != 2 {
+				t.Errorf("cli %v with a failing writer: exit %d, want 2", args, code)
+			}
+		})
+	}
+}
