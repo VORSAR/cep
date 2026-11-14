@@ -85,8 +85,7 @@ func git(dir string, args ...string) ([]byte, error) {
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 			return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(exit.Stderr)))
 		}
 		return nil, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
