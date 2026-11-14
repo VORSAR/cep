@@ -203,6 +203,23 @@ class LineRule(CandidateTest):
         self.assert_clean(cand)
         self.assert_loads(cand)
 
+    def test_the_candidate_carries_go_built(self):
+        # S1.1c-5 design §6, §8 row 5.2: the field is copied, upgraded or not, and the candidate still loads.
+        for tool in self.pins["tools"]:
+            if tool["name"] == "golangci-lint":
+                tool["go_built"] = True
+        for tags in ((), ("v2.15.1",)):
+            with self.subTest(upgrade=tags):
+                feeds = copy.deepcopy(self.feeds)
+                self.feeds = feeds
+                self.add_golangci(*tags)
+                cand = self.build()
+                self.assertEqual(bool(tags), "golangci-lint" in [u.name for u in cand.upgrades])  # witness
+                self.assertIs(fs.tool(cand.tools, "golangci-lint").get("go_built"), True)
+                self.assertEqual([t["name"] for t in cand.tools["tools"] if "go_built" in t], ["golangci-lint"])
+                self.assert_clean(cand)
+                self.assert_loads(cand)
+
     def test_go_patch_on_line_and_newer_line_listed(self):
         self.feeds["go"] = [self.go_release("go1.28.0"), self.go_release("go1.27.5"), *self.feeds["go"]]
         cand = self.build()

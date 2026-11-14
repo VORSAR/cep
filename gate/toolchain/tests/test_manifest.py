@@ -382,6 +382,43 @@ class Load(support.ToolchainTest):
         self.assertEqual(manifest.python_paths("/c", tools), ["/c/demo-pkg-1.0-abababababab"])
 
 
+class GoBuilt(support.ToolchainTest):
+    """`go_built` (S1.1c-5 design note §6; §8 row 5.1): only `true` is legal, on an executable only."""
+
+    write = Load.write
+    load_doc = Load.load_doc
+    assert_refused = Load.assert_refused
+
+    def test_true_is_accepted(self):
+        self.assertFalse(self.load_doc(good_doc())[0].go_built)  # witness: absent is the default, False
+        doc = good_doc()
+        doc["tools"][0]["go_built"] = True
+        self.assertIs(self.load_doc(doc)[0].go_built, True)
+
+    def test_false_is_refused(self):
+        doc = good_doc()
+        doc["tools"][0]["go_built"] = False
+        self.assert_refused(doc, 'tools[0] (demo): "go_built": false is the default: remove it')
+
+    def test_a_non_bool_is_refused(self):
+        for value in (1, 0, "true", None, [True], {"x": True}):
+            with self.subTest(value=value):
+                doc = good_doc()
+                doc["tools"][0]["go_built"] = value
+                self.assert_refused(doc, 'tools[0] (demo): "go_built" must be true')
+
+    def test_on_a_python_package_is_refused(self):
+        self.assertEqual(self.load_doc({"schema": 1, "tools": [good_package()]})[0].kind, "python-package")  # witness
+        self.assert_refused({"schema": 1, "tools": [good_package() | {"go_built": True}]}, "tools[0]", "go_built")
+
+    def test_golangci_lint_is_declared_go_built(self):
+        for platform in manifest.SUPPORTED_PLATFORMS:
+            with self.subTest(platform=platform):
+                tools = manifest.load(os.path.join(support.REPO, "tools.json"), platform)
+                self.assertIn("golangci-lint", [t.name for t in tools])
+                self.assertEqual([t.name for t in tools if t.go_built], ["golangci-lint"])
+
+
 class Locate(unittest.TestCase):
     def tool(self, path_dir: str) -> manifest.Tool:
         return manifest.Tool(
