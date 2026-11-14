@@ -7,6 +7,7 @@ package playback_test
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -91,7 +92,7 @@ func cgGenerate(p *plan.App, seed uint64) string {
 					}
 					v = fmt.Sprintf("%q", ldRFC(at))
 				default:
-					panic(fmt.Sprintf("cgGenerate: attribute type %v", a.Type))
+					panic(fmt.Sprintf("cgGenerate: attribute type %v", a.Type)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 				}
 				attrs = append(attrs, fmt.Sprintf("%q:%s", a.Name, v))
 			}
@@ -151,7 +152,11 @@ func cgLive(t testing.TB, p *plan.App, recs []playback.Record) (runtime.Stats, r
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	defer r.Close(ctx)
+	defer func() {
+		if err := r.Close(ctx); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
 	var drained runtime.DrainResult
 	for _, rec := range recs {
 		switch rec.Kind {
@@ -195,7 +200,7 @@ var twTracked = []string{"outbox", "sink-depth", "drained_pending", "partial-cou
 // ceiling, and on a live run of the corpus no high-water mark is over a blocking ceiling; one over an advisory
 // ceiling is reported. CEP_TRIPWIRE_FILE overrides the ceilings' file, for the gate's proofs.
 func TestTripwire(t *testing.T) {
-	path := os.Getenv("CEP_TRIPWIRE_FILE")
+	path := os.Getenv("CEP_TRIPWIRE_FILE") //nolint:forbidigo // PERMANENT reason="an override of the ceilings' file, a path and not an update switch" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	if path == "" {
 		path = filepath.Join("..", "..", "gate", "tripwire.json")
 	}
@@ -262,8 +267,11 @@ func TestTripwire(t *testing.T) {
 
 // TestDeterminismGolden is the T4 determinism row (S3.2b's item 8, exit 7; design s3-2b-2 §9): the corpus replayed
 // through the plan driver gives, byte for byte, the committed golden — on Linux in CI and on macOS, the second OS
-// (owner Q5). CEP_UPDATE_GOLDEN=1 rewrites the golden; CEP_DETERMINISM_PLANT=maporder plants a nondeterminism in
+// (owner Q5). The -update flag rewrites the golden; CEP_DETERMINISM_PLANT=maporder plants a nondeterminism in
 // this path — 64 keys in map iteration order — for the gate's proof (review F11).
+// update rewrites the determinism golden: go test ./internal/playback -run TestDeterminismGolden -args -update.
+var update = flag.Bool("update", false, "rewrite testdata/determinism.golden from the corpus")
+
 func TestDeterminismGolden(t *testing.T) {
 	var b strings.Builder
 	for _, prog := range cgCorpus(t) {
@@ -288,7 +296,7 @@ func TestDeterminismGolden(t *testing.T) {
 			}
 		}
 	}
-	if os.Getenv("CEP_DETERMINISM_PLANT") == "maporder" {
+	if os.Getenv("CEP_DETERMINISM_PLANT") == "maporder" { //nolint:forbidigo // PERMANENT reason="the gate's determinism proofs plant a nondeterminism through this switch" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		keys := map[string]bool{}
 		for i := range 64 {
 			keys[fmt.Sprintf("k%02d", i)] = true
@@ -298,14 +306,14 @@ func TestDeterminismGolden(t *testing.T) {
 		}
 	}
 	golden := filepath.Join("testdata", "determinism.golden")
-	if os.Getenv("CEP_UPDATE_GOLDEN") == "1" {
+	if *update {
 		if err := os.WriteFile(golden, []byte(b.String()), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	want, err := os.ReadFile(golden)
 	if err != nil {
-		t.Fatalf("%v (CEP_UPDATE_GOLDEN=1 writes it)", err)
+		t.Fatalf("%v (-args -update writes it)", err)
 	}
 	if got := b.String(); got != string(want) {
 		g, w := strings.Split(got, "\n"), strings.Split(string(want), "\n")

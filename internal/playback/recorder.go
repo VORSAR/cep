@@ -52,7 +52,8 @@ func (r *Recorder) Header(start int64) error {
 	if err := stamp(start); err != nil {
 		return err
 	}
-	b := append(r.buf[:0], `{"recording":{"start":`...)
+	b := r.buf[:0]
+	b = append(b, `{"recording":{"start":`...)
 	b = appendTime(b, start)
 	return r.line(append(b, `}}`...))
 }
@@ -68,7 +69,8 @@ func (r *Recorder) Event(e *event.Event, arrival int64, payload []byte) error {
 	if err := stamp(arrival); err != nil {
 		return err
 	}
-	b := append(r.buf[:0], '{')
+	b := r.buf[:0]
+	b = append(b, '{')
 	if s.TimeAttr() != event.ArrivalTime {
 		b = append(b, `"arrival":`...)
 		b = appendTime(b, arrival)
@@ -117,7 +119,8 @@ func (r *Recorder) Rejected(stream int, arrival int64, fault *event.DecodeError)
 	if !ok {
 		return fmt.Errorf("playback: recorder: decode reason %d", fault.Reason)
 	}
-	b := append(r.buf[:0], `{"arrival":`...)
+	b := r.buf[:0]
+	b = append(b, `{"arrival":`...)
 	b = appendTime(b, arrival)
 	b = append(b, `,"rejected":{`...)
 	if fault.Attr != "" && fault.Reason != event.DecodeSyntax {
@@ -137,7 +140,8 @@ func (r *Recorder) Tick(now int64) error {
 	if err := stamp(now); err != nil {
 		return err
 	}
-	b := append(r.buf[:0], `{"tick":`...)
+	b := r.buf[:0]
+	b = append(b, `{"tick":`...)
 	b = appendTime(b, now)
 	return r.line(append(b, '}'))
 }
@@ -161,9 +165,11 @@ func (r *Recorder) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 	}
 	for _, row := range rows {
 		if len(row) != len(cols) {
-			return fmt.Errorf("playback: recorder: table %q: a %s row of %d values for %d columns", t.Name, opName, len(row), len(cols))
+			return fmt.Errorf("playback: recorder: table %q: a %s row of %d values for %d columns", t.Name, opName, len(row),
+				len(cols))
 		}
-		b := append(r.buf[:0], `{"op":`...)
+		b := r.buf[:0]
+		b = append(b, `{"op":`...)
 		b = appendString(b, opName)
 		b = append(b, `,"row":{`...)
 		for i, a := range cols {
@@ -196,7 +202,8 @@ func (r *Recorder) BatchEnd(stream int, batch string) error {
 	if batch == "" {
 		return errors.New("playback: recorder: an empty batch id cannot end a batch (the reader refuses one)")
 	}
-	b := append(r.buf[:0], `{"batch_end":`...)
+	b := r.buf[:0]
+	b = append(b, `{"batch_end":`...)
 	b = appendString(b, batch)
 	b = append(b, `,"stream":`...)
 	b = appendString(b, r.app.Streams[stream].Schema.Stream())

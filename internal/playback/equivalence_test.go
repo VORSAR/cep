@@ -224,7 +224,11 @@ func eqLive(t testing.TB, p *plan.App, recs []playback.Record, n int) (*eqResult
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	defer r.Close(ctx)
+	defer func() {
+		if err := r.Close(ctx); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
 	for _, rec := range recs {
 		switch rec.Kind {
 		case playback.RecEvent:

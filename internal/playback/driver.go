@@ -73,7 +73,7 @@ func (d *Driver) Step(rec Record) Step {
 			op = runtime.TableDelete
 		}
 		if err := d.sync.TableWrite(rec.Table, op, [][]event.Value{rec.Row}); err != nil {
-			panic(fmt.Sprintf("playback: line %d: a table refused a record the Reader accepted: %v", rec.Line, err))
+			panic(fmt.Sprintf("playback: line %d: a table refused a record the Reader accepted: %v", rec.Line, err)) //nolint:forbidigo,lll // PERMANENT reason="the Reader checks a table record before the driver writes it; a refusal is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		st.Kind, st.Table, st.Op = StepTable, rec.Table, rec.Op
 	case RecBatchEnd:
@@ -88,7 +88,7 @@ func (d *Driver) Step(rec Record) Step {
 		d.sync.Reject(rec.Stream, rec.Arrival)
 		st.Kind, st.Stream = StepRejected, rec.Stream
 	default:
-		panic(fmt.Sprintf("playback: line %d: record kind %d", rec.Line, rec.Kind))
+		panic(fmt.Sprintf("playback: line %d: record kind %d", rec.Line, rec.Kind)) //nolint:forbidigo,lll // PERMANENT reason="the Reader yields only the record kinds this switch covers; another is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	st.Tables = d.sync.Snapshot()
 	return st

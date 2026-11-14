@@ -1,7 +1,7 @@
 """gate/regen-baseline: re-records the Tier-2 baselines (qa-strategy §3; design s3-3-2 §8.3).
 
 It re-runs Tier 1 first (the gate's `conformance` and `semantics` rows), writes a fresh run (TestBaseline with
-CEP_BASELINE_WRITE), classifies every block against the stored baseline and records only when no block is refused.
+-args -baseline-write), classifies every block against the stored baseline and records only when no block is refused.
 Run by path from the repository root with the pinned interpreter:
 
     python3.15 -I -B -X utf8 gate/baseline/regen.py [--accept '<file> <file>:<rule>:<ordinal> …']
@@ -245,8 +245,8 @@ def fresh_run(repo: str, out_dir: str) -> int:
 
     cache, tools = _toolchain(repo)
     env = gate_env.clean_env(os.environ, manifest.path_dirs(cache, tools))
-    env["CEP_BASELINE_WRITE"] = out_dir
     cmd = ["go", "test", "-count=1", "-run", "^TestBaseline$", "./internal/playback"]
+    cmd += ["-args", "-baseline-write=" + out_dir]
     return subprocess.run(cmd, cwd=repo, env=env, stdin=subprocess.DEVNULL, check=False).returncode
 
 
