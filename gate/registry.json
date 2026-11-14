@@ -590,9 +590,10 @@
         "gate/proofs/go.mod",
         "gate/proofs/go.sum",
         "tools/deps-allowlist.json",
-        "tools/allowlists/vulns.json"
+        "tools/allowlists/vulns.json",
+        "tools.json"
       ],
-      "min_wants": 6,
+      "min_wants": 7,
       "lands_in": "S1.1c-4",
       "exclusive": false,
       "command": [
