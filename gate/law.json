@@ -714,7 +714,8 @@
         "gate/known-issues.json",
         "gate/sprints.json",
         "gate/current-sprint",
-        "docs/sprints/decisions.md"
+        "docs/sprints/decisions.md",
+        "tools/allowlists/smells.json"
       ]
     },
     {
