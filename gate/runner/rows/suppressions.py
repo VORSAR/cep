@@ -19,14 +19,54 @@ from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import allowlists, anchors, rows, sprintid, suppressions
+from gate.runner import allowlists, anchors, pin, rows, sprintid, suppressions
 
 LISTS = "tools/allowlists/"
 RUFF_TOML = "ruff.toml"
 RUFF_WAIVERS = ("per-file-ignores", "extend-per-file-ignores")
 RUFF_GLOBAL = ("ignore", "extend-ignore")
-# ruff.toml as tomllib parses it, minus lint.per-file-ignores (S1.1c-5 design §5). Stub (W0b): lane B writes it.
-RUFF_PINNED: dict[str, object] = {}
+_REAP = "never reap children behind subprocess's back (it turns a failure into exit 0)"
+_IGNORE = "never ignore a signal: an ignored SIGCHLD reports a failed child as exit 0"
+# ruff.toml as tomllib parses it, minus lint.per-file-ignores (S1.1c-5 design §5): pinned whole and type-strict
+# through pin.differences, so a key that hides a finding (builtins, dummy-variable-rgx, a pycodestyle max-line-length,
+# an exclude, a narrowed select, M-5) is named by its path. per-file-ignores is ruff.json's, checked both ways below.
+# A file that needs per-file-target-version is edited here and in ruff.toml (both law paths).
+RUFF_PINNED: dict[str, object] = {
+    "target-version": "py315",
+    "line-length": 120,
+    "per-file-target-version": {
+        "gate/bootstrap.py": "py39",
+        "gate/toolchain/install.py": "py312",
+        "gate/toolchain/manifest.py": "py312",
+        "gate/run.py": "py312",
+        "gate/runner/pyshim.py": "py312",
+        "gate/runner/tests/test_run_guard.py": "py312",
+        "gate/toolchain/tests/support.py": "py312",
+        "gate/toolchain/tests/test_bootstrap.py": "py312",
+        "gate/toolchain/tests/test_install.py": "py312",
+        "gate/toolchain/tests/test_manifest.py": "py312",
+        ".githooks/*": "py39",
+        "gate/hooks/*.py": "py312",
+        "gate/hooks/tests/test_launcher.py": "py312",
+    },
+    "lint": {
+        "select": ["E", "W", "F", "I", "B", "UP", "SIM", "TID", "BLE", "S602", "S604", "S605"],
+        "flake8-tidy-imports": {
+            "banned-api": {
+                "time.sleep": {"msg": "wait for a state through gate/wait.py, never for time (testing.md rule 1)"},
+                "os.system": {"msg": "use subprocess with an argv list"},
+                "os.wait": {"msg": _REAP},
+                "os.wait3": {"msg": _REAP},
+                "os.wait4": {"msg": _REAP},
+                "os.waitpid": {"msg": _REAP},
+                "os.waitid": {"msg": _REAP},
+                "shutil.move": {"msg": "use os.rename: atomic, and never nests into an existing directory"},
+                "signal.SIG_IGN": {"msg": _IGNORE},
+                "signal.Handlers.SIG_IGN": {"msg": _IGNORE},
+            }
+        },
+    },
+}
 REGISTRY = "gate/registry.json"
 KNOWN_ISSUES = "gate/known-issues.json"
 GENERATED_LIST = "tools/allowlists/generated.json"
@@ -86,18 +126,22 @@ def _pair(target: str) -> tuple[str, str]:
 
 
 def ruff_pin(lists: dict[str, allowlists.AllowList]) -> list[str]:
-    """ruff.toml's per-file waivers and ruff.json's targets, both ways; a global ignore is red. The pin reads
-    [lint]'s per-file tables only, so every other place ruff takes a waiver from is red (BK-B2, measured with the
-    pinned ruff 0.17.3): `extend` (another file's settings, maybe outside every law path), and the deprecated
-    top-level `ignore`, `extend-ignore`, `per-file-ignores` and `extend-per-file-ignores`, which ruff still honours.
-    Refused rather than read: one table to pin both ways, and nothing ruff itself warns about."""
+    """ruff.toml pinned whole (S1.1c-5 design §5): the document minus lint.per-file-ignores equals RUFF_PINNED
+    type-strictly, each difference named by its path (`pin.differences`); then ruff.toml's per-file waivers and
+    ruff.json's targets, both ways. The deny-list texts below predate the whole pin (BK-B2, measured with ruff
+    0.17.3): `extend` (another file's settings, maybe outside every law path), the deprecated top-level `ignore`,
+    `extend-ignore`, `per-file-ignores` and `extend-per-file-ignores`, which ruff still honours, and a global
+    lint ignore. The pin already names each; they stay as the clearer texts."""
     try:
         with open(RUFF_TOML, "rb") as f:
             top = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
         return [f"{RUFF_TOML}: {e}"]
     lint = top.get("lint", {})
-    faults = []
+    if type(lint) is not dict:
+        return [f"{RUFF_TOML}: lint is not a table"]
+    pinned = {**top, "lint": {key: value for key, value in lint.items() if key != "per-file-ignores"}}
+    faults = pin.differences(pinned, RUFF_PINNED, RUFF_TOML)
     if "extend" in top:
         faults.append("ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there")
     faults += [
