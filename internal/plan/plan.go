@@ -33,8 +33,9 @@ type Stream struct {
 	Delay     int64        // d, ms: the bound; 0 for ascending and arrival
 	IdleAfter int64        // ms; 0: none
 	Derived   bool         // no time clause, produced by a rule
-	Source    *Connector   // the stream's @source annotation, if any (design s3-3-1 §3.4; the facade never reads the model)
-	Sink      *Connector   // its @sink annotation, if any
+	// the stream's @source annotation, if any (design s3-3-1 §3.4; the facade never reads the model)
+	Source *Connector
+	Sink   *Connector // its @sink annotation, if any
 }
 
 // Connector is a stream's connector annotation as the facade binds it: the type, every other key with its value as
@@ -219,7 +220,8 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 		}
 		item := selected(r.Select, a.Name)
 		if item == nil {
-			return Rule{}, fmt.Errorf("%s.%s is bound by no select item (Build is given only a checked model)", out.Stream(), a.Name)
+			return Rule{}, fmt.Errorf("%s.%s is bound by no select item (Build is given only a checked model)", out.Stream(),
+				a.Name)
 		}
 		spec.sel = append(spec.sel, projSpec{idx: i, node: *item, widen: a.Type == event.TFloat})
 	}
@@ -242,8 +244,10 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 					attrs[p], types[p] = i, a.Type
 				}
 			}
-			if attrs[p] < 0 || slices.Index(attrs[:p], attrs[p]) >= 0 { // E-NAME-001, E-PART-006: Build is given only a checked model
-				return Rule{}, fmt.Errorf("stream %s: key attribute %s is unknown or named twice (a checked model has neither)", k.Stream, ka.Name)
+			// E-NAME-001, E-PART-006: Build is given only a checked model
+			if attrs[p] < 0 || slices.Index(attrs[:p], attrs[p]) >= 0 {
+				return Rule{}, fmt.Errorf("stream %s: key attribute %s is unknown or named twice (a checked model has neither)",
+					k.Stream, ka.Name)
 			}
 		}
 		pr.KeyAttrs, pr.KeyTypes, pr.TTL = [][]int{attrs}, types, r.Partition.TTL.Ms
@@ -251,7 +255,7 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 	pr.NewBody = func(emit func(event.Event)) partition.Body {
 		b, err := spec.compile() // each body owns its trees: nothing is shared across shards
 		if err != nil {
-			panic(fmt.Sprintf("plan: rule %s: an expression Build accepted failed to compile again: %v", r.Name, err))
+			panic(fmt.Sprintf("plan: rule %s: an expression Build accepted failed to compile again: %v", r.Name, err)) //nolint:forbidigo,lll // PERMANENT reason="an expression Build accepted compiles again the same way; a failure is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		b.emit = emit
 		return b
