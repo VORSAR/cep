@@ -96,6 +96,7 @@
 | 2026-11-14 | [the proof-world speed-up's measurement](#owner-decisions-2026-11-14--the-proof-world-speed-ups-measurement) |
 | 2026-11-14 | [the proof-world speed-up's design reviews](#owner-decisions-2026-11-14--the-proof-world-speed-ups-design-reviews) |
 | 2026-11-14 | [S1.1c-5's plan check](#owner-decisions-2026-11-14--s11c-5s-plan-check) |
+| 2026-11-14 | [S1.1c-5's design, before its reviews](#owner-decisions-2026-11-14--s11c-5s-design-before-its-reviews) |
 
 ## The decisions
 
@@ -944,7 +945,13 @@ Ten answers, all as recommended.
 9. **errcheck's built-in exclusions are kept, written out in the pinned config** (as recommended). Rejected: switching them off.
 10. **Confirmed** (as recommended):
     - `fmt.Print*` is allowed in package-main tools;
-    - the config is `.golangci.json`, so no YAML dependency;
+    - the config is `.golangci.json`, so no YAML dependency *(annotated 2026-11-14: changed to `.golangci.toml` — [the design, before its reviews](#owner-decisions-2026-11-14--s11c-5s-design-before-its-reviews), decision 1)*;
     - lint runs under both `GOOS=linux` and `darwin`;
     - lll counts a tab as one column, and funlen counts comment lines;
     - the ruff pin is a fixed list of `ruff.toml` keys and values.
+
+### Owner decisions, 2026-11-14 — S1.1c-5's design, before its reviews
+
+The design note's first draft measured that golangci-lint v2.15.0 reads a JSON config's numbers as floats. revive, the only linter with ADR-0015 §2's file-length (500) and parameter (5) limits, refuses them: `setup revive: cannot configure rule: "argument-limit": invalid value…`. golangci-lint then reports "0 issues", so neither limit would ever fire. The coordinator reproduced it. The same settings in TOML report a six-parameter function and pass five. One answer, as recommended.
+
+1. **The lint config is `.golangci.toml`** (as recommended). Python's standard library reads TOML (`tomllib`, in both pinned interpreters), so there is no new dependency, and the gate pins the parsed document whole as decided. This replaces decision 10's confirm of `.golangci.json` (S1.1c-5's plan check). Rejected: JSON without revive's two limits (against ADR-0015 §2's set); YAML with a new dependency (ground rules 3 and 20).
