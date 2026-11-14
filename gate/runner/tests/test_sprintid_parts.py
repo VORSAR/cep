@@ -92,3 +92,61 @@ class Passed(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# S1.1c-5 design §3.2, §8 3.1: `Order.reached_part(part, marker)`, the parts printed as rows after their open row.
+PRINTED = sprintid.Order(
+    tuple(
+        sprintid.Row(id, closed)
+        for id, closed in (
+            ("S3.3", True),
+            ("S1.1c", False),
+            ("S1.1c-5", False),
+            ("S1.1c-6", False),
+            ("S1.1c-7", False),
+            ("S1.1c-8", False),
+            ("S1.1c-10", False),
+            ("S4.1", False),
+        )
+    )
+)
+
+
+class ReachedPart(unittest.TestCase):
+    def test_the_design_table(self):
+        for part, marker, want in (
+            ("S1.1c-6", "S1.1c-5", False),
+            ("S1.1c-6", "S1.1c-6", True),
+            ("S1.1c-6", "S1.1c-7", True),
+            ("S1.1c-6", "S4.1", True),
+            ("S1.1c-6", "S1.1c", False),
+        ):
+            with self.subTest(part=part, marker=marker):
+                self.assertIs(PRINTED.reached_part(part, marker), want)
+        with self.subTest(part="S1.1c-9"):
+            with self.assertRaises(ValueError) as cm:
+                PRINTED.reached_part("S1.1c-9", "S1.1c-5")
+            self.assertEqual(str(cm.exception), "S1.1c-9: not a printed part of gate/sprints.json")
+
+    def test_a_part_less_marker_at_the_parts_row_is_false(self):
+        for part in ("S1.1c-5", "S1.1c-8", "S1.1c-10"):
+            with self.subTest(part=part):
+                self.assertIs(PRINTED.reached_part(part, "S1.1c"), False)
+
+    def test_an_unprinted_part_raises(self):
+        # S1.1c-4 is a part of the printed row S1.1c, but not itself printed: `index` would place it at its row.
+        with self.assertRaises(ValueError) as cm:
+            PRINTED.reached_part("S1.1c-4", "S4.1")
+        self.assertEqual(str(cm.exception), "S1.1c-4: not a printed part of gate/sprints.json")
+
+    def test_a_row_id_as_part_raises(self):
+        for part in ("S1.1c", "S4.1"):
+            with self.subTest(part=part):
+                with self.assertRaises(ValueError) as cm:
+                    PRINTED.reached_part(part, "S4.1")
+                self.assertEqual(str(cm.exception), f"{part}: not a printed part of gate/sprints.json")
+
+    def test_parts_compare_as_numbers(self):
+        # Printed order: S1.1c-6 before S1.1c-10; a string sort puts "S1.1c-10" first.
+        self.assertIs(PRINTED.reached_part("S1.1c-10", "S1.1c-6"), False)
+        self.assertIs(PRINTED.reached_part("S1.1c-6", "S1.1c-10"), True)
