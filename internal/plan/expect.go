@@ -62,7 +62,8 @@ func expects(app *model.App, p *App, streams map[string]int) ([]Expect, error) {
 			b := &r.Expects[bi]
 			x, err := expect(app, p, streams, tables, r, b)
 			if err != nil {
-				return nil, fmt.Errorf("plan: rule %s, expect block %d: %w (Build is given only a checked model)", r.Name, bi+1, err)
+				return nil, fmt.Errorf("plan: rule %s, expect block %d: %w (Build is given only a checked model)", r.Name, bi+1,
+					err)
 			}
 			x.Rule, x.Block = ri, bi+1
 			out = append(out, x)
@@ -175,14 +176,16 @@ func values(attrs []model.Attr, rec model.Record, timeIdx int) ([]event.Value, e
 	return out, nil
 }
 
-// value is a block's literal as a value of type t: an int literal for a float widens (as validate.as); null is t's null.
+// value is a block's literal as a value of type t: an int literal for a float widens (as validate.as); null is t's
+// null.
 func value(l model.Literal, t event.Type) (event.Value, error) {
 	switch {
 	case l.Kind == model.LitNull:
 		return event.Value{Kind: t, Null: true}, nil
 	case l.Kind == model.LitString && t == event.TString:
 		return event.Value{Kind: t, Str: l.Str}, nil
-	case l.Kind == model.LitString && t == event.TObject: // its JSON text, in the boundary's stored form (owner, 2026-11-10)
+	// its JSON text, in the boundary's stored form (owner, 2026-11-10)
+	case l.Kind == model.LitString && t == event.TObject:
 		return event.Value{Kind: t, Obj: event.CleanObject([]byte(strings.TrimSpace(l.Str)))}, nil
 	case l.Kind == model.LitInt && t == event.TInt:
 		return event.Value{Kind: t, I: l.Int}, nil

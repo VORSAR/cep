@@ -300,7 +300,7 @@ func TestRatePanicResetStartsFresh(t *testing.T) {
 	body := rule.NewBody(func(e event.Event) {
 		calls++
 		if calls == 1 {
-			panic("planted: the first emission fails")
+			panic("planted: the first emission fails") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		out = append(out, e)
 	})
