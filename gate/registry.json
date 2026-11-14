@@ -555,7 +555,8 @@
         "gate/known-issues.json",
         "gate/sprints.json",
         "gate/current-sprint",
-        "docs/sprints/decisions.md"
+        "docs/sprints/decisions.md",
+        "tools/allowlists/smells.json"
       ],
       "min_wants": 1,
       "lands_in": "S1.1c-3",
