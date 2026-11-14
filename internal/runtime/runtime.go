@@ -58,7 +58,8 @@ type App struct {
 }
 
 // Recorder writes one app's recording (design s3-2b-2 §7). The runtime calls it from the app's recorder goroutine —
-// never the router's — in intake order: each record is queued before the step it records. A non-nil error ends the recording for good (owner Q2 of S3.2b-2): the router never calls
+// never the router's — in intake order: each record is queued before the step it records. A non-nil error ends the
+// recording for good (owner Q2 of S3.2b-2): the router never calls
 // it again, records the failure in Stats and goes on running the app.
 type Recorder interface {
 	Header(start int64) error                                           // once, before any other call
@@ -67,7 +68,8 @@ type Recorder interface {
 	Tick(now int64) error
 	Table(table int, op TableOp, rows [][]event.Value) error // only a write that succeeded
 	Stop() error                                             // at the drain, once
-	BatchEnd(stream int, batch string) error                 // a source's batch-close signal, in intake order (design s3-3-1 §2.1)
+	// a source's batch-close signal, in intake order (design s3-3-1 §2.1)
+	BatchEnd(stream int, batch string) error
 }
 
 // Config is the runtime's configuration; zero values take the defaults.
@@ -91,7 +93,8 @@ var (
 	ErrStarted  = errors.New("runtime: the app is already activated")      // design s3-3-1 §2.1
 	ErrRemoved  = errors.New("runtime: the app is removed")                // design s3-3-1 §2.1
 	ErrActive   = errors.New("runtime: the app is active: drain it first") // Remove of an active app
-	// ErrDrainIncomplete is Remove of a draining app whose barrier has not run (a Drain stuck on its sources): drain again.
+	// ErrDrainIncomplete is Remove of a draining app whose barrier has not run (a Drain stuck on its sources): drain
+	// again.
 	ErrDrainIncomplete = errors.New("runtime: the drain is not complete: drain it again")
 )
 
@@ -150,9 +153,10 @@ type Stats struct {
 
 // Runtime is a running engine core (design §2–§6).
 type Runtime struct {
-	start     int64 // the deployment's start: the stamps' floor (review F5)
-	cfg       Config
-	apps      atomic.Pointer[[]*appState] // copy-on-write by the router (iAdd, iRemove); callers Load a snapshot (design s3-3-1 §2.5 MUST 1)
+	start int64 // the deployment's start: the stamps' floor (review F5)
+	cfg   Config
+	// copy-on-write by the router (iAdd, iRemove); callers Load a snapshot (design s3-3-1 §2.5 MUST 1)
+	apps      atomic.Pointer[[]*appState]
 	shards    []*shard
 	intake    chan item
 	handoff   chan handoff
@@ -267,11 +271,13 @@ type item struct {
 }
 
 type reply struct {
-	err       error
-	id        AppID // iAdd's
-	pending   int64
-	markers   []chan struct{}
-	recMarker chan struct{} // a drain's recording stop, or an ended recording's queued records, waited for only until the drain's deadline (owner, 2026-11-06)
+	err     error
+	id      AppID // iAdd's
+	pending int64
+	markers []chan struct{}
+	// a drain's recording stop, or an ended recording's queued records, waited for only until the drain's deadline (owner,
+	// 2026-11-06)
+	recMarker chan struct{}
 	stats     Stats
 }
 
@@ -473,7 +479,8 @@ func validateApp(i int, a *App) error {
 	}
 	for sid, sch := range a.Schemas {
 		if sch.Stream() != a.Streams[sid].Name {
-			return fmt.Errorf("runtime: app %d: schema %d describes stream %q, not %q", i, sid, sch.Stream(), a.Streams[sid].Name)
+			return fmt.Errorf("runtime: app %d: schema %d describes stream %q, not %q", i, sid, sch.Stream(),
+				a.Streams[sid].Name)
 		}
 	}
 	for ri, rule := range a.Rules {
@@ -613,7 +620,8 @@ func streamStats(a *appState) []StreamStats {
 	}
 	for i := range out {
 		c := a.ing.counts[i]
-		out[i] = StreamStats{Late: a.late[i], AfterDrain: a.after[i], Rejected: c.rejected, Unknown: c.unknown, FlagOverrides: c.overrides, Batches: a.batches[i]}
+		out[i] = StreamStats{Late: a.late[i], AfterDrain: a.after[i], Rejected: c.rejected, Unknown: c.unknown,
+			FlagOverrides: c.overrides, Batches: a.batches[i]}
 	}
 	return out
 }
@@ -630,32 +638,41 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 	}
 	sch := a.app.Schemas[e.StreamID]
 	if len(e.Values) != sch.NumAttrs() {
-		return fmt.Errorf("runtime: app %d stream %q: %d values for %d attributes", app, sch.Stream(), len(e.Values), sch.NumAttrs())
+		return fmt.Errorf("runtime: app %d stream %q: %d values for %d attributes", app, sch.Stream(), len(e.Values),
+			sch.NumAttrs())
 	}
 	for i, v := range e.Values {
 		at := sch.Attr(i)
 		switch {
 		case v.Kind != at.Type:
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(), at.Name, v.Kind, at.Type)
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(),
+				at.Name, v.Kind, at.Type)
 		case v.Null && !at.Optional:
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app, sch.Stream(), at.Name)
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app,
+				sch.Stream(), at.Name)
 		case v.Null && i == sch.TimeAttr():
 			// the decoder refuses a null time attribute (event.DecodeNull); the Go boundary agrees, so no event enters
 			// at timestamp 0 (S3.3-1's break-it S1)
 			return fmt.Errorf("runtime: app %d stream %q: the time attribute %q is null", app, sch.Stream(), at.Name)
 		case v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)", app, sch.Stream(), at.Name, v.F)
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)",
+				app, sch.Stream(), at.Name, v.F)
 		}
 		if err := recordable(v); err != nil {
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(), at.Name, err)
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(),
+				at.Name, err)
 		}
 	}
 	if ta := sch.TimeAttr(); ta != event.ArrivalTime && e.Ts != e.Values[ta].T {
-		return fmt.Errorf("runtime: app %d stream %q: Ts %d differs from the time attribute %q, %d: an event-time stream's time is its attribute (S3.2a-1's D2; owner D1 of S3.2b-2's design)",
+		return fmt.Errorf(
+			"runtime: app %d stream %q: Ts %d differs from the time attribute %q, %d: an event-time stream's time is its "+
+				"attribute (S3.2a-1's D2; owner D1 of S3.2b-2's design)",
 			app, sch.Stream(), e.Ts, sch.Attr(ta).Name, e.Values[ta].T)
 	}
 	if lineBound(sch, e) > event.MaxLogLine {
-		return fmt.Errorf("runtime: app %d stream %q: the event could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", app, sch.Stream(), event.MaxLogLine)
+		return fmt.Errorf(
+			"runtime: app %d stream %q: the event could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)",
+			app, sch.Stream(), event.MaxLogLine)
 	}
 	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
 }
@@ -678,7 +695,8 @@ func CheckRows(table string, attrs []event.Attr, rows [][]event.Value) error {
 			}
 		}
 		if rowBound(table, attrs, row) > event.MaxLogLine {
-			return fmt.Errorf("row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", ri, event.MaxLogLine)
+			return fmt.Errorf("row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", ri,
+				event.MaxLogLine)
 		}
 	}
 	return nil
@@ -690,7 +708,9 @@ func (r *Runtime) Closed() bool { return r.isClosed() || r.inflight.closed() }
 // Tick hands a wall tick to the intake, behind every event already there.
 func (r *Runtime) Tick(ctx context.Context, now int64) error {
 	if !event.TimestampInRange(now) {
-		return fmt.Errorf("runtime: Tick at %d ms: outside the years 0000-9999, which a recording cannot write (owner D1 of S3.2b-2's design; break-it S2)", now)
+		return fmt.Errorf(
+			"runtime: Tick at %d ms: outside the years 0000-9999, which a recording cannot write (owner D1 of S3.2b-2's "+
+				"design; break-it S2)", now)
 	}
 	if r.isClosed() {
 		return ErrClosed
@@ -754,11 +774,12 @@ type send struct {
 }
 
 type drainWait struct {
-	app       *appState
-	acks      int
-	pending   int64
-	replies   []chan reply  // the Drain calls waiting for this drain's result
-	recMarker chan struct{} // closed once the recording's stop is written, or an ended recording's queued records are; nil: no recording
+	app     *appState
+	acks    int
+	pending int64
+	replies []chan reply // the Drain calls waiting for this drain's result
+	// closed once the recording's stop is written, or an ended recording's queued records are; nil: no recording
+	recMarker chan struct{}
 }
 
 type statsWait struct {
@@ -940,7 +961,8 @@ func (rt *router) ingest(it item) {
 	case iTick:
 		stamp := rt.now(it.now)
 		for _, a := range r.appList() {
-			if a == nil || a.ing == nil || !a.activated || a.drained || a.quiet { // the clock starts at Start (owner, 2026-11-08)
+			// the clock starts at Start (owner, 2026-11-08)
+			if a == nil || a.ing == nil || !a.activated || a.drained || a.quiet {
 				continue
 			}
 			a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
@@ -998,7 +1020,8 @@ func (rt *router) ingest(it item) {
 		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
 		for _, a := range r.appList() {
 			if a == nil { // never installed here
-				st.Streams, st.Recording, st.Rules = append(st.Streams, nil), append(st.Recording, RecordingStats{}), append(st.Rules, nil)
+				st.Streams, st.Recording, st.Rules = append(st.Streams, nil), append(st.Recording, RecordingStats{}), append(
+					st.Rules, nil)
 				continue
 			}
 			st.Streams = append(st.Streams, streamStats(a)) // a removed app: zero rows of its length (MUST 2)
@@ -1020,7 +1043,8 @@ func (rt *router) ingest(it item) {
 // event is design §4: the ingest step (stamping e in place), the offers by key, and one message per shard, each a
 // view delivered before the next step (design s3-2b-1 v2 §4). The caller checks the app is not drained and gives the
 // arrival stamp. adv is the ingest step's, valid until its next call.
-func (rt *router) event(a *appState, e *event.Event, arrival int64, info event.Decoded) (late bool, adv []clock.WMAdvance) {
+func (rt *router) event(a *appState, e *event.Event, arrival int64, info event.Decoded) (late bool,
+	adv []clock.WMAdvance) {
 	reg := a.ing.Registry()
 	before := reg.Admission(e.StreamID)
 	late, adv = a.ing.Event(e, arrival, info)
@@ -1089,7 +1113,8 @@ func (a *appState) write(tableID int, op TableOp, rows [][]event.Value) error {
 
 // broadcast delivers one advance-only (or drain) message to every shard, with the app's snapshot (owner D5 of
 // S3.2a-1); final marks a drain or the end, whose advances on-arrival rules take too (owner D1 of S3.2b-1).
-func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, tables *table.Snapshot, token uint64, final bool) {
+func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, tables *table.Snapshot, token uint64,
+	final bool) {
 	for sid := range rt.r.shards {
 		rt.deliver(sid, message{kind: kind, app: a.id, adv: adv, tables: tables, token: token, admStream: -1, final: final})
 	}
@@ -1292,7 +1317,8 @@ func (sh *shard) install(app AppID, a *App) (err error) {
 			if e.StreamID < 0 || e.StreamID >= len(streams) || !streams[e.StreamID].Derived {
 				// a body's fault: partition recovers it and resets the key (owner F10); the router never sees it
 				// (break-it B1)
-				panic(fmt.Sprintf("runtime: rule %q emitted on stream %d, which is not a derived stream of app %d", name, e.StreamID, app))
+				panic(fmt.Sprintf( //nolint:forbidigo,lll // PERMANENT reason="a body emitting on a stream that is not derived is a fault partition recovers, resetting the key (owner F10)" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
+					"runtime: rule %q emitted on stream %d, which is not a derived stream of app %d", name, e.StreamID, app))
 			}
 			sh.outbox = append(sh.outbox, outItem{kind: oEvent, app: app, ev: e})
 			if sh.burst[ai][ri]++; sh.burst[ai][ri] == 1 {
@@ -1303,7 +1329,8 @@ func (sh *shard) install(app AppID, a *App) (err error) {
 		if err != nil {
 			return fmt.Errorf("runtime: app %d rule %d (%q): %w", app, ri, rule.Name, err)
 		}
-		pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body, OnArrival: rule.OnArrival})
+		pr, err := partition.NewRule(partition.Config{Inputs: rule.Inputs, KeyTypes: rule.KeyTypes, TTL: rule.TTL, Body: body,
+			OnArrival: rule.OnArrival})
 		if err != nil {
 			return fmt.Errorf("runtime: app %d rule %d (%q): %w", app, ri, rule.Name, err)
 		}
@@ -1445,7 +1472,8 @@ func (sh *shard) stats() *shardStats {
 			}
 		}
 		if rules == nil { // a removed app: zero rows keep [app] indexes stable
-			st.rules, st.emits, st.panics, st.outHigh = append(st.rules, nil), append(st.emits, nil), append(st.panics, nil), append(st.outHigh, nil)
+			st.rules, st.emits, st.panics, st.outHigh = append(st.rules, nil), append(st.emits, nil), append(st.panics, nil),
+				append(st.outHigh, nil)
 			continue
 		}
 		st.rules = append(st.rules, ps)

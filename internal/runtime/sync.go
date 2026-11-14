@@ -28,7 +28,9 @@ func NewSync(app App, start int64, virtual bool, out func(e event.Event)) (*Sync
 		start = 0
 	}
 	// A Sync delivers in place and never queues: one-slot queues, not the live defaults (design s3-3-2 §5.2, C5).
-	r, err := build(Config{Shards: 1, Mailbox: 1, Intake: 1, SinkQueue: 1, RecordQueue: 1, Now: func() int64 { return start }}, []App{app})
+	r, err := build(Config{Shards: 1, Mailbox: 1, Intake: 1, SinkQueue: 1, RecordQueue: 1, Now: func() int64 {
+		return start
+	}}, []App{app})
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +160,8 @@ func (s *Sync) Stats() Stats {
 func FromPlan(p *plan.App, tables *table.Set, sinks []SinkBinding) App {
 	a := App{Rules: p.Rules, Sinks: sinks, Tables: tables}
 	for _, st := range p.Streams {
-		a.Streams = append(a.Streams, clock.StreamSpec{Name: st.Schema.Stream(), Delay: st.Delay, IdleAfter: st.IdleAfter, Derived: st.Derived})
+		a.Streams = append(a.Streams, clock.StreamSpec{Name: st.Schema.Stream(), Delay: st.Delay, IdleAfter: st.IdleAfter,
+			Derived: st.Derived})
 		a.Schemas = append(a.Schemas, st.Schema)
 	}
 	if tables == nil && len(p.Tables) > 0 {
@@ -166,7 +169,7 @@ func FromPlan(p *plan.App, tables *table.Set, sinks []SinkBinding) App {
 		for _, t := range p.Tables {
 			tb, err := table.New(t.Name, t.Attrs, t.Key)
 			if err != nil {
-				panic(fmt.Sprintf("runtime: FromPlan: table %s: %v (a plan holds only checked tables)", t.Name, err))
+				panic(fmt.Sprintf("runtime: FromPlan: table %s: %v (a plan holds only checked tables)", t.Name, err)) //nolint:forbidigo,lll // PERMANENT reason="a plan holds only tables the validator checked; table.New refusing one is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 			}
 			ts = append(ts, tb)
 		}

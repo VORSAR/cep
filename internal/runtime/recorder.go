@@ -48,7 +48,9 @@ type recQ struct {
 	overflow chan int64    // the router's one signal that the queue filled: the records queued before it
 	stop     chan struct{} // closed by Remove's router step: write what is queued, flush, return (design s3-3-1 §2.4)
 	returned chan struct{} // closed by the goroutine when it returns
-	settled  chan struct{} // closed by the goroutine once an ended recording's output is final: the records queued before a full queue written and flushed, or the Recorder's failure
+	// closed by the goroutine once an ended recording's output is final: the records queued before a full queue written
+	// and flushed, or the Recorder's failure
+	settled chan struct{}
 
 	ended  bool  // the router's: the recording has ended (a full queue, or it saw the goroutine fail); put nothing more
 	queued int64 // the router's: records put
@@ -64,7 +66,8 @@ type recQ struct {
 }
 
 func newRecQ(rec Recorder, capacity int) *recQ {
-	return &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1), stop: make(chan struct{}), returned: make(chan struct{}), settled: make(chan struct{})}
+	return &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1), stop: make(chan struct{}),
+		returned: make(chan struct{}), settled: make(chan struct{})}
 }
 
 // drainStop is the router's drain step: it queues the recording's stop and a marker closed once the stop is written,
@@ -99,7 +102,8 @@ func (q *recQ) put(it recItem) bool {
 		return true
 	default:
 		q.ended = true
-		q.fail(fmt.Sprintf("runtime: recording queue full after record %d: the recording stopped; detection goes on", q.queued))
+		q.fail(fmt.Sprintf("runtime: recording queue full after record %d: the recording stopped; detection goes on",
+			q.queued))
 		q.overflow <- q.queued // once: ended stops every later put; the goroutine writes what is queued
 		return false
 	}
@@ -125,7 +129,8 @@ func (q *recQ) cut() {
 	}
 	q.cutOff = true
 	if !q.failed {
-		q.failed, q.err = true, "runtime: the recording's stop was not written before the drain's deadline: the recording is incomplete"
+		q.failed, q.err = true,
+			"runtime: the recording's stop was not written before the drain's deadline: the recording is incomplete"
 		return
 	}
 	q.err += "; its queued records were not written before the drain's deadline: the recording is incomplete"

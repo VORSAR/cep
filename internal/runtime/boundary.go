@@ -105,7 +105,8 @@ func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payloa
 	}
 	name := a.app.Schemas[stream].Stream()
 	if len(payload) > payloadLimit(name) {
-		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf("the payload is longer than %d bytes, the most a recording line holds", payloadLimit(name))})
+		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
+			"the payload is longer than %d bytes, the most a recording line holds", payloadLimit(name))})
 	}
 	values, info, err := a.dec[stream].Decode(payload, nil)
 	if err != nil {
@@ -116,10 +117,12 @@ func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payloa
 		return reject(de)
 	}
 	if n := event.CleanLen(payload); n > payloadLimit(name) { // the recorded form: malformed UTF-8 grows (review C1)
-		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf("the payload is %d bytes as a recording keeps it; a recording line holds %d", n, payloadLimit(name))})
+		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
+			"the payload is %d bytes as a recording keeps it; a recording line holds %d", n, payloadLimit(name))})
 	}
 	if info.Depth > event.MaxDepth-1 {
-		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf("the payload is nested %d deep; a recording line holds %d", info.Depth, event.MaxDepth-1)})
+		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
+			"the payload is nested %d deep; a recording line holds %d", info.Depth, event.MaxDepth-1)})
 	}
 	it := item{kind: iEvent, app: app, ev: event.Event{StreamID: stream, Ts: info.Ts, Values: values}, info: info}
 	if a.rec != nil {

@@ -20,7 +20,7 @@ import (
 type bk2Panicker struct{ rrDouble }
 
 func (d *bk2Panicker) Event(*event.Event, int64, []byte) error {
-	panic("bk2Panicker: the writer broke")
+	panic("bk2Panicker: the writer broke") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 }
 
 // TestBreakitRecorderPanicLeavesDetectionRunning (owner Q2 of S3.2b-2: "when the recording cannot be written,

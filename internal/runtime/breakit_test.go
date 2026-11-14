@@ -77,7 +77,7 @@ func TestBkFailedRedrainReopensSend(t *testing.T) {
 // panics the router goroutine, which kills the process. The child process runs the scenario; the parent checks it
 // survived.
 func TestBkEmitOnUnknownStreamCrashesProcess(t *testing.T) {
-	if os.Getenv("BK_CHILD") == "emit-unknown-stream" {
+	if os.Getenv("BK_CHILD") == "emit-unknown-stream" { //nolint:forbidigo // PERMANENT reason="the child-process marker: the child runs the crashing scenario" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		ctx := rtCeiling(t)
 		r := rtStart(t, runtime.Config{Shards: 1}, bkApp(t, 0, 7, func(event.Event) error { return nil }))
 		rtSend(t, ctx, r, 0, rtEv(0, rtAt(1), rtStr("a")))
@@ -87,7 +87,7 @@ func TestBkEmitOnUnknownStreamCrashesProcess(t *testing.T) {
 		return
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestBkEmitOnUnknownStreamCrashesProcess$", "-test.count=1")
-	cmd.Env = append(os.Environ(), "BK_CHILD=emit-unknown-stream")
+	cmd.Env = append(os.Environ(), "BK_CHILD=emit-unknown-stream") //nolint:forbidigo // PERMANENT reason="the child-process marker: the child inherits the parent environment" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		s := string(out)
@@ -426,18 +426,18 @@ func TestBkGuardPanicStorm(t *testing.T) {
 		in.Clock.Schedule(e.Ts+500, clock.TimerKind(1), e.Seq)
 		in.Op.(*rtState).timers = append(in.Op.(*rtState).timers, clock.Timer{Due: e.Ts + 500, Kind: clock.TimerKind(1), Ref: e.Seq})
 		if e.Seq%3 == 0 {
-			panic("OnEvent storm")
+			panic("OnEvent storm") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 	}, onTimers: func(b *rtBody, in *partition.Instance, fires []clock.Timer, _ any) {
 		if fires[0].Ref%2 == 0 {
-			panic("OnTimers storm")
+			panic("OnTimers storm") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 	}}
 	app := bkApp(t, 0, 1,
 		func(e event.Event) error {
 			sinkCalls.Add(1)
 			if e.Values[1].I%5 == 0 {
-				panic("sink storm")
+				panic("sink storm") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 			}
 			if e.Values[1].I%7 == 0 {
 				return errors.New("sink error")
