@@ -97,7 +97,7 @@ func Builtins() *Registry {
 	r := NewRegistry()
 	for _, d := range builtins {
 		if err := r.Register(d); err != nil {
-			panic(err) // the table below is wrong, which no input can cause
+			panic(err) //nolint:forbidigo,lll // PERMANENT reason="the builtins table below is wrong, which no input can cause" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 	}
 	return r
@@ -134,7 +134,8 @@ func buildExtreme(max bool) func([]Expr, model.Expr) (Expr, error) {
 		case event.TInt, event.TFloat, event.TTimestamp, event.TDuration:
 			return &extreme{x: args[0], y: args[1], typ: at, max: max}, nil
 		}
-		return nil, typeErr("%s needs two arguments of one numeric, timestamp or duration type, got %s and %s", name, args[0].Type(), args[1].Type())
+		return nil, typeErr("%s needs two arguments of one numeric, timestamp or duration type, got %s and %s", name,
+			args[0].Type(), args[1].Type())
 	}
 }
 

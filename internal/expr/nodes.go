@@ -397,7 +397,8 @@ func (a *arith) Eval(row Row) (event.Value, error) {
 // is dropped for this rule only and counted; no rule acts on a wrapped value. The message is built only here, off the
 // path that fits.
 func (a *arith) overflow(x, y int64) (event.Value, error) {
-	return event.Value{Kind: a.typ, Null: true}, runtimeErr("integer overflow: %d %c %d is outside the 64-bit range", x, a.op, y)
+	return event.Value{Kind: a.typ, Null: true}, runtimeErr("integer overflow: %d %c %d is outside the 64-bit range", x,
+		a.op, y)
 }
 
 // addInt, subInt, mulInt, divInt and negInt are int64 arithmetic that reports overflow (ok false) instead of wrapping
@@ -558,7 +559,8 @@ func (a *abs) Eval(row Row) (event.Value, error) {
 		if v.I < 0 {
 			i, ok := negInt(v.I)
 			if !ok {
-				return event.Value{Kind: a.typ, Null: true}, runtimeErr("integer overflow: abs(%d) is outside the 64-bit range", v.I)
+				return event.Value{Kind: a.typ, Null: true}, runtimeErr("integer overflow: abs(%d) is outside the 64-bit range",
+					v.I)
 			}
 			v.I = i
 		}

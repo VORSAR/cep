@@ -72,17 +72,17 @@ func (r row) Table(id int) *table.Version {
 var testTables = sync.OnceValue(func() []*table.Version {
 	hosts, err := table.New("Hosts", []event.Attr{{Name: "host", Type: event.TString}}, []string{"host"})
 	if err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	if err := hosts.Upsert([][]event.Value{{{Kind: event.TString, Str: "abc"}}, {{Kind: event.TString, Str: "db1"}}}); err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	ports, err := table.New("Ports", []event.Attr{{Name: "port", Type: event.TInt}}, []string{"port"})
 	if err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	if err := ports.Upsert([][]event.Value{{{Kind: event.TInt, I: 7}}, {{Kind: event.TInt, I: 443}}}); err != nil {
-		panic(err)
+		panic(err) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	return []*table.Version{hosts.Snapshot(), ports.Snapshot()}
 })
