@@ -18,10 +18,21 @@ from dataclasses import dataclass
 
 from gate.runner import allowlists
 
-ENABLED: frozenset[str] = frozenset()  # S1.1c-5 sets it from its golangci config (DA-L4)
 # git grep -e patterns, case-sensitive as git grep is (design §10.12); every recognised form contains one. "fmt:"
-# covers every spelling ruff reads after it (BK-B1).
-PREFILTER = ("nolint", "fmt:", "noqa", "yapf:", "isort:", "Code generated")
+# covers every spelling ruff reads after it (BK-B1); the foreign Go forms and //line from S1.1c-5 (design §4.2).
+PREFILTER = (
+    "nolint",
+    "fmt:",
+    "noqa",
+    "yapf:",
+    "isort:",
+    "Code generated",
+    "revive:",
+    "nosec",
+    "gosec:",
+    "gocyclo:",
+    "line ",
+)
 KEYS = frozenset({"reason", "ref", "expiry", "issue", "sprint"})
 SELF_JUDGED = frozenset({"MARKER", "REGION", "GENERATED"})  # judged when read (Python) or by the row (GENERATED)
 # Go's generated-code rule (go/ast.IsGenerated): a comment line before the package clause, this prefix, then this
@@ -39,6 +50,20 @@ REGION = re.compile(r"(fmt:[ \t\f]*(off|on)|yapf:[ \t\f]*(disable|enable)|isort:
 NOQA = re.compile(r"((ruff|flake8): ?)?noqa\b", re.ASCII | re.IGNORECASE)
 
 METADATA = 'a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=…'
+CONFIG = ".golangci.toml"
+EXACTLY = "exactly (two slashes, no space, lower case, one list)"
+STANDALONE = (
+    "//nolint stands alone on its line: it would waive the whole next declaration; put it at the end of the line it"
+    " waives"
+)
+ALL = "write the linter: //nolint:all waives every linter"
+TYPECHECK = "typecheck cannot be waived"
+FOREIGN = "{linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP … (decision 7)"
+LINE = "a //line directive moves findings between files; not allowed (S1.1c-5)"
+# The census's honoured forms (gate/runner/testdata/directives.json), as each tool matches them (design §4.1-§4.2):
+# revive `^//\s*revive:`; gocyclo a doc comment starting `//gocyclo:`; gosec `#nosec` at a comment's start after
+# trimming (line or block), and `//gosec:`.
+REVIVE = re.compile(r"\s*revive:")
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 SPELLING = "ruff honours this spelling too; write # fmt: skip  # <reason>"
 UNTOKENIZABLE = "cannot be tokenized as Python"
@@ -65,23 +90,38 @@ class Directive:
 # ------------------------------------------------------------------------------------------------------------- Go
 
 
-def go_comments(source: str) -> Iterator[tuple[int, str]]:
-    """(line, the text after the first "//") for each line comment; block comments, strings, raw strings and runes
-    are stepped over. States: CODE, LINE, BLOCK, STRING (ends at an unescaped " or a newline), RAW, RUNE."""
-    i, n, line = 0, len(source), 1
+@dataclass(frozen=True)
+class Comment:
+    line: int  # the line the comment starts on
+    text: str  # after "//", or between "/*" and "*/"
+    block: bool
+    alone: bool  # nothing but blanks (and block comments) before it on its line
+
+
+def go_all_comments(source: str) -> Iterator[Comment]:
+    """Every comment, line and block; strings, raw strings and runes are stepped over. States: CODE, LINE, BLOCK,
+    STRING (ends at an unescaped " or a newline), RAW, RUNE. `alone` is false once code or a literal precedes the
+    comment on its line; a block comment before it does not count as code (so a standalone //nolint is never hidden
+    behind one)."""
+    i, n, line, code = 0, len(source), 1, False
     while i < n:
         ch = source[i]
         if ch == "\n":
             line += 1
             i += 1
+            code = False
         elif source.startswith("//", i):  # LINE
             end = source.find("\n", i)
             end = n if end < 0 else end
-            yield line, source[i + 2 : end]
+            yield Comment(line, source[i + 2 : end], False, not code)
             i = end
         elif source.startswith("/*", i):  # BLOCK
             end = source.find("*/", i + 2)
+            close = n if end < 0 else end
             end = n if end < 0 else end + 2
+            yield Comment(line, source[i + 2 : close], True, not code)
+            if "\n" in source[i:end]:
+                code = False
             line += source.count("\n", i, end)
             i = end
         elif ch == "`":  # RAW
@@ -89,14 +129,26 @@ def go_comments(source: str) -> Iterator[tuple[int, str]]:
             end = n if end < 0 else end + 1
             line += source.count("\n", i, end)
             i = end
+            code = True
         elif ch in "\"'":  # STRING, RUNE
             i += 1
             while i < n and source[i] != ch and source[i] != "\n":
                 i += 2 if source[i] == "\\" and i + 1 < n and source[i + 1] != "\n" else 1
             if i < n and source[i] == ch:
                 i += 1
+            code = True
         else:  # CODE
+            if not ch.isspace():
+                code = True
             i += 1
+
+
+def go_comments(source: str) -> Iterator[tuple[int, str]]:
+    """(line, the text after the first "//") for each line comment; block comments, strings, raw strings and runes
+    are stepped over."""
+    for c in go_all_comments(source):
+        if not c.block:
+            yield c.line, c.text
 
 
 def _linters_as_written(head: str) -> str:
@@ -104,8 +156,8 @@ def _linters_as_written(head: str) -> str:
     if not head.startswith("nolint:"):
         return "<linter>"
     written = head.removeprefix("nolint:").split(maxsplit=1)
-    linters = written[0].strip(",") if written else ""
-    return linters or "<linter>"
+    linters = written[0].strip(",").lower() if written else ""
+    return linters if linters and not linters.startswith("/") else "<linter>"
 
 
 def _metadata(text: str) -> tuple[str, dict[str, str]] | str:
@@ -151,21 +203,33 @@ def _metadata(text: str) -> tuple[str, dict[str, str]] | str:
 
 def go_directives(path: str, source: str) -> tuple[list[Directive], list[str]]:
     """The //nolint directives golangci would honour (§0.3): each canonical one with its metadata read, each other
-    one a fault. A comment golangci ignores (//NOLINT, a tab, text before it, a block comment) is neither."""
+    one a fault. A comment golangci ignores (//NOLINT, a tab, text before it, a block comment) is neither. S1.1c-5
+    (design §4.2): a //nolint alone on its line (golangci applies it to the whole next declaration), a non-canonical
+    spelling or an upper-case name, //nolint:all and //nolint:typecheck are faults too."""
     directives: list[Directive] = []
     faults: list[str] = []
-    for line, text in go_comments(source):
+    for c in go_all_comments(source):
+        line, text = c.line, c.text
         head = text.lstrip("/ ")
-        if not HONOURED.match(head):
+        if c.block or not HONOURED.match(head):
             continue
         where = f"{path}:{line}"
         m = CANONICAL.match(text)
-        if m is None:
+        if c.alone:
+            faults.append(f"{where}: {STANDALONE}")
+            directives.append(Directive(path, line, (m.group(1),) if m else ("<linter>",), "", {}, valid=False))
+            continue
+        if m is None or m.group(1) != m.group(1).lower():
             written = _linters_as_written(head)
-            faults.append(f"{where}: write //nolint:{written} (two slashes, no space)")
+            faults.append(f"{where}: write //nolint:{written} {EXACTLY}")
             directives.append(Directive(path, line, tuple(written.split(",")), "", {}, valid=False))
             continue
         linters = tuple(m.group(1).split(","))
+        refused = ALL if "all" in linters else TYPECHECK if "typecheck" in linters else ""
+        if refused:
+            faults.append(f"{where}: {refused}")
+            directives.append(Directive(path, line, linters, "", {}, valid=False))
+            continue
         rest = text[m.end() :]
         read = _metadata(rest.removeprefix(" // ")) if rest.startswith(" // ") else METADATA
         if isinstance(read, str):
@@ -181,7 +245,35 @@ def go_foreign(path: str, source: str) -> tuple[list[Directive], list[str]]:
     """Every comment directive another linter honours (the census, gate/runner/testdata/directives.json) and every
     //line or /*line directive: a FOREIGN Directive (valid=False, counted in the LAW Δ) and a named fault each
     (S1.1c-5 design §4.2; owner 2026-11-14, S1.1c-5's plan check, decision 7)."""
-    raise NotImplementedError("S1.1c-5 lane B: suppressions.go_foreign")
+    directives: list[Directive] = []
+    faults: list[str] = []
+    for c in go_all_comments(source):
+        where = f"{path}:{c.line}"
+        written = f"/*{c.text}*/" if c.block else f"//{c.text}"
+        if c.text.startswith("line "):  # the compiler's two forms, //line and /*line
+            faults.append(f"{where}: {LINE}")
+            directives.append(Directive(path, c.line, ("line",), "FOREIGN", {"form": written}, valid=False))
+            continue
+        linter = _foreign(c)
+        if linter:
+            faults.append(f"{where}: {FOREIGN.format(linter=linter)}")
+            directives.append(Directive(path, c.line, (linter,), "FOREIGN", {"form": written}, valid=False))
+    return directives, faults
+
+
+def _foreign(c: Comment) -> str:
+    """The linter that honours the comment as a waiver, else ""."""
+    if any(part.strip().startswith("#nosec") for part in c.text.split("\n")) or (
+        not c.block and c.text.startswith("gosec:")
+    ):
+        return "gosec"
+    if c.block:
+        return ""
+    if REVIVE.match(c.text):
+        return "revive"
+    if c.text.startswith("gocyclo:"):
+        return "gocyclo"
+    return ""
 
 
 def _generator_line(text: str) -> bool:
@@ -314,7 +406,7 @@ def check(directives: Iterable[Directive], ctx: allowlists.Ctx, enabled: frozens
         )
         out += [f"{where}: {fault}" for fault in faults]
         out += [
-            f"{where}: //nolint:{linter}: {linter} is not enabled (none is until S1.1c-5)"
+            f"{where}: //nolint:{linter}: {linter} is not enabled in {CONFIG}"
             for linter in d.linters
             if linter not in enabled
         ]
@@ -336,7 +428,8 @@ def read(path: str, source: str) -> tuple[list[Directive], list[str]]:
     match scoped(path):
         case "go":
             directives, faults = go_directives(path, source)
-            return [*go_generated(path, source), *directives], faults
+            foreign, refused = go_foreign(path, source)
+            return [*go_generated(path, source), *directives, *foreign], [*faults, *refused]
         case "py":
             return py_markers(path, source)
         case _:

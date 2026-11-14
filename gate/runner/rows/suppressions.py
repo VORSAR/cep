@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import allowlists, anchors, pin, rows, sprintid, suppressions
+from gate.runner import allowlists, anchors, golangci, pin, rows, sprintid, suppressions
 
 LISTS = "tools/allowlists/"
 RUFF_TOML = "ruff.toml"
@@ -140,16 +140,22 @@ def ruff_pin(lists: dict[str, allowlists.AllowList]) -> list[str]:
     lint = top.get("lint", {})
     if type(lint) is not dict:
         return [f"{RUFF_TOML}: lint is not a table"]
-    pinned = {**top, "lint": {key: value for key, value in lint.items() if key != "per-file-ignores"}}
-    faults = pin.differences(pinned, RUFF_PINNED, RUFF_TOML)
+    denied: dict[str, str] = {}  # path → the clearer text; the pin's line for that path is left out
     if "extend" in top:
-        faults.append("ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there")
-    faults += [
-        f"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)"
-        for key in (*RUFF_GLOBAL, *RUFF_WAIVERS)
-        if top.get(key)  # an empty one waives nothing, as for lint.ignore
+        denied["extend"] = "ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there"
+    for key in (*RUFF_GLOBAL, *RUFF_WAIVERS):
+        if top.get(key):  # an empty one waives nothing, as for lint.ignore
+            denied[key] = f"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)"
+    for key in RUFF_GLOBAL:
+        if lint.get(key):
+            denied[f"lint.{key}"] = f"ruff.toml sets lint.{key}: write per-file waivers"
+    pinned = {**top, "lint": {key: value for key, value in lint.items() if key != "per-file-ignores"}}
+    faults = [
+        line
+        for line in pin.differences(pinned, RUFF_PINNED, RUFF_TOML)
+        if not any(line.startswith(f"{RUFF_TOML}: {path}: ") for path in denied)
     ]
-    faults += [f"ruff.toml sets lint.{key}: write per-file waivers" for key in RUFF_GLOBAL if lint.get(key)]
+    faults += denied.values()
     waived = {(file, code) for key in RUFF_WAIVERS for file, codes in lint.get(key, {}).items() for code in codes}
     listed = {_pair(e.target) for e in lists["ruff"].entries} if "ruff" in lists else set()
     for file, code in sorted(waived - listed):
@@ -235,6 +241,7 @@ def main(argv: list[str]) -> int:
     try:
         tracked = tracked_files(row_dir)
         ctx = context(set(tracked))
+        enabled = golangci.enabled(golangci.load(rows.read_text(golangci.CONFIG)))
     except SIDE_FAULTS as e:
         return rows.finish([f"suppressions: {e}"])
     lists, faults = load_lists(tracked)
@@ -244,7 +251,7 @@ def main(argv: list[str]) -> int:
     faults += stale(lists, set(tracked))
     faults += generated(directives, lists)
     faults += file_faults
-    faults += suppressions.check(directives, ctx, suppressions.ENABLED)
+    faults += suppressions.check(directives, ctx, enabled)
     return rows.finish([f"suppressions: {fault}" for fault in faults])
 
 
