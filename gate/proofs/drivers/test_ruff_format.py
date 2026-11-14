@@ -1,7 +1,7 @@
 """The ruff proof of the format check (design note §8; re-check B3).
 
 Planted: a temporary tracked gate/plant_format.py that ruff would reformat, in an otherwise clean copy of the gate.
-The row's stdout carries ruff 0.17.3's own text, `File would be reformatted`, and the failure names only the plant.
+The row's stdout carries ruff 0.17.5's own text, `File would be reformatted`, and the failure names only the plant.
 """
 
 from gate.proofs.drivers import support

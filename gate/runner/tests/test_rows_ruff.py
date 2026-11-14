@@ -1,6 +1,6 @@
 """The real ruff wrapper over temporary trees, with the pinned ruff and a copy of ruff.toml (design note §5).
 
-GATE_COVERED is the sum of `ruff format --check`'s summary lines, in ruff 0.17.3's exact forms (re-check S6).
+GATE_COVERED is the sum of `ruff format --check`'s summary lines, in ruff 0.17.5's exact forms (re-check S6).
 """
 
 import os
@@ -147,7 +147,7 @@ class Wrapper(support.GateTest):
         self.track("gate/x/bad.py", "x  =  1\n")
         self.assertEqual(self.ruff_row(), "exit 1: gate/x/bad.py: ruff format (exit 1)")
         out = self.out()
-        self.assertIn("File would be reformatted", out)  # ruff 0.17.3's own text, as the proofs read it
+        self.assertIn("File would be reformatted", out)  # ruff 0.17.5's own text, as the proofs read it
         self.assertIn("failed: gate/x/bad.py", out)
 
     def test_an_inline_noqa_never_waives_a_rule(self):

@@ -4,7 +4,7 @@ Per batch: `ruff format --check`, then `ruff check --ignore-noqa`, each with `--
 ruff.toml's per-file-ignores are the only waivers and nothing lands in the worktree. The explicit file list keeps
 ruff from finding untracked files (re-check S6). `--` comes before the list: a top-level `-x.py` is a file.
 
-GATE_COVERED is the sum over batches of the files in `ruff format --check`'s summary line, in ruff 0.17.3's exact
+GATE_COVERED is the sum over batches of the files in `ruff format --check`'s summary line, in ruff 0.17.5's exact
 forms (re-checked). Any other summary is a failure: a count we cannot read is not a count. `ruff check`'s own
 count is residue (QA DQ22). Ruff's output is echoed under a prefix, so the row's stdout names every finding but
 no line of it can pass for the row's own GATE_COVERED.
@@ -30,7 +30,7 @@ _LOCATION = re.compile(rb" *--> (.+):\d+:\d+")
 
 
 def summary_count(line: bytes) -> int | None:
-    """The files a summary line accounts for, or None if it is not one of ruff 0.17.3's forms."""
+    """The files a summary line accounts for, or None if it is not one of ruff 0.17.5's forms."""
     match = _BOTH.fullmatch(line)
     if match is not None:
         return int(match.group(1) or b"0") + int(match.group(2))
