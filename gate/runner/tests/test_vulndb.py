@@ -474,6 +474,46 @@ REAL = (
 PLANTED = {e["id"]: e for e in (PLANTED_XEXP, PLANTED_OOO, PLANTED_MUT)}
 
 
+BINARY = frozenset({"stdlib"})  # the binary scan's pseudo-modules (S1.1c-5 design §6)
+
+
+def both_pseudo(entry_id: str) -> dict:
+    return entry(
+        entry_id,
+        ("stdlib", semver({"introduced": "0"}, {"fixed": "1.27.5"})),
+        ("toolchain", semver({"introduced": "0"}, {"fixed": "1.27.5"})),
+    )
+
+
+class Pseudo(unittest.TestCase):
+    """findings(..., pseudo=) (S1.1c-5 design §6; §8 row 5.3): a declared binary is judged against stdlib only; the
+    engine scan's default keeps toolchain; the entry's shape check is never narrowed (DA-S7)."""
+
+    def test_a_binary_scan_never_judges_toolchain(self):
+        e = entry("GO-2099-0101", ("toolchain", semver({"introduced": "0"}, {"fixed": "1.27.5"})))
+        self.assertEqual([f.module for f in scan({}, "go1.27.0", [e])], ["toolchain"])  # witness: it affects go1.27.0
+        self.assertEqual(vulndb.findings({}, frozenset(), "go1.27.0", [e], pseudo=BINARY), ([], []))
+
+    def test_the_engine_scan_still_judges_toolchain(self):
+        got, faults = vulndb.findings({}, frozenset(), "go1.27.4", [both_pseudo("GO-2099-0102")])
+        self.assertEqual(faults, [])
+        self.assertEqual([(f.module, f.version) for f in got], [("stdlib", "go1.27.4"), ("toolchain", "go1.27.4")])
+
+    def test_a_binary_scan_judges_stdlib(self):
+        got, faults = vulndb.findings({}, frozenset(), "go1.27.0", [both_pseudo("GO-2099-0103")], pseudo=BINARY)
+        self.assertEqual(faults, [])
+        self.assertEqual(got, [vulndb.Finding("GO-2099-0103", "stdlib", "go1.27.0", "1.27.5", True)])
+
+    def test_a_toolchain_entry_stays_well_formed_under_a_binary_scan(self):
+        toolchain_only = entry("GO-2099-0104", ("toolchain", semver({"introduced": "0"})))
+        malformed = {"id": "GO-2099-0105", "affected": {"package": {"name": "toolchain", "ecosystem": "Go"}}}
+        fault = ("GO-2099-0105", "", "vulns: GO-2099-0105: the entry is malformed")
+        engine = vulndb.findings({}, frozenset(), "go1.27.0", [toolchain_only, malformed])
+        self.assertEqual(([f.id for f in engine[0]], engine[1]), (["GO-2099-0104"], [fault]))  # witness
+        binary = vulndb.findings({}, frozenset(), "go1.27.0", [toolchain_only, malformed], pseudo=BINARY)
+        self.assertEqual(binary, ([], [fault]))  # not judged, never malformed; the shape check unchanged
+
+
 class Agreement(unittest.TestCase):
     """The matcher agrees with govulncheck v1.9.0 on every row (design §5; plan check §2 S1)."""
 
