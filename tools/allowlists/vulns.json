@@ -1,6 +1,127 @@
 {
   "schema": 1,
-  "note": "The vulns row's exemptions (owner, 2026-11-13, S1.1c-4's plan check, decisions 1-2 and confirm (d)): each entry TEMP, with an expiry and a known issue; target '<id> <module>' silences that one advisory in that one module, target 'vulndb' only the copy's availability and age faults (design note s1-1c-4-design.md §2.5). Empty: no finding today.",
+  "note": "The vulns row's exemptions (owner, 2026-11-13, S1.1c-4's plan check, decisions 1-2 and confirm (d)): each entry TEMP, with an expiry and a known issue; target '<id> <module>' silences that one advisory in that one module, '<id> <tool>' that one advisory in a declared Go-built tool's own build (S1.1c-5 design note §6), target 'vulndb' only the copy's availability and age faults (design note s1-1c-4-design.md §2.5). The golangci-lint entries: owner, 2026-11-14, S1.1c-5's plan check, decision 8 (30 days, known issue S1.1c-5-4, renewed only by an owner decision).",
   "rule": "vulns",
-  "entries": []
+  "entries": [
+    {
+      "target": "GO-2026-6599 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's html/template is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6600 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's html/template is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6603 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http, http2 is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6604 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's os (Root, Windows) is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6605 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http, httputil is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6607 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's crypto/tls is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6608 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/textproto, mime/multipart is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6609 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6610 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http, http2 is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6611 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http, http2 is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6612 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http, http2 is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6613 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6617 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http, http2 is fixed in go1.27.2 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6809 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's crypto/x509 is fixed in go1.27.3 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    },
+    {
+      "target": "GO-2026-6859 golangci-lint",
+      "kind": "TEMP",
+      "reason": "golangci-lint v2.15.0, the latest release, is built with go1.27.0; its standard library's net/http is fixed in go1.27.4 (owner, 2026-11-14, S1.1c-5's plan check, decision 8: docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check; renewed only by an owner decision)",
+      "sprint": "S1.1c-5",
+      "expiry": "2026-12-14",
+      "issue": "S1.1c-5-4"
+    }
+  ]
 }
