@@ -59,6 +59,10 @@
       "kind": "tools"
     },
     {
+      "path": ".golangci.toml",
+      "kind": "code"
+    },
+    {
       "path": "ruff.toml",
       "kind": "code"
     },
@@ -628,6 +632,45 @@
       ]
     },
     {
+      "id": "smells",
+      "row": "smells",
+      "lands_in": "S1.1c-5",
+      "code": [
+        "gate/runner/allowlists.py",
+        "gate/runner/anchors.py",
+        "gate/runner/deps.py",
+        "gate/runner/golangci.py",
+        "gate/runner/jsonstream.py",
+        "gate/runner/pin.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/gomods.py",
+        "gate/runner/rows/smells.py",
+        "gate/runner/sprintid.py",
+        "gate/runner/workers.py",
+        "gate/term.py",
+        "gate/toolchain/manifest.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_smells_planted.py",
+          "cases": 30
+        }
+      ],
+      "tiers": [
+        "T0",
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "min_wants": 1,
+      "expected_scope": [
+        "git",
+        ":(glob)**/*.go",
+        ":(glob,exclude)gate/proofs/**"
+      ]
+    },
+    {
       "id": "testhygiene",
       "row": "testhygiene",
       "lands_in": "S1.1c-2",
@@ -1097,7 +1140,7 @@
       "tiers": [
         "T4"
       ],
-      "min_wants": 38,
+      "min_wants": 39,
       "expected_scope": [
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
