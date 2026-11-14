@@ -339,3 +339,45 @@ class Expiring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LaneDPackages(unittest.TestCase):
+    """S1.1c-5 design §1, §8 3.9: lane D's four packages are cleaned for the whole set in S1.1c-5, so
+    tools/allowlists/smells.json never holds a size entry for them (G1 → T3). Green on an empty file; the mutation
+    proof (an entry planted for internal/table) is test_a_planted_entry_is_seen."""
+
+    LANE_D = ("internal/table", "internal/clock", "io/inmemory", "tools/shape")
+    PATH = "tools/allowlists/smells.json"
+
+    @staticmethod
+    def packages(text: str) -> set[str]:
+        return {e.target.split(" ")[0] for e in allowlists.load(text, "smells").entries}
+
+    def test_lane_d_packages_have_no_size_entry(self):
+        import os
+
+        from gate.runner.tests import support
+
+        with open(os.path.join(support.REPO, self.PATH), encoding="utf-8") as f:
+            text = f.read()
+        self.assertEqual(sorted(self.packages(text) & set(self.LANE_D)), [])
+
+    def test_a_planted_entry_is_seen(self):
+        planted = json.dumps(
+            {
+                "schema": 1,
+                "note": "n",
+                "rule": "smells",
+                "entries": [
+                    {
+                        "target": "internal/table funlen",
+                        "kind": "TEMP",
+                        "reason": "size family not yet cleaned",
+                        "sprint": "S1.1c-5",
+                        "expiry": "2026-12-14",
+                        "issue": "S1.1c-5-1",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(sorted(self.packages(planted) & set(self.LANE_D)), ["internal/table"])
