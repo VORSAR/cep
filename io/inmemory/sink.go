@@ -62,7 +62,10 @@ func (s *Sink) Drain() []Record {
 	defer s.mu.Unlock()
 	out := make([]Record, len(s.recs))
 	for i, r := range s.recs {
-		out[i] = Record{Stream: r.Stream, Timestamp: r.Timestamp, Canonical: append([]byte(nil), r.Canonical...), Values: append([]any(nil), r.Values...)}
+		out[i] = Record{
+			Stream: r.Stream, Timestamp: r.Timestamp,
+			Canonical: append([]byte(nil), r.Canonical...), Values: append([]any(nil), r.Values...),
+		}
 	}
 	return out
 }
