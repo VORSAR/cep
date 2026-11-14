@@ -183,7 +183,7 @@ func (g *gen) value(t event.Type) string {
 	case event.TObject:
 		return g.pick(append(slices.Clone(validFor[t]), nestedValues[:4]...))
 	}
-	panic(fmt.Sprintf("gen: no values for %v", t))
+	panic(fmt.Sprintf("gen: no values for %v", t)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 }
 
 func (g *gen) anyValue() string {

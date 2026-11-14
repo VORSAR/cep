@@ -111,12 +111,15 @@ func NewSchema(stream string, attrs []Attr, timeAttr int) (Schema, error) {
 				stream, i, errEmptyAttrName)
 		}
 		if first, dup := declaredAt[a.Name]; dup {
-			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w, first declared as attribute %d (names are case-sensitive)",
+			return Schema{}, fmt.Errorf(
+				"event: invalid schema for stream %q: attribute %d %q: %w, first declared as attribute %d (names are "+
+					"case-sensitive)",
 				stream, i, a.Name, errDuplicateAttrName, first)
 		}
 		declaredAt[a.Name] = i
 		if a.Type < TString || a.Type > TObject {
-			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w (%v); want one of %v, %v, %v, %v, %v, %v, %v",
+			return Schema{}, fmt.Errorf(
+				"event: invalid schema for stream %q: attribute %d %q: %w (%v); want one of %v, %v, %v, %v, %v, %v, %v",
 				stream, i, a.Name, errInvalidAttrType, a.Type, TString, TInt, TFloat, TBool, TTimestamp, TDuration, TObject)
 		}
 	}
