@@ -119,6 +119,10 @@ path = '_test\.go$'
 linters = ["forbidigo"]
 text = '\[reflect\]'
 [[linters.exclusions.rules]]
+path = '_test\.go$'
+linters = ["forbidigo"]
+text = '\[fmtprint\]'
+[[linters.exclusions.rules]]
 path-except = '^internal/(event|model|metrics|clock|pattern|window|expr|text|table|partition)/'
 linters = ["forbidigo"]
 text = '\[reflect\]'

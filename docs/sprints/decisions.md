@@ -101,6 +101,7 @@
 | 2026-11-14 | [during S1.1c-5's W0](#owner-decisions-2026-11-14--during-s11c-5s-w0) |
 | 2026-11-14 | [four known issues placed](#owner-decisions-2026-11-14--four-known-issues-placed) |
 | 2026-11-14 | [during S1.1c-5's W1](#owner-decisions-2026-11-14--during-s11c-5s-w1) |
+| 2026-11-14 | [during S1.1c-5's W2](#owner-decisions-2026-11-14--during-s11c-5s-w2) |
 
 ## The decisions
 
@@ -1004,3 +1005,10 @@ Two questions raised by the lanes' reports. Two answers, as recommended.
 
 1. **The `smells` row runs golangci-lint with `--allow-parallel-runners`** (as recommended). golangci-lint takes a machine-wide lock, and a second run at the same moment exits 3 ("parallel golangci-lint is running"), measured by lane A when the planted cases ran concurrently. Each planted world already has its own fresh cache, and golangci-lint's cache is the Go build-cache format, which is built for concurrent use. Rejected: `--allow-serial-runners`, which would queue every lint on the machine.
 2. **The `vulns` row counts `tools.json` once, whatever it declares** (as recommended). Covered is the six database and module files plus `tools.json`, against the scope's seven. The binary scan is proven by its four planted cases, and a unit test on the real `tools.json` keeps golangci-lint declared. The planted cases stay independent of golangci-lint's own build list. This changes design §6's "6 + 1 per declared binary" and the W0 test `test_covered_counts_each_declared_binary`. Rejected: test worlds declaring golangci-lint by default, which ties planted cases to the tool's build on every upgrade.
+
+### Owner decisions, 2026-11-14 — during S1.1c-5's W2
+
+Two questions from lanes C2 and D. Two answers, as recommended.
+
+1. **A waiver that runs past 120 columns also names `lll`** (as recommended): `//nolint:forbidigo,lll // PERMANENT reason=… ref=… sprint=…`. A PERMANENT waiver's reason, its `ref` (about 70 characters) and its sprint do not fit in 120 columns. Naming `lll` keeps the waiver explicit on its own line, and nolintlint checks that `lll` is really used there, so it cannot sit on a short line. DEVELOPMENT.md's waiver policy says so. Rejected: an lll exclusion for every line carrying a `//nolint`, which would let a long code line with any waiver escape the line limit.
+2. **Tests are exempt from the `fmt.Print*` pattern** (as recommended). ADR-0015 §2 bans it "in library code", tests are not library code, and a godoc Example must print to stdout for its `// Output:` check. This is one exclusion rule for `_test.go` files, as decision 4 of the plan check made for `reflect`, and ADR-0015 §2.1 is annotated. Rejected: per-line waivers on the Examples.

@@ -136,6 +136,7 @@ tools/analyzers/                          the gate's go/analysis analyzers + tes
 tools/archcheck/                          the architecture analyzer: imports, clock, purity, globals; -tests (the sleep fence); its named exceptions in tools/allowlists/ (ADR-0015 §2 as built)
 tools/apipartition/                       the public-API partition and export golden (ADR-0015 §2 apipartition)
 tools/shape/                              the grammar differential's engine side (tools/grammar-diff.md)
+tools/astequal/                           proves a commit's moves and reflows changed no Go syntax tree (S1.1c-5 design §7.4; the coordinator re-runs it at G5)
 tools/importcheck/rules.json              the layer law, diffed against this §3 as parsed edges (ADR-0015)
 tools/allowlists/, tools/deps-allowlist.json  the one allowlist grammar (ADR-0015 §3.10)
 tools/kwgen/                              keyword-table generator (ADR-0002) *(annotated 2026-11-04: not built; the keyword table is pinned equal to `grammar.lark` by a test in `internal/parser` instead)*
