@@ -15,6 +15,7 @@ design ambiguity: the pin's fault texts are not written in the design; each red 
 instrument or row id.
 """
 
+import ast
 import copy
 import json
 import os
@@ -165,6 +166,78 @@ class UnnamedDrivers(unittest.TestCase):
             "gate/runner/tests/test_x.py",
         }
         self.assertEqual(teeth.unnamed_drivers(manifest, tracked), ["gate/proofs/drivers/test_parity_hash.py"])
+
+
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
+def module_file(name: str) -> str | None:
+    """The repository file a dotted `gate.*` name imports: the package's __init__.py, else the module's .py."""
+    base = os.path.join(*name.split("."))
+    for rel in (os.path.join(base, "__init__.py"), base + ".py"):
+        if os.path.isfile(os.path.join(REPO, rel)):
+            return rel.replace(os.sep, "/")
+    return None
+
+
+def imported(rel: str) -> set[str]:
+    """The repository files one module imports by name (every import statement, at any depth). `from P import n`
+    is P.n when that is a module, else P's own file; a parent package's __init__.py is included only when the
+    package itself is named (S1.1c-5 design §2.5's rule, "__init__.py files included where imported")."""
+    with open(os.path.join(REPO, rel), "rb") as f:
+        tree = ast.parse(f.read(), rel)
+    package = rel.removesuffix(".py").replace("/", ".").removesuffix(".__init__")
+    if not rel.endswith("__init__.py"):
+        package = package.rpartition(".")[0]
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parent = package.split(".")[: len(package.split(".")) - node.level + 1]
+                base = ".".join([*parent, *([base] if base else [])])
+            for alias in node.names:
+                sub = f"{base}.{alias.name}"
+                names.add(sub if module_file(sub) else base)
+    return {f for name in names if name == "gate" or name.startswith("gate.") if (f := module_file(name))}
+
+
+def closure(root: str) -> set[str]:
+    seen, todo = set(), [root]
+    while todo:
+        rel = todo.pop()
+        if rel not in seen:
+            seen.add(rel)
+            todo.extend(imported(rel) - seen)
+    return seen
+
+
+class CodeClosure(unittest.TestCase):
+    """S1.1c-5 design §2.5 (DA-S5, DQ-L3), §8 row L.1: a row instrument's Python `code` is its row module plus the
+    transitive closure of its `gate.*` imports, compared both ways; config and Go files are not compared."""
+
+    def test_each_instruments_code_is_its_import_closure(self):
+        with open(os.path.join(REPO, "gate", "law.json"), encoding="utf-8") as f:
+            instruments = json.load(f)["instruments"]
+        with open(os.path.join(REPO, "gate", "registry.json"), encoding="utf-8") as f:
+            commands = {row["id"]: row["command"] for row in json.load(f)["rows"]}
+        with self.subTest("the smells instrument is staged"):  # §8 counts: the smells instrument is new
+            self.assertIn("smells", [i["id"] for i in instruments])
+        judged = 0
+        for instrument in instruments:
+            roots = [a for a in commands.get(instrument["row"], []) if a.endswith(".py")]
+            if instrument["id"] != instrument["row"] or not roots:
+                continue  # a Go-test instrument, or a row with no Python module
+            judged += 1
+            with self.subTest(instrument=instrument["id"]):
+                code = {p for p in instrument["code"] if p.endswith(".py")}
+                want = closure(roots[0])
+                self.assertEqual(
+                    (sorted(want - code), sorted(code - want)), ([], []), "(missing from code, not imported)"
+                )
+        self.assertGreaterEqual(judged, 25)  # witness: the row instruments were judged
 
 
 class RealTree(unittest.TestCase):
