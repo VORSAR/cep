@@ -8,6 +8,7 @@ DEVELOPMENT.md when lane A lands, after which this test should read DEVELOPMENT.
 """
 
 import contextlib
+import json
 import os
 import re
 import sys
@@ -32,7 +33,10 @@ META = (
     'PERMANENT reason="fixture generator; output is never security-relevant" ref=docs/sprints/decisions.md#title'
     " sprint=S1.1c-2"
 )
-WRITE = re.compile(r"^p\.go:(\d+): write //nolint:(<linter>|\S*) \(two slashes, no space\)$")
+# S1.1c-5 design §4.2: the non-canonical spellings' text names lower case and one list too.
+WRITE = re.compile(
+    r"^p\.go:(\d+): write //nolint:(<linter>|\S*) exactly \(two slashes, no space, lower case, one list\)$"
+)
 METADATA = 'a suppression carries its metadata: // PERMANENT reason="…" ref=… sprint=…'
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 NO_REASON = "write its reason as another comment: # fmt: skip  # <reason, 12+ characters>"
@@ -303,10 +307,10 @@ class Check(unittest.TestCase):
         self.assertEqual(faults, [])
         return directives
 
-    def test_no_linter_is_enabled_until_s11c4(self):
+    def test_a_linter_outside_the_enabled_set_is_named(self):
+        # S1.1c-5 design §4.2: the enabled set is the config's, passed in; ENABLED is gone (Enabled below).
         got = suppressions.check(self.directives(f"//nolint:errcheck // {META}"), fixture_ctx(), frozenset())
-        self.assertEqual(got, ["p.go:3: //nolint:errcheck: errcheck is not enabled (none is until S1.1c-5)"])
-        self.assertEqual(suppressions.ENABLED, frozenset())
+        self.assertEqual(got, ["p.go:3: //nolint:errcheck: errcheck is not enabled in .golangci.toml"])
 
     def test_a_valid_directive_with_its_linter_enabled_is_green(self):
         got = suppressions.check(
@@ -318,7 +322,7 @@ class Check(unittest.TestCase):
         got = suppressions.check(
             self.directives(f"//nolint:errcheck,gosec // {META}"), fixture_ctx(), frozenset({"errcheck"})
         )
-        self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled (none is until S1.1c-5)"])
+        self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled in .golangci.toml"])
 
     def test_the_field_rules_apply(self):
         comment = '//nolint:errcheck // PERMANENT reason="short" ref=docs/sprints/decisions.md#title sprint=S1.1c-2'
@@ -594,3 +598,193 @@ class Row(support.GateTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# S1.1c-5 design §4, §8 2.1-2.7: only //nolint waives. The census (gate/runner/testdata/directives.json, design §4.1)
+# is the data: every comment directive a linter golangci-lint v2.15.0 runs (or gosec, refused anyway, decision 7)
+# honours, with its source reference and its confirmation by the pinned binary.
+CENSUS = os.path.join(support.REPO, "gate", "runner", "testdata", "directives.json")
+FOREIGN_FAULT = (
+    "{where}: {linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP … (decision 7)"
+)
+LINE_FAULT = "{where}: a //line directive moves findings between files; not allowed (S1.1c-5)"
+STANDALONE = (
+    "{where}: //nolint stands alone on its line: it would waive the whole next declaration; put it at the end of the"
+    " line it waives"
+)
+EXACTLY = re.compile(
+    r"^p\.go:3: write //nolint:(<linter>|\S*) exactly \(two slashes, no space, lower case, one list\)$"
+)
+# The policy's example the twins use (design §4.2), verbatim.
+ACCEPTED_LLL = (
+    '//nolint:lll // PERMANENT reason="a URL that cannot wrap" ref=docs/architecture/adr/'
+    "ADR-0015-build-enforcement-hostile-gate.md#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go"
+    " sprint=S1.1c-5"
+)
+# Judged elsewhere: //nolint forms by go_directives (Nolint below), a generated marker by go_generated.
+NOT_FOREIGN = frozenset({"nolint", "nolintlint", "exclusions"})
+
+
+def census() -> list[dict[str, object]]:
+    with open(CENSUS, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def placed(form: str, placement: str) -> tuple[str, int]:
+    """A Go file holding the form in its census placement, and the form's line."""
+    match placement:
+        case "trailing":
+            return f"package p\n\nvar _ = 1 {form}\n", 3
+        case "file":
+            return f"{form}\npackage p\n", 1
+        case "residue":
+            return f"package p\n\n{form}generate echo x\n", 3
+        case _:  # above, region
+            return f"package p\n\n{form}\nvar _ = 1\n", 3
+
+
+class Census(unittest.TestCase):
+    def test_every_enabled_linter_has_a_row(self):
+        # Design §4.1 step 3: at least one row per enabled linter, "none in source" included; golangci.LINTERS is
+        # lane A's, so the list is the design's §2.2 literal here.
+        linters = {"errcheck", "forbidigo", "funlen", "gocritic", "gocyclo", "lll", "nolintlint", "revive"}
+        self.assertLessEqual(linters, {item["linter"] for item in census()})
+        for item in census():
+            with self.subTest(item=item):
+                self.assertEqual(sorted(item), ["confirmed", "form", "honoured", "linter", "placement", "source"])
+                self.assertIs(type(item["honoured"]), bool)
+
+
+class Foreign(unittest.TestCase):
+    def test_each_honoured_census_form_is_refused(self):
+        rows = [r for r in census() if r["honoured"] and r["linter"] not in NOT_FOREIGN]
+        self.assertGreater(len(rows), 10)  # witness: the census holds the forms
+        for item in rows:
+            form, linter = str(item["form"]), str(item["linter"])
+            with self.subTest(form=form, placement=item["placement"]):
+                source, line = placed(form, str(item["placement"]))
+                directives, faults = suppressions.go_foreign("p.go", source)
+                where = f"p.go:{line}"
+                if linter == "line":
+                    self.assertEqual(faults, [LINE_FAULT.format(where=where)])
+                    continue
+                self.assertEqual(faults, [FOREIGN_FAULT.format(where=where, linter=linter)])
+                self.assertEqual(len(directives), 1, directives)
+                d = directives[0]
+                self.assertEqual(
+                    (d.path, d.line, d.linters, d.kind, d.valid), ("p.go", line, (linter,), "FOREIGN", False)
+                )
+
+    def test_each_unhonoured_form_is_not_a_fault(self):
+        # A form one linter ignores and another honours (`// #nosec`: errcheck no, gosec yes) is refused as honoured.
+        honoured = {r["form"] for r in census() if r["honoured"]}
+        rows = [r for r in census() if not r["honoured"] and r["form"] not in honoured]
+        self.assertGreater(len(rows), 5)
+        for item in rows:
+            with self.subTest(form=item["form"], placement=item["placement"]):
+                source, _ = placed(str(item["form"]), str(item["placement"]))
+                self.assertEqual(suppressions.go_foreign("p.go", source), ([], []))
+
+    def test_the_prefilter_finds_every_honoured_form(self):
+        for item in census():
+            if item["honoured"]:
+                with self.subTest(form=item["form"]):
+                    self.assertTrue(any(p in str(item["form"]) for p in suppressions.PREFILTER), item["form"])
+
+
+class LineDirective(unittest.TestCase):
+    def test_a_line_directive_is_refused(self):
+        for form in ("//line x.go:1", "/*line x.go:1*/"):
+            with self.subTest(form=form):
+                _, faults = suppressions.go_foreign("p.go", f"package p\n\n{form}\nvar _ = 1\n")
+                self.assertEqual(faults, [LINE_FAULT.format(where="p.go:3")])
+
+    def test_line_in_prose_is_not_a_directive(self):
+        # The compiler's forms only: "//line " and "/*line " at the comment's start.
+        for form in ("// line x.go:1", "// the line x.go:1", "//lines x.go:1"):
+            with self.subTest(form=form):
+                self.assertEqual(suppressions.go_foreign("p.go", f"package p\n\n{form}\nvar _ = 1\n"), ([], []))
+
+
+def s1_1c_5_ctx() -> allowlists.Ctx:
+    """The accepted example's context: S1.1c-5 printed after S1.1c, its ADR-0015 ref resolving."""
+    order = sprintid.Order((*ORDER.rows[:4], sprintid.Row("S1.1c-5", False), ORDER.rows[4]))
+    ref = ACCEPTED_LLL.split("ref=")[1].split()[0]
+    return allowlists.Ctx(
+        today=TODAY,
+        tier="T2",
+        order=order,
+        current=sprintid.parse("S1.1c-5"),
+        issues=frozenset(),
+        resolve=lambda r: "" if r == ref else f"{r} does not resolve",
+    )
+
+
+class Nolint(unittest.TestCase):
+    def test_a_standalone_nolint_is_refused(self):
+        waiver = f"//nolint:lll // {META}"
+        for name, source, line in (
+            ("above a func", f"package p\n\n{waiver}\nfunc F() {{}}\n", 3),
+            ("above the package clause", f"{waiver}\npackage p\n", 1),
+        ):
+            with self.subTest(name):
+                _, faults = suppressions.go_directives("p.go", source)
+                self.assertIn(STANDALONE.format(where=f"p.go:{line}"), faults)
+        with self.subTest("its twin trails its line"):
+            directives, faults = suppressions.go_directives("p.go", go_line(waiver))
+            self.assertEqual((len(directives), faults), (1, []))
+
+    def assertRefusedWith(self, comment: str, text: str) -> None:
+        _, faults = suppressions.go_directives("p.go", go_line(comment))
+        self.assertTrue(any(f.startswith("p.go:3: ") and f.endswith(text) for f in faults), faults)
+
+    def test_nolint_all_is_refused(self):
+        self.assertRefusedWith(f"//nolint:all // {META}", "write the linter: //nolint:all waives every linter")
+
+    def test_nolint_typecheck_is_refused(self):
+        self.assertRefusedWith(f"//nolint:typecheck // {META}", "typecheck cannot be waived")
+
+    def test_a_nolint_variant_golangci_honours_is_refused(self):
+        # M-9's seven honoured spellings (re-confirmed in the census); the first six with full metadata, so the
+        # spelling is the only fault; the seventh is canonical and red through the metadata rule alone.
+        for spelling in (
+            "// nolint:lll",
+            "//nolint: lll",
+            "//nolint:LLL",
+            "//  nolint:lll",
+            "//nolint:lll,",
+            "//nolint",
+        ):
+            with self.subTest(spelling=spelling):
+                _, faults = suppressions.go_directives("p.go", go_line(f"{spelling} // {META}"))
+                self.assertEqual(len(faults), 1, faults)
+                self.assertRegex(faults[0], EXACTLY)
+        with self.subTest(spelling="//nolint:lll // x"):
+            _, faults = suppressions.go_directives("p.go", go_line("//nolint:lll // x"))
+            self.assertEqual(faults, [f"p.go:3: {METADATA}"])
+
+    def test_an_accepted_lll_waiver_passes(self):
+        # Red until the row's enabled set is the config's (design §4.2): today ENABLED is empty and lll "not enabled".
+        from gate.runner import golangci  # lane A's reader
+
+        with open(os.path.join(support.REPO, ".golangci.toml"), encoding="utf-8") as f:
+            enabled = golangci.enabled(golangci.load(f.read()))
+        directives, faults = suppressions.go_directives("p.go", go_line(ACCEPTED_LLL))
+        self.assertEqual((len(directives), faults), (1, []))
+        self.assertEqual(suppressions.check(directives, s1_1c_5_ctx(), enabled), [])
+
+
+class Enabled(unittest.TestCase):
+    def test_enabled_equals_the_config_both_ways(self):
+        from gate.runner import golangci  # lane A's reader
+
+        with open(os.path.join(support.REPO, ".golangci.toml"), encoding="utf-8") as f:
+            enabled = golangci.enabled(golangci.load(f.read()))
+        self.assertEqual(enabled, frozenset(golangci.LINTERS))
+        self.assertEqual(frozenset(golangci.LINTERS), enabled)
+        self.assertFalse(hasattr(suppressions, "ENABLED"), "ENABLED is removed as a constant (design §4.2)")
+
+    def test_a_linter_not_in_the_config_is_not_enabled_text(self):
+        directives, _ = suppressions.go_directives("p.go", go_line(f"//nolint:gosec // {META}"))
+        got = suppressions.check(directives, fixture_ctx(), frozenset({"lll"}))
+        self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled in .golangci.toml"])
