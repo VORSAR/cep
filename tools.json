@@ -7,22 +7,22 @@
       "path_dir": "bin",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "285a6b924713bec9c1cdf442ba5ebfbafbab070060b34d607c30546b758e64a6",
+          "archive_sha256": "6767ca67fdcfa3a966b6fb77fc3d4dd4020063fce27ac1e9425fab653195cbab",
           "exec_sha256": {
-            "bin/python3.15": "24eb2eac51c73c4e0dd756f84d73783f67b43ac19d2babb5643bdd1bfc8ab82f"
+            "bin/python3.15": "7d6ccb6fa89f391994f60eb066c594553e33bcd305dccf6b1892928e142bf16e"
           },
           "strip": "python/",
-          "tree_sha256": "81c806fe6e4e0def0c539b0a93b242103252c09084dafe5770504f727b72aa0c",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.15.2%2B20261026-aarch64-apple-darwin-install_only.tar.gz"
+          "tree_sha256": "9bba8da2a46ff276455faa1ea6eb349df231a14d8f611bfc4bd6f8e52eea9068",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.15.2%2B20261110-aarch64-apple-darwin-install_only.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "08d4ae9024a7cfbd3b70e559241afa2571cd3208d7bd5f96f88e0080dd4092aa",
+          "archive_sha256": "182e7adf7e4f0e32dafac5143f00d466afd20eef45918ea170f78884e503ac18",
           "exec_sha256": {
-            "bin/python3.15": "92cd46cc9c4f7622a8501cf8e0282f5dd384edf3f8111239449e0bd95b8c6849"
+            "bin/python3.15": "22e07cccd5b1ecf2375f5162017610fd9886436c9b77837bf6da0a40b1e04d4b"
           },
           "strip": "python/",
-          "tree_sha256": "5537f6815d9f8ecc12bb708390ed466796c34128f8d292561cf0ef9acf093276",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.15.2%2B20261026-x86_64-unknown-linux-gnu-install_only.tar.gz"
+          "tree_sha256": "11f83a58f9db8d877585fe074179ed77211c0b20097d6eee501c71f4a120844d",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.15.2%2B20261110-x86_64-unknown-linux-gnu-install_only.tar.gz"
         }
       },
       "version": "3.15.2",
@@ -38,22 +38,22 @@
       "path_dir": "bin",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e",
+          "archive_sha256": "e956e60bc9465d577ef8062059aa05cd3a2665b4b8678a2ed24e432368330b8f",
           "exec_sha256": {
-            "bin/python3.12": "c172d5d4e4c0a03d30c7c3cb04d638f667a31fe1f494157f11861c5fd40c8a28"
+            "bin/python3.12": "54788b15120aa4f534da3f59b59f46658a9bfdc3d3d9c8b3af1459002e307c90"
           },
           "strip": "python/",
-          "tree_sha256": "90caa4d42e6ac333ee6da74ca93c37dabbcbfca0703d5ef3f5a137686e5c5e20",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-aarch64-apple-darwin-install_only.tar.gz"
+          "tree_sha256": "0e9167e59ff9231c0fce150c69361dde2eed408daf30721dff438a0494dabe9d",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-aarch64-apple-darwin-install_only.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "6a79e922e50006b601f29e688407659da1c2b86ebcd4e9c7254cf234be8b89de",
+          "archive_sha256": "c2f87d4b4e8db3abddb0f116c6ccfc503d0cbdbb9ee8faacddad1b679ec12e99",
           "exec_sha256": {
-            "bin/python3.12": "88824fc08d28dc998af64dd55a8dd01366005d517903282a6989b1a3ccd70ded"
+            "bin/python3.12": "138937d12d15e660ae7e687a6e2f3c2a06780ceef6400209d45018630dc1667d"
           },
           "strip": "python/",
-          "tree_sha256": "dec2c7e10c75663e1848d462680f9a6049f06abba3ab02faf6a574da83b35ac6",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-unknown-linux-gnu-install_only.tar.gz"
+          "tree_sha256": "5d75d1f421a2e3f0e1fb313874a951af143d8f87143c3ae420641199b48e5115",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-x86_64-unknown-linux-gnu-install_only.tar.gz"
         }
       },
       "version": "3.12.16",
@@ -149,30 +149,30 @@
       "path_dir": ".",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "118f7121aa838785672bf612487f755a89108bb5f44e0f3df96c5967a72614f9",
+          "archive_sha256": "4ffadabec5c5fee1ddb2eecac0787ffe6fa18c665b73da9258b84211f40c5829",
           "exec_sha256": {
-            "ruff": "b768f3410db7e66d84b634d329b5f54599a7c39012a1eb3aaaa16e73a90587e2"
+            "ruff": "1af9b4c19c81c8cc3ead3b71ad1d38f89a18d0e5ed8e39f7611a07977b23ea01"
           },
           "strip": "ruff-aarch64-apple-darwin/",
-          "tree_sha256": "b275c168f8a6c538ca5566098edeea9a4990089647f635a296eda36f20e63cb9",
-          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-aarch64-apple-darwin.tar.gz"
+          "tree_sha256": "06241daaaef456ed77514a0ee3759197587340aac08c4c3d1f8e50e4a7f996b2",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-aarch64-apple-darwin.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "2b0890f5a55900af741f133918c2656919bbf18c2ab7741b4ca8403a90e647a9",
+          "archive_sha256": "7d261fc981a784668e19e9fa6ad437bfd95b67f2dc263fc1eab87d54d72fcc90",
           "exec_sha256": {
-            "ruff": "6761c67c2b307be3905473b165eb5af0fb2f083836b04f9e4a8cdd0caee37833"
+            "ruff": "fd6368438e0e10bb2c30a9a2782ddb7866de4828490e51d6f18808a2569dd6c2"
           },
           "strip": "ruff-x86_64-unknown-linux-gnu/",
-          "tree_sha256": "9079ac526bbd084cb84bde59c4da2cab9b0938d91e54890a2d64397803bc2f3a",
-          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.3/ruff-x86_64-unknown-linux-gnu.tar.gz"
+          "tree_sha256": "8413133d95f8a9146726a538f91459c70c444d2c0f071705078f7f3fe290b38a",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-x86_64-unknown-linux-gnu.tar.gz"
         }
       },
-      "version": "0.17.3",
+      "version": "0.17.5",
       "version_argv": [
         "ruff",
         "--version"
       ],
-      "version_line": "ruff 0.17.3"
+      "version_line": "ruff 0.17.5"
     },
     {
       "kind": "python-package",

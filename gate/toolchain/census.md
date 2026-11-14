@@ -6,20 +6,22 @@ S1.1a-1 Lane B's first commit (design note [s1-1a-gate-design.md](../../docs/spr
 
 *(Annotated 2026-11-12, the Go 1.27.3 → 1.27.4 bump: the two go rows re-taken the same way, each archive's sha256 first checked against go.dev's published listing. go1.27.4 holds two more regular files than go1.27.3 and nothing else changes: no link, no special bit, no collision, the same two non-ASCII names and the same ten executables; §2–§6 hold as written.)*
 
+*(Annotated 2026-11-14, ruff 0.17.3 → 0.17.5 and python-build-standalone 20261026 → 20261110 for CPython 3.15.2 and 3.12.16: the six rows re-taken the same way, each archive's sha256 first checked against GitHub's published asset digest, the method first reproducing the four 20261026 Python rows exactly. Each Python archive's only change is its bundled pip, 26.2.2 → 26.3: 32 regular files out and 67 in (35 more), with two more directories created on demand (`pip/_internal/exceptions/`, `pip/_vendor/rich/_unicode_data/`), every new file 0o664. ruff 0.17.5's rows equal 0.17.3's. Nothing else changes: the same links and targets, each on the same side of its target, the same 1038 terminfo links and the same 33 case collisions in both Linux Pythons, no special bit, no non-ASCII name, no hard link, device or FIFO, the same `DT_NEEDED` and `RPATH` for both Linux interpreters, Linux ruff still dynamic against system libraries only, the same extension modules; §2–§6 hold as written, with §4's on-demand counts updated.)*
+
 ## 1. Counts
 
 | Tool | Platform | Members | Regular | Dir | Symlink | Hard link | Device, FIFO, other | `strip` | Member equal to `strip` | Parents created on demand | Modes (non-symlink) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| python 3.15.2 | darwin-arm64 | 1770 | 1761 | 0 | 9 | 0 | 0 | `python/` | none | 173 | reg 0o664 ×1741, 0o775 ×20 |
-| python 3.15.2 | linux-amd64 | 4641 | 3593 | 0 | 1048 | 0 | 0 | `python/` | none | 216 | reg 0o664 ×3572, 0o775 ×21 |
-| python-floor 3.12.16 | darwin-arm64 | 1665 | 1655 | 0 | 10 | 0 | 0 | `python/` | none | 153 | reg 0o664 ×1604, 0o775 ×51 |
-| python-floor 3.12.16 | linux-amd64 | 4536 | 3487 | 0 | 1049 | 0 | 0 | `python/` | none | 196 | reg 0o664 ×3435, 0o775 ×52 |
+| python 3.15.2 | darwin-arm64 | 1805 | 1796 | 0 | 9 | 0 | 0 | `python/` | none | 175 | reg 0o664 ×1776, 0o775 ×20 |
+| python 3.15.2 | linux-amd64 | 4676 | 3628 | 0 | 1048 | 0 | 0 | `python/` | none | 218 | reg 0o664 ×3607, 0o775 ×21 |
+| python-floor 3.12.16 | darwin-arm64 | 1700 | 1690 | 0 | 10 | 0 | 0 | `python/` | none | 155 | reg 0o664 ×1639, 0o775 ×51 |
+| python-floor 3.12.16 | linux-amd64 | 4571 | 3522 | 0 | 1049 | 0 | 0 | `python/` | none | 198 | reg 0o664 ×3470, 0o775 ×52 |
 | go go1.27.4 | darwin-arm64 | 17375 | 15659 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15605, 0o755 ×54 |
 | go go1.27.4 | linux-amd64 | 17375 | 15659 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15605, 0o755 ×54 |
 | golangci-lint v2.15.0 | darwin-arm64 | 3 | 3 | 0 | 0 | 0 | 0 | `golangci-lint-2.15.0-darwin-arm64/` | none | 0 | reg 0o644 ×2, 0o755 ×1 |
 | golangci-lint v2.15.0 | linux-amd64 | 3 | 3 | 0 | 0 | 0 | 0 | `golangci-lint-2.15.0-linux-amd64/` | none | 0 | reg 0o644 ×2, 0o755 ×1 |
-| ruff 0.17.3 | darwin-arm64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-aarch64-apple-darwin/` | `ruff-aarch64-apple-darwin` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
-| ruff 0.17.3 | linux-amd64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-x86_64-unknown-linux-gnu/` | `ruff-x86_64-unknown-linux-gnu` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
+| ruff 0.17.5 | darwin-arm64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-aarch64-apple-darwin/` | `ruff-aarch64-apple-darwin` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
+| ruff 0.17.5 | linux-amd64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-x86_64-unknown-linux-gnu/` | `ruff-x86_64-unknown-linux-gnu` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
 
 `tarfile` names a directory member without its trailing slash, so the go and ruff root members appear as `go` and `ruff-…`, not as `strip` itself.
 
@@ -112,7 +114,7 @@ None in the darwin archives, go, golangci-lint or ruff. These matter only when a
 |---|---|---|
 | Accept regular files and directories | all | every regular file and directory member is accepted |
 | Accept the member equal to `strip` (the tree root) | go ×2, ruff ×2 | needed: `go` and `ruff-…` are member #0, directories. A literal "starts with `strip`" test would reject them (re-check claim 2) |
-| Create parents on demand | python ×4 (173, 216, 153, 196 directories), golangci-lint ×2 (none needed: its members sit in the root) | needed: the Python archives hold **no** directory member |
+| Create parents on demand | python ×4 (175, 218, 155, 198 directories), golangci-lint ×2 (none needed: its members sit in the root) | needed: the Python archives hold **no** directory member |
 | Accept symlinks resolving lexically inside the tree, never testing the target exists | python ×4 | needed: 7, 417, 8 and 418 links come before their target; 300 terminfo targets per Linux Python use `..` and stay inside |
 | Accept hard links to an earlier member inside the tree | none | no archive has a hard link; the rule is exercised only by test fixtures |
 | Reject an absolute path | none | no real member is rejected |
