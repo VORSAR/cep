@@ -595,15 +595,19 @@
       "code": [
         "gate/runner/allowlists.py",
         "gate/runner/anchors.py",
+        "gate/runner/golangci.py",
+        "gate/runner/pin.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/suppressions.py",
         "gate/runner/sprintid.py",
-        "gate/runner/suppressions.py"
+        "gate/runner/suppressions.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
           "path": "gate/proofs/drivers/test_suppressions_planted.py",
-          "cases": 9
+          "cases": 13
         }
       ],
       "tiers": [
