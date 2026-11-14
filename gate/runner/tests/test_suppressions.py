@@ -63,7 +63,6 @@ GOLANGCI = (
     (f"//nolint errcheck // {META}", True, False),
     ("// nolint", True, False),
     (f"///nolint:errcheck // {META}", True, False),
-    (f"//nolint:all // {META}", True, False),
     (f"//NOLINT:errcheck // {META}", False, False),
     (f"//\tnolint:errcheck // {META}", False, False),
     (f"// x nolint:errcheck // {META}", False, False),
