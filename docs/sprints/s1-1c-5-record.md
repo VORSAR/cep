@@ -34,6 +34,17 @@ The full plan is [s1-1c-5-plan-check.md](s1-1c-5-plan-check.md) (v2), drafted re
 
 **The card — the owner, 2026-11-14:** approved, so the sprint passes G0.
 
+**The design — the owner, 2026-11-14** ([before its reviews](decisions.md#owner-decisions-2026-11-14--s11c-5s-design-before-its-reviews), [after them](decisions.md#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews); all as recommended). The note is [s1-1c-5-design.md](s1-1c-5-design.md) v2. It follows v1's blind reviews: [architecture](../reviews/s1-1c-5-design-architecture.md) found 1 blocker, 9 should-fix and 6 later; [QA](../reviews/s1-1c-5-design-qa.md) found 3 blockers, 13 should-fix and 5 later. Every finding is placed in the note's §11.
+
+1. **The lint config is `.golangci.toml`.** JSON numbers reach revive as floats and silence its two size limits.
+2. **A size exclusion's deadline is enforced mechanically by the `aging` row**, against the merge base. A missing base at T4 is red.
+3. **The four new known issues are named:** S1.1c-5-1, S1.1c-5-2, S1.1c-5-3 and S1.1c-5-4. S3.3-2-1/2/3 and S1.1c-3-4 come to the owner before S1.1c-7's close.
+4. **`log.Print*` goes to the backlog.**
+
+**The coordinator's rulings at G1:**
+- `gate/registry.json` and `gate/law.json` are the coordinator's for the whole sprint, so each file has one owner.
+- A `//nolint` must trail the code it waives. A standalone one waives the whole next declaration, so it is a named fault.
+
 ## How it runs
 
 At most two agents at once. The plan check §1 holds the waves:
@@ -67,8 +78,8 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-14)
              ☑ fits the cap, lanes ≤ 8 days (the wave cut across S1.1c-5 to S1.1c-8, decision 1)
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-14)
              ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit after the plan check's
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions (ADR-0015 §2, §2.1, §2.2 annotated)
+Design (G1)  ☑ architecture + the-fool findings resolved (design §11) ☑ QA testability findings resolved (design §11)
+             ☑ owner decisions recorded (2026-11-14) ☐ ADRs written for lasting decisions (ADR-0015 §2, §2.1, §2.2 annotated at G5, design §9)
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
              ☐ tests on the real code ☐ every breaker's red test committed (step 7)
