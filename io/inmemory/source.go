@@ -95,34 +95,45 @@ func (s *Source) Open(ctx context.Context, emit cepio.Emitter) error {
 		return ErrReopened
 	}
 	defer close(s.done)
-	apply := func(it item) error {
-		if it.fill != nil {
-			return emit.Emit(ctx, it.batch, it.fill)
-		}
-		return emit.EndBatch(ctx, it.batch)
-	}
 	for {
 		select {
 		case it := <-s.ch:
-			if err := apply(it); err != nil {
-				s.dropped.Add(int64(1 + len(s.ch)))
+			if err := s.emitItem(ctx, emit, it); err != nil {
 				return err
 			}
 		case <-s.quit: // closed: emit what is buffered, then end
-			for {
-				select {
-				case it := <-s.ch:
-					if err := apply(it); err != nil {
-						s.dropped.Add(int64(1 + len(s.ch)))
-						return err
-					}
-				default:
-					return nil
-				}
-			}
+			return s.drainBuffered(ctx, emit)
 		case <-ctx.Done():
 			s.dropped.Add(int64(len(s.ch)))
 			return ctx.Err()
 		}
 	}
+}
+
+// drainBuffered emits what is buffered once the source is closed, then returns nil; an emit error ends it.
+func (s *Source) drainBuffered(ctx context.Context, emit cepio.Emitter) error {
+	for {
+		select {
+		case it := <-s.ch:
+			if err := s.emitItem(ctx, emit, it); err != nil {
+				return err
+			}
+		default:
+			return nil
+		}
+	}
+}
+
+// emitItem hands one item to emit, a row or a batch end; an error counts it and everything still buffered in Dropped.
+func (s *Source) emitItem(ctx context.Context, emit cepio.Emitter, it item) error {
+	var err error
+	if it.fill != nil {
+		err = emit.Emit(ctx, it.batch, it.fill)
+	} else {
+		err = emit.EndBatch(ctx, it.batch)
+	}
+	if err != nil {
+		s.dropped.Add(int64(1 + len(s.ch)))
+	}
+	return err
 }
