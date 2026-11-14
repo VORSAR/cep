@@ -570,6 +570,60 @@ class Staged(World):
         self.assertFalse([b for b in banned if b in workflow])
 
 
+class Lock(World):
+    """Owner, during S1.1c-5's W1: the row runs golangci-lint with --allow-parallel-runners."""
+
+    def test_the_lint_argv_is_pinned(self):
+        _, _, calls = self.run_row()
+        lints = sorted((c["env"]["GOOS"], c["argv"]) for c in calls if c["tool"] == "golangci-lint")
+        want = [
+            (
+                goos,
+                [
+                    "run",
+                    "--allow-parallel-runners",
+                    "--config",
+                    ".golangci.toml",
+                    f"--output.json.path={self.row_dir}/smells-{goos}.json",
+                    "./...",
+                ],
+            )
+            for goos in ("darwin", "linux")
+        ]
+        self.assertEqual(lints, want)
+
+
+def ignored(path: str, line: int, col: int, linter: str, first: int, last: int, expanded: bool) -> str:
+    """One `GL_DEBUG=nolint_filter` line for an issue a //nolint silenced, as golangci-lint v2.15.0 writes it
+    (recorded by hand from the pinned binary, pkg/result/processors/nolint_filter.go:128)."""
+    ptr = "0x6e04262e0b40" if expanded else "<nil>"
+    return (
+        f'level=debug msg="[nolint_filter] found ignored range for issue &{{{linter} use of `panic` forbidden because'
+        f' \\"[panic]\\"  [] planted.example/internal/p {path}:{line}:{col} <nil> 0 [] false  internal/p/p.go'
+        f' internal/p/p.go}}: {{[{linter}] map[] {{{first} {last}}} 8 {ptr}}}"\n'
+    )
+
+
+class Silenced(World):
+    """Coordinator, during S1.1c-5's W1 (acceptance line 2): a waiver on the wrong line is red. golangci-lint widens a
+    trailing //nolint to the next line's node when that node starts at the comment's column; the row reads the
+    nolint filter's own record of each silenced issue and requires the issue's line to be the directive's line."""
+
+    def test_an_issue_silenced_from_the_line_above_is_red(self):
+        path = os.path.join(self.repo, "internal", "p", "p.go")
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 9, 2, "forbidigo", 9, 9, False)}
+        self.assert_green()  # witness: an issue silenced by the //nolint on its own line is green
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 5, 2, "forbidigo", 4, 5, True)}
+        self.assert_fault(
+            "internal/p/p.go:5:2: forbidigo: silenced by the //nolint on line 4; a //nolint waives only its own line"
+        )
+
+    def test_a_silenced_nolintlint_report_is_not_judged(self):
+        path = os.path.join(self.repo, "internal", "p", "p.go")
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 4, 8, "nolintlint", 3, 3, False)}
+        self.assert_green()
+
+
 class Summary(World):
     def test_the_green_line_format_is_pinned(self):
         pkgs = [package("internal/p", "p.go"), package("internal/q", "q.go")]
