@@ -15,7 +15,8 @@ func (c *checker) resolve() {
 	for i := range c.app.Params {
 		p := &c.app.Params[i]
 		if !fits(p.Default, p.Type) {
-			c.report("E-PARAM-001", p.Pos, "param %s is declared %s, but its default is a %s", p.Name, p.Type, kindName(p.Default))
+			c.report("E-PARAM-001", p.Pos, "param %s is declared %s, but its default is a %s", p.Name, p.Type, kindName(
+				p.Default))
 			c.badParam[p.Name] = true
 			continue
 		}

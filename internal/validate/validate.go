@@ -54,12 +54,14 @@ func check(app *model.App, opts Options, conn connectors) (*model.App, []Diagnos
 		app: cp, opts: opts, conn: conn, reg: expr.Builtins(),
 		streams: map[string]*model.Stream{}, tables: map[string]*model.Table{}, params: map[string]*model.Param{},
 		effective: map[string]model.Literal{}, badParam: map[string]bool{},
-		poisoned: map[*model.Rule]bool{}, noTarget: map[*model.Rule]bool{}, badTs: map[*model.Stream]bool{}, badKey: map[*model.PartitionKey]bool{},
+		poisoned: map[*model.Rule]bool{}, noTarget: map[*model.Rule]bool{}, badTs: map[*model.Stream]bool{},
+		badKey:   map[*model.PartitionKey]bool{},
 		skipExpr: map[*model.Expr]bool{}, skipDur: map[*model.DurationOrParam]bool{},
 	}
 	c.run()
 	slices.SortStableFunc(c.diags, func(a, b Diagnostic) int {
-		return cmp.Or(cmp.Compare(a.Line, b.Line), cmp.Compare(a.Col, b.Col), cmp.Compare(a.Code, b.Code), cmp.Compare(a.Msg, b.Msg))
+		return cmp.Or(cmp.Compare(a.Line, b.Line), cmp.Compare(a.Col, b.Col), cmp.Compare(a.Code, b.Code), cmp.Compare(a.Msg,
+			b.Msg))
 	})
 	for _, d := range c.diags {
 		if !d.Lint {
@@ -94,7 +96,8 @@ type checker struct {
 func (c *checker) run() {
 	if c.app.Language != "cep/0.1" {
 		// SPEC §3.1: a later version is refused, never half-interpreted, so nothing else is reported.
-		c.report("E-PRAG-002", c.app.LanguagePos, "language %s is not supported: this engine reads cep/0.1 only", c.app.Language)
+		c.report("E-PRAG-002", c.app.LanguagePos, "language %s is not supported: this engine reads cep/0.1 only",
+			c.app.Language)
 		return
 	}
 	c.index()

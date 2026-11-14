@@ -27,7 +27,8 @@ var builtin = connectors{
 	Sources: []connector{
 		{Name: "http", Keys: []string{"port", "path"}, Punctuates: true}, // §4: one listener; a POST body is one batch
 		{Name: "stdin", Punctuates: true},                                // §4: one batch per --batch-lines or end of input
-		{Name: "inmemory", Punctuates: true},                             // §4: the Go API's feed, its batch id from the caller
+		// §4: the Go API's feed, its batch id from the caller
+		{Name: "inmemory", Punctuates: true},
 	},
 	Sinks: []connector{
 		{Name: "http", Keys: []string{"url", "template"}},        // FA8: a webhook, JSON, {{attr}} templates; example 01

@@ -46,7 +46,8 @@ func (c *checker) partition(r *model.Rule) {
 			keyed = keyed || k.Stream == name
 		}
 		if !keyed {
-			c.report("E-PART-002", r.Partition.Pos, "the partition of rule %s keys no attribute of %s, which the rule reads", r.Name, name)
+			c.report("E-PART-002", r.Partition.Pos, "the partition of rule %s keys no attribute of %s, which the rule reads",
+				r.Name, name)
 		}
 	}
 	// The spelling and the shape, in design s3-2b-2 v2 §1.3's order: a group naming an attribute twice (E-PART-006), a
@@ -59,7 +60,8 @@ func (c *checker) partition(r *model.Rule) {
 		seen := map[string]bool{}
 		for _, a := range k.Attrs {
 			if seen[a.Name] {
-				c.report("E-PART-006", a.Pos, "%s is named twice in the partition key of %s in rule %s: name each attribute once", a.Name, k.Stream, r.Name)
+				c.report("E-PART-006", a.Pos, "%s is named twice in the partition key of %s in rule %s: name each attribute once",
+					a.Name, k.Stream, r.Name)
 				bad[k] = true
 				break
 			}
@@ -75,7 +77,9 @@ func (c *checker) partition(r *model.Rule) {
 			continue
 		}
 		bad[k] = true
-		c.report("E-PART-004", k.Pos, "%s is keyed twice in the partition of rule %s: to key it on both, write (%s) of %s, and give every stream the same number of parts",
+		c.report("E-PART-004", k.Pos,
+			"%s is keyed twice in the partition of rule %s: to key it on both, write (%s) of %s, and give every stream the "+
+				"same number of parts",
 			k.Stream, r.Name, strings.Join(append(attrNamesOf(f), attrNamesOf(k)...), ", "), k.Stream)
 	}
 	var live []*model.PartitionKey
@@ -93,7 +97,8 @@ func (c *checker) partition(r *model.Rule) {
 			for i, k := range live {
 				counts[i] = fmt.Sprintf("%s %d", k.Stream, len(k.Attrs))
 			}
-			c.report("E-PART-007", r.Partition.Pos, "the partition keys of rule %s have different numbers of parts: %s: give every stream the same number of parts",
+			c.report("E-PART-007", r.Partition.Pos,
+				"the partition keys of rule %s have different numbers of parts: %s: give every stream the same number of parts",
 				r.Name, strings.Join(counts, ", "))
 			return
 		}
@@ -101,7 +106,8 @@ func (c *checker) partition(r *model.Rule) {
 	if len(live[0].Attrs) == 1 {
 		for _, k := range live {
 			if k.Grouped {
-				c.report("E-PART-005", k.Pos, "the partition key of %s in rule %s is one attribute in brackets: write %s of %s", k.Stream, r.Name, k.Attrs[0].Name, k.Stream)
+				c.report("E-PART-005", k.Pos, "the partition key of %s in rule %s is one attribute in brackets: write %s of %s",
+					k.Stream, r.Name, k.Attrs[0].Name, k.Stream)
 			}
 		}
 	}
@@ -114,9 +120,11 @@ func (c *checker) partition(r *model.Rule) {
 				continue
 			}
 			if len(k.Attrs) == 1 {
-				c.report("E-PART-003", k.Pos, "partition key %s of %s is %s, but %s of %s is %s", a.Name, k.Stream, kt, ra.Name, ref.Stream, ft)
+				c.report("E-PART-003", k.Pos, "partition key %s of %s is %s, but %s of %s is %s", a.Name, k.Stream, kt, ra.Name,
+					ref.Stream, ft)
 			} else {
-				c.report("E-PART-003", a.Pos, "part %d of the partition key: %s of %s is %s, but %s of %s is %s", i+1, a.Name, k.Stream, kt, ra.Name, ref.Stream, ft)
+				c.report("E-PART-003", a.Pos, "part %d of the partition key: %s of %s is %s, but %s of %s is %s", i+1, a.Name,
+					k.Stream, kt, ra.Name, ref.Stream, ft)
 			}
 			break // one finding per key: its first differing part
 		}
@@ -128,9 +136,11 @@ func (c *checker) partition(r *model.Rule) {
 				continue
 			}
 			if len(k.Attrs) == 1 {
-				c.report("E-PART-008", k.Pos, "partition key %s of %s is an object: an object cannot key a partition", a.Name, k.Stream)
+				c.report("E-PART-008", k.Pos, "partition key %s of %s is an object: an object cannot key a partition", a.Name,
+					k.Stream)
 			} else {
-				c.report("E-PART-008", a.Pos, "part %d of the partition key: %s of %s is an object: an object cannot key a partition", i+1, a.Name, k.Stream)
+				c.report("E-PART-008", a.Pos,
+					"part %d of the partition key: %s of %s is an object: an object cannot key a partition", i+1, a.Name, k.Stream)
 			}
 			break
 		}
