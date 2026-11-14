@@ -51,5 +51,6 @@ func ParseLiteral(text string) (model.Literal, error) {
 
 // notALiteral is an override's message when its text is not one literal (break-it S5 of S3.3-1).
 func notALiteral(text string) string {
-	return fmt.Sprintf("%q is not a literal: write a signed number, a string in quotes, a duration, a timestamp '…', true or false", text)
+	return fmt.Sprintf(
+		"%q is not a literal: write a signed number, a string in quotes, a duration, a timestamp '…', true or false", text)
 }

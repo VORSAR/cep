@@ -46,7 +46,8 @@ func lower(p *Program) (*model.App, *lowerError) {
 		case s.Stream != nil:
 			app.Streams = append(app.Streams, l.stream(s.Stream))
 		case s.Table != nil:
-			t := model.Table{Name: name(s.Table.Name), Attrs: l.attrs(s.Table.Attrs), PrimaryKey: []string{}, Pos: pos(s.Table.Pos)}
+			t := model.Table{Name: name(s.Table.Name), Attrs: l.attrs(s.Table.Attrs), PrimaryKey: []string{}, Pos: pos(
+				s.Table.Pos)}
 			for _, k := range s.Table.Cols {
 				t.PrimaryKey = append(t.PrimaryKey, name(k))
 			}
@@ -194,7 +195,8 @@ func (l *lowerer) body(b *Body) model.Body {
 			w.Kind = model.WindowCron
 			w.CronExpr, w.CronTZ = l.str(k.CronExpr.Value, k.CronExpr.Pos), l.str(k.CronTZ.Value, k.CronTZ.Pos)
 		default:
-			w.Kind, w.SortAttr, w.SortDir, w.SortAttrPos = model.WindowSort, name(k.SortAttr.Value), k.SortDir, pos(k.SortAttr.Pos)
+			w.Kind, w.SortAttr, w.SortDir, w.SortAttrPos = model.WindowSort, name(k.SortAttr.Value), k.SortDir, pos(
+				k.SortAttr.Pos)
 			w.SortN = l.sortSize(k.SortN)
 		}
 		w.Emit = b.Emit.Value
@@ -276,7 +278,8 @@ func (l *lowerer) expect(e *ExpectBlock, at Position) model.Expect {
 		})
 	}
 	out.Then = model.Then{
-		Name: name(e.Then.Name.Value), Records: l.records(e.Then.Records), Pos: pos(e.Then.Pos), NamePos: pos(e.Then.Name.Pos),
+		Name: name(e.Then.Name.Value), Records: l.records(e.Then.Records), Pos: pos(e.Then.Pos), NamePos: pos(
+			e.Then.Name.Pos),
 	}
 	return out
 }
@@ -393,20 +396,25 @@ func (l *lowerer) atom(a *Atom) model.Expr {
 	case a.Literal != nil:
 		return model.Expr{Kind: model.ExprLiteral, Lit: l.literal(a.Literal), Args: []model.Expr{}, Pos: at}
 	case a.Param != "":
-		return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitParam, Param: paramName(a.Param)}, Args: []model.Expr{}, Pos: at}
+		return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitParam, Param: paramName(a.Param)},
+			Args: []model.Expr{}, Pos: at}
 	case a.Raw != nil:
-		return model.Expr{Kind: model.ExprRaw, Qualifier: name(a.Raw.Qualifier), Name: name(a.Raw.Name), Args: []model.Expr{}, Pos: at}
+		return model.Expr{Kind: model.ExprRaw, Qualifier: name(a.Raw.Qualifier), Name: name(a.Raw.Name), Args: []model.Expr{},
+			Pos: at}
 	case a.Call != nil:
-		out := model.Expr{Kind: model.ExprCall, Namespace: name(a.Call.Namespace), Name: name(a.Call.Name), Args: []model.Expr{}, Pos: at}
+		out := model.Expr{Kind: model.ExprCall, Namespace: name(a.Call.Namespace), Name: name(a.Call.Name),
+			Args: []model.Expr{}, Pos: at}
 		for _, arg := range a.Call.Args {
 			out.Args = append(out.Args, l.expr(arg))
 		}
 		return out
 	case a.Attr != nil:
-		return model.Expr{Kind: model.ExprAttr, Qualifier: name(a.Attr.Qualifier), Name: name(a.Attr.Name), Args: []model.Expr{}, Pos: at}
+		return model.Expr{Kind: model.ExprAttr, Qualifier: name(a.Attr.Qualifier), Name: name(a.Attr.Name),
+			Args: []model.Expr{}, Pos: at}
 	case a.Neg != nil:
 		if n := a.Neg.Literal; n != nil && minIntDigits(n.Number) {
-			return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitInt, Int: math.MinInt64}, Args: []model.Expr{}, Pos: at}
+			return model.Expr{Kind: model.ExprLiteral, Lit: model.Literal{Kind: model.LitInt, Int: math.MinInt64},
+				Args: []model.Expr{}, Pos: at}
 		}
 		return model.Expr{Kind: model.ExprNeg, Args: []model.Expr{l.atom(a.Neg)}, Pos: at}
 	default:
@@ -469,7 +477,8 @@ func (l *lowerer) number(text string, pos Position) model.Literal {
 	return model.Literal{Kind: model.LitInt, Int: i}
 }
 
-var units = map[string]int64{"ms": 1, "sec": 1000, "min": 60_000, "hour": 3_600_000, "day": 86_400_000, "week": 604_800_000}
+var units = map[string]int64{"ms": 1, "sec": 1000, "min": 60_000, "hour": 3_600_000, "day": 86_400_000,
+	"week": 604_800_000}
 
 // unitRank orders the units from small to large: a duration's units are strictly descending (SPEC §2.4).
 var unitRank = map[string]int{"ms": 0, "sec": 1, "min": 2, "hour": 3, "day": 4, "week": 5}

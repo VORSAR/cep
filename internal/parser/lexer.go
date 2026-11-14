@@ -44,7 +44,8 @@ var rules = lexer.MustSimple([]lexer.SimpleRule{
 })
 
 // definition is what the grammar is built on: the rules above plus the two classified token types and the joined
-// pragma id, so a tag may name @Ident, @Keyword, @MixedKeyword or @Pragma. The grammar matches keywords by their text, so classification only
+// pragma id, so a tag may name @Ident, @Keyword, @MixedKeyword or @Pragma. The grammar matches keywords by their text,
+// so classification only
 // decides what an Ident capture may take: a keyword or a mixed-case reserved word is never a name (ADR-0002 §3).
 // The parser is always fed from lexAll's token slice, never through the embedded Lex.
 type definition struct{ lexer.Definition }

@@ -372,9 +372,9 @@ type CmpTail struct {
 	Right   *Sum         `parser:"  @@"`
 	IsNull  bool         `parser:"| 'is' ( @'null'"`
 	NotNull bool         `parser:"       | @('not' 'null') )"`
-	TextOp  string       `parser:"| @('has_ci'|'has_cs'|'contains_ci'|'contains_cs'|'starts_with_ci'|'starts_with_cs'|'ends_with_ci'|'ends_with_cs'|'matches_ci'|'matches_cs'|'contains_match_ci'|'contains_match_cs')"`
+	TextOp  string       `parser:"| @('has_ci'|'has_cs'|'contains_ci'|'contains_cs'|'starts_with_ci'|'starts_with_cs'|'ends_with_ci'|'ends_with_cs'|'matches_ci'|'matches_cs'|'contains_match_ci'|'contains_match_cs')"` //nolint:lll // PERMANENT reason="a participle grammar tag is one string literal and cannot wrap" ref=docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go sprint=S1.1c-5
 	Operand *TextOperand `parser:"  @@"`
-	SetOp   string       `parser:"| @('has_any_ci'|'has_any_cs'|'has_all_ci'|'has_all_cs'|'contains_any_ci'|'contains_any_cs'|'contains_all_ci'|'contains_all_cs')"`
+	SetOp   string       `parser:"| @('has_any_ci'|'has_any_cs'|'has_all_ci'|'has_all_cs'|'contains_any_ci'|'contains_any_cs'|'contains_all_ci'|'contains_all_cs')"` //nolint:lll // PERMANENT reason="a participle grammar tag is one string literal and cannot wrap" ref=docs/architecture/adr/ADR-0015-build-enforcement-hostile-gate.md#2-architecture-constraints-as-analyzers-with-teeth-reference-a-in-go sprint=S1.1c-5
 	SetArg  *SetOperand  `parser:"  '(' @@ ')'"`
 }
 

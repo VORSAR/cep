@@ -67,7 +67,7 @@ const pecInvalidDir = "../../docs/language/invalid"
 func pecEdit(base string, pairs ...string) string {
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if !strings.Contains(base, pairs[i]) {
-			panic("pecEdit: the program does not hold " + pairs[i])
+			panic("pecEdit: the program does not hold " + pairs[i]) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		base = strings.Replace(base, pairs[i], pairs[i+1], 1)
 	}
