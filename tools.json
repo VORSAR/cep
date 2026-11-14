@@ -114,6 +114,7 @@
     },
     {
       "command": "golangci-lint",
+      "go_built": true,
       "name": "golangci-lint",
       "path_dir": ".",
       "platforms": {

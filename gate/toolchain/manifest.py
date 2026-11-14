@@ -181,10 +181,23 @@ def _kind(value: Any, where: str) -> str:
     return kind
 
 
+def _go_built(fields: dict[str, Any], where: str) -> bool:
+    """Absent is False; only `true` may be written (S1.1c-5 design note §6)."""
+    if "go_built" not in fields:
+        return False
+    value = fields["go_built"]
+    if value is False:
+        raise ManifestError(f'{where}: "go_built": false is the default: remove it')
+    if value is not True:
+        raise ManifestError(f'{where}: "go_built" must be true')
+    return True
+
+
 def _tool(value: Any, platform: str, where: str) -> Tool:
     kind = _kind(value, where)
     package = kind == PYTHON_PACKAGE
-    want = _PACKAGE_FIELDS if package else _TOOL_FIELDS | ({"kind"} if "kind" in value else set())
+    optional = {"kind", "go_built"} & value.keys()
+    want = _PACKAGE_FIELDS if package else _TOOL_FIELDS | optional
     fields = _fields(value, want, where)
     name = _file_name(fields["name"], "name", where)
     where = f"{where} ({name})"
@@ -206,6 +219,7 @@ def _tool(value: Any, platform: str, where: str) -> Tool:
         version_line=_text(fields["version_line"], "version_line", where),
         kind=kind,
         module=_identifier(fields["module"], "module", where) if package else "",
+        go_built=_go_built(fields, where),
         **entries[platform],
     )
 
