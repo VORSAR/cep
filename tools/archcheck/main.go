@@ -30,7 +30,8 @@
 // testhygiene.json lists.
 //
 // With -cases it lists, for the teeth (S1.1c-2 design §4.2, §11), each named _test.go file's planted cases and the
-// cases that assert nothing, as Cases reads them: "<path>: case <name>" and "<path>: fault <name>: <why>" lines, file by
+// cases that assert nothing, as Cases reads them: "<path>: case <name>" and "<path>: fault <name>: <why>" lines, file
+// by
 // file in argument order, and exits 0; the gate's Python pin judges the listing.
 //
 // The first two modes print one "failed: <file>:<line>: <check>: <message>" line per finding, then, sorted, one
@@ -99,7 +100,8 @@ const AllowlistsDir = "tools/allowlists"
 
 var (
 	clockCalls = []string{"Now", "Since", "Until", "Tick", "After", "AfterFunc", "NewTimer", "NewTicker", "Sleep"}
-	operators  = []string{"internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table", "internal/partition"}
+	operators  = []string{"internal/pattern", "internal/window", "internal/expr", "internal/text", "internal/table",
+		"internal/partition"}
 	// testWaits are the calls the sleep fence bans in a test (testing.md rule 1; design S1.1c-2 §3).
 	testWaits = []string{"Sleep", "After", "AfterFunc", "Tick", "NewTimer", "NewTicker"}
 )
@@ -154,7 +156,8 @@ func splitPurity(target string) (pkg, imp, ident string, ok bool) {
 // LoadLists reads <root>/tools/allowlists/{purity,clock,testhygiene,generated}.json. A missing or unparsable file, a
 // rule that is not the file's name, or a target that does not split (or is empty) is an error naming the file.
 func LoadLists(root string) (*Lists, error) {
-	l := &Lists{Purity: map[string]map[string][]string{}, Clock: map[string]bool{}, Tests: map[string]bool{}, Generated: map[string]bool{}}
+	l := &Lists{Purity: map[string]map[string][]string{}, Clock: map[string]bool{}, Tests: map[string]bool{},
+		Generated: map[string]bool{}}
 	purity, err := readList(root, "purity")
 	if err != nil {
 		return nil, err
@@ -162,7 +165,8 @@ func LoadLists(root string) (*Lists, error) {
 	for _, target := range purity {
 		pkg, imp, ident, ok := splitPurity(target)
 		if !ok {
-			return nil, fmt.Errorf("%s/purity.json: target %q: want \"<package>: <import path>.<identifier>\"", AllowlistsDir, target)
+			return nil, fmt.Errorf("%s/purity.json: target %q: want \"<package>: <import path>.<identifier>\"", AllowlistsDir,
+				target)
 		}
 		if l.Purity[pkg] == nil {
 			l.Purity[pkg] = map[string][]string{}
@@ -281,7 +285,10 @@ func Unused(lists *Lists, root string) ([]string, error) {
 		}
 		dir := filepath.ToSlash(filepath.Dir(file))
 		operator := slices.ContainsFunc(operators, func(op string) bool { return under(dir, op) })
-		if !operator || !slices.ContainsFunc(parsed.Imports, func(spec *ast.ImportSpec) bool { return importPath(spec) == "time" }) {
+		if !operator || !slices.ContainsFunc(parsed.Imports, func(spec *ast.ImportSpec) bool {
+			return importPath(
+				spec) == "time"
+		}) {
 			unused("clock", file+": time")
 		}
 	}
@@ -322,7 +329,10 @@ func Unused(lists *Lists, root string) ([]string, error) {
 // Unused does not judge its targets.
 func holdsGo(root, dir string) bool {
 	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
-	return err == nil && slices.ContainsFunc(entries, func(e os.DirEntry) bool { return strings.HasSuffix(e.Name(), ".go") })
+	return err == nil && slices.ContainsFunc(entries, func(e os.DirEntry) bool {
+		return strings.HasSuffix(e.Name(),
+			".go")
+	})
 }
 
 // selected gives every "<import path>.<identifier>" a non-test Go file of package directory pkg selects.
@@ -426,12 +436,14 @@ func CheckSources(rules *Rules, lists *Lists, path string, files map[string]stri
 	if dir == "." {
 		dir = ""
 	}
-	c := &checker{rules: rules, lists: lists, fset: fset, path: path, dir: dir, file: file, test: strings.HasSuffix(path, "_test.go")}
+	c := &checker{rules: rules, lists: lists, fset: fset, path: path, dir: dir, file: file, test: strings.HasSuffix(path,
+		"_test.go")}
 	c.imports()
 	c.fences()
 	marked := generated(file)
 	if marked && !lists.Generated[path] {
-		c.report(file.FileStart, "generated: the file says it is generated but %s/generated.json does not list it", AllowlistsDir)
+		c.report(file.FileStart, "generated: the file says it is generated but %s/generated.json does not list it",
+			AllowlistsDir)
 	}
 	if !under(dir, "bench") {
 		c.clock()
@@ -468,14 +480,16 @@ func (c *checker) imports() {
 		switch {
 		case p == c.rules.Module || strings.HasPrefix(p, c.rules.Module+"/"):
 			target := strings.TrimPrefix(strings.TrimPrefix(p, c.rules.Module), "/")
-			if allows(c.rules.Imports[key], target) || (c.test && (target == c.dir || allows(c.rules.TestImports[key], target))) {
+			if allows(c.rules.Imports[key], target) || (c.test && (target == c.dir || allows(c.rules.TestImports[key],
+				target))) {
 				continue
 			}
 			c.report(spec.Pos(), "imports: %s may not import %s (ARCHITECTURE §3; %s)", name(c.dir), name(target), RulesPath)
 		case stdlib(p):
 		default:
 			listed := func(prefix string) bool { return strings.HasPrefix(p, prefix) }
-			if !slices.ContainsFunc(c.rules.External[key], listed) && !(c.test && slices.ContainsFunc(c.rules.TestExternal[key], listed)) {
+			if !slices.ContainsFunc(c.rules.External[key], listed) && !(c.test && slices.ContainsFunc(c.rules.TestExternal[key],
+				listed)) {
 				c.report(spec.Pos(), "imports: %s may not import the third-party package %s (%s)", name(c.dir), p, RulesPath)
 			}
 		}
@@ -490,7 +504,8 @@ func (c *checker) fences() {
 		}
 		locals := c.localNames(c.rules.Module + "/" + target)
 		if slices.Contains(locals, ".") {
-			c.report(c.file.Package, "fence: %s may not dot-import %s: a dot-import hides which identifiers it uses (%s)", name(c.dir), target, RulesPath)
+			c.report(c.file.Package, "fence: %s may not dot-import %s: a dot-import hides which identifiers it uses (%s)", name(
+				c.dir), target, RulesPath)
 		}
 		ast.Inspect(c.file, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
@@ -503,7 +518,8 @@ func (c *checker) fences() {
 			}
 			if !slices.ContainsFunc(allowed, func(prefix string) bool { return strings.HasPrefix(sel.Sel.Name, prefix) }) {
 				short := target[strings.LastIndex(target, "/")+1:]
-				c.report(sel.Pos(), "fence: %s may use %s.%s* only (%s), not %s.%s", name(c.dir), short, strings.Join(allowed, "*, "+short+"."), RulesPath, short, sel.Sel.Name)
+				c.report(sel.Pos(), "fence: %s may use %s.%s* only (%s), not %s.%s", name(c.dir), short, strings.Join(allowed,
+					"*, "+short+"."), RulesPath, short, sel.Sel.Name)
 			}
 			return true
 		})
@@ -534,7 +550,9 @@ func (c *checker) clock() {
 	operator := slices.ContainsFunc(operators, func(op string) bool { return under(c.dir, op) })
 	for _, spec := range c.file.Imports {
 		if importPath(spec) == "time" && operator && !c.lists.Clock[c.path] {
-			c.report(spec.Pos(), "clock: %s may not import time: an operator package reads time through internal/clock, and a file's exception is an entry in %s/clock.json (ADR-0015 §2.2)", c.dir, AllowlistsDir)
+			c.report(spec.Pos(),
+				"clock: %s may not import time: an operator package reads time through internal/clock, and a file's exception is "+
+					"an entry in %s/clock.json (ADR-0015 §2.2)", c.dir, AllowlistsDir)
 		}
 	}
 	timeNames := c.localNames("time")
@@ -542,12 +560,16 @@ func (c *checker) clock() {
 		return
 	}
 	if slices.Contains(timeNames, ".") {
-		c.report(c.file.Package, "clock: %s may not dot-import time: a dot-import hides the wall-clock calls (ADR-0015 §2.2)", name(c.dir))
+		c.report(c.file.Package, "clock: %s may not dot-import time: a dot-import hides the wall-clock calls (ADR-0015 §2.2)",
+			name(c.dir))
 	}
 	ast.Inspect(c.file, func(n ast.Node) bool {
 		if sel, ok := n.(*ast.SelectorExpr); ok {
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(timeNames, x.Name) && slices.Contains(clockCalls, sel.Sel.Name) {
-				c.report(sel.Pos(), "clock: time.%s reads the wall clock: only internal/runtime, io, internal/playback and cmd may (ADR-0015 §2.2)", sel.Sel.Name)
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(timeNames, x.Name) && slices.Contains(
+				clockCalls, sel.Sel.Name) {
+				c.report(sel.Pos(),
+					"clock: time.%s reads the wall clock: only internal/runtime, io, internal/playback and cmd may (ADR-0015 §2.2)",
+					sel.Sel.Name)
 			}
 		}
 		return true
@@ -567,9 +589,12 @@ func (c *checker) purity() {
 		case (p == "sync" || p == "sync/atomic") && !syncOK && named[p] == nil:
 			c.report(spec.Pos(), "purity: %s may not import %s (ADR-0015 §2.2)", name(c.dir), p)
 		case named[p] != nil && spec.Name != nil && spec.Name.Name == ".":
-			c.report(spec.Pos(), "purity: %s may not dot-import %s: its named exception is %s only (ADR-0015 §2.2)", name(c.dir), p, exceptionList(named))
+			c.report(spec.Pos(), "purity: %s may not dot-import %s: its named exception is %s only (ADR-0015 §2.2)", name(c.dir),
+				p, exceptionList(named))
 		case !boundary && (under(p, "os") || under(p, "net") || under(p, "io")):
-			c.report(spec.Pos(), "purity: %s may not import %s: only io, internal/playback and cmd touch the outside (ADR-0015 §2.2)", name(c.dir), p)
+			c.report(spec.Pos(),
+				"purity: %s may not import %s: only io, internal/playback and cmd touch the outside (ADR-0015 §2.2)", name(c.dir),
+				p)
 		}
 	}
 	for _, group := range c.file.Comments {
@@ -613,8 +638,10 @@ func (c *checker) namedSync(named map[string][]string) {
 			if !ok {
 				return true
 			}
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(locals, x.Name) && !slices.Contains(allowed, sel.Sel.Name) {
-				c.report(sel.Pos(), "purity: %s may use only %s, not %s.%s (ADR-0015 §2.2)", name(c.dir), exceptionList(named), p[strings.LastIndex(p, "/")+1:], sel.Sel.Name)
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(locals, x.Name) && !slices.Contains(allowed,
+				sel.Sel.Name) {
+				c.report(sel.Pos(), "purity: %s may use only %s, not %s.%s (ADR-0015 §2.2)", name(c.dir), exceptionList(named),
+					p[strings.LastIndex(p, "/")+1:], sel.Sel.Name)
 			}
 			return true
 		})
@@ -663,7 +690,8 @@ func root(e ast.Expr) string {
 func (c *checker) written(files map[string]string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for path, src := range files {
-		if filepath.ToSlash(filepath.Dir(path)) != filepath.ToSlash(filepath.Dir(c.path)) || strings.HasSuffix(path, "_test.go") {
+		if filepath.ToSlash(filepath.Dir(path)) != filepath.ToSlash(filepath.Dir(c.path)) || strings.HasSuffix(path,
+			"_test.go") {
 			continue
 		}
 		file, err := parser.ParseFile(token.NewFileSet(), path, src, 0)
@@ -760,7 +788,9 @@ func (c *checker) globals(files map[string]string) error {
 				case value != nil && mustConstructor(value):
 				case value != nil && table(value) && !written[id.Name]:
 				default:
-					c.report(id.Pos(), "globals: %s is a mutable package-level var: only error sentinels, Must-constructed values and never-written lookup tables are allowed (ADR-0015 §2.2)", id.Name)
+					c.report(id.Pos(),
+						"globals: %s is a mutable package-level var: only error sentinels, Must-constructed values and never-written "+
+							"lookup tables are allowed (ADR-0015 §2.2)", id.Name)
 				}
 			}
 		}
@@ -789,8 +819,11 @@ func CheckTest(lists *Lists, path, src string) []string {
 	}
 	ast.Inspect(file, func(n ast.Node) bool {
 		if sel, ok := n.(*ast.SelectorExpr); ok {
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(names, x.Name) && slices.Contains(testWaits, sel.Sel.Name) {
-				c.report(sel.Pos(), "testhygiene: time.%s in a test: wait for a state, cap it with a context, yield on every pass of a poll (testing.md rule 1)", sel.Sel.Name)
+			if x, ok := sel.X.(*ast.Ident); ok && x.Name != "." && slices.Contains(names, x.Name) && slices.Contains(testWaits,
+				sel.Sel.Name) {
+				c.report(sel.Pos(),
+					"testhygiene: time.%s in a test: wait for a state, cap it with a context, yield on every pass of a poll "+
+						"(testing.md rule 1)", sel.Sel.Name)
 			}
 		}
 		return true
@@ -828,7 +861,8 @@ type caseReader struct {
 // func Test<X>(t *testing.T); a case <parent>/<literal> per t.Run("<literal>", …), nested names joined with "/"; and
 // for a for … range <x> whose body calls t.Run with a non-literal name, a case <parent>/<ident>[<i>] per element of
 // <x> when <x> is an inline slice, array or map literal or an identifier bound to one earlier in the same function by
-// := or var (a [:n] slice of either counts n when n is an integer literal). <ident> is the table's identifier, or for an
+// := or var (a [:n] slice of either counts n when n is an integer literal). <ident> is the table's identifier, or for
+// an
 // inline literal the loop's first named variable. Any other t.Run with a non-literal name — over a range Cases cannot
 // count, a three-clause for, two ranges, or no loop — is the fault "<parent>: t.Run over a table -cases cannot count".
 // A case whose body (its t.Run closures included) calls none of Fatal, Fatalf, Error, Errorf or FailNow on a
@@ -1630,7 +1664,7 @@ func targetsIn(lists *Lists, root string, names ...string) ([]string, error) {
 // listCases is -cases: per file in argument order, Cases' cases then its faults, one line each as
 // "<path>: case <name>" and "<path>: fault <name>: <why>"; a file that cannot be read is one "<path>: fault : <error>"
 // line, as one that does not parse is (S1.1c-2 design §11). It judges nothing: the teeth pin reads the listing.
-func listCases(root string, files []string, out io.Writer) {
+func listCases(root string, files []string, out *report) {
 	for _, path := range files {
 		var cases, faults []string
 		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
@@ -1640,10 +1674,10 @@ func listCases(root string, files []string, out io.Writer) {
 			cases, faults = Cases(path, string(src))
 		}
 		for _, c := range cases {
-			fmt.Fprintf(out, "%s: case %s\n", path, c)
+			out.printf("%s: case %s\n", path, c)
 		}
 		for _, f := range faults {
-			fmt.Fprintf(out, "%s: fault %s\n", path, f)
+			out.printf("%s: fault %s\n", path, f)
 		}
 	}
 }
@@ -1651,14 +1685,15 @@ func listCases(root string, files []string, out io.Writer) {
 // cli is archcheck run at root with args (the files list, after "-tests" for the sleep fence; or "-cases" and the
 // _test.go files to list); it writes the report to out and gives the exit code: 0 clean (always, for -cases), 1 a
 // finding, 2 a usage or internal error.
-func cli(root string, args []string, out io.Writer) int {
+func cli(root string, args []string, w io.Writer) int {
+	out := &report{w: w}
 	if len(args) > 1 && args[0] == "-cases" {
 		listCases(root, args[1:], out)
-		return 0
+		return out.exit(0)
 	}
 	tests := len(args) == 2 && args[0] == "-tests"
 	if !tests && (len(args) != 1 || strings.HasPrefix(args[0], "-")) {
-		fmt.Fprintln(out, "usage: go run ./tools/archcheck [-tests] <files.nul> | -cases <file>...")
+		out.printf("usage: go run ./tools/archcheck [-tests] <files.nul> | -cases <file>...\n")
 		return 2
 	}
 	lists, err := LoadLists(root)
@@ -1678,18 +1713,40 @@ func cli(root string, args []string, out io.Writer) int {
 		}
 	}
 	if err != nil {
-		fmt.Fprintf(out, "internal error: %v\n", err)
+		out.printf("internal error: %v\n", err)
 		return 2
 	}
 	findings = append(findings, targets...)
 	for _, f := range findings {
-		fmt.Fprintf(out, "failed: %s\n", f)
+		out.printf("failed: %s\n", f)
 	}
-	fmt.Fprintf(out, "GATE_COVERED %d\n", count)
+	out.printf("GATE_COVERED %d\n", count)
 	if len(findings) > 0 {
-		return 1
+		return out.exit(1)
 	}
-	return 0
+	return out.exit(0)
+}
+
+// report is cli's output; it keeps the first write error, so a report the runner cannot read is exit 2, never a
+// verdict.
+type report struct {
+	w   io.Writer
+	err error
+}
+
+// printf writes one line of the report unless an earlier line failed to write.
+func (r *report) printf(format string, args ...any) {
+	if r.err == nil {
+		_, r.err = fmt.Fprintf(r.w, format, args...)
+	}
+}
+
+// exit is code, or 2 when a line of the report failed to write.
+func (r *report) exit(code int) int {
+	if r.err != nil {
+		return 2
+	}
+	return code
 }
 
 // main runs at the repository root: the gate's runner starts archcheck there.
