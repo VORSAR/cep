@@ -267,9 +267,10 @@ def binary_findings(
     return [(f"{f.id} {tool}", f) for f in found], sorted(set(named), key=lambda f: (f[0], f[2]))
 
 
-def covered(tools: list[manifest.Tool]) -> int:
-    """COVERED plus one per go_built tool (§6)."""
-    return COVERED + sum(1 for t in tools if t.go_built)
+def covered(tools: list[manifest.Tool] | None) -> int:
+    """COVERED plus tools.json once, whatever it declares; None when tools.json could not be read (owner,
+    2026-11-14, during S1.1c-5's W1, decision 2: never one per declared binary)."""
+    return COVERED + (tools is not None)
 
 
 @dataclass(frozen=True)
@@ -428,13 +429,13 @@ def scan(
 def main(argv: list[str]) -> int:
     row_dir = rows.start()
     env = {**os.environ, **gomods.ENV}
-    tools: list[manifest.Tool] = []
+    tools: list[manifest.Tool] | None = None
     manifest_faults: list[str] = []
     try:
         tools = manifest.load("tools.json", manifest.platform_key())
     except manifest.ManifestError as e:
         manifest_faults.append(f"vulns: {e}")
-    declared = binaries(tools, manifest.cache_root(os.environ))
+    declared = binaries(tools or [], manifest.cache_root(os.environ))
     faults, lines = scan(
         row_dir, env, repo=".", copy_root=vulndb_fetch.copy_root(os.environ), now=datetime.now(UTC), declared=declared
     )
