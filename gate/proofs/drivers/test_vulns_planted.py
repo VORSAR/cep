@@ -18,6 +18,13 @@ waiver expires 20 days ahead (allowlists.AHEAD_MAX is 90). The row runs at T4, i
 
 Until lane E1 lands, every red case is red on the W0 stub's `exit 1: vulns: not built yet (S1.1c-4 lane E1)`, which
 names no planted id, and every green case is red on the same line.
+
+Declared binaries (S1.1c-5 design note §6, §8 row 5.6): the world's tools.json declares no Go-built tool unless a case
+says so, since the real golangci-lint's own build lists x/tools, x/mod and others at versions the world does not
+choose, and a planted module entry would hit it too. A case that declares one sets `"go_built": true` on the real
+tools.json's golangci-lint entry; its home is the real tool cache's, which parity checks in the same run, and its
+build information is read by the pinned go itself (`go version`), the oracle for its Go version. A binary without
+build information is the real ruff (a Rust executable) declared Go-built.
 """
 
 import hashlib
@@ -56,6 +63,7 @@ PLANTED_ROW = {
     "command": ["python3.15", "-I", "-B", "-X", "utf8", "gate/runner/rows/vulns.py"],
 }
 COVERED = 6  # the six files the row reads (§2.5)
+TOOL = "golangci-lint"  # the real tools.json's one declared binary (test_manifest.py GoBuilt)
 WAIVERS = "tools/allowlists/vulns.json"
 REGISTER = "tools/deps-allowlist.json"
 KNOWN = "gate/known-issues.json"
@@ -151,8 +159,12 @@ def zip_of(members: dict[str, bytes]) -> bytes:
 
 
 def go_binary() -> str:
-    go = support.tool("go")
-    return os.path.join(support.home(support.real_cache(), "go"), go.path_dir, go.command)
+    return executable("go")
+
+
+def executable(name: str) -> str:
+    tool = support.tool(name)
+    return os.path.join(support.home(support.real_cache(), name), tool.path_dir, tool.command)
 
 
 class VulnsPlanted(support.DriverTest):
@@ -180,6 +192,7 @@ class VulnsPlanted(support.DriverTest):
         self.expiry = (self.today + timedelta(days=EXPIRY_DAYS)).isoformat()
         self.go_version = self.go(".", ["env", "GOVERSION"]).strip()
         self.assertTrue(self.marker and self.issue and self.go_version.startswith("go1."))
+        self.declare()
 
     # ---------------------------------------------------------------------------------------------------- the world
 
@@ -193,6 +206,28 @@ class VulnsPlanted(support.DriverTest):
         if code != 0:
             raise AssertionError(f"go {' '.join(args)} in {cwd}: exit {code}: {support.read_text(err)}")
         return support.read_text(out)
+
+    def declare(self, *names: str) -> None:
+        """The world's tools.json with `"go_built": true` on exactly the named tools (none: no binary scanned)."""
+        data = json.loads(support.read_text(os.path.join(support.REPO, "tools.json")))
+        for tool in data["tools"]:
+            tool.pop("go_built", None)
+            if tool["name"] in names:
+                tool["go_built"] = True
+        self.assertEqual(sorted(t["name"] for t in data["tools"] if "go_built" in t), sorted(names))
+        self.world.write("tools.json", json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+    def binary_go(self) -> str:
+        """The declared binary's Go version, read by the pinned go; a release tag the cases can step past."""
+        line = self.go(".", ["version", executable(TOOL)]).strip()
+        version = line.rpartition(": ")[2]
+        self.assertRegex(version, r"^go1\.[0-9]+\.[0-9]+$", line)
+        self.assertNotEqual(version, self.go_version, "the cases need the binary's go apart from the engine's")
+        return version
+
+    def binary_range(self, version: str) -> list[dict]:
+        """Exactly the binary's go: introduced at it, fixed one patch above (the engine's go lies outside)."""
+        return [{"introduced": version.removeprefix("go")}, {"fixed": next_patch(version)}]
 
     def versions(self) -> dict[str, str]:
         """path -> version over both build lists, the root's first (§2.1), the main modules aside."""
@@ -338,9 +373,9 @@ class VulnsPlanted(support.DriverTest):
         self.assertTrue(any(f.startswith(prefix) and f.endswith(suffix) for f in failed), (prefix, suffix, failed))
         self.assertParityPassed(run, JOB)
 
-    def assertScannedGreen(self, run: support.Run, *needles: str) -> None:
-        """Green at covered 6, the gate passed, and each needle in the row's own output (its reason, §2.5)."""
-        self.assertRow(run, JOB, "vulns", True, f"covered {COVERED}")
+    def assertScannedGreen(self, run: support.Run, *needles: str, covered: int = COVERED) -> None:
+        """Green at `covered`, the gate passed, and each needle in the row's own output (its reason, §2.5)."""
+        self.assertRow(run, JOB, "vulns", True, f"covered {covered}")
         self.assertParityPassed(run, JOB)
         self.assertEqual(run.tail(), ["GATE PASSED", "exit: 0"], run.stdout)
         out = run.row_stdout(JOB, ROW)
@@ -600,7 +635,9 @@ class VulnsPlanted(support.DriverTest):
     # --------------------------------------------------------------------------------------------- the real tree
 
     def test_the_real_tree_with_a_clean_database_is_green(self):
-        # (23): the real tree's modules, stdlib and toolchain against a clean database: green, covered 6.
+        # (23): the real tree's modules, stdlib and toolchain, and its one declared binary against a clean database:
+        # green, covered 7 (6 + golangci-lint, S1.1c-5 design §6).
+        self.world.copy("tools.json")
         self.plant_copy(self.clean_db())
         modified_day = (self.now - timedelta(days=MODIFIED_DAYS)).date().isoformat()
         fetched_day = (self.now - timedelta(days=FRESH_DAYS)).date().isoformat()
@@ -608,5 +645,50 @@ class VulnsPlanted(support.DriverTest):
             self.run_row(),
             f"vulndb {modified_day} (fetched {fetched_day}, {self.copy_root}), 1 entries; ",
             f"stdlib and toolchain at {self.go_version}",
-            "not read: golangci-lint (Go build info, from S1.1c-5); ruff, CPython (outside the Go database)",
+            f"declared binaries, stdlib only: {TOOL} {support.tool(TOOL).version} (",
+            "not read: ruff, CPython (outside the Go database)",
+            covered=COVERED + 1,
         )
+
+    # ------------------------------------------------------------------------------------ the declared binaries
+
+    def test_a_declared_binary_with_a_stdlib_advisory_is_red(self):
+        # S1.1c-5 §6, §8 5.6: stdlib at the binary's own go, not the engine's: red, the pair naming the tool.
+        self.declare(TOOL)
+        version = self.binary_go()
+        entry = osv("GO-2099-0701", ("stdlib", self.binary_range(version)), modified=self.modified())
+        self.plant_copy(database([entry], modified=self.modified()))
+        expected = f"vulns: GO-2099-0701 {TOOL} (stdlib {version}): fixed in {next_patch(version)}"
+        self.assertRedLines(self.run_row(), [expected], exactly=True)
+
+    def test_an_exemption_scoped_to_the_binary_is_green(self):
+        self.declare(TOOL)
+        version = self.binary_go()
+        entry = osv("GO-2099-0702", ("stdlib", self.binary_range(version)), modified=self.modified())
+        self.plant_copy(database([entry], modified=self.modified()))
+        self.waive(f"GO-2099-0702 {TOOL}")
+        self.assertScannedGreen(
+            self.run_row(),
+            f"silenced: GO-2099-0702 {TOOL} until {self.expiry} ({self.issue})",
+            f"declared binaries, stdlib only: {TOOL} {support.tool(TOOL).version} ({version}, ",
+            covered=COVERED + 1,
+        )
+
+    def test_a_toolchain_advisory_never_applies_to_a_binary(self):
+        # The same range on toolchain and on stdlib: only stdlib is red, the witness that the binary was judged.
+        self.declare(TOOL)
+        version = self.binary_go()
+        toolchain = osv("GO-2099-0703", ("toolchain", self.binary_range(version)), modified=self.modified())
+        stdlib = osv("GO-2099-0704", ("stdlib", self.binary_range(version)), modified=self.modified())
+        self.plant_copy(database([toolchain, stdlib], modified=self.modified()))
+        expected = f"vulns: GO-2099-0704 {TOOL} (stdlib {version}): fixed in {next_patch(version)}"
+        self.assertRedLines(self.run_row(), [expected], exactly=True)
+
+    def test_a_declared_binary_without_build_info_is_red(self):
+        # ruff is a Rust executable: go version -m reads no build information from it. golangci-lint, declared in
+        # the same run, is the witness that the scan ran.
+        self.declare(TOOL, "ruff")
+        self.plant_copy(self.clean_db())
+        run = self.run_row()
+        self.assertRedLines(run, ["vulns: ruff: go version -m: exit 1: no Go build information read"], exactly=True)
+        self.assertIn(f"declared binaries, stdlib only: {TOOL} ", run.row_stdout(JOB, ROW))
