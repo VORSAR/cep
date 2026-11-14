@@ -97,6 +97,7 @@
 | 2026-11-14 | [the proof-world speed-up's design reviews](#owner-decisions-2026-11-14--the-proof-world-speed-ups-design-reviews) |
 | 2026-11-14 | [S1.1c-5's plan check](#owner-decisions-2026-11-14--s11c-5s-plan-check) |
 | 2026-11-14 | [S1.1c-5's design, before its reviews](#owner-decisions-2026-11-14--s11c-5s-design-before-its-reviews) |
+| 2026-11-14 | [S1.1c-5's design, after the reviews](#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews) |
 
 ## The decisions
 
@@ -955,3 +956,26 @@ Ten answers, all as recommended.
 The design note's first draft measured that golangci-lint v2.15.0 reads a JSON config's numbers as floats. revive, the only linter with ADR-0015 §2's file-length (500) and parameter (5) limits, refuses them: `setup revive: cannot configure rule: "argument-limit": invalid value…`. golangci-lint then reports "0 issues", so neither limit would ever fire. The coordinator reproduced it. The same settings in TOML report a six-parameter function and pass five. One answer, as recommended.
 
 1. **The lint config is `.golangci.toml`** (as recommended). Python's standard library reads TOML (`tomllib`, in both pinned interpreters), so there is no new dependency, and the gate pins the parsed document whole as decided. This replaces decision 10's confirm of `.golangci.json` (S1.1c-5's plan check). Rejected: JSON without revive's two limits (against ADR-0015 §2's set); YAML with a new dependency (ground rules 3 and 20).
+
+### Owner decisions, 2026-11-14 — S1.1c-5's design, after the reviews
+
+The design note v1 ([s1-1c-5-design.md](s1-1c-5-design.md)) was reviewed blind:
+- architecture with the-fool ([review](../reviews/s1-1c-5-design-architecture.md)): 1 blocker, 9 should-fix, 6 later;
+- QA for testability ([review](../reviews/s1-1c-5-design-qa.md)): 3 blockers, 13 should-fix, 5 later, plus the finished test table.
+
+The coordinator verified the claims that changed the design: the T0 run's "waives nothing" step (design §2.3 step 8 against §2.7); and the restore source of BK-S4's tests, which is `96b76f4` on `main`, while `fc944ef` is a pre-rebase hash.
+
+Three answers, all as recommended.
+
+1. **A size exclusion's deadline is enforced mechanically** (as recommended; QA's design). The `aging` row compares each exclusion's forward (its issue's part) at the merge base with now. A later part is red at T4 and nightly unless a decisions.md section names the moved id, and a missing merge base at T4 is red. Rejected: the LAW Δ line alone, which is loud but never red.
+2. **Printing S1.1c-5 to S1.1c-8 as rows, and the aging it starts** (as recommended):
+   - This section names the four known issues the sprint opens, each forwarded as the design note §3.3 sets:
+     - S1.1c-5-1, the size family's debt for S1.1c-6;
+     - S1.1c-5-2, for S1.1c-7;
+     - S1.1c-5-3, for S1.1c-8;
+     - S1.1c-5-4, the tool scan's 15 advisories.
+   - A test pins which ids aging would name red at S1.1c-7's close.
+   - The coordinator brings S3.3-2-1, S3.3-2-2, S3.3-2-3 and S1.1c-3-4 to the owner for a decision before then.
+
+   Rejected: deciding all eight now.
+3. **`log.Print*` is not added to the forbidden calls; it goes to the backlog** (as recommended): it is not in ADR-0015 §2's set, and there are no uses in library code today. Rejected: adding it now.
