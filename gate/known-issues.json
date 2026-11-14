@@ -29,24 +29,24 @@
     {
       "id": "S3.3-2-1",
       "first_seen": "S3.3-2",
-      "forward": "",
-      "decision": "",
+      "forward": "S5.1",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--four-known-issues-placed",
       "correctness": false,
       "opened": "2026-11-10"
     },
     {
       "id": "S3.3-2-3",
       "first_seen": "S3.3-2",
-      "forward": "",
-      "decision": "",
+      "forward": "S6.2",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--four-known-issues-placed",
       "correctness": false,
       "opened": "2026-11-10"
     },
     {
       "id": "S1.1c-3-4",
       "first_seen": "S1.1c-3",
-      "forward": "",
-      "decision": "",
+      "forward": "S6.2",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--four-known-issues-placed",
       "correctness": false,
       "opened": "2026-11-13"
     },
