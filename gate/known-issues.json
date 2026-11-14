@@ -49,6 +49,38 @@
       "decision": "",
       "correctness": false,
       "opened": "2026-11-13"
+    },
+    {
+      "id": "S1.1c-5-1",
+      "first_seen": "S1.1c-5",
+      "forward": "S1.1c-6",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews",
+      "correctness": false,
+      "opened": "2026-11-14"
+    },
+    {
+      "id": "S1.1c-5-2",
+      "first_seen": "S1.1c-5",
+      "forward": "S1.1c-7",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews",
+      "correctness": false,
+      "opened": "2026-11-14"
+    },
+    {
+      "id": "S1.1c-5-3",
+      "first_seen": "S1.1c-5",
+      "forward": "S1.1c-8",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews",
+      "correctness": false,
+      "opened": "2026-11-14"
+    },
+    {
+      "id": "S1.1c-5-4",
+      "first_seen": "S1.1c-5",
+      "forward": "",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews",
+      "correctness": false,
+      "opened": "2026-11-14"
     }
   ]
 }
