@@ -86,6 +86,13 @@ class Order:
             return at_marker > at_part
         return parse(marker).n > parse(part).n
 
+    def reached_part(self, part: str, marker: str) -> bool:
+        """Whether the marker is at or past a printed part (S1.1c-5 design §3.2). `part` must be a printed row id that
+        names a part (S<stage>.<part><letter>-<n>); ValueError "<part>: not a printed part of gate/sprints.json"
+        otherwise. The marker is placed by `index`: a later position → True, an earlier one → False, the same → True;
+        a part-less marker at the part's own row sits before every printed part → False."""
+        raise NotImplementedError("S1.1c-5 lane B: sprintid.Order.reached_part")
+
     def first_open(self) -> str:
         for row in self.rows:
             if not row.closed:
