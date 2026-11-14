@@ -1,0 +1,108 @@
+# The smells row's law (ADR-0015 §2; owner 2026-11-14, S1.1c-5's plan check and design). Pinned whole by gate/runner/golangci.py.
+version = "2"
+
+[run]
+relative-path-mode = "gomod"
+tests = true
+build-tags = []
+modules-download-mode = "readonly"
+
+[output]
+show-stats = false
+
+[issues]
+max-issues-per-linter = 0
+max-same-issues = 0
+uniq-by-line = false
+new = false
+fix = false
+
+[severity]
+default = "error"
+
+[formatters]
+enable = []
+
+[linters]
+default = "none"
+enable = ["errcheck", "forbidigo", "funlen", "gocritic", "gocyclo", "lll", "nolintlint", "revive"]
+
+[linters.settings.errcheck]
+check-type-assertions = false
+check-blank = false
+disable-default-exclusions = true
+exclude-functions = [
+  "(*bytes.Buffer).Write", "(*bytes.Buffer).WriteByte", "(*bytes.Buffer).WriteRune", "(*bytes.Buffer).WriteString",
+  "fmt.Print", "fmt.Printf", "fmt.Println",
+  "fmt.Fprint(*bytes.Buffer)", "fmt.Fprintf(*bytes.Buffer)", "fmt.Fprintln(*bytes.Buffer)",
+  "fmt.Fprint(*strings.Builder)", "fmt.Fprintf(*strings.Builder)", "fmt.Fprintln(*strings.Builder)",
+  "fmt.Fprint(os.Stderr)", "fmt.Fprintf(os.Stderr)", "fmt.Fprintln(os.Stderr)",
+  "(*io.PipeReader).CloseWithError", "(*io.PipeWriter).CloseWithError",
+  "math/rand.Read", "(*math/rand.Rand).Read",
+  "(*strings.Builder).Write", "(*strings.Builder).WriteByte", "(*strings.Builder).WriteRune", "(*strings.Builder).WriteString",
+  "(hash.Hash).Write",
+]
+
+[linters.settings.forbidigo]
+analyze-types = true
+exclude-godoc-examples = false
+forbid = [
+  { pattern = '^(fmt\.Print.*|print|println)$', msg = "[fmtprint]" },
+  { pattern = '^panic$', msg = "[panic]" },
+  { pattern = '^reflect\..*$', msg = "[reflect]" },
+  { pattern = '^unsafe\..*$', msg = "[unsafe]" },
+  { pattern = '^os\.(Getenv|LookupEnv|Environ)$', msg = "[getenv]" },
+]
+
+[linters.settings.funlen]
+lines = 60
+statements = 100000      # -1 switches funlen off in v2.15 (RM); the ADR names lines only
+ignore-comments = false  # decision 10: funlen counts comment lines
+
+[linters.settings.gocritic]
+
+[linters.settings.gocyclo]
+min-complexity = 10      # reports > 10
+
+[linters.settings.lll]
+line-length = 120
+tab-width = 1            # decision 10
+
+[linters.settings.nolintlint]
+require-explanation = true
+require-specific = true
+allow-unused = false
+allow-no-explanation = []
+
+[linters.settings.revive]
+enable-all-rules = false
+[[linters.settings.revive.rules]]
+name = "file-length-limit"
+severity = "error"
+arguments = [{ max = 500, skipComments = false, skipBlankLines = false }]
+[[linters.settings.revive.rules]]
+name = "argument-limit"
+severity = "error"
+arguments = [5]
+
+[linters.exclusions]
+generated = "disable"
+warn-unused = false
+presets = []
+paths = []
+paths-except = []
+[[linters.exclusions.rules]]   # decision 4: tests exempt from the size family and lll
+path = '_test\.go$'
+linters = ["funlen", "gocyclo", "lll", "revive"]
+[[linters.exclusions.rules]]   # decision 4: tests exempt from the reflect pattern
+path = '_test\.go$'
+linters = ["forbidigo"]
+text = '\[reflect\]'
+[[linters.exclusions.rules]]   # ADR §2 smells: reflect only in L0–L2 (ARCHITECTURE's layer charter)
+path-except = '^internal/(event|model|metrics|clock|pattern|window|expr|text|table|partition)/'
+linters = ["forbidigo"]
+text = '\[reflect\]'
+[[linters.exclusions.rules]]   # ADR §2 smells: os.Getenv allowed in cmd and io
+path = '^(cmd|io)/'
+linters = ["forbidigo"]
+text = '\[getenv\]'
