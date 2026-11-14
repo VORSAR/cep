@@ -380,7 +380,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-4 merged (PRs #1–#41, the last on 2026-11-14). S1.1c-4 is closed — the scans: the `vulns` row reading the Go vulnerability database itself at T4 and nightly, failing closed unless the dependency register marks a module never built; `make vulndb`; the weekly canary trying each tool's newer patch release; S1.1c-3-1 to -3 closed → next: two small PRs the owner placed first (2026-11-14) — the proof worlds reusing the outer run's tool check (the `proofs` row at 480 s of its 600 s cap on CI), and the tool upgrade (ruff 0.17.5, python-build-standalone 20261110); then S1.1c-5's plan check (the strict lint set, and the pinned Go tools' build information), S4.1.**
+**Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-4 merged, then the proof-world speed-up (#44: the `proofs` row 480 → 297 s on CI) and the tool upgrade (#45: ruff 0.17.5, python-build-standalone 20261110), the last on 2026-11-14. S1.1c-5 in progress — the strict lint set: the `smells` row pinned whole, the whole tree strict for line length, unchecked errors, gocritic, forbidden calls and waivers, the size limits by package with dated exclusions to S1.1c-6 to S1.1c-8 (re-cut at S1.1c-5's close), the pinned Go tools' builds scanned ([plan check](s1-1c-5-plan-check.md), [owner, 2026-11-14](decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check)) → then S1.1c-6 to S1.1c-8, S4.1.**
 
 
 

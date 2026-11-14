@@ -1,0 +1,87 @@
+# S1.1c-5 — sprint record
+
+**Sprint:** S1.1c-5 — the strict lint set: the instrument, the whole-tree rules, the first packages · **Routine:** the full loop without the semantics panel · **Size:** 13 SP (inferred) against the 2-week cap · **Branch:** `s1-1c-5/integration`
+**What to build and how each item is proven:** [the S1.1c-5 card](sprint-plan.md#s11c-5--the-strict-lint-set-the-instrument-the-whole-tree-rules-the-first-packages) · **How it runs:** [the plan check §1](s1-1c-5-plan-check.md#1-routine-shape-sizing) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+
+*This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
+
+---
+
+## Plan check (step 0)
+
+The full plan is [s1-1c-5-plan-check.md](s1-1c-5-plan-check.md) (v2), drafted read-only from `main` @ d4b028f and rebased in reading on 4266f65.
+- **The re-measure.** A read-only re-measure ([research](../reviews/s1-1c-5-research-lint.md)) wrote ADR-0015 §2's set exactly and found 417 non-test findings and 969 in tests. The 308 of 2026-11-11 had undercounted through three golangci-lint defaults. The whole wave is about 56–68 lane-days, so it is cut across S1.1c-5 to S1.1c-8.
+- **The blind reviews of v1:**
+  - [architecture](../reviews/s1-1c-5-plan-check-architecture.md): 4 blockers, 14 should-fix, 6 later;
+  - [QA](../reviews/s1-1c-5-plan-check-qa.md): 5 blockers, 12 should-fix, 5 later.
+
+  Every finding is placed in v2 §12.
+
+## Decisions at the gates
+
+**Plan check — the owner, 2026-11-14** ([decisions](decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check); all ten as recommended):
+
+1. **The whole tree is strict now for lll, errcheck, gocritic, forbidigo and nolintlint; the size family goes by package**, through TEMP exclusions tied to known issues forwarded to S1.1c-6, -7 or -8 and enforced by a new part-level check. A forward moves only by an owner decision, never past S1.1c-8.
+2. **The later sprints are re-cut at this sprint's close**, from the first packages' measured rate. `internal/runtime` splits into files.
+3. **The canonical encoder keeps `reflect`**, as a PERMANENT in-code waiver (`ref=ADR-0003`) in its own file.
+4. **Rules on tests:** tests are exempt from lll and the `reflect` pattern. Panic and `os.Getenv` stay on tests, with the golden switches moved to a test flag.
+5. **All 15 production panics are PERMANENT in-code waivers**, `row.go:73` included (the `RowWriter` contract).
+6. **Hot paths are refactored behind pinned benchmarks and `AllocsPerRun`**; a function stays whole only on measured evidence.
+7. **Only `//nolint` waives**; every other directive form found by the census is refused.
+8. **The tool scan's 15 advisories are dated exemptions scoped to `golangci-lint`**, and `tools.json` gains `"go_built": true`.
+9. **errcheck's built-in exclusions are written out in the config.**
+10. **Confirmed:** `fmt.Print*` in package-main tools; `.golangci.json`; both `GOOS`; a tab counts one column and funlen counts comments; the ruff pin is a fixed key and value list.
+
+**The card — the owner, 2026-11-14:** approved, so the sprint passes G0.
+
+## How it runs
+
+At most two agents at once. The plan check §1 holds the waves:
+1. the design note, with QA's W0 (every counter-example red, the waiver census, the hiding-default proofs);
+2. W1: lane A (the row) and lane B (the waivers, the ruff pin, the part-level check);
+3. W2: lane C (the tool scan and the whole-tree fixes) and lane D (the first packages, the calibration run);
+4. combine, T3, review and break-it, one fix round, T4, the owner's check.
+
+## Measured results
+
+*(Filled as the sprint runs.)*
+
+## Test material
+
+QA's W0 is an item: every counter-example of the plan check §6 is written red before its code.
+
+## Scope changes
+
+None.
+
+## Findings
+
+*(Filled at step 7.)*
+
+## Done-done
+
+```
+Sprint S1.1c-5 — the strict lint set · routine: full · SP 13 (inferred) · cap 2 weeks
+Entry (G0)   ☑ card complete and approved (owner, 2026-11-14)
+             ☑ dependencies merged, main green (S1.1c-4, PR #40; #43, #44, #45 merged; main 4266f65, PR #45's CI green)
+             ☑ fits the cap, lanes ≤ 8 days (the wave cut across S1.1c-5 to S1.1c-8, decision 1)
+             ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-14)
+             ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit after the plan check's
+Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
+             ☐ owner decisions recorded ☐ ADRs written for lasting decisions (ADR-0015 §2, §2.1, §2.2 annotated)
+Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
+             ☐ conformance cases for every construct shipped or changed (n/a: no construct)
+             ☐ tests on the real code ☐ every breaker's red test committed (step 7)
+Review (G3)  ☐ architecture review of the combined diff: no drift
+             ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
+Verify (G4)  ☐ T4 strict-gate exit 0, run complete ☐ owner's check passed
+             ☐ every acceptance line met by its named proof
+Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
+             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
+             ☐ documents reconciled ☐ memory updated ☐ worktrees removed
+             ☐ the row closed in gate/sprints.json as in the plan table — n/a: S1.1c stays open, S1.1c-6 follows
+```
+
+## Retro
+
+*(Written at close-out.)*
