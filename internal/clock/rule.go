@@ -121,7 +121,7 @@ func (rc *RuleClock) NewInstance() *Instance {
 // Free drops a key's instance. It must be Empty: the shard keeps an instance while it holds an event or a timer.
 func (rc *RuleClock) Free(in *Instance) {
 	if !in.Empty() {
-		panic("clock: Free of an instance that still holds events or timers")
+		panic("clock: Free of an instance that still holds events or timers") //nolint:forbidigo,lll // PERMANENT reason="Free of a non-empty instance is a shard bug, never a recoverable state; the waiver cannot wrap" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	in.freed = true
 }
@@ -179,6 +179,19 @@ func (rc *RuleClock) nextTimer() *timer {
 
 // fireGroup fires the head timer and every timer of the same instant, phase, key and callback with it.
 func (rc *RuleClock) fireGroup(head *timer, cb Callbacks) {
+	in, discard := head.in, head.kind == Discard
+	rc.takeGroup(head)
+	switch {
+	case discard && cb.OnDiscard != nil:
+		cb.OnDiscard(in, rc.refs)
+	case !discard && cb.OnTimers != nil:
+		cb.OnTimers(in, rc.fires)
+	}
+}
+
+// takeGroup removes the head timer and every timer of the same instant, phase, key and callback from the heap, into
+// rc.refs for discards and rc.fires otherwise, both reused.
+func (rc *RuleClock) takeGroup(head *timer) {
 	in, due, phase, discard := head.in, head.due, head.phase(), head.kind == Discard
 	rc.fires, rc.refs = rc.fires[:0], rc.refs[:0]
 	for len(rc.timers) > 0 {
@@ -192,12 +205,6 @@ func (rc *RuleClock) fireGroup(head *timer, cb Callbacks) {
 		} else {
 			rc.fires = append(rc.fires, Timer{Due: t.due, Kind: t.kind, Ref: t.ref})
 		}
-	}
-	switch {
-	case discard && cb.OnDiscard != nil:
-		cb.OnDiscard(in, rc.refs)
-	case !discard && cb.OnTimers != nil:
-		cb.OnTimers(in, rc.fires)
 	}
 }
 
