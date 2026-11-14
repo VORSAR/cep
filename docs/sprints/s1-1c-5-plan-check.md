@@ -1,4 +1,4 @@
-# S1.1c-5 — plan check (v2, 2026-11-14; after the architect and QA reviews; for the owner)
+# S1.1c-5 — plan check (v2, 2026-11-14; answered by the owner 2026-11-14 — [decisions.md](decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check); the sprint record, `s1-1c-5-record.md`, opens at G0)
 
 *Step 0 of the full loop. Drafted read-only against `main` @ 4266f65, which is d4b028f plus the tool upgrade (#45, which touches nothing below). "RM" marks the re-measure of 2026-11-14 ([research](../reviews/s1-1c-5-research-lint.md)). "PA-" and "PQ-" mark the blind architecture and QA reviews of v1 ([architecture](../reviews/s1-1c-5-plan-check-architecture.md), [QA](../reviews/s1-1c-5-plan-check-qa.md)); every claim that changes the plan was verified by the coordinator. Nothing here is an owner decision until the owner answers §11.*
 
@@ -8,7 +8,7 @@ SP ≈ 13 (inferred; lane D is the calibration run, §1) · cap 2 weeks · the w
 Entry (G0)   ☐ card complete and approved ☑ dependencies merged, main green (#43, #44, #45; main 4266f65)
              ☐ fits the cap, lanes ≤ 8 days ☐ test material: QA's W0 is an item
              ☐ `gate/current-sprint` set to S1.1c-5 as the first commit
-             ☑ reviewed by the architect ☑ reviewed by QA ☐ answered by the owner (§11)
+             ☑ reviewed by the architect ☑ reviewed by QA ☑ answered by the owner (§11, 2026-11-14: all ten as recommended)
 ```
 
 ## 0. What the code says that the plan does not
