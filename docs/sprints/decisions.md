@@ -100,6 +100,7 @@
 | 2026-11-14 | [S1.1c-5's design, after the reviews](#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews) |
 | 2026-11-14 | [during S1.1c-5's W0](#owner-decisions-2026-11-14--during-s11c-5s-w0) |
 | 2026-11-14 | [four known issues placed](#owner-decisions-2026-11-14--four-known-issues-placed) |
+| 2026-11-14 | [during S1.1c-5's W1](#owner-decisions-2026-11-14--during-s11c-5s-w1) |
 
 ## The decisions
 
@@ -996,3 +997,10 @@ Brought early, during S1.1c-5's W1. Printing S1.1c-5 to S1.1c-8 as rows would ha
 2. **S3.3-2-2 is fixed now, in its own tiny PR** (as recommended). The gap is the missing `.gitattributes`. The fix is a `.gitattributes` forcing LF for `*.cep` and the conformance baselines; the gate check on `git check-attr eol` waits for the first Windows build. Rejected: forwarding it to S12; accepting Linux/macOS only.
 3. **S3.3-2-3: an `expect` block that tests nothing is refused, in S6.2** (as recommended). This covers a block with no given event, or one whose given events are all dropped as stream-late. S6.2 is the next language sprint: the refusal is a deploy error with its own code, designed with the language-design skill. Rejected: a warning only; leaving it.
 4. **S1.1c-3-4 goes to S6.2** (as recommended). It is the syntax hint that names only the first expected item. In S6.2, E-SYN-001's hint names the likeliest item, pinned by contract rows for the three known cases. Rejected: S4.1 (at its cap); accepting it as is.
+
+### Owner decisions, 2026-11-14 — during S1.1c-5's W1
+
+Two questions raised by the lanes' reports. Two answers, as recommended.
+
+1. **The `smells` row runs golangci-lint with `--allow-parallel-runners`** (as recommended). golangci-lint takes a machine-wide lock, and a second run at the same moment exits 3 ("parallel golangci-lint is running"), measured by lane A when the planted cases ran concurrently. Each planted world already has its own fresh cache, and golangci-lint's cache is the Go build-cache format, which is built for concurrent use. Rejected: `--allow-serial-runners`, which would queue every lint on the machine.
+2. **The `vulns` row counts `tools.json` once, whatever it declares** (as recommended). Covered is the six database and module files plus `tools.json`, against the scope's seven. The binary scan is proven by its four planted cases, and a unit test on the real `tools.json` keeps golangci-lint declared. The planted cases stay independent of golangci-lint's own build list. This changes design §6's "6 + 1 per declared binary" and the W0 test `test_covered_counts_each_declared_binary`. Rejected: test worlds declaring golangci-lint by default, which ties planted cases to the tool's build on every upgrade.
