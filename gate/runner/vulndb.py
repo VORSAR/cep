@@ -236,6 +236,8 @@ def findings(
     never_built: frozenset[str],
     go_version: str,
     entries: Iterable[Mapping[str, object]],
+    *,
+    pseudo: frozenset[str] = frozenset(GO_PSEUDO),
 ) -> tuple[list[Finding], list[tuple[str, str, str]]]:
     """Every entry affecting a module of `modules` (path -> the version, or the versions, the build lists give it,
     a `replace` already applied: one path may be built at two versions, review BK-B2), `stdlib` and `toolchain` at

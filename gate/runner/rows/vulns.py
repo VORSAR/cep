@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from gate.runner import allowlists, deps, rows, vulndb
 from gate.runner.rows import gomods
-from gate.toolchain import vulndb_fetch
+from gate.toolchain import manifest, vulndb_fetch
 
 WAIVERS = "tools/allowlists/vulns.json"
 COVERED = 6  # go.mod, go.sum, gate/proofs/go.mod, gate/proofs/go.sum, the register, the waivers (design §2.5)
@@ -191,6 +191,33 @@ def _module_map(loaded: gomods.Loaded, notes: list[str]) -> dict[str, set[str]]:
         else:
             modules.setdefault(m.path, set()).add(m.version)
     return modules
+
+
+@dataclass(frozen=True)
+class BuildInfo:
+    """A Go-built tool's `go version -m` text, read (S1.1c-5 design note §6)."""
+
+    go_version: str  # line 1's go<version>, e.g. go1.27.0
+    main_version: str  # the `mod` line's version
+    deps: dict[str, str]  # dep path -> version, a `=>` replacement applied
+
+
+def build_info(tool: str, pinned: str, code: int, text: str) -> tuple[BuildInfo | None, list[str]]:
+    """`go version -m`'s exit code and stdout for the declared tool `tool` pinned at `pinned`: the build info, or
+    None and the named faults (§6: exit, go line, mod line, mod version, zero deps)."""
+    raise NotImplementedError("S1.1c-5 lane C: vulns.build_info")
+
+
+def binary_findings(
+    tool: str, info: BuildInfo, entries: list[dict]
+) -> tuple[list[tuple[str, vulndb.Finding]], list[tuple[str, str, str]]]:
+    """The findings of one declared binary, each with its `<id> <tool>` pair, judged against stdlib only (§6)."""
+    raise NotImplementedError("S1.1c-5 lane C: vulns.binary_findings")
+
+
+def covered(tools: list[manifest.Tool]) -> int:
+    """COVERED plus one per go_built tool (§6)."""
+    raise NotImplementedError("S1.1c-5 lane C: vulns.covered")
 
 
 def _day(text: object) -> str:

@@ -58,6 +58,7 @@ class Tool:
     tree_sha256: str
     kind: str = EXECUTABLE
     module: str = ""  # python-package only: the import name
+    go_built: bool = False  # an executable built by Go whose build information the vulns row scans (S1.1c-5 §6)
 
 
 def _platform_key(sys_platform: str, machine: str) -> str:
