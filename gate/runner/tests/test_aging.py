@@ -22,14 +22,19 @@ reading. If the design reads decision 6 as "a forward is the clock", it changes.
 design question (an id at a sentence's end): see SentenceEnd.
 """
 
+import contextlib
+import io
 import json
 import os
 import subprocess
 import sys
 import unittest
 from datetime import UTC, date, datetime, timedelta
+from unittest import mock
 
-from gate.runner import aging, anchors, knownissues, sprintid
+from gate.runner import aging, anchors, knownissues, parts, sprintid
+from gate.runner.rows import aging as aging_row
+from gate.runner.tests import support
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DECISIONS = "docs/sprints/decisions.md"
@@ -389,3 +394,140 @@ class RealTree(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# S1.1c-5 design §3.4, §3.5, §8 3.10-3.11: the aging row runs the part-level check over tools/allowlists/smells.json
+# (gate/runner/parts.py), and printing S1.1c-5 to S1.1c-8 as rows moves rule 1's clock.
+
+
+SMELLS = "tools/allowlists/smells.json"
+SMELLS_ENTRY = {
+    "target": "internal/runtime gocyclo",
+    "kind": "TEMP",
+    "reason": "size family not yet cleaned",
+    "sprint": "S1.1c-5",
+    "expiry": "2026-12-14",
+    "issue": "S1.1c-5-1",
+}
+WORLD_SPRINTS = {
+    "schema": 1,
+    "note": "fixture",
+    "rows": [
+        {"id": "S3.3", "closed": True},
+        {"id": "S1.1c", "closed": False},
+        {"id": "S1.1c-5", "closed": False},
+        {"id": "S1.1c-6", "closed": False},
+        {"id": "S1.1c-7", "closed": False},
+        {"id": "S1.1c-8", "closed": False},
+    ],
+}
+WORLD_ISSUE = {
+    "id": "S1.1c-5-1",
+    "first_seen": "S1.1c-5",
+    "forward": "S1.1c-6",
+    "decision": "",
+    "correctness": False,
+    "opened": "2026-11-14",
+}
+WORLD_FILES = (knownissues.JSON, sprintid.SPRINTS, sprintid.MARKER, DECISIONS, SMELLS)
+
+
+class Parts(support.GateTest):
+    """The row in a world of its own, run in-process with parts' two functions observed (rows.start replaced, so
+    no signal handler is installed in the test process)."""
+
+    def world(self) -> None:
+        self.track(knownissues.JSON, json.dumps({"schema": 1, "note": "n", "entries": [WORLD_ISSUE]}) + "\n")
+        self.track(sprintid.SPRINTS, json.dumps(WORLD_SPRINTS) + "\n")
+        self.track(sprintid.MARKER, "S1.1c-5\n")
+        self.track(DECISIONS, "# Decisions\n")
+        self.track(SMELLS, json.dumps({"schema": 1, "note": "n", "rule": "smells", "entries": [SMELLS_ENTRY]}) + "\n")
+        self.git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "world")
+
+    def run_row(self, tier: str = "T4", **patches) -> tuple[int, str]:
+        row_dir = os.path.join(self.root, "row")
+        os.makedirs(row_dir, exist_ok=True)
+        with open(os.path.join(row_dir, "files.nul"), "wb") as f:
+            f.write(b"".join(p.encode() + b"\0" for p in WORLD_FILES))
+        out = io.StringIO()
+        with (
+            contextlib.chdir(self.repo),
+            mock.patch.dict(os.environ, {"GATE_ROW_DIR": row_dir, "GATE_TIER": tier}),
+            mock.patch.object(aging_row.rows, "start", return_value=row_dir),
+            contextlib.ExitStack() as stack,
+            contextlib.redirect_stdout(out),
+        ):
+            for name, value in patches.items():
+                stack.enter_context(mock.patch.object(parts, name, value))
+            code = aging_row.main([])
+        return code, out.getvalue()
+
+    def test_the_aging_row_calls_forwards_with_its_tier_and_base(self):
+        self.world()
+        base = parts.Base("0123abcd", (), {})
+        forwards = mock.Mock(return_value=([], []))
+        code, out = self.run_row("T4", read_base=mock.Mock(return_value=base), forwards=forwards)
+        self.assertEqual(code, 0, out)
+        forwards.assert_called_once()
+        args = forwards.call_args.args
+        entries, issues, order, marker, tier, got_base, decided = args
+        self.assertEqual([e.target for e in entries], ["internal/runtime gocyclo"])
+        self.assertEqual(sorted(issues), ["S1.1c-5-1"])
+        self.assertEqual(order.index("S1.1c-6"), 3)
+        self.assertEqual((marker, tier, got_base), ("S1.1c-5", "T4", base))
+        self.assertTrue(callable(decided))
+
+    def test_smells_json_is_counted_in_covered(self):
+        self.world()
+        code, out = self.run_row(
+            "T4",
+            read_base=mock.Mock(return_value=parts.Base("0123abcd", (), {})),
+            forwards=mock.Mock(return_value=([], [])),
+        )
+        self.assertIn(f"GATE_COVERED {len(WORLD_FILES)}\n", out)
+        with open(os.path.join(support.REPO, "gate", "registry.json"), encoding="utf-8") as f:
+            rows = {r["id"]: r for r in json.load(f)["rows"]}
+        self.assertIn(SMELLS, rows["aging"]["expected_scope"])
+
+    def test_a_read_base_error_is_one_named_fault(self):
+        self.world()
+        bad = mock.Mock(side_effect=ValueError(f"0123abcd:{SMELLS}: Expecting value: line 1 column 1 (char 0)"))
+        code, out = self.run_row("T4", read_base=bad, forwards=mock.Mock(return_value=([], [])))
+        self.assertEqual(code, 1, out)
+        failed = [line for line in out.splitlines() if line.startswith("failed: ")]
+        self.assertEqual(failed, [f"failed: aging: 0123abcd:{SMELLS}: Expecting value: line 1 column 1 (char 0)"])
+
+
+class PrintedParts(unittest.TestCase):
+    """§3.4 (owner, S1.1c-5's design after the reviews, decision 2): with S1.1c-5 to S1.1c-8 printed after S1.1c and
+    S1.1c-5, -6 and -7 closed, rule 1 names exactly the four undecided entries first seen at or before row S1.1c, and
+    none of S1.1c-5-1 to -4 (their decision names them). The order and the known issues are the committed files', the
+    closed marks the fixture's; the decisions reader is the tracked Markdown, as RealTree reads it."""
+
+    def test_at_s1_1c_7s_close_aging_names_exactly_the_undecided(self):
+        def read_repo(rel: str) -> str:
+            with open(os.path.join(REPO, rel), encoding="utf-8") as f:
+                return f.read()
+
+        done = subprocess.run(
+            ["git", "ls-files", "-z", "--", "*.md"], cwd=REPO, capture_output=True, timeout=60, check=False
+        )
+        tracked = {p for p in done.stdout.decode("utf-8", errors="replace").split("\0") if p}
+        self.assertIn(DECISIONS, tracked)
+        printed = sprintid.load_order(read_repo(sprintid.SPRINTS))
+        ids = [row.id for row in printed.rows]
+        for part in ("S1.1c-5", "S1.1c-6", "S1.1c-7", "S1.1c-8"):
+            self.assertIn(part, ids)  # W0a printed them
+        closing = {"S1.1c-5", "S1.1c-6", "S1.1c-7"}
+        order = sprintid.Order(tuple(sprintid.Row(r.id, r.closed or r.id in closing) for r in printed.rows))
+        entries = json.loads(read_repo(knownissues.JSON))["entries"]
+        self.assertLessEqual({"S1.1c-5-1", "S1.1c-5-2", "S1.1c-5-3", "S1.1c-5-4"}, {e["id"] for e in entries})
+        lines = aging.aged(
+            entries,
+            order,
+            "S1.1c-8",
+            today=date(2026, 12, 1),
+            read=lambda p: read_repo(p) if p in tracked else None,
+        )
+        named = sorted({line.split()[1] for line in lines if AGE in line})
+        self.assertEqual(named, ["S1.1c-3-4", "S3.3-2-1", "S3.3-2-2", "S3.3-2-3"])
