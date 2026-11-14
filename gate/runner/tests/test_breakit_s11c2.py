@@ -34,7 +34,7 @@ both findings, which reappear when the comments go. §0.3's table and go_directi
 in a tracked .go file is no directive and no fault, and no PREFILTER pattern finds it. No linter is enabled until
 S1.1c-5, so today it waives nothing; the day gosec is enabled every `#nosec` already in the tree is a live waiver
 with no metadata and no LAW Δ line. Forwarded to S1.1c-5's plan check (owner, 2026-11-12, S1.1c-2's review and
-break-it 4; the lint set's id since S1.1c-3's plan check): its two red tests (`NosecIsAWaiver`, commit fc944ef) left
+break-it 4; the lint set's id since S1.1c-3's plan check): its two red tests (`NosecIsAWaiver`, commit 96b76f4) left
 this module at the fix round, to be restored there.
 
 BK-B4 (Python side; the Go side is tools/archcheck/breakit_s11c2_test.go): the pin counts a driver's cases from its
@@ -345,6 +345,23 @@ class PinTiesAProofToItsRow(unittest.TestCase):
             targets,
         )
         self.assertTrue(faults, "the docsync instrument passes on the lawdelta row's driver")
+
+
+NOSEC = 'package x\n\nimport (\n\t"crypto/md5" // #nosec G501\n)\n\nvar _ = md5.Sum(nil) // #nosec G401 -- reason\n'
+NOSEC_FAULT = "{where}: gosec honours this form; the only waiver is //nolint:gosec // PERMANENT|TEMP … (decision 7)"
+
+
+class NosecIsAWaiver(unittest.TestCase):
+    """BK-S4: a linter-native waiver golangci honours is read like //nolint. Restored from 96b76f4 for S1.1c-5
+    (design §4.2, §8 2.8): the reader is go_foreign, and each #nosec is a named fault."""
+
+    def test_a_nosec_is_read(self):
+        directives, faults = suppressions.go_foreign("x.go", NOSEC)
+        self.assertNotEqual((directives, faults), ([], []), "a #nosec passes unseen")
+        self.assertEqual(faults, [NOSEC_FAULT.format(where="x.go:4"), NOSEC_FAULT.format(where="x.go:7")])
+
+    def test_a_nosec_is_found_by_lawdeltas_prefilter(self):
+        self.assertTrue(any(p in NOSEC for p in suppressions.PREFILTER))
 
 
 if __name__ == "__main__":
