@@ -67,7 +67,8 @@ func (c *checker) names() {
 				case a.Optional:
 					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is optional: a null cannot key a row", a.Name, t.Name)
 				case a.Type == event.TObject:
-					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is an object: an object cannot key a row", a.Name, t.Name)
+					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is an object: an object cannot key a row", a.Name,
+						t.Name)
 				}
 			}
 		}

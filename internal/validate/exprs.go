@@ -63,7 +63,8 @@ func (c *checker) before(n *model.Expr, count, chain bool) bool {
 	switch n.Kind {
 	case model.ExprIn:
 		if t := c.tables[n.Table]; t != nil && len(t.PrimaryKey) > 1 {
-			c.report("E-TBL-001", n.TablePos, "%s has a %d-column primary key; `in` compares against a single-column key", t.Name, len(t.PrimaryKey))
+			c.report("E-TBL-001", n.TablePos, "%s has a %d-column primary key; `in` compares against a single-column key",
+				t.Name, len(t.PrimaryKey))
 			return true
 		}
 	case model.ExprText:
@@ -119,7 +120,8 @@ func (c *checker) build(root *model.Expr, sc *scope) (expr.Expr, bool) {
 			// A bare name in a pattern select: the capture that has it, if one does.
 			for _, cname := range sc.order {
 				if attrOf(sc.slots[sc.captures[cname]], xe.Name) != nil {
-					c.report("E-NAME-001", at, "unknown attribute %s; a pattern select names a capture's: did you mean %s.%s?", xe.Name, cname, xe.Name)
+					c.report("E-NAME-001", at, "unknown attribute %s; a pattern select names a capture's: did you mean %s.%s?",
+						xe.Name, cname, xe.Name)
 					return nil, false
 				}
 			}
@@ -170,7 +172,8 @@ func (c *checker) nulls(root *model.Expr, sc *scope, inAbsence bool) {
 		case len(offenders) == 0:
 		case inAbsence:
 			c.report("E-NULL-001", n.Pos, "comparison over the optional attribute %s inside an absence: a null makes it "+
-				"false, so the absence would fire; wrap it in coalesce(...) or test `is null` explicitly", strings.Join(offenders, ", "))
+				"false, so the absence would fire; wrap it in coalesce(...) or test `is null` explicitly", strings.Join(offenders,
+				", "))
 		default:
 			c.report("E-NULL-002", n.Pos, "%s is optional, and `%s` is false when it is null; wrap it in coalesce(...) "+
 				"or test `is null` explicitly", strings.Join(offenders, ", "), opName(n))
@@ -213,7 +216,8 @@ func (c *checker) regex(root *model.Expr) {
 		}
 		for _, pattern := range n.Operand.Strings {
 			if what, offset := unsupported(pattern); what != "" {
-				c.report("E-REGEX-001", n.Operand.Pos, "the pattern %q uses %s at offset %d: regex is linear-time (RE2) only", pattern, what, offset)
+				c.report("E-REGEX-001", n.Operand.Pos, "the pattern %q uses %s at offset %d: regex is linear-time (RE2) only",
+					pattern, what, offset)
 				return
 			}
 		}
@@ -284,11 +288,14 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 		case !assignable(typ, a.Type):
 			c.report("E-TYPE-001", item.Pos, "select item %s is %s; %s.%s is %s", name, typ, target.Name, name, a.Type)
 		case !a.Optional && c.mayBeNull(&item.Expr, sc, r):
-			c.report("E-NULL-003", item.Pos, "%s can be null and %s.%s is not optional: wrap it in coalesce(...) or declare %s.%s optional",
+			c.report("E-NULL-003", item.Pos,
+				"%s can be null and %s.%s is not optional: wrap it in coalesce(...) or declare %s.%s optional",
 				exprText(item.Expr), target.Name, name, target.Name, name)
 		case window && aggregating(r.Body.Window.Kind):
 			if attr := c.perEvent(r, &item.Expr); attr != "" {
-				c.report("E-SEL-002", item.Pos, "%s is a per-event attribute; a %s window's select holds the partition key, aggregates or constants", attr, r.Body.Window.Kind)
+				c.report("E-SEL-002", item.Pos,
+					"%s is a per-event attribute; a %s window's select holds the partition key, aggregates or constants", attr,
+					r.Body.Window.Kind)
 			}
 		}
 		if name != "" {
@@ -298,9 +305,11 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 	if target == nil {
 		return
 	}
-	if ts := attrOf(target, "ts"); ts != nil && target.Time.Kind == model.TimeNone && ts.Type != event.TTimestamp && !c.badTs[target] {
+	if ts := attrOf(target, "ts"); ts != nil && target.Time.Kind == model.TimeNone && ts.Type != event.TTimestamp &&
+		!c.badTs[target] {
 		c.badTs[target] = true // once per stream, at the attribute itself (owner, S3.2b-1's review: D3's position)
-		c.report("E-TYPE-001", ts.Pos, "%s.ts is filled with the output timestamp: declare it timestamp, not %s", target.Name, ts.Type)
+		c.report("E-TYPE-001", ts.Pos, "%s.ts is filled with the output timestamp: declare it timestamp, not %s", target.Name,
+			ts.Type)
 	}
 	for _, a := range target.Attrs {
 		if broken {
@@ -310,8 +319,10 @@ func (c *checker) selects(r *model.Rule, sc *scope) {
 			c.report("E-SEL-001", r.SelectPos, "%s.%s is bound by no select item", target.Name, a.Name)
 		}
 	}
-	if snk := c.connectorOf(target, "sink"); snk != nil && !snk.Changelog && window && r.Body.Window.Kind == model.WindowSort {
-		c.report("E-SINK-001", r.InsertIntoPos, "a sort window emits a changelog, and %s's sink (%s) takes appends only", target.Name, snk.Name)
+	if snk := c.connectorOf(target, "sink"); snk != nil && !snk.Changelog && window &&
+		r.Body.Window.Kind == model.WindowSort {
+		c.report("E-SINK-001", r.InsertIntoPos, "a sort window emits a changelog, and %s's sink (%s) takes appends only",
+			target.Name, snk.Name)
 	}
 }
 
@@ -361,7 +372,10 @@ func (c *checker) mayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
 		}
 		// A rule's own partition key is never null where the rule runs: a null key never reaches it (SEMANTICS §1.1,
 		// §9; break-it L1 of S3.2b-1).
-		return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool { return k.Stream == st.Name && k.Has(n.Name) })
+		return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool {
+			return k.Stream == st.Name && k.Has(
+				n.Name)
+		})
 	case model.ExprNeg, model.ExprArith:
 		return slices.ContainsFunc(n.Args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
 	case model.ExprNot, model.ExprAnd, model.ExprOr, model.ExprCompare, model.ExprIsNull, model.ExprIn, model.ExprText:

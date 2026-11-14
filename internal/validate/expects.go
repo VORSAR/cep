@@ -143,10 +143,12 @@ func (c *checker) blockValue(at, owner string, a *model.Attr, f *model.Field) {
 	switch {
 	case a.Type == event.TObject && f.Value.Kind == model.LitString:
 		if !objectText(f.Value.Str) {
-			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is object; the block's string is not one JSON object or array", owner, f.Name))
+			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is object; the block's string is not one JSON object or array", owner,
+				f.Name))
 		}
 	case !fits(f.Value, a.Type):
-		c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is %s; the block gives %s", owner, f.Name, a.Type, article(kindName(f.Value))))
+		c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is %s; the block gives %s", owner, f.Name, a.Type, article(kindName(
+			f.Value))))
 	}
 }
 

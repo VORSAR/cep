@@ -36,13 +36,16 @@ func (c *checker) graph() {
 		case timed && len(prod) > 0 && (readers[s.Name] || hasAnnotation(s, "source")):
 			graphFound = true
 			for _, r := range prod {
-				c.report("E-GRAPH-002", r.InsertIntoPos, "rule %s inserts into %s, a source stream (it has a time clause and is read)", r.Name, s.Name)
+				c.report("E-GRAPH-002", r.InsertIntoPos,
+					"rule %s inserts into %s, a source stream (it has a time clause and is read)", r.Name, s.Name)
 			}
 		case timed && len(prod) > 0:
-			c.report("E-TIME-002", s.Time.Pos, "%s is only the output of rule %s, so it is derived and takes no time clause", s.Name, prod[0].Name)
+			c.report("E-TIME-002", s.Time.Pos, "%s is only the output of rule %s, so it is derived and takes no time clause",
+				s.Name, prod[0].Name)
 		case !timed && len(prod) > 1:
 			for _, r := range prod[1:] {
-				c.report("E-GRAPH-003", r.InsertIntoPos, "rule %s is a second producer of %s, after rule %s", r.Name, s.Name, prod[0].Name)
+				c.report("E-GRAPH-003", r.InsertIntoPos, "rule %s is a second producer of %s, after rule %s", r.Name, s.Name,
+					prod[0].Name)
 			}
 		}
 		c.timeAttr(s)
@@ -79,7 +82,8 @@ func (c *checker) graph() {
 		for _, ref := range refs {
 			if p := derived(ref.name); p != nil && !slices.Contains(seen, ref.name) {
 				seen = append(seen, ref.name)
-				c.report("E-GRAPH-004", ref.at, "rule %s reads %s, the output of rule %s: v0.1 rules read source streams only", r.Name, ref.name, p.Name)
+				c.report("E-GRAPH-004", ref.at, "rule %s reads %s, the output of rule %s: v0.1 rules read source streams only",
+					r.Name, ref.name, p.Name)
 				graphFound = true
 			}
 		}
@@ -88,7 +92,8 @@ func (c *checker) graph() {
 	// which is E-GRAPH-004 when it is derived and E-GRAPH-002 when it has a time clause. The search stays for
 	// Phase 2's rule chaining, and reports only what nothing else explains.
 	if cyc := cycle(c.app.Rules); len(cyc) > 0 && !graphFound {
-		c.report("E-GRAPH-001", c.app.Rules[cyc[0]].InsertIntoPos, "rules %s form a cycle", strings.Join(ruleNames(c.app.Rules, cyc), " -> "))
+		c.report("E-GRAPH-001", c.app.Rules[cyc[0]].InsertIntoPos, "rules %s form a cycle", strings.Join(ruleNames(
+			c.app.Rules, cyc), " -> "))
 	}
 	c.idle()
 }
@@ -100,9 +105,11 @@ func (c *checker) invisiblesDecl(s *model.Stream) {
 	switch {
 	case a == nil:
 	case a.Type != event.TBool:
-		c.report("E-TYPE-001", a.Pos, "%s.%s is the engine's invisible-character flag: declare it bool, not %s", s.Name, a.Name, a.Type)
+		c.report("E-TYPE-001", a.Pos, "%s.%s is the engine's invisible-character flag: declare it bool, not %s", s.Name,
+			a.Name, a.Type)
 	case a.Optional:
-		c.report("E-TYPE-001", a.Pos, "%s.%s is the engine's invisible-character flag, never null: declare it bool without optional", s.Name, a.Name)
+		c.report("E-TYPE-001", a.Pos,
+			"%s.%s is the engine's invisible-character flag, never null: declare it bool without optional", s.Name, a.Name)
 	}
 }
 
@@ -114,9 +121,11 @@ func (c *checker) timeAttr(s *model.Stream) {
 	case a == nil:
 		c.unknown(s.Time.AttrPos, "attribute of "+s.Name, s.Time.Attr, attrNames(s.Attrs))
 	case a.Type != event.TTimestamp:
-		c.report("E-TIME-003", s.Time.AttrPos, "the time attribute %s of %s is declared %s, not timestamp", a.Name, s.Name, a.Type)
+		c.report("E-TIME-003", s.Time.AttrPos, "the time attribute %s of %s is declared %s, not timestamp", a.Name, s.Name,
+			a.Type)
 	case a.Optional: // owner, 2026-11-09, design 7: live ingest refuses an event without a time, whatever optional says
-		c.report("E-TIME-003", s.Time.AttrPos, "the time attribute %s of %s is declared optional: every event needs a time", a.Name, s.Name)
+		c.report("E-TIME-003", s.Time.AttrPos, "the time attribute %s of %s is declared optional: every event needs a time",
+			a.Name, s.Name)
 	}
 }
 
@@ -192,7 +201,8 @@ func (c *checker) idle() {
 			why = "a window"
 		case len(streams) > 1:
 			why = "it reads " + strings.Join(streams, " and ")
-		case r.Body.Kind == model.BodyPattern && slices.ContainsFunc(r.Body.Pattern.Elements, func(e model.PatternElement) bool {
+		case r.Body.Kind == model.BodyPattern && slices.ContainsFunc(r.Body.Pattern.Elements, func(
+			e model.PatternElement) bool {
 			return e.Kind == model.ElemAbsence
 		}):
 			why = "an absence"
@@ -205,7 +215,8 @@ func (c *checker) idle() {
 				continue
 			}
 			reported[name] = true
-			c.report("E-IDLE-001", s.Time.Pos, "%s feeds rule %s, which holds timers (%s), and declares no `idle after`", name, r.Name, why)
+			c.report("E-IDLE-001", s.Time.Pos, "%s feeds rule %s, which holds timers (%s), and declares no `idle after`", name,
+				r.Name, why)
 		}
 	}
 }
