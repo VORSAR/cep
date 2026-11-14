@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import zipfile
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
@@ -31,6 +32,7 @@ from gate.toolchain import manifest, vulndb_fetch
 WAIVERS = "tools/allowlists/vulns.json"
 COVERED = 6  # go.mod, go.sum, gate/proofs/go.mod, gate/proofs/go.sum, the register, the waivers (design §2.5)
 VULNDB = "vulndb"
+ANY_EXIT = range(-255, 256)  # `go version -m`'s exit code is judged by build_info, never raised
 PAIR = re.compile(r"(GO-[0-9]{4}-[0-9]{4,}) (\S+)", re.ASCII)
 # The faults the `vulndb` waiver may silence: the copy's availability and age, never its integrity (review DA-B3).
 # "no stamp.json" is not one: it is named only beside a zip, whose origin it leaves unknown (review CA-L5).
@@ -41,9 +43,9 @@ AVAILABILITY = (
     "vulns: the database has not changed since ",
 )
 NOT_READ = (
-    "not read: golangci-lint (Go build info, from S1.1c-5); ruff, CPython (outside the Go database); build tags"
-    " beyond linux/amd64 and darwin/arm64, CGO_ENABLED=1"
+    "not read: ruff, CPython (outside the Go database); build tags beyond linux/amd64 and darwin/arm64, CGO_ENABLED=1"
 )
+BINARY = frozenset({"stdlib"})  # a declared binary's pseudo-modules: its build never runs the go command (§6)
 
 
 @dataclass
@@ -202,22 +204,90 @@ class BuildInfo:
     deps: dict[str, str]  # dep path -> version, a `=>` replacement applied
 
 
+def _module_fields(line: str) -> tuple[str, str] | None:
+    """A `\t<kind>\t<path>\t<version>[\t<sum>]` line's (path, version); the sum may be empty or absent (M-13)."""
+    fields = line.split("\t")[2:]
+    if len(fields) not in (2, 3) or not fields[0] or not fields[1]:
+        return None
+    return fields[0], fields[1]
+
+
 def build_info(tool: str, pinned: str, code: int, text: str) -> tuple[BuildInfo | None, list[str]]:
     """`go version -m`'s exit code and stdout for the declared tool `tool` pinned at `pinned`: the build info, or
     None and the named faults (§6: exit, go line, mod line, mod version, zero deps)."""
-    raise NotImplementedError("S1.1c-5 lane C: vulns.build_info")
+    where = f"vulns: {tool}: go version -m"
+    if code != 0:
+        return None, [f"{where}: exit {code}: no Go build information read"]
+    lines = text.split("\n")
+    faults: list[str] = []
+    head, sep, go = lines[0].rpartition(": ")
+    if not sep or not head or lines[0].startswith("\t"):
+        faults.append(f"{where}: line 1 names no Go version: {lines[0]!r}")
+    else:
+        try:
+            vulndb.go_version(go)
+        except vulndb.InvalidVersion:
+            faults.append(f"{where}: the Go version {go!r} cannot be ordered")
+    main: list[tuple[str, str]] = []
+    found: dict[str, str] = {}
+    last = ""  # the dep a `=>` line replaces
+    for n, line in enumerate(lines[1:], start=2):
+        kind = line.split("\t")[1] if line.startswith("\t") and line.count("\t") > 1 else ""
+        pair = _module_fields(line) if kind in ("mod", "dep", "=>") else None
+        if (kind in ("mod", "dep") and pair is None) or (kind == "=>" and (pair is None or not last)):
+            faults.append(f"{where}: line {n} cannot be read: {line!r}")
+        elif kind == "mod":
+            main.append(pair)
+        elif kind == "dep":
+            last = pair[0]
+            found[last] = pair[1]
+        elif kind == "=>":
+            del found[last]
+            found[pair[0]] = pair[1]
+            last = ""
+        elif line and not line.startswith("\t"):
+            faults.append(f"{where}: line {n} cannot be read: {line!r}")
+    if len(main) != 1:
+        faults.append(f"{where}: {len(main)} mod lines, want the main module's one")
+    elif main[0][1] != pinned:
+        faults.append(f"{where}: the main module {main[0][0]} is {main[0][1]}, tools.json pins {pinned}")
+    if not found:
+        faults.append(f"{where}: no dep line: the build information is vacuous")
+    if faults:
+        return None, faults
+    return BuildInfo(go, main[0][1], dict(sorted(found.items()))), []
 
 
 def binary_findings(
     tool: str, info: BuildInfo, entries: list[dict]
 ) -> tuple[list[tuple[str, vulndb.Finding]], list[tuple[str, str, str]]]:
     """The findings of one declared binary, each with its `<id> <tool>` pair, judged against stdlib only (§6)."""
-    raise NotImplementedError("S1.1c-5 lane C: vulns.binary_findings")
+    found, faults = vulndb.findings(info.deps, frozenset(), info.go_version, entries, pseudo=BINARY)
+    named = [(entry_id, tool, f"{text} (in {tool})") for entry_id, _, text in faults]
+    return [(f"{f.id} {tool}", f) for f in found], sorted(set(named), key=lambda f: (f[0], f[2]))
 
 
 def covered(tools: list[manifest.Tool]) -> int:
     """COVERED plus one per go_built tool (§6)."""
-    raise NotImplementedError("S1.1c-5 lane C: vulns.covered")
+    return COVERED + sum(1 for t in tools if t.go_built)
+
+
+@dataclass(frozen=True)
+class Binary:
+    """A declared Go-built tool and its executable in the tool cache (§6)."""
+
+    tool: manifest.Tool
+    path: str
+
+
+def binaries(tools: list[manifest.Tool], cache: str) -> list[Binary]:
+    """Each go_built tool's executable: <tool_home>/<path_dir>/<command>, in name order."""
+    found = [
+        Binary(t, os.path.normpath(os.path.join(manifest.tool_home(cache, t), t.path_dir, t.command)))
+        for t in tools
+        if t.go_built
+    ]
+    return sorted(found, key=lambda b: b.tool.name)
 
 
 def _day(text: object) -> str:
@@ -225,8 +295,17 @@ def _day(text: object) -> str:
     return vulndb._utc_day(moment).isoformat() if moment is not None else "?"
 
 
-def scan(row_dir: str, env: dict[str, str], *, repo: str, copy_root: str, now: datetime) -> tuple[list[str], list[str]]:
-    """The row's faults and its reason lines: `repo` holds the register and the waivers, `copy_root` the copy."""
+def scan(
+    row_dir: str,
+    env: dict[str, str],
+    *,
+    repo: str,
+    copy_root: str,
+    now: datetime,
+    declared: Sequence[Binary] = (),
+) -> tuple[list[str], list[str]]:
+    """The row's faults and its reason lines: `repo` holds the register and the waivers, `copy_root` the copy;
+    `declared` the go_built tools whose build information is scanned against stdlib (§6)."""
     faults: list[str] = []
     notes: list[str] = []
     lines: list[str] = []
@@ -277,6 +356,33 @@ def scan(row_dir: str, env: dict[str, str], *, repo: str, copy_root: str, now: d
         if loaded is not None:
             found, scan_faults = vulndb.findings(_module_map(loaded, notes), never_built, loaded.go_version, entries)
 
+    scanned: list[str] = []
+    for b in declared:
+        name = b.tool.name
+        try:
+            code, text = gomods.run_status(
+                row_dir, env, repo, f"buildinfo-{name}", ["go", "version", "-m", b.path], ok=ANY_EXIT
+            )
+        except (gomods.Failed, OSError) as e:
+            faults.append(f"vulns: {name}: go version -m: {e}")
+            complete = False
+            continue
+        info, bad = build_info(name, b.tool.version, code, text)
+        if info is None:
+            faults += bad
+            complete = False
+            continue
+        scanned.append(f"{name} {info.main_version} ({info.go_version}, {len(info.deps)} deps)")
+        if copy.zip is not None:
+            tool_found, tool_faults = binary_findings(name, info, entries)
+            for pair, f in tool_found:
+                if pair in live:
+                    used.add(pair)
+                else:
+                    fix = f"fixed in {f.fixed}" if f.fixed else "no fix yet"
+                    faults.append(f"vulns: {pair} ({f.module} {f.version}): {fix}")
+            scan_faults += tool_faults
+
     unbuilt: list[str] = []
     for f in found:
         pair = f"{f.id} {f.module}"
@@ -307,6 +413,8 @@ def scan(row_dir: str, env: dict[str, str], *, repo: str, copy_root: str, now: d
             f" {_day(stamp.get('fetched'))}, {copy.root}), {len(entries)} entries; {len(loaded.modules)} modules"
             f" ({sum(1 for m in loaded.modules if m.built)} built); stdlib and toolchain at {loaded.go_version}"
         )
+    if scanned:
+        lines.append(f"vulns: declared binaries, stdlib only: {', '.join(scanned)}")
     if unbuilt:
         lines.append(f"vulns: never built: {', '.join(unbuilt)}")
     if used:
@@ -320,8 +428,18 @@ def scan(row_dir: str, env: dict[str, str], *, repo: str, copy_root: str, now: d
 def main(argv: list[str]) -> int:
     row_dir = rows.start()
     env = {**os.environ, **gomods.ENV}
-    faults, lines = scan(row_dir, env, repo=".", copy_root=vulndb_fetch.copy_root(os.environ), now=datetime.now(UTC))
-    rows.covered(COVERED)
+    tools: list[manifest.Tool] = []
+    manifest_faults: list[str] = []
+    try:
+        tools = manifest.load("tools.json", manifest.platform_key())
+    except manifest.ManifestError as e:
+        manifest_faults.append(f"vulns: {e}")
+    declared = binaries(tools, manifest.cache_root(os.environ))
+    faults, lines = scan(
+        row_dir, env, repo=".", copy_root=vulndb_fetch.copy_root(os.environ), now=datetime.now(UTC), declared=declared
+    )
+    faults = manifest_faults + faults
+    rows.covered(covered(tools))
     for line in lines:
         print(line)
     sys.stdout.flush()
