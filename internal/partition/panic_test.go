@@ -55,7 +55,7 @@ func (b *pnBody) OnEvent(in *partition.Instance, e event.Event) {
 		}
 	}
 	if in.Key.First.Str == b.panicOn {
-		panic("pn: a body's panic in OnEvent")
+		panic("pn: a body's panic in OnEvent") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 }
 
@@ -72,7 +72,7 @@ func (b *pnBody) OnDiscard(*partition.Instance, []uint64) {}
 func (b *pnBody) OnPurge(in *partition.Instance) {
 	b.log = append(b.log, "purge "+in.Key.First.Str)
 	if in.Key.First.Str == b.purgePanicOn {
-		panic("pn: a body's panic in OnPurge")
+		panic("pn: a body's panic in OnPurge") //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 }
 

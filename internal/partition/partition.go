@@ -39,7 +39,7 @@ type TimerFree struct{}
 // OnTimers is a fault: no timer is ever scheduled for such a body, so one reaching it panics, which partition counts
 // as the body's panic and resets the key — never dropped in silence (combined review C9 of S3.2b-1).
 func (TimerFree) OnTimers(*Instance, []clock.Timer, any) {
-	panic("partition: a timer reached a body that holds none")
+	panic("partition: a timer reached a body that holds none") //nolint:forbidigo,lll // PERMANENT reason="a timer reaching a TimerFree body is a fault partition recovers as the body's panic, resetting the key" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 }
 
 // OnDiscard does nothing.
@@ -89,19 +89,21 @@ func (k Key) Part(i int) event.Value {
 
 // Instance is one key of one rule on one shard.
 type Instance struct {
-	Key          Key             // the first event's key; a float zero part is stored as +0.0 (break-it K1)
-	Clock        *clock.Instance // the key's release buffer and timers
-	Op           OpState         // nil until birth, and from a purge until rebirth
-	LastActivity int64           // the event time of the key's last released event (on arrival: the largest seen); math.MinInt64 before any
+	Key   Key             // the first event's key; a float zero part is stored as +0.0 (break-it K1)
+	Clock *clock.Instance // the key's release buffer and timers
+	Op    OpState         // nil until birth, and from a purge until rebirth
+	// the event time of the key's last released event (on arrival: the largest seen); math.MinInt64 before any
+	LastActivity int64
 
 	pending bool // listed for freeing after a purge (once: review F10)
 }
 
 // Config describes one rule to its partitions.
 type Config struct {
-	Inputs   []int        // the stream ids the rule reads
-	KeyTypes []event.Type // per part, the one type of that position (E-PART-003); a key-less rule: {TString}, the pseudo-key ""
-	TTL      int64        // ms, > 0; 0 only for a key-less rule, which is never purged
+	Inputs []int // the stream ids the rule reads
+	// per part, the one type of that position (E-PART-003); a key-less rule: {TString}, the pseudo-key ""
+	KeyTypes []event.Type
+	TTL      int64 // ms, > 0; 0 only for a key-less rule, which is never purged
 	Body     Body
 	// OnArrival: the body sees each event at Offer, never buffered and never construct-late; exactly one input
 	// (owner Q1 of S3.2b; design s3-2b-1 v2 §3). Its clock is fed its stream's admission watermark (D1): the runtime's.
@@ -223,7 +225,8 @@ var (
 	errNegTTL     = errors.New("partition: negative TTL")
 )
 
-// NewRule rejects an empty Inputs, an empty KeyTypes or a part type of TInvalid or TObject, a negative TTL and a nil Body. A TTL of 0 is
+// NewRule rejects an empty Inputs, an empty KeyTypes or a part type of TInvalid or TObject, a negative TTL and a nil
+// Body. A TTL of 0 is
 // accepted: the validator guarantees a keyed rule carries one (E-TTL-001), and a key-less rule is never purged.
 func NewRule(cfg Config) (*Rule, error) {
 	switch {
@@ -232,13 +235,16 @@ func NewRule(cfg Config) (*Rule, error) {
 	case len(cfg.KeyTypes) == 0:
 		return nil, errNoKeyTypes
 	case slices.ContainsFunc(cfg.KeyTypes, func(t event.Type) bool { return t < event.TString || t >= event.TObject }):
-		return nil, fmt.Errorf("partition: key types %v: a part of these types cannot key a partition (owner D7 of S3.2a-1: object keys are a deploy error from S3.3)", cfg.KeyTypes)
+		return nil, fmt.Errorf(
+			"partition: key types %v: a part of these types cannot key a partition (owner D7 of S3.2a-1: object keys are a "+
+				"deploy error from S3.3)", cfg.KeyTypes)
 	case cfg.TTL < 0:
 		return nil, errNegTTL
 	case cfg.Body == nil:
 		return nil, errNilBody
 	case cfg.OnArrival && len(cfg.Inputs) != 1:
-		return nil, fmt.Errorf("partition: an on-arrival rule reads exactly one stream, not %d (design s3-2b-1 v2 §3)", len(cfg.Inputs))
+		return nil, fmt.Errorf("partition: an on-arrival rule reads exactly one stream, not %d (design s3-2b-1 v2 §3)", len(
+			cfg.Inputs))
 	}
 	r := &Rule{
 		clock: clock.NewRuleClock(cfg.Inputs), keyTypes: slices.Clone(cfg.KeyTypes), ttl: cfg.TTL, body: cfg.Body,
@@ -259,23 +265,24 @@ func (r *Rule) Apply(a clock.WMAdvance) (advanced bool) {
 // part count other than the rule's, a null part, a part of another type or a NaN part: the router checks first.
 func (r *Rule) Offer(key Key, e event.Event) (constructLate bool) {
 	if key.Parts() != len(r.keyTypes) {
-		panic(fmt.Sprintf("partition: Offer: a key of %d parts for a rule keyed by %d", key.Parts(), len(r.keyTypes)))
+		panic(fmt.Sprintf("partition: Offer: a key of %d parts for a rule keyed by %d", key.Parts(), len(r.keyTypes))) //nolint:forbidigo,lll // PERMANENT reason="the router checks the key's part count before Offer; a mismatch is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	for i, t := range r.keyTypes {
 		switch p := key.Part(i); {
 		case p.Null:
-			panic("partition: Offer: a null key part (the router makes it a per-rule event error)")
+			panic("partition: Offer: a null key part (the router makes it a per-rule event error)") //nolint:forbidigo,lll // PERMANENT reason="the router makes a null key part a per-rule event error before Offer; one here is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		case p.Kind != t:
-			panic(fmt.Sprintf("partition: Offer: a %v key part %d for a rule keyed by %v", p.Kind, i+1, r.keyTypes))
+			panic(fmt.Sprintf("partition: Offer: a %v key part %d for a rule keyed by %v", p.Kind, i+1, r.keyTypes)) //nolint:forbidigo,lll // PERMANENT reason="the router checks each key part's type before Offer; a mismatch is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		case p.Kind == event.TFloat && p.F != p.F:
-			panic("partition: Offer: a NaN key part")
+			panic("partition: Offer: a NaN key part") //nolint:forbidigo,lll // PERMANENT reason="the router refuses a NaN key part before Offer; one here is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 	}
 	k := keyOf(key)
 	in, resident := r.byKey[k]
 	if !resident {
 		if key.First.Kind == event.TFloat && key.First.F == 0 {
-			key.First.F = 0 // -0.0 and +0.0 are one key, stored as +0.0, whichever arrives first (break-it K1); Rest is the router's
+			// -0.0 and +0.0 are one key, stored as +0.0, whichever arrives first (break-it K1); Rest is the router's
+			key.First.F = 0
 		}
 		in = &Instance{Key: key, Clock: r.clock.NewInstance(), LastActivity: math.MinInt64}
 	}
@@ -342,7 +349,7 @@ func (r *Rule) onTimers(ci *clock.Instance, fires []clock.Timer) {
 	// A key has one TTL timer, the only strict kind OnTimers receives, so it fires alone in its group.
 	if fires[0].Kind == clock.TTLPurge {
 		if len(fires) != 1 {
-			panic("partition: a TTLPurge grouped with other timers")
+			panic("partition: a TTLPurge grouped with other timers") //nolint:forbidigo,lll // PERMANENT reason="a key has one TTL timer, so a TTLPurge fires alone in its group; a grouped one is a clock fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		r.stats.Purged++
 		r.onPurge(in)
@@ -441,7 +448,8 @@ func (r *Rule) Walk(fn func(component, key string, state any)) {
 	fn("clock", "", r.clock.State())
 	for _, in := range r.ordered() {
 		birth, born := in.Clock.Birth()
-		born = born || (r.arrival && in.Op != nil) // a key-less on-arrival key schedules nothing, so the clock never bears it (review F11)
+		// a key-less on-arrival key schedules nothing, so the clock never bears it (review F11)
+		born = born || (r.arrival && in.Op != nil)
 		fn("instance", strconv.FormatUint(in.Clock.Ordinal(), 10), InstanceState{
 			Key: in.Key, LastActivity: in.LastActivity, Birth: birth, Born: born,
 			Events: in.Clock.Events(nil), Timers: in.Clock.Timers(nil),
@@ -465,7 +473,8 @@ func (r *Rule) CheckTimers() error {
 			implied := in.Op.Timers(nil)
 			for _, t := range implied {
 				if t.Kind == clock.TTLPurge {
-					return fmt.Errorf("partition: instance %d: its state implies a TTLPurge, which only partition schedules", in.Clock.Ordinal())
+					return fmt.Errorf("partition: instance %d: its state implies a TTLPurge, which only partition schedules",
+						in.Clock.Ordinal())
 				}
 			}
 			want = append(want, implied...)
@@ -473,7 +482,8 @@ func (r *Rule) CheckTimers() error {
 		slices.SortFunc(got, cmpTimer)
 		slices.SortFunc(want, cmpTimer)
 		if !slices.Equal(got, want) {
-			return fmt.Errorf("partition: instance %d: pending timers %v, but its state implies %v", in.Clock.Ordinal(), got, want)
+			return fmt.Errorf("partition: instance %d: pending timers %v, but its state implies %v", in.Clock.Ordinal(), got,
+				want)
 		}
 	}
 	return nil
@@ -514,7 +524,7 @@ type Registry struct {
 // Register adds a holder; a duplicate name panics.
 func (g *Registry) Register(name string, h Holder) {
 	if slices.Contains(g.names, name) {
-		panic("partition: Registry.Register: duplicate holder " + strconv.Quote(name))
+		panic("partition: Registry.Register: duplicate holder " + strconv.Quote(name)) //nolint:forbidigo,lll // PERMANENT reason="holder names are fixed when the registry is built; a duplicate is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	g.names = append(g.names, name)
 	g.holders = append(g.holders, h)
