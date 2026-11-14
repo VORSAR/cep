@@ -55,7 +55,18 @@ At most two agents at once. The plan check §1 holds the waves:
 
 ## Measured results
 
-*(Filled as the sprint runs.)*
+**W0 (2026-11-14):** two agents wrote the stubs and the red tests, split by lane ownership; 17 commits were combined onto `s1-1c-5/integration`.
+- **W0-AC.** Lanes A and C's stubs (`golangci.py`, `rows/smells.py`, `vulndb.findings(pseudo=)`, `manifest.Tool.go_built`, `rows/vulns.py`'s `build_info`/`binary_findings`/`covered`) and their unit tests: §8 rows 1.1–1.12, 1.14–1.15, 3.5–3.6, 5.1–5.5, L.1.
+- **W0-B.** Lane B's stubs (`pin.py`, `parts.py`, `Order.reached_part`, `suppressions.go_foreign`, `RUFF_PINNED`), the directive census (`gate/runner/testdata/directives.json`, 43 rows, each confirmed with the pinned binary or cited to source), lane B's tests (rows 2.1–2.8, 3.1–3.4, 3.9–3.11, 4.1–4.4), BK-S4's `NosecIsAWaiver` restored from 96b76f4, and `test_suppressions_planted.py` 9 → 13.
+- **The combined T2: red in exactly the 15 W0 modules, and nowhere else** (pytests: test_candidate, test_aging, test_allowlists, test_breakit_s11c2, test_golangci, test_instruments_pin, test_parts, test_pin, test_rows_ruff, test_rows_smells, test_sprintid_parts, test_suppressions, test_vulndb, test_vulns_row, test_manifest; pyfloor: test_manifest's `go_built` tests). Four tests green from birth each have a mutation proof shown red.
+- **Measured:**
+  - **golangci-lint's build:** the linux-amd64 binary was built with go1.27.0, has 207 deps (as darwin; not 208) and an empty main-module sum.
+  - **Skipped directories:** golangci-lint skips no directory name by default under the decided config. Only `testdata/` is unlinted, and `go list` never claims it.
+  - **Waiver placement:** a `//nolint` above a function covers its whole body, while a trailing one does not.
+  - **`warn-unused`:** `true` adds `Report.Warnings`, so `false` is right.
+  - **New census forms:** `//<TAB>nolint` is not honoured; gosec's `//gosec:disable` is honoured (gosec is not enabled); forbidigo's `//permit:` is switched off by golangci.
+  - **Already in place:** an exemption matching nothing is already red in `vulns` (`rows/vulns.py`, "matches nothing: remove it").
+- **Not yet written:** `test_smells_planted.py` (30 cases), whose texts depend on the row's output, goes to lane A, written red first. `test_vulns_planted.py` +4, which needs a world that declares a Go-built tool, goes to lane C, written red first. W0-AC skipped the commit hook with `--no-verify` after its first commit, to keep gate tiers off the shared machine; the combined T2 covers it.
 
 ## Test material
 
