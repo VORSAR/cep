@@ -91,7 +91,14 @@ class Order:
         names a part (S<stage>.<part><letter>-<n>); ValueError "<part>: not a printed part of gate/sprints.json"
         otherwise. The marker is placed by `index`: a later position → True, an earlier one → False, the same → True;
         a part-less marker at the part's own row sits before every printed part → False."""
-        raise NotImplementedError("S1.1c-5 lane B: sprintid.Order.reached_part")
+        refused = ValueError(f"{part}: not a printed part of {SPRINTS}")
+        try:
+            id = parse(part)
+        except ValueError:
+            raise refused from None
+        if id.n == 0 or canonical(id) != part or part not in {row.id for row in self.rows}:
+            raise refused
+        return self.index(marker) >= self.index(part)
 
     def first_open(self) -> str:
         for row in self.rows:
