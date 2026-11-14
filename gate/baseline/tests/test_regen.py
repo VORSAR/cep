@@ -40,7 +40,7 @@ K1, K2, K3 = "1" * 64, "2" * 64, "3" * 64
 SEAMS = {
     "REPO": "REPO: str, the repository root main reads conformance/baseline/ and SPEC.md under",
     "run_tier1": "run_tier1(repo: str) -> int, step 1: the two-row gate's exit code",
-    "fresh_run": "fresh_run(repo: str, out_dir: str) -> int, step 2: TestBaseline with CEP_BASELINE_WRITE=out_dir",
+    "fresh_run": "fresh_run(repo: str, out_dir: str) -> int, step 2: TestBaseline with -args -baseline-write=out_dir",
 }
 
 

@@ -298,7 +298,7 @@ func TestRunExpectsIsDeterministic(t *testing.T) {
 type xpBoom struct{ partition.TimerFree }
 
 func (xpBoom) NewState(*partition.Instance) partition.OpState { return &eqState{} }
-func (xpBoom) OnEvent(*partition.Instance, event.Event)       { panic("xp: boom") }
+func (xpBoom) OnEvent(*partition.Instance, event.Event)       { panic("xp: boom") } //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 
 // MUST 8: a body that panics on its event, under an empty then-list, fails the block at `expect`.
 func TestPanicFailsADefeatPath(t *testing.T) {

@@ -144,7 +144,8 @@ func diverge(target event.Schema, x *plan.Expect, o []event.Event, c Counts) (st
 		if all {
 			for j := range m {
 				if of[j] != j {
-					return fmt.Sprintf("the outputs are in another order: then-record %d matches output %d", j+1, of[j]+1) + reason, t[j].Line, t[j].Col
+					return fmt.Sprintf("the outputs are in another order: then-record %d matches output %d", j+1, of[j]+1) + reason,
+						t[j].Line, t[j].Col
 				}
 			}
 		}
@@ -171,7 +172,8 @@ func diverge(target event.Schema, x *plan.Expect, o []event.Event, c Counts) (st
 		if m == 0 {
 			tail = "; the then-list is empty"
 		}
-		return fmt.Sprintf("output %d was not expected: %s%s", i+1, outputText(target, o[i]), tail) + reason, x.ThenLine, x.ThenCol
+		return fmt.Sprintf("output %d was not expected: %s%s", i+1, outputText(target, o[i]), tail) + reason, x.ThenLine,
+			x.ThenCol
 	}
 	switch {
 	case i == m: // every then-record paired: output i is the first edit
@@ -216,7 +218,8 @@ func nearest(target event.Schema, o []event.Event, i int, r plan.ThenRecord) str
 	}
 	for k, a := range r.Attrs {
 		if got := o[i].Values[a]; !sameValue(got, r.Values[k]) {
-			return fmt.Sprintf("the nearest output is %d: %s is %s, expected %s", i+1, target.Attr(a).Name, canon(got), canon(r.Values[k]))
+			return fmt.Sprintf("the nearest output is %d: %s is %s, expected %s", i+1, target.Attr(a).Name, canon(got), canon(
+				r.Values[k]))
 		}
 	}
 	return ""

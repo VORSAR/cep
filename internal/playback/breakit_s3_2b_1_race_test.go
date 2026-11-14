@@ -58,7 +58,11 @@ func TestBreakitGuardLiveConcurrentOnArrival(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	defer r.Close(ctx)
+	defer func() {
+		if err := r.Close(ctx); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
 	var wg sync.WaitGroup
 	const per = 2000
 	for g := range 4 {

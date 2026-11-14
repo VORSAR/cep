@@ -323,7 +323,7 @@ func bkRandValue(rng *rand.Rand, ty event.Type) string {
 		return []string{`{ "a" : [ 1 , 2.5e3 , { } ] , "b" : "x  y` + bkBS + `"\t" }`, "[ ]", `{"s":"` + "\xff\xe2\x82" + `"}`,
 			`[` + strings.Repeat("[ ", 50) + strings.Repeat("] ", 50) + `]`, `{"k":"` + bkBS + "u00e9" + `" ,"n":null}`}[rng.IntN(5)]
 	}
-	panic(ty)
+	panic(ty) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 }
 
 // TestBreakitGuardRoundTripRandom: design §5.4's round trip over randomized lines of every type, nulls, escapes,

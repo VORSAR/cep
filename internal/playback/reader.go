@@ -98,11 +98,13 @@ func NewReader(r io.Reader, app *App) (*Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("playback: the envelope schema: %w", err)
 	}
-	hdrSchema, err := event.NewSchema("recording", []event.Attr{{Name: "start", Type: event.TTimestamp}}, event.ArrivalTime)
+	hdrSchema, err := event.NewSchema("recording", []event.Attr{{Name: "start", Type: event.TTimestamp}},
+		event.ArrivalTime)
 	if err != nil {
 		return nil, fmt.Errorf("playback: the header schema: %w", err)
 	}
-	rejSchema, err := event.NewSchema("rejected", []event.Attr{{Name: "attr", Type: event.TString, Optional: true}, {Name: "reason", Type: event.TString}}, event.ArrivalTime)
+	rejSchema, err := event.NewSchema("rejected", []event.Attr{{Name: "attr", Type: event.TString, Optional: true}, {
+		Name: "reason", Type: event.TString}}, event.ArrivalTime)
 	if err != nil {
 		return nil, fmt.Errorf("playback: the rejected record's schema: %w", err)
 	}
@@ -472,7 +474,8 @@ func (r *Reader) eventRecord(vals []event.Value, present func(int) bool) (Record
 	case arrivalTime && !present(eTs):
 		return Record{}, r.fault("stream %q is `time arrival`: its events carry ts", name)
 	case !arrivalTime && present(eTs):
-		return Record{}, r.fault("ts on stream %q, whose time is its attribute %q", name, st.Schema.Attr(st.Schema.TimeAttr()).Name)
+		return Record{}, r.fault("ts on stream %q, whose time is its attribute %q", name, st.Schema.Attr(
+			st.Schema.TimeAttr()).Name)
 	case !r.recording && present(eArrival):
 		return Record{}, r.fault("arrival in a log without a recording header")
 	case r.recording && arrivalTime && present(eArrival):
@@ -486,7 +489,8 @@ func (r *Reader) eventRecord(vals []event.Value, present func(int) bool) (Record
 	if err != nil {
 		var de *event.DecodeError
 		errors.As(err, &de)
-		return Record{}, &LoadError{Line: r.line, Msg: fmt.Sprintf("the payload fails stream %q's schema: %s", name, decodeMsg(err)), Decode: de}
+		return Record{}, &LoadError{Line: r.line, Msg: fmt.Sprintf("the payload fails stream %q's schema: %s", name,
+			decodeMsg(err)), Decode: de}
 	}
 	ts := info.Ts
 	if arrivalTime {

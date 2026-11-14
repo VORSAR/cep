@@ -2,8 +2,8 @@ package playback_test
 
 // Tier 2 (qa-strategy §3; design s3-3-2 §8.1–§8.2): the full outputs and drop counts of every expect block of every
 // built corpus file, locked in conformance/baseline/. TestBaseline compares a fresh run with the stored files; with
-// CEP_BASELINE_WRITE=<dir> it writes the fresh run there instead (gate/baseline/regen.py's step 2; the gate never
-// sets it). Prefix: bl.
+// -args -baseline-write=<dir> it writes the fresh run there instead (gate/baseline/regen.py's step 2; the gate's
+// rows never pass it). Prefix: bl.
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,10 +47,13 @@ type blHeader struct {
 	SpecRev      int    `json:"spec_rev"`
 }
 
+// baselineWrite is the directory TestBaseline writes a fresh run into instead of comparing (regen.py's step 2).
+var baselineWrite = flag.String("baseline-write", "", "write the fresh baseline files into this directory")
+
 // TestBaseline locks Tier 2: every built corpus file's blocks, run fresh, equal their stored lines byte for byte (the
 // header's spec_rev aside, which only the regen tool writes).
 func TestBaseline(t *testing.T) {
-	out := os.Getenv("CEP_BASELINE_WRITE")
+	out := *baselineWrite
 	files := blFiles(t)
 	if len(files) != blWantFiles {
 		t.Fatalf("read %d corpus files, want %d: %v", len(files), blWantFiles, files)

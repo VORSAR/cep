@@ -157,7 +157,8 @@ func appendEvent(dst []byte, s event.Schema, e event.Event, skip string) ([]byte
 		}
 		v := e.Values[i]
 		if v.Kind != a.Type {
-			return dst, fmt.Errorf("playback: stream %q: attribute %q holds a %v value; it is declared %v", s.Stream(), a.Name, v.Kind, a.Type)
+			return dst, fmt.Errorf("playback: stream %q: attribute %q holds a %v value; it is declared %v", s.Stream(), a.Name,
+				v.Kind, a.Type)
 		}
 		if k > 0 {
 			dst = append(dst, ',')
