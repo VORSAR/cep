@@ -682,8 +682,10 @@
       "lands_in": "S1.1c-3",
       "code": [
         "gate/runner/aging.py",
+        "gate/runner/knownissues.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/aging.py"
+        "gate/runner/rows/aging.py",
+        "gate/runner/sprintid.py"
       ],
       "proofs": [
         {
