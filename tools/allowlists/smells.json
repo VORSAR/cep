@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "note": "Size exclusions for the smells row (S1.1c-5 design §3.1): one TEMP entry per package directory and size rule, target \"<package dir> <rule>\" with the rule one of funlen, gocyclo, file-length-limit and argument-limit, each naming a known issue whose forward is a printed part no later than S1.1c-8; the aging row runs the part-level check (§3.5). Empty until the coordinator writes the entries from the real tree's run.",
+  "rule": "smells",
+  "entries": []
+}

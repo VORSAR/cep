@@ -88,10 +88,11 @@ class Load(unittest.TestCase):
         self.assertEqual(str(caught.exception), want)
 
     def test_rules(self):
-        # "vulns": S1.1c-4 (owner, 2026-11-13, S1.1c-4's design, after the reviews).
+        # "vulns": S1.1c-4 (owner, 2026-11-13, S1.1c-4's design, after the reviews); "smells": S1.1c-5 (design §3.1,
+        # PA-S13: the rule lands with tools/allowlists/smells.json).
         self.assertEqual(
             allowlists.RULES,
-            frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated", "fragments", "vulns"}),
+            frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated", "fragments", "vulns", "smells"}),
         )
 
     def test_a_good_list_loads(self):

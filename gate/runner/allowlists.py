@@ -17,8 +17,9 @@ from datetime import date
 from gate.runner import anchors, sprintid
 
 # "fragments" from S1.1c-3 (the fragment test's register); "vulns" from S1.1c-4 (the vulns row's dated exemptions;
-# owner 2026-11-13, S1.1c-4's design, after the reviews: the rule and file are named vulns, not govulncheck).
-RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated", "fragments", "vulns"})
+# owner 2026-11-13, S1.1c-4's design, after the reviews: the rule and file are named vulns, not govulncheck);
+# "smells" from S1.1c-5 (the smells row's size exclusions, "<package dir> <rule>", S1.1c-5 design §3.1).
+RULES = frozenset({"purity", "clock", "teeth", "ruff", "testhygiene", "generated", "fragments", "vulns", "smells"})
 KINDS = ("PERMANENT", "TEMP")
 TOP_KEYS = ("schema", "note", "rule", "entries")
 REQUIRED = ("target", "kind", "reason", "sprint")
