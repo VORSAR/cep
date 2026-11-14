@@ -237,7 +237,7 @@ def read_report(path: str) -> Report:
             doc = json.loads(f.read().decode("utf-8", errors="replace"))
         return _report(doc)
     except ValueError as e:
-        raise ReportError(f"{path}: {e}") from None
+        raise ReportError(f"{path}: unreadable report: {e}") from None
 
 
 def go_files(listing: Sequence[Mapping[str, object]], root: str) -> tuple[dict[str, GoFile], list[str]]:
