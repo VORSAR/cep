@@ -98,6 +98,10 @@ linters = ["funlen", "gocyclo", "lll", "revive"]
 path = '_test\.go$'
 linters = ["forbidigo"]
 text = '\[reflect\]'
+[[linters.exclusions.rules]]   # tests are not library code: exempt from the fmt.Print pattern (godoc Examples print)
+path = '_test\.go$'
+linters = ["forbidigo"]
+text = '\[fmtprint\]'
 [[linters.exclusions.rules]]   # ADR §2 smells: reflect only in L0–L2 (ARCHITECTURE's layer charter)
 path-except = '^internal/(event|model|metrics|clock|pattern|window|expr|text|table|partition)/'
 linters = ["forbidigo"]

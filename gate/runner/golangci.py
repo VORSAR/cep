@@ -112,6 +112,7 @@ PINNED: dict[str, object] = {
             "rules": [
                 {"path": "_test\\.go$", "linters": ["funlen", "gocyclo", "lll", "revive"]},
                 {"path": "_test\\.go$", "linters": ["forbidigo"], "text": "\\[reflect\\]"},
+                {"path": "_test\\.go$", "linters": ["forbidigo"], "text": "\\[fmtprint\\]"},
                 {
                     "path-except": "^internal/(event|model|metrics|clock|pattern|window|expr|text|table|partition)/",
                     "linters": ["forbidigo"],
