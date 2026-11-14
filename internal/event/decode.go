@@ -138,7 +138,8 @@ func (d *Decoder) value(b []byte, i int, sp span, closing int) (Value, error) {
 			return Value{Kind: a.Type, Null: true}, nil
 		}
 		return Value{}, &DecodeError{Reason: DecodeMissing, Attr: a.Name, Offset: closing,
-			Msg: fmt.Sprintf("attribute %q (%v) is missing from the object that ends at offset %d%s", a.Name, a.Type, closing, timeNote(isTime))}
+			Msg: fmt.Sprintf("attribute %q (%v) is missing from the object that ends at offset %d%s", a.Name, a.Type, closing,
+				timeNote(isTime))}
 	}
 	raw := b[sp.start:sp.end]
 	if raw[0] == 'n' {
@@ -333,7 +334,8 @@ func timeNote(isTime bool) string {
 
 func typeErr(a Attr, at int, want string, raw []byte) error {
 	return &DecodeError{Reason: DecodeType, Attr: a.Name, Offset: at,
-		Msg: fmt.Sprintf("attribute %q (%v) at offset %d: want %s, found %s %s", a.Name, a.Type, at, want, jsonKind(raw[0]), excerpt(raw))}
+		Msg: fmt.Sprintf("attribute %q (%v) at offset %d: want %s, found %s %s", a.Name, a.Type, at, want, jsonKind(raw[0]),
+			excerpt(raw))}
 }
 
 // excerpt quotes at most 32 payload bytes with %q, so no control byte or malformed UTF-8 reaches a log line and
@@ -500,7 +502,8 @@ func (s *scanner) syntax(at int, what string) error {
 		end := min(at+16, len(s.b))
 		near = fmt.Sprintf(" near %q", s.b[at:end])
 	}
-	return &DecodeError{Reason: DecodeSyntax, Offset: at, Msg: fmt.Sprintf("invalid JSON at offset %d: %s%s", at, what, near)}
+	return &DecodeError{Reason: DecodeSyntax, Offset: at, Msg: fmt.Sprintf("invalid JSON at offset %d: %s%s", at, what,
+		near)}
 }
 
 func (s *scanner) ws() {
@@ -808,7 +811,9 @@ func (s *scanner) literal(word string) error {
 // since 1970-01-01T00:00:00Z. Fraction digits past the third are dropped (rounding down, since the fraction is
 // added); a leap second reads as that minute's :59.999.
 //
-//	date-time = 4DIGIT "-" 2DIGIT "-" 2DIGIT ("T"/"t") 2DIGIT ":" 2DIGIT ":" 2DIGIT ["." 1*DIGIT] ("Z"/"z"/("+"/"-") 2DIGIT ":" 2DIGIT)
+//	date-time = 4DIGIT "-" 2DIGIT "-" 2DIGIT ("T"/"t") 2DIGIT ":" 2DIGIT ":" 2DIGIT ["." 1*DIGIT] ("Z"/"z"/("+"/"-")
+//
+// 2DIGIT ":" 2DIGIT)
 func parseRFC3339(t []byte) (int64, bool) {
 	if len(t) < len("2006-01-02T15:04:05Z") || t[4] != '-' || t[7] != '-' || (t[10] != 'T' && t[10] != 't') ||
 		t[13] != ':' || t[16] != ':' {

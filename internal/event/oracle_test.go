@@ -57,7 +57,7 @@ func oracleParse(b []byte) parsed {
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
-		panic(fmt.Sprintf("oracle: Unmarshal accepted %q but its first token is %v, %v", clip(b), tok, err))
+		panic(fmt.Sprintf("oracle: Unmarshal accepted %q but its first token is %v, %v", clip(b), tok, err)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	var keys []string
 	lastAt := map[string]int{}
@@ -65,11 +65,11 @@ func oracleParse(b []byte) parsed {
 		tok, err := dec.Token()
 		k, ok := tok.(string)
 		if err != nil || !ok {
-			panic(fmt.Sprintf("oracle: Unmarshal accepted %q but a key token is %v, %v", clip(b), tok, err))
+			panic(fmt.Sprintf("oracle: Unmarshal accepted %q but a key token is %v, %v", clip(b), tok, err)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		var raw json.RawMessage
 		if err := dec.Decode(&raw); err != nil {
-			panic(fmt.Sprintf("oracle: Unmarshal accepted %q but the value of %q does not decode: %v", clip(b), k, err))
+			panic(fmt.Sprintf("oracle: Unmarshal accepted %q but the value of %q does not decode: %v", clip(b), k, err)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 		}
 		keys = append(keys, k)
 		// After Decode the decoder stands at the value's end; RawMessage holds the value's bytes exactly.
@@ -81,7 +81,7 @@ func oracleParse(b []byte) parsed {
 		closeAt--
 	}
 	if closeAt < 0 || b[closeAt] != '}' {
-		panic(fmt.Sprintf("oracle: Unmarshal accepted %q but it does not end with '}'", clip(b)))
+		panic(fmt.Sprintf("oracle: Unmarshal accepted %q but it does not end with '}'", clip(b))) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	return parsed{syntaxOK: true, m: m, keys: keys, lastAt: lastAt, closeAt: closeAt}
 }
@@ -192,7 +192,7 @@ func oracleValue(t event.Type, raw json.RawMessage) (event.Value, bool) {
 		}
 		return event.Value{}, false
 	}
-	panic(fmt.Sprintf("oracle: no rule for type %v", t))
+	panic(fmt.Sprintf("oracle: no rule for type %v", t)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 }
 
 // oracleObjectText is owner D4 of S3.2a-1 (design note s3-2a-1 §5.6): an object value is stored as json.Compact of
@@ -203,7 +203,7 @@ func oracleValue(t event.Type, raw json.RawMessage) (event.Value, bool) {
 func oracleObjectText(raw []byte) string {
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, raw); err != nil {
-		panic(fmt.Sprintf("oracle: json.Compact refused %q, which Unmarshal accepted: %v", clip(raw), err))
+		panic(fmt.Sprintf("oracle: json.Compact refused %q, which Unmarshal accepted: %v", clip(raw), err)) //nolint:forbidigo // PERMANENT reason="a test fixture's own invariant: a wrong fixture, never the code under test" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	b := compact.Bytes()
 	out := make([]byte, 0, len(b))
