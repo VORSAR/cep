@@ -724,24 +724,30 @@
       "lands_in": "S1.1c-4",
       "code": [
         "gate/runner/allowlists.py",
+        "gate/runner/anchors.py",
         "gate/runner/deps.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/gomods.py",
         "gate/runner/rows/vulns.py",
+        "gate/runner/sprintid.py",
         "gate/runner/vulndb.py",
+        "gate/runner/workers.py",
+        "gate/term.py",
+        "gate/toolchain/install.py",
+        "gate/toolchain/manifest.py",
         "gate/toolchain/vulndb_fetch.py"
       ],
       "proofs": [
         {
           "path": "gate/proofs/drivers/test_vulns_planted.py",
-          "cases": 31
+          "cases": 35
         }
       ],
       "tiers": [
         "T4",
         "nightly"
       ],
-      "min_wants": 6,
+      "min_wants": 7,
       "expected_scope": [
         "git",
         "go.mod",
@@ -749,7 +755,8 @@
         "gate/proofs/go.mod",
         "gate/proofs/go.sum",
         "tools/deps-allowlist.json",
-        "tools/allowlists/vulns.json"
+        "tools/allowlists/vulns.json",
+        "tools.json"
       ]
     },
     {
