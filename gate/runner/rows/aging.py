@@ -6,6 +6,11 @@ It reads the files its expected_scope selects (the runner's files.nul: gate/know
 tracked Markdown only, the section a decision names; the day is `rows.today()` (UTC). GATE_COVERED is the number of
 those files it read — the count the runner expects (`verdict.py`: covered must equal expected) — so a list emptied of
 entries stays green. A side input that is missing or unreadable is one named line.
+
+After its own rules it runs the part-level check on tools/allowlists/smells.json's size exclusions (S1.1c-5 design
+§3.5, `parts.forwards`) with the row's tier (GATE_TIER), the merge base's state (`parts.read_base`) and `aging.decided`
+over the same tracked-Markdown reader; its faults print as the row's, its countdown lines plain. A merge base that
+cannot be read is one named fault.
 """
 
 import os
@@ -13,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import aging, knownissues, rows, sprintid
+from gate.runner import aging, allowlists, knownissues, parts, rows, sprintid
 
 SIDE_FAULTS = (OSError, ValueError)
 
@@ -66,7 +71,25 @@ def main(argv: list[str]) -> int:
         except OSError:
             return None
 
-    return rows.finish(aging.aged(entries, order, marker, today=rows.today(), read=read))
+    faults = aging.aged(entries, order, marker, today=rows.today(), read=read)
+    try:
+        smells = allowlists.load(_listed(texts, parts.SMELLS), parts.RULE)
+        base = parts.read_base()
+    except SIDE_FAULTS as e:
+        return rows.finish([*faults, f"aging: {e}"])
+    issues = {str(entry["id"]): entry for entry in entries}
+    more, lines = parts.forwards(
+        smells.entries,
+        issues,
+        order,
+        marker,
+        os.environ.get("GATE_TIER", ""),
+        base,
+        lambda id, decision: aging.decided(id, decision, read),
+    )
+    for line in lines:
+        print(line)
+    return rows.finish([*faults, *more])
 
 
 if __name__ == "__main__":
