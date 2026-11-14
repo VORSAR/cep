@@ -95,6 +95,7 @@
 | 2026-11-14 | [S1.1c-4's close-out](#owner-decisions-2026-11-14--s11c-4s-close-out) |
 | 2026-11-14 | [the proof-world speed-up's measurement](#owner-decisions-2026-11-14--the-proof-world-speed-ups-measurement) |
 | 2026-11-14 | [the proof-world speed-up's design reviews](#owner-decisions-2026-11-14--the-proof-world-speed-ups-design-reviews) |
+| 2026-11-14 | [S1.1c-5's plan check](#owner-decisions-2026-11-14--s11c-5s-plan-check) |
 
 ## The decisions
 
@@ -913,3 +914,37 @@ After the blind architect and QA break-it reviews of the design note's first dra
 2. **The hand-off travels as a command-line option, `gate/run.py --parity-handoff <path>`** (as recommended), passed only by the proof driver: it cannot be inherited, set by a shell profile or by an earlier CI step, and a test holds the generated workflows and the Makefile free of it. Rejected: an environment variable dropped from every row's environment.
 3. **The reuse is named in the parity reason** (as recommended; both reviewers' choice): `covered 6; 6 trees taken from run <run id>`, unchanged `covered 6` when nothing was taken, and never on a failure. Rejected: a new record field and a summary line (a records-schema change).
 4. **Naming the four parity proof drivers in `gate/law.json` goes to the backlog** (as recommended): an existing gap, not made by this change, that needs the law pin to accept the built-in parity step. Rejected: naming them in the speed-up's PR.
+
+### Owner decisions, 2026-11-14 — S1.1c-5's plan check
+
+The plan check ([s1-1c-5-plan-check.md](s1-1c-5-plan-check.md), v2) was preceded by a read-only re-measure on `main` d4b028f ([research](../reviews/s1-1c-5-research-lint.md)). The re-measure wrote ADR-0015 §2's set exactly and found 417 non-test findings and 969 in tests. The 308 of 2026-11-11 had undercounted through three golangci-lint defaults, and the whole wave comes to about 56–68 lane-days. v1 was reviewed blind by architecture with the-fool ([review](../reviews/s1-1c-5-plan-check-architecture.md): 4 blockers, 14 should-fix, 6 later) and QA ([review](../reviews/s1-1c-5-plan-check-qa.md): 5 blockers, 12 should-fix, 5 later). The coordinator verified every claim that changed the plan:
+- the not-built expiry refuses a part (`gate/runner/notbuilt.py:60-61`);
+- `//gocyclo:ignore` silences gocyclo in the pinned binary;
+- `io.RowWriter`'s `Set*` methods return nothing.
+
+Ten answers, all as recommended.
+
+1. **The cut: the whole tree strict now for lll, errcheck, gocritic, forbidigo and nolintlint; the size family (gocyclo, funlen, file length, params) by package** (as recommended; the architecture review's option).
+   - Each package not yet clean for the size family is a TEMP exclusion in the one grammar, tied to a known issue forwarded to the part that cleans it: S1.1c-6, -7 or -8.
+   - A new part-level check reds the exclusion when the marker reaches its part. A forward moves only by an owner decision, and never past S1.1c-8. An exclusion that waives nothing is red.
+   - This annotates decision 1 of 2026-11-10 ("fixed and loud") and ADR-0015 §2.2 ("nothing is grandfathered"): the size family's debt is held to dated parts, not recorded as maxima.
+   - Rejected: every rule by package; fixing everything first and landing the row last.
+2. **The later sprints are re-cut at S1.1c-5's close** (as recommended), from the fix rate the first packages measure (`table`, `clock`, `io/inmemory`, `shape`). runtime and validate come next, behind a performance net; `tools/archcheck` sits behind the `proofs` row. `internal/runtime` splits into files, not packages. Rejected: fixing the order now (the reviews sized S1.1c-6 at about 16 lane-days, over the cap).
+3. **The canonical encoder keeps `reflect`** (as recommended): a PERMANENT in-code waiver with `ref=ADR-0003`, the encoder moved to its own file. It is a generic walk that cannot drift from the IR, and today only tests call it. Rejected: a typed encoder.
+4. **Rules on tests** (as recommended): tests are exempt from lll (the `smells` row's "(prod scope only)") and from the `reflect` pattern. The panic and `os.Getenv` patterns stay on tests: the golden-update switches become a test flag, and the planted panics and child-process markers become PERMANENT in-code waivers. ADR-0015 §2.1 is annotated. Rejected: every forbidigo pattern exempt in tests; every rule on tests.
+5. **All 15 production panics stay, as PERMANENT in-code waivers each naming its invariant, `row.go:73` included** (as recommended). The public `io.RowWriter` contract requires that panic (the s3-3-1 design's MUST 14). Rejected: changing `RowWriter`'s eight methods (a public API break).
+6. **Decision 1's named exceptions are refactored too, behind pinned benchmarks and `AllocsPerRun`** (as recommended). A hot-path function stays whole, as a PERMANENT waiver, only where its benchmark shows the split costs time or allocations, with the measurement as the evidence. Rejected: naming them exceptions up front.
+7. **Every waiver form except `//nolint` with its metadata is refused** (as recommended), from a census of every enabled linter's directives in the first wave (`//revive:…`, `#nosec`, `//gocyclo:ignore`, `//nolint:all` and the rest). lll's skip of `//go:generate` lines is named residue. Rejected: accepting them as waivers held to the same metadata.
+8. **The tool scan's 15 advisories are dated exemptions, and the Go-built tools are declared** (as recommended).
+   - The exemptions are scoped to `golangci-lint`, last 30 days, sit under one known issue, and are renewed only by an owner decision, until a release built with Go ≥ 1.27.4 ships.
+   - `toolchain` is never checked for a binary.
+   - `tools.json` gains `"go_built": true` (a format change).
+
+   Rejected: probing every tool with `go version -m`.
+9. **errcheck's built-in exclusions are kept, written out in the pinned config** (as recommended). Rejected: switching them off.
+10. **Confirmed** (as recommended):
+    - `fmt.Print*` is allowed in package-main tools;
+    - the config is `.golangci.json`, so no YAML dependency;
+    - lint runs under both `GOOS=linux` and `darwin`;
+    - lll counts a tab as one column, and funlen counts comment lines;
+    - the ruff pin is a fixed list of `ruff.toml` keys and values.
