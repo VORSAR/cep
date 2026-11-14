@@ -244,7 +244,9 @@ def findings(
     `go_version` (`go env GOVERSION`, e.g. go1.27.4, converted once: a tag it cannot convert is one fault, review
     CA-L9); an entry withdrawn at an RFC 3339 time skipped, any other `withdrawn` but null a fault (review BK-S1);
     a module in `never_built` gives findings with built=False; sorted by (module, id, version). It never stops at a
-    bad entry: each one it cannot judge is a fault (id, module, text), collected (review DA-S1)."""
+    bad entry: each one it cannot judge is a fault (id, module, text), collected (review DA-S1). `pseudo` names the
+    pseudo-modules judged at `go_version`: a declared binary's scan passes {"stdlib"} (its build never runs the go
+    command); it narrows only which blocks are judged, never the entry's shape check (S1.1c-5 design §6, DA-S7)."""
     tag = go_version
     found: list[Finding] = []
     faults: list[tuple[str, str, str]] = []
@@ -270,12 +272,12 @@ def findings(
             if not isinstance(package, Mapping) or package.get("ecosystem") != "Go":
                 continue
             name = package.get("name")
-            if not isinstance(name, str) or (name not in modules and name not in GO_PSEUDO):
+            if not isinstance(name, str) or (name not in modules and name not in pseudo):
                 continue
             ranges = block.get("ranges") or []
             blocks.setdefault(name, []).append(ranges if isinstance(ranges, list) else [ranges])
         for module in sorted(blocks):
-            if module in GO_PSEUDO:
+            if module in pseudo:
                 if go is None:
                     continue  # named once above
                 pairs = [(tag, go)]
