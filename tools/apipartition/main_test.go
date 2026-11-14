@@ -55,11 +55,16 @@ func TestMain(m *testing.M) {
 	cancel()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "go build of the tool: %v\n%s", err, out)
-		os.RemoveAll(dir)
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "remove the tool's build directory: %v\n", err)
+		}
 		os.Exit(1)
 	}
 	code := m.Run()
-	os.RemoveAll(dir)
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "remove the tool's build directory: %v\n", err)
+		code = 1
+	}
 	os.Exit(code)
 }
 
