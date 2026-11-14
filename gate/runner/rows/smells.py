@@ -13,6 +13,7 @@ the same verdict and the liveness check off.
 
 import os
 import posixpath
+import re
 import subprocess
 import sys
 from datetime import date
@@ -31,6 +32,13 @@ CACHE = "golangci-lint-cache"
 FMTPRINT = "[fmtprint]"
 UNSAFE = "imports unsafe (banned everywhere, ADR-0015 §2 smells; //go:linkname needs it)"
 IMPORT_LISTS = ("Imports", "TestImports", "XTestImports")
+# GL_DEBUG=nolint_filter: golangci-lint v2.15.0 logs each issue a //nolint silenced, with the range that silenced
+# it (pkg/result/processors/nolint_filter.go:128); From is the directive's own line, To is widened to a node on the
+# next line that starts at the comment's column (:270-292). The pinned binary's format; a tool upgrade re-checks it.
+NOLINT_DEBUG = {"GL_DEBUG": "nolint_filter"}
+SILENCED = "[nolint_filter] found ignored range for issue &{"
+SILENCED_RANGE = re.compile(r"\}: \{\[[^\]]*\] map\[[^\]]*\] \{(\d+) (\d+)\} \d+ (?:<nil>|0x[0-9a-f]+)\}\"$")
+SILENCED_AT = re.compile(r" (/\S+?\.go):(\d+):(\d+) <nil> \d+ ")
 TEMP_ONLY = "a size exclusion is TEMP, with an expiry and a known issue"
 Key = tuple[str, int, int, str, str]
 
@@ -44,6 +52,7 @@ class Platform:
         self.ignored: set[str] = set()
         self.unsafe: set[str] = set()
         self.report: golangci.Report | None = None
+        self.silenced: list[str] = []
 
 
 def run(argv: list[str], env: dict[str, str], cwd: str, out: str, err: str) -> int:
@@ -97,7 +106,15 @@ def lint(plat: Platform, env: dict[str, str], root: str, row_dir: str, targets: 
     except OSError as e:
         return [f"golangci-lint ({goos}): cannot remove {path}: {e.strerror}"]
     err = os.path.join(row_dir, f"smells-{goos}.stderr")
-    argv = ["golangci-lint", "run", "--config", golangci.CONFIG, f"--output.json.path={path}", *targets]
+    argv = [
+        "golangci-lint",
+        "run",
+        "--allow-parallel-runners",
+        "--config",
+        golangci.CONFIG,
+        f"--output.json.path={path}",
+        *targets,
+    ]
     code = run(argv, env, root, os.path.join(row_dir, f"smells-{goos}.stdout"), err)
     if code not in (0, 1):
         return [f"golangci-lint ({goos}) exit {code}: {first_line(err)}"]
@@ -117,7 +134,32 @@ def lint(plat: Platform, env: dict[str, str], root: str, row_dir: str, targets: 
     if rep.enabled != want:
         faults.append(f"golangci-lint ({goos}) ran {', '.join(sorted(rep.enabled))} not {', '.join(sorted(want))}")
     plat.report = rep
+    plat.silenced = silenced(err, root)
     return faults
+
+
+def silenced(err: str, root: str) -> list[str]:
+    """Each issue a //nolint silenced from another line (coordinator, S1.1c-5 W1: a waiver on the wrong line is red)."""
+    found: list[str] = []
+    for line in rows.read_text(err).splitlines():
+        start = line.find(SILENCED)
+        end = SILENCED_RANGE.search(line)
+        if start < 0 or end is None:
+            continue
+        issue = line[start + len(SILENCED) : end.start()]
+        linter = issue.split(" ", 1)[0]
+        at = list(SILENCED_AT.finditer(issue))
+        if linter == "nolintlint" or not at:
+            continue  # nolintlint's own reports are how golangci finds unused directives
+        path, row, col = at[-1].group(1), int(at[-1].group(2)), int(at[-1].group(3))
+        directive = int(end.group(1))
+        if row != directive:
+            rel = os.path.relpath(path, root).replace(os.sep, "/")
+            found.append(
+                f"{rel}:{row}:{col}: {linter}: silenced by the //nolint on line {directive};"
+                " a //nolint waives only its own line"
+            )
+    return found
 
 
 def size_entries(root: str, tier: str, today: date) -> tuple[dict[tuple[str, str], bool], list[str]]:
@@ -268,7 +310,7 @@ def main(argv: list[str]) -> int:
     plats = [Platform(goos) for goos, _ in PLATFORMS]
     run_faults: list[str] = []  # steps 1-6: any one and the run proves nothing about an exclusion's liveness
     for plat, (goos, goarch) in zip(plats, PLATFORMS, strict=True):
-        env = {**os.environ, **gomods.ENV, "GOOS": goos, "GOARCH": goarch, "GOLANGCI_LINT_CACHE": cache}
+        env = {**os.environ, **gomods.ENV, "GOOS": goos, "GOARCH": goarch, "GOLANGCI_LINT_CACHE": cache, **NOLINT_DEBUG}
         run_faults += go_list(plat, env, root, row_dir)
         if targets:
             run_faults += lint(plat, env, root, row_dir, targets)
@@ -290,6 +332,7 @@ def main(argv: list[str]) -> int:
             for (pkg, rule), n in sorted(dropped.items())
             if n == 0 and entries[(pkg, rule)]
         ]
+    faults += sorted(set(plats[0].silenced) | set(plats[1].silenced))
     faults += sorted(f"{path}: {UNSAFE}" for path in plats[0].unsafe | plats[1].unsafe)
     lines.append(summary(dropped, data))
     rows.covered(count)
