@@ -113,7 +113,15 @@ class FmtSkipWhitespace(unittest.TestCase):
                 self.assertTrue(any(p in comment for p in suppressions.PREFILTER), comment)
 
 
-SELECT = '[lint]\nselect = ["TID"]\n'
+def _pinned_ruff_toml() -> str:
+    """The committed ruff.toml up to its per-file waivers: since S1.1c-5 the ruff pin holds the whole document
+    (design §5), so each case adds its waiver to the pinned document rather than to a one-line one."""
+    with open(os.path.join(support.REPO, "ruff.toml"), encoding="utf-8") as f:
+        text = f.read()
+    return text[: text.index("[lint.per-file-ignores]")]
+
+
+SELECT = _pinned_ruff_toml()
 
 
 class RuffPinReadsEveryWaiver(support.GateTest):

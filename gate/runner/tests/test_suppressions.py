@@ -462,6 +462,14 @@ class GeneratedMarker(unittest.TestCase):
         self.assertTrue(any(p in GENERATED_HEADER for p in suppressions.PREFILTER))
 
 
+def pinned_ruff_toml() -> str:
+    """The committed ruff.toml without its per-file waivers: the whole ruff pin's green base (S1.1c-5 design §5), so
+    a case adds only the setting it is about."""
+    with open(os.path.join(support.REPO, "ruff.toml"), encoding="utf-8") as f:
+        text = f.read()
+    return text[: text.index("[lint.per-file-ignores]")]
+
+
 class RuffPinRefuses(support.GateTest):
     """BK-B2: ruff.toml settings the pin does not read are red (the pin reads only [lint]'s per-file tables)."""
 
@@ -473,7 +481,7 @@ class RuffPinRefuses(support.GateTest):
 
     def test_extend_is_refused_even_naming_an_empty_file(self):
         self.assertEqual(
-            self.pin('extend = "docs/base.toml"\n[lint]\nselect = ["E"]\n'),
+            self.pin('extend = "docs/base.toml"\n' + pinned_ruff_toml()),
             ["ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there"],
         )
 
@@ -486,7 +494,7 @@ class RuffPinRefuses(support.GateTest):
         ):
             with self.subTest(key=key):
                 self.assertEqual(
-                    self.pin(f'{key} = {value}\n[lint]\nselect = ["E"]\n'),
+                    self.pin(f"{key} = {value}\n" + pinned_ruff_toml()),
                     [f"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)"],
                 )
 
@@ -506,7 +514,9 @@ class Row(support.GateTest):
         self.track("gate/sprints.json", SPRINTS)
         self.track("gate/current-sprint", "S1.1c-2\n")
         self.track("gate/known-issues.json", KNOWN)
-        self.track("ruff.toml", '[lint]\nselect = ["E"]\n')
+        self.track("ruff.toml", pinned_ruff_toml())
+        with open(os.path.join(support.REPO, ".golangci.toml"), encoding="utf-8") as f:
+            self.track(".golangci.toml", f.read())  # the enabled set is the config's (S1.1c-5 design §4.2)
         self.track("docs/sprints/decisions.md", "# Title\n")
         self.write("docs/architecture/adr/untracked.md", "# Title\n")
         entry = (
