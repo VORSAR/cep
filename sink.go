@@ -24,7 +24,8 @@ func adapter(stream string, sch event.Schema, s cepio.Sink) func(ctx context.Con
 			if err != nil {
 				return err // the encoder refused the output: counted as a sink error (S5.1's forward)
 			}
-			return s.Write(ctx, cepio.OutEvent{Stream: stream, Timestamp: e.Ts, Row: &reader{attrs: attrs, names: ns, values: e.Values}, Canonical: canon})
+			return s.Write(ctx, cepio.OutEvent{Stream: stream, Timestamp: e.Ts, Row: &reader{attrs: attrs, names: ns,
+				values: e.Values}, Canonical: canon})
 		}
 	}
 }

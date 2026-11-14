@@ -23,11 +23,13 @@ type row struct {
 
 // Two allocations per row: the header and its values (design s3-3-1 MUST 13).
 func newStreamRow(attrs []event.Attr, names []string, timeAttr int) *row {
-	return &row{attrs: attrs, names: names, timeAttr: timeAttr, values: make([]event.Value, len(attrs)), what: "the stream's"}
+	return &row{attrs: attrs, names: names, timeAttr: timeAttr, values: make([]event.Value, len(attrs)),
+		what: "the stream's"}
 }
 
 func newTableRow(attrs []event.Attr, names []string, keyOnly []int) *row {
-	return &row{attrs: attrs, names: names, timeAttr: -1, values: make([]event.Value, len(attrs)), keyOnly: keyOnly, what: "the table's"}
+	return &row{attrs: attrs, names: names, timeAttr: -1, values: make([]event.Value, len(attrs)), keyOnly: keyOnly,
+		what: "the table's"}
 }
 
 // run arms the row, calls fill, disarms it and checks what fill left (design s3-3-1 §4.3, rows 5).
@@ -70,7 +72,7 @@ func (w *row) run(fill func(cepio.RowWriter) error) error {
 // put is every Set: the checks of design s3-3-1 §4.3 rows 1–4; the first error is kept for run.
 func (w *row) put(attr int, kind event.Type, v event.Value, what string) {
 	if !w.armed {
-		panic(ErrRowUsedAfterFill)
+		panic(ErrRowUsedAfterFill) //nolint:forbidigo,lll // PERMANENT reason="a Set after the fill is a programming fault, never an error: io.RowWriter's Set methods return nothing (the s3-3-1 design's MUST 14)" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}
 	if attr < 0 || attr >= len(w.values) {
 		w.fail(fmt.Errorf("cep: attribute index %d is outside %s %d attributes", attr, w.what, len(w.values)))

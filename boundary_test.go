@@ -27,19 +27,29 @@ func TestSendRowChecks(t *testing.T) {
 	fcStart(t, ctx, h)
 	in := fcInput(t, h, "S")
 	good := fcRow("ok", 1, fcAt(1))
+	// afterGood fills the good row, then makes set's one bad write; good's own error, if any, is the fill's.
+	afterGood := func(set func(cepio.RowWriter)) func(cepio.RowWriter) error {
+		return func(w cepio.RowWriter) error {
+			if err := good(w); err != nil {
+				return err
+			}
+			set(w)
+			return nil
+		}
+	}
 	rows := []struct {
 		name string
 		fill func(cepio.RowWriter) error
 		want string // in the error's text
 	}{
-		{"index out of range", func(w cepio.RowWriter) error { good(w); w.SetString(99, "x"); return nil }, "99"},
-		{"wrong type", func(w cepio.RowWriter) error { good(w); w.SetInt(w.AttrIndex("s"), 1); return nil }, "s"},
-		{"NaN", func(w cepio.RowWriter) error { good(w); w.SetFloat(w.AttrIndex("f"), math.NaN()); return nil }, "f"},
-		{"+Inf", func(w cepio.RowWriter) error { good(w); w.SetFloat(w.AttrIndex("f"), math.Inf(1)); return nil }, "f"},
-		{"malformed UTF-8", func(w cepio.RowWriter) error { good(w); w.SetString(w.AttrIndex("s"), "\xff"); return nil }, "s"},
-		{"object not compact", func(w cepio.RowWriter) error { good(w); w.SetObject(w.AttrIndex("o"), "{ \"a\": 1 }"); return nil }, "o"},
-		{"object not JSON", func(w cepio.RowWriter) error { good(w); w.SetObject(w.AttrIndex("o"), "[1,"); return nil }, "o"},
-		{"timestamp out of range", func(w cepio.RowWriter) error { good(w); w.SetTimestamp(w.AttrIndex("t"), 253402300800001); return nil }, "t"},
+		{"index out of range", afterGood(func(w cepio.RowWriter) { w.SetString(99, "x") }), "99"},
+		{"wrong type", afterGood(func(w cepio.RowWriter) { w.SetInt(w.AttrIndex("s"), 1) }), "s"},
+		{"NaN", afterGood(func(w cepio.RowWriter) { w.SetFloat(w.AttrIndex("f"), math.NaN()) }), "f"},
+		{"+Inf", afterGood(func(w cepio.RowWriter) { w.SetFloat(w.AttrIndex("f"), math.Inf(1)) }), "f"},
+		{"malformed UTF-8", afterGood(func(w cepio.RowWriter) { w.SetString(w.AttrIndex("s"), "\xff") }), "s"},
+		{"object not compact", afterGood(func(w cepio.RowWriter) { w.SetObject(w.AttrIndex("o"), "{ \"a\": 1 }") }), "o"},
+		{"object not JSON", afterGood(func(w cepio.RowWriter) { w.SetObject(w.AttrIndex("o"), "[1,") }), "o"},
+		{"timestamp out of range", afterGood(func(w cepio.RowWriter) { w.SetTimestamp(w.AttrIndex("t"), 253402300800001) }), "t"},
 		{"s unset", func(w cepio.RowWriter) error {
 			w.SetInt(w.AttrIndex("i"), 1)
 			w.SetTimestamp(w.AttrIndex("t"), fcAt(1))
@@ -50,8 +60,13 @@ func TestSendRowChecks(t *testing.T) {
 			w.SetInt(w.AttrIndex("i"), 1)
 			return nil
 		}, "t"},
-		{"SetNull on a non-optional attribute", func(w cepio.RowWriter) error { good(w); w.SetNull(w.AttrIndex("s")); return nil }, "s"},
-		{"fill's error", func(w cepio.RowWriter) error { good(w); return errors.New("the caller's own error") }, "the caller's own error"},
+		{"SetNull on a non-optional attribute", afterGood(func(w cepio.RowWriter) { w.SetNull(w.AttrIndex("s")) }), "s"},
+		{"fill's error", func(w cepio.RowWriter) error {
+			if err := good(w); err != nil {
+				return err
+			}
+			return errors.New("the caller's own error")
+		}, "the caller's own error"},
 	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {

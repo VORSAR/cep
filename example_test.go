@@ -21,7 +21,11 @@ func Example_embed() {
 		fmt.Println("error:", err)
 		return
 	}
-	defer rt.Close(ctx)
+	defer func() {
+		if err := rt.Close(ctx); err != nil {
+			fmt.Println("error:", err)
+		}
+	}()
 	sink := &inmemory.Sink{}
 	app, err := rt.Deploy(ctx, "09", string(src), cep.WithSink("RiskAlerts", sink))
 	if err != nil {

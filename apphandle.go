@@ -27,8 +27,9 @@ type AppHandle struct {
 
 // StopReport is what Stop found.
 type StopReport struct {
-	DrainedPending int64            // body timers left unfired by the barrier (drained_pending)
-	SourceErrors   map[string]error // per bound source stream: Open's non-nil return, context.Canceled excluded; nil when none
+	DrainedPending int64 // body timers left unfired by the barrier (drained_pending)
+	// per bound source stream: Open's non-nil return, context.Canceled excluded; nil when none
+	SourceErrors map[string]error
 }
 
 // Name is the name Deploy was given: a label for diagnostics and recordings, not a key.

@@ -513,7 +513,7 @@ func TestBreakitWriterFromAPanickingFillIsDisarmed(t *testing.T) {
 	var kept cepio.RowWriter
 	func() {
 		defer func() { _ = recover() }()
-		_ = in.SendRow(ctx, "", func(w cepio.RowWriter) error { kept = w; panic("the caller's fill fails") })
+		_ = in.SendRow(ctx, "", func(w cepio.RowWriter) error { kept = w; panic("the caller's fill fails") }) //nolint:forbidigo // PERMANENT reason="a planted panic: the test proves the engine recovers or reports it" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
 	}()
 	if kept == nil {
 		t.Fatal("the fill never ran")
