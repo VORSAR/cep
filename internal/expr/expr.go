@@ -349,7 +349,8 @@ func (m *member) Eval(row Row) (event.Value, error) {
 	}
 	snap := row.Table(m.table)
 	if snap == nil {
-		return event.Value{Kind: event.TBool, Null: true}, runtimeErr("membership: no snapshot of table %d for this evaluation", m.table)
+		return event.Value{Kind: event.TBool, Null: true}, runtimeErr(
+			"membership: no snapshot of table %d for this evaluation", m.table)
 	}
 	return boolean(snap.Has(v) != m.negated), nil
 }
