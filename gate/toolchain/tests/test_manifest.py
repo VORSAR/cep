@@ -125,23 +125,23 @@ class Load(support.ToolchainTest):
             ("python-floor", "3.12.16", "python3.12", "bin", "python-floor-3.12.16"),
             ("go", "go1.27.4", "go", "bin", "go-go1.27.4"),
             ("golangci-lint", "v2.15.0", "golangci-lint", ".", "golangci-lint-v2.15.0"),
-            ("ruff", "0.17.3", "ruff", ".", "ruff-0.17.3"),
+            ("ruff", "0.17.5", "ruff", ".", "ruff-0.17.5"),
             ("lark", "1.3.1", "", ".", "lark-1.3.1"),  # a python-package: one sdist for both platforms
         ]
         darwin_archives = (
-            "285a6b924713",
-            "fbf4afef53c2",
+            "6767ca67fdcf",
+            "e956e60bc946",
             "91a44a2b8a71",
             "d1e409481a8c",
-            "118f7121aa83",
+            "4ffadabec5c5",
             "b426a7a6d6d5",
         )
         linux_archives = (
-            "08d4ae9024a7",
-            "6a79e922e500",
+            "182e7adf7e4f",
+            "c2f87d4b4e8d",
             "7226736c2339",
             "9b7fe6a6bf63",
-            "2b0890f5a559",
+            "7d261fc981a7",
             "b426a7a6d6d5",
         )
         for platform, prefixes in (("darwin-arm64", darwin_archives), ("linux-amd64", linux_archives)):
