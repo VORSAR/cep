@@ -98,6 +98,7 @@
 | 2026-11-14 | [S1.1c-5's plan check](#owner-decisions-2026-11-14--s11c-5s-plan-check) |
 | 2026-11-14 | [S1.1c-5's design, before its reviews](#owner-decisions-2026-11-14--s11c-5s-design-before-its-reviews) |
 | 2026-11-14 | [S1.1c-5's design, after the reviews](#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews) |
+| 2026-11-14 | [during S1.1c-5's W0](#owner-decisions-2026-11-14--during-s11c-5s-w0) |
 
 ## The decisions
 
@@ -979,3 +980,9 @@ Three answers, all as recommended.
 
    Rejected: deciding all eight now.
 3. **`log.Print*` is not added to the forbidden calls; it goes to the backlog** (as recommended): it is not in ADR-0015 §2's set, and there are no uses in library code today. Rejected: adding it now.
+
+### Owner decisions, 2026-11-14 — during S1.1c-5's W0
+
+W0's import-closure test (design §8 L.1, from the architecture review's DA-S5) found that almost every row instrument's `code` list in `gate/law.json` misses modules it imports. Most misses are two shared helpers every row imports, `gate/term.py` and `gate/runner/workers.py`; a few are real (lawdelta, vulns and coverage-inclusion each lack modules they use). One answer, as recommended.
+
+1. **The closure test holds the four instruments this sprint builds or changes** (`aging`, `smells`, `suppressions`, `vulns`), each fixed here. **The other instruments' gaps go to the backlog** as one item with the measured list (ground rule 7). Rejected: widening all 30 instruments' code lists in this sprint.

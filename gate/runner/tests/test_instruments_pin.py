@@ -216,7 +216,11 @@ def closure(root: str) -> set[str]:
 
 class CodeClosure(unittest.TestCase):
     """S1.1c-5 design §2.5 (DA-S5, DQ-L3), §8 row L.1: a row instrument's Python `code` is its row module plus the
-    transitive closure of its `gate.*` imports, compared both ways; config and Go files are not compared."""
+    transitive closure of its `gate.*` imports, compared both ways; config and Go files are not compared. Held for the
+    four instruments S1.1c-5 builds or changes (owner, 2026-11-14, during S1.1c-5's W0: the other instruments' gaps are
+    a backlog item)."""
+
+    JUDGED = ("aging", "smells", "suppressions", "vulns")
 
     def test_each_instruments_code_is_its_import_closure(self):
         with open(os.path.join(REPO, "gate", "law.json"), encoding="utf-8") as f:
@@ -228,8 +232,8 @@ class CodeClosure(unittest.TestCase):
         judged = 0
         for instrument in instruments:
             roots = [a for a in commands.get(instrument["row"], []) if a.endswith(".py")]
-            if instrument["id"] != instrument["row"] or not roots:
-                continue  # a Go-test instrument, or a row with no Python module
+            if instrument["id"] not in self.JUDGED or instrument["id"] != instrument["row"] or not roots:
+                continue  # outside this sprint's four, a Go-test instrument, or a row with no Python module
             judged += 1
             with self.subTest(instrument=instrument["id"]):
                 code = {p for p in instrument["code"] if p.endswith(".py")}
@@ -237,7 +241,7 @@ class CodeClosure(unittest.TestCase):
                 self.assertEqual(
                     (sorted(want - code), sorted(code - want)), ([], []), "(missing from code, not imported)"
                 )
-        self.assertGreaterEqual(judged, 25)  # witness: the row instruments were judged
+        self.assertEqual(judged, len(self.JUDGED))  # witness: each of the four was found and judged
 
 
 class RealTree(unittest.TestCase):
