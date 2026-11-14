@@ -25,6 +25,8 @@ LISTS = "tools/allowlists/"
 RUFF_TOML = "ruff.toml"
 RUFF_WAIVERS = ("per-file-ignores", "extend-per-file-ignores")
 RUFF_GLOBAL = ("ignore", "extend-ignore")
+# ruff.toml as tomllib parses it, minus lint.per-file-ignores (S1.1c-5 design §5). Stub (W0b): lane B writes it.
+RUFF_PINNED: dict[str, object] = {}
 REGISTRY = "gate/registry.json"
 KNOWN_ISSUES = "gate/known-issues.json"
 GENERATED_LIST = "tools/allowlists/generated.json"

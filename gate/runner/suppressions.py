@@ -177,6 +177,13 @@ def go_directives(path: str, source: str) -> tuple[list[Directive], list[str]]:
     return directives, faults
 
 
+def go_foreign(path: str, source: str) -> tuple[list[Directive], list[str]]:
+    """Every comment directive another linter honours (the census, gate/runner/testdata/directives.json) and every
+    //line or /*line directive: a FOREIGN Directive (valid=False, counted in the LAW Δ) and a named fault each
+    (S1.1c-5 design §4.2; owner 2026-11-14, S1.1c-5's plan check, decision 7)."""
+    raise NotImplementedError("S1.1c-5 lane B: suppressions.go_foreign")
+
+
 def _generator_line(text: str) -> bool:
     prefix, suffix = GENERATED
     return text.startswith(prefix) and text.removeprefix(prefix).endswith(suffix)
