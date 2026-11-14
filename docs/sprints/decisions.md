@@ -102,6 +102,7 @@
 | 2026-11-14 | [four known issues placed](#owner-decisions-2026-11-14--four-known-issues-placed) |
 | 2026-11-14 | [during S1.1c-5's W1](#owner-decisions-2026-11-14--during-s11c-5s-w1) |
 | 2026-11-14 | [during S1.1c-5's W2](#owner-decisions-2026-11-14--during-s11c-5s-w2) |
+| 2026-11-14 | [S1.1c-5's review and break-it](#owner-decisions-2026-11-14--s11c-5s-review-and-break-it) |
 
 ## The decisions
 
@@ -1012,3 +1013,20 @@ Two questions from lanes C2 and D. Two answers, as recommended.
 
 1. **A waiver that runs past 120 columns also names `lll`** (as recommended): `//nolint:forbidigo,lll // PERMANENT reason=… ref=… sprint=…`. A PERMANENT waiver's reason, its `ref` (about 70 characters) and its sprint do not fit in 120 columns. Naming `lll` keeps the waiver explicit on its own line, and nolintlint checks that `lll` is really used there, so it cannot sit on a short line. DEVELOPMENT.md's waiver policy says so. Rejected: an lll exclusion for every line carrying a `//nolint`, which would let a long code line with any waiver escape the line limit.
 2. **Tests are exempt from the `fmt.Print*` pattern** (as recommended). ADR-0015 §2 bans it "in library code", tests are not library code, and a godoc Example must print to stdout for its `// Output:` check. This is one exclusion rule for `_test.go` files, as decision 4 of the plan check made for `reflect`, and ADR-0015 §2.1 is annotated. Rejected: per-line waivers on the Examples.
+
+### Owner decisions, 2026-11-14 — S1.1c-5's review and break-it
+
+After step 7 on the combined branch (c6deb91, T3 green):
+- architecture with the-fool ([review](../reviews/s1-1c-5-combined-architecture.md)): no blocker, 4 should-fix, 2 later;
+- the QA break-it ([report](../reviews/s1-1c-5-breakit-qa.md)): 1 blocker, 3 should-fix, 3 later.
+
+The coordinator verified the blocker: `aging.decided` (`gate/runner/aging.py:32-37`) accepts a heading of any tracked Markdown file. Three answers, all as recommended.
+
+1. **Only a `docs/sprints/decisions.md#…` section counts as a decision**, for the part-level check's forward moves and for the aging row's older rule 1 alike (as recommended; BK-B1). Every open known issue's decision already points there. Rejected: decisions.md and the ADRs; narrowing the deadline check only.
+2. **Each size exclusion is capped at the number of findings it drops today** (as recommended; the pre-mortems' first path, BK-L3).
+   - A new over-long or over-complex function in an excluded package is red.
+   - A count below the cap is fine.
+   - A cap is raised only by an owner decision, which the part-level check holds as it holds a forward move.
+
+   No new debt is taken on during the transition; the old debt is still paid on its schedule. Rejected: printing the change in LAW Δ only; no guard.
+3. **The canonical encoder keeps its per-line waivers** (as recommended; CA-L2): every `reflect` line, including any future one, needs its own visible waiver. Rejected: one pinned exclusion rule for `internal/model/canonical.go`.
