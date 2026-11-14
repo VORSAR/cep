@@ -3,12 +3,16 @@
 GATE_COVERED is the sum of `ruff format --check`'s summary lines, in ruff 0.17.5's exact forms (re-check S6).
 """
 
+import contextlib
 import os
+import re
 import shutil
 import sys
 import tomllib
 
+from gate.runner import allowlists, pin
 from gate.runner.rows import ruff
+from gate.runner.rows import suppressions as suppressions_row
 from gate.runner.tests import support
 
 ROWS = os.path.join(support.GATE, "runner", "rows")
@@ -234,3 +238,94 @@ class FakeRuff(support.GateTest):
             "    sys.exit(1)\n"
         ))  # fmt: skip  # one script line per string
         self.assertEqual(self.ruff_row(), "exit 1: gate/x/m.py: ruff check (exit 1)")
+
+
+# S1.1c-5 design §5, §8 4.1-4.3: the ruff pin is closed — ruff.toml, minus lint.per-file-ignores, is pinned whole and
+# type-strictly (rows/suppressions.RUFF_PINNED through gate/runner/pin.py); per-file-ignores stay checked both ways
+# against tools/allowlists/ruff.json. Every case edits a copy of the committed ruff.toml as text.
+
+
+COMMITTED_RUFF = os.path.join(support.REPO, "ruff.toml")
+RUFF_JSON = os.path.join(support.REPO, "tools", "allowlists", "ruff.json")
+
+
+def committed(name: str) -> str:
+    with open(name, encoding="utf-8") as f:
+        return f.read()
+
+
+def top_level(text: str, lines: str) -> str:
+    """Insert top-level keys before the first table."""
+    return text.replace("line-length = 120\n", f"line-length = 120\n{lines}", 1)
+
+
+def in_lint(text: str, lines: str) -> str:
+    return text.replace("[lint]\n", f"[lint]\n{lines}", 1)
+
+
+HIDING = (  # (subTest name, edit, the path the pin must name)
+    ("builtins", lambda t: top_level(t, 'builtins = ["undefined_name"]\n'), "builtins"),
+    ("lint.dummy-variable-rgx", lambda t: in_lint(t, 'dummy-variable-rgx = ".*"\n'), "lint.dummy-variable-rgx"),
+    (
+        "lint.pycodestyle.max-line-length",
+        lambda t: t + "\n[lint.pycodestyle]\nmax-line-length = 400\n",
+        "lint.pycodestyle",
+    ),
+    ("line-length", lambda t: t.replace("line-length = 120\n", "line-length = 400\n", 1), "line-length"),
+    ("lint.select narrowed", lambda t: re.sub(r"(?m)^select = \[.*\]$", 'select = ["E"]', t, count=1), "lint.select"),
+    # design §8 4.2 names "lint.extend-select removed"; the committed ruff.toml has no extend-select, so one is added.
+    ("lint.extend-select added", lambda t: in_lint(t, 'extend-select = ["ANN"]\n'), "lint.extend-select"),
+    (
+        "per-file-target-version entry added",
+        lambda t: t.replace("[per-file-target-version]\n", '[per-file-target-version]\n"gate/x.py" = "py39"\n', 1),
+        'per-file-target-version."gate/x.py"',
+    ),
+    (
+        "lint.flake8-bugbear.extend-immutable-calls",
+        lambda t: t + '\n[lint.flake8-bugbear]\nextend-immutable-calls = ["x.y"]\n',
+        "lint.flake8-bugbear",
+    ),
+    ("force-exclude", lambda t: top_level(t, 'force-exclude = true\nextend-exclude = ["gate"]\n'), "force-exclude"),
+    ("extend-exclude", lambda t: top_level(t, 'force-exclude = true\nextend-exclude = ["gate"]\n'), "extend-exclude"),
+    ("format.exclude", lambda t: t + '\n[format]\nexclude = ["gate"]\n', "format"),
+)
+
+
+class RuffPin(support.GateTest):
+    def pin(self, ruff_toml: str) -> list[str]:
+        self.write("ruff.toml", ruff_toml)
+        lists = {"ruff": allowlists.load(committed(RUFF_JSON), "ruff")}
+        with contextlib.chdir(self.repo):
+            return suppressions_row.ruff_pin(lists)
+
+    def test_the_committed_ruff_toml_equals_pinned(self):
+        doc = tomllib.loads(committed(COMMITTED_RUFF))
+        self.assertIn("per-file-ignores", doc["lint"])  # witness: the one table the pin leaves to ruff.json
+        del doc["lint"]["per-file-ignores"]
+        self.assertEqual(pin.differences(doc, suppressions_row.RUFF_PINNED, "ruff.toml"), [])
+        self.assertEqual(self.pin(committed(COMMITTED_RUFF)), [])
+
+    def test_each_hiding_key_is_named(self):
+        for name, edit, path in HIDING:
+            with self.subTest(name):
+                text = edit(committed(COMMITTED_RUFF))
+                self.assertNotEqual(text, committed(COMMITTED_RUFF))  # witness: the edit applied
+                faults = self.pin(text)
+                self.assertTrue(any(f.startswith(f"ruff.toml: {path}") for f in faults), faults)
+
+    def test_per_file_ignores_still_checked_both_ways(self):
+        text = committed(COMMITTED_RUFF).replace(
+            "[lint.per-file-ignores]\n", '[lint.per-file-ignores]\n"gate/x.py" = ["E501"]\n', 1
+        )
+        self.assertEqual(
+            self.pin(text), ["ruff.toml waives E501 for gate/x.py without an entry in tools/allowlists/ruff.json"]
+        )
+        removed = re.sub(r'(?m)^"gate/wait\.py" = \["TID251"\].*\n', "", committed(COMMITTED_RUFF), count=1)
+        self.assertNotEqual(removed, committed(COMMITTED_RUFF))
+        self.assertEqual(
+            self.pin(removed), ["tools/allowlists/ruff.json lists gate/wait.py: TID251, which ruff.toml does not waive"]
+        )
+
+    def test_a_type_change_is_named(self):
+        text = committed(COMMITTED_RUFF).replace("line-length = 120\n", "line-length = 120.0\n", 1)
+        self.assertIn("ruff.toml: line-length: 120.0 ≠ pinned 120", self.pin(text))
