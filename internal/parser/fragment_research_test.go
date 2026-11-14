@@ -39,7 +39,11 @@ func readResearchSpans(t *testing.T) []researchSpan {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close %s: %v", f.Name(), err)
+		}
+	}()
 	var rows []researchSpan
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

@@ -177,7 +177,8 @@ func parseError(name string, toks []Token, err error) *Error {
 	case cur.Value == "->" && next.Value == "and" && tok(at+2).Value == "not":
 		return mk(name, "E-PAT-005", next.Pos, "an absence follows its step directly: drop the -> before and not")
 	case cur.Value == "->" && next.Value == "not":
-		return mk(name, "E-PAT-005", next.Pos, "an absence is written and not, straight after its step: write and not instead of -> not")
+		return mk(name, "E-PAT-005", next.Pos,
+			"an absence is written and not, straight after its step: write and not instead of -> not")
 	case cur.Value == "->" && endsTheChain(next):
 		return mk(name, "E-PAT-005", next.Pos, "a step must follow ->")
 	case (kind == "Keyword" || kind == "MixedKeyword") && expects("(<ident>"):
@@ -185,7 +186,8 @@ func parseError(name string, toks []Token, err error) *Error {
 	case kind == "MixedKeyword":
 		return mk(name, "E-KW-002", cur.Pos, "keywords are lowercase: write "+strings.ToLower(cur.Value))
 	case kind == "Ident" && synonyms[cur.Value] != "":
-		return mk(name, "E-SYN-001", cur.Pos, cur.Value+" is not a construct of this language; the canonical form is "+synonyms[cur.Value])
+		return mk(name, "E-SYN-001", cur.Pos,
+			cur.Value+" is not a construct of this language; the canonical form is "+synonyms[cur.Value])
 	case kind == "Ident" && unsuffixed[cur.Value]:
 		return mk(name, "E-TXT-001", cur.Pos, cur.Value+" has no case mode")
 	case cur.Value == "=" && prev2.Value == "from" && typeName(prev.Type) == "Ident":
