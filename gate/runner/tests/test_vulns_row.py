@@ -228,16 +228,21 @@ class BuildInfo(unittest.TestCase):
         self.assertEqual([pair for pair, _ in found], [f"GO-2099-0202 {TOOL}", f"GO-2099-0201 {TOOL}"])
         self.assertEqual([f.module for _, f in found], ["example.com/a", "stdlib"])
 
-    def test_covered_counts_each_declared_binary(self):
+    def test_covered_counts_tools_json_once_whatever_it_declares(self):
+        # Owner, 2026-11-14, during S1.1c-5's W1, decision 2: the six database and module files plus tools.json,
+        # against the scope's seven, however many binaries tools.json declares; tools.json unread is not counted.
         def tool(name: str, go_built: bool) -> manifest.Tool:
             return manifest.Tool(
                 name, "1", name, ".", (name,), name, "u", "a" * 64, "s/", {}, "t" * 64, go_built=go_built
             )
 
         self.assertEqual(vulns.COVERED, 6)
-        self.assertEqual(vulns.covered([tool("go", False), tool("ruff", False)]), 6)
-        self.assertEqual(vulns.covered([tool(TOOL, True), tool("ruff", False)]), 7)
-        self.assertEqual(vulns.covered([tool(TOOL, True), tool("other", True)]), 8)
+        for declared in ([], [TOOL], [TOOL, "other"]):
+            with self.subTest(declared=declared):
+                tools = [tool("ruff", False), *(tool(name, True) for name in declared)]
+                self.assertEqual(sum(t.go_built for t in tools), len(declared))  # witness: as many as named
+                self.assertEqual(vulns.covered(tools), 7)
+        self.assertEqual(vulns.covered(None), 6)
 
 
 SEMVER_FIX = [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "99.0.0"}]}]
