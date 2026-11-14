@@ -35,7 +35,8 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 	if err != nil {
 		var pe *parser.Error
 		if errors.As(err, &pe) {
-			return nil, &DeployError{Name: name, Diagnostics: []Diagnostic{{Code: pe.Code, Line: pe.Line, Col: pe.Col, Message: pe.Msg, Fix: pe.Fix}}}
+			return nil, &DeployError{Name: name, Diagnostics: []Diagnostic{{Code: pe.Code, Line: pe.Line, Col: pe.Col,
+				Message: pe.Msg, Fix: pe.Fix}}}
 		}
 		return nil, fmt.Errorf("cep: deploy %s: %w", name, err)
 	}
@@ -45,7 +46,9 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 		literal := o.params[pname]
 		lit, err := parser.ParseLiteral(literal)
 		if err != nil {
-			bad = append(bad, Diagnostic{Code: "E-PARAM-001", Message: fmt.Sprintf("the deployment overrides %s with %q, which is not a literal: %v", pname, literal, err), Fix: "declare the param with a default, or correct the value's type."})
+			bad = append(bad, Diagnostic{Code: "E-PARAM-001", Message: fmt.Sprintf(
+				"the deployment overrides %s with %q, which is not a literal: %v", pname, literal, err),
+				Fix: "declare the param with a default, or correct the value's type."})
 			continue
 		}
 		vopts.Override(pname, lit)
@@ -80,7 +83,8 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 	}
 	for _, res := range results {
 		if res.Divergence != "" {
-			bad = append(bad, Diagnostic{Code: "E-EXP-001", Line: res.Line, Col: res.Col, Message: fmt.Sprintf("rule %s, expect block %d: %s", res.Rule, res.Block, res.Divergence), Fix: "correct the rule or the example."})
+			bad = append(bad, Diagnostic{Code: "E-EXP-001", Line: res.Line, Col: res.Col, Message: fmt.Sprintf(
+				"rule %s, expect block %d: %s", res.Rule, res.Block, res.Divergence), Fix: "correct the rule or the example."})
 		}
 	}
 	if len(bad) > 0 {
@@ -115,7 +119,8 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 // the tables' starting rows and the handle's name maps (design s3-3-1 §3.4). The runtime.Sink of each binding is
 // filled by Deploy once the app's sink context exists.
 func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, []runtime.SinkBinding, error) {
-	h := &AppHandle{rt: r.rt, name: name, plan: p, streams: map[string]int{}, tables: map[string]int{}, sinkRows: map[string][]int{}}
+	h := &AppHandle{rt: r.rt, name: name, plan: p, streams: map[string]int{}, tables: map[string]int{},
+		sinkRows: map[string][]int{}}
 	for sid, st := range p.Streams {
 		h.streams[st.Schema.Stream()] = sid
 	}
@@ -146,7 +151,8 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
 				}
 				if s == nil { // the engine would run Open on nil (break-it B3)
-					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no source and no error", name, stream)
+					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no source and no error",
+						name, stream)
 				}
 				h.sources = append(h.sources, boundSource{stream: stream, id: sid, src: s})
 			}
@@ -158,7 +164,8 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
 				}
 				if s == nil { // Accepts would run on nil (break-it B3)
-					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no sink and no error", name, stream)
+					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no sink and no error", name,
+						stream)
 				}
 				if err := addSink(stream, sid, s); err != nil {
 					return nil, nil, fmt.Errorf("cep: deploy %s: %w", name, err)

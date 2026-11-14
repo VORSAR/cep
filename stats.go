@@ -38,12 +38,14 @@ func (a *AppHandle) convert(st runtime.Stats) Stats {
 			if a.plan.Streams[sid].Derived {
 				continue
 			}
-			out.Streams[a.plan.Streams[sid].Schema.Stream()] = StreamStats{Late: s.Late, AfterDrain: s.AfterDrain, Rejected: s.Rejected, Unknown: s.Unknown, FlagOverrides: s.FlagOverrides, Batches: s.Batches}
+			out.Streams[a.plan.Streams[sid].Schema.Stream()] = StreamStats{Late: s.Late, AfterDrain: s.AfterDrain,
+				Rejected: s.Rejected, Unknown: s.Unknown, FlagOverrides: s.FlagOverrides, Batches: s.Batches}
 		}
 	}
 	if id < len(st.Rules) {
 		for ri, r := range st.Rules[id] {
-			out.Rules[a.plan.Rules[ri].Name] = RuleStats{ConstructLate: r.ConstructLate, Purged: r.Purged, KeyErrors: r.KeyErrors, Panics: r.Panics, Suppressed: r.Suppressed, Errored: r.Errored, OutboxHigh: r.OutboxHigh}
+			out.Rules[a.plan.Rules[ri].Name] = RuleStats{ConstructLate: r.ConstructLate, Purged: r.Purged,
+				KeyErrors: r.KeyErrors, Panics: r.Panics, Suppressed: r.Suppressed, Errored: r.Errored, OutboxHigh: r.OutboxHigh}
 		}
 	}
 	if id < len(st.Recording) {

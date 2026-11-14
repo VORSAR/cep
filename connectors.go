@@ -26,13 +26,15 @@ var connectorSprint = map[string]string{
 
 func notBuilt(kind, typ string) error {
 	if typ == "inmemory" {
-		return fmt.Errorf("%w: @%s(type = %q) has no annotation form: bind it in Go with With%s", ErrConnectorNotBuilt, kind, typ, title(kind))
+		return fmt.Errorf("%w: @%s(type = %q) has no annotation form: bind it in Go with With%s", ErrConnectorNotBuilt, kind,
+			typ, title(kind))
 	}
 	sprint, ok := connectorSprint[typ]
 	if !ok {
 		sprint = "a later sprint"
 	}
-	return fmt.Errorf("%w: @%s(type = %q) arrives in %s; bind a Go %s with With%s for now", ErrConnectorNotBuilt, kind, typ, sprint, kind, title(kind))
+	return fmt.Errorf("%w: @%s(type = %q) arrives in %s; bind a Go %s with With%s for now", ErrConnectorNotBuilt, kind,
+		typ, sprint, kind, title(kind))
 }
 
 func title(kind string) string {
