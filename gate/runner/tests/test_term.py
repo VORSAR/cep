@@ -29,6 +29,35 @@ class Install(unittest.TestCase):
         self.assertTrue(issubclass(term.Terminated, BaseException))
 
 
+class Critical(unittest.TestCase):
+    """A TERM inside `term.critical()` is raised when the block ends, never in its middle (S1.1c-5's T4: a stop in
+    the spawn-and-hold window lost the child; 19/20 under the stress harness, 2026-11-15)."""
+
+    def setUp(self):
+        self.addCleanup(signal.signal, signal.SIGTERM, signal.getsignal(signal.SIGTERM))
+
+    def test_a_term_inside_a_critical_block_is_raised_when_the_block_ends(self):
+        calls, reached = [], []
+        term.install(lambda: calls.append("hook"))
+        with self.assertRaises(term.Terminated), term.critical():
+            os.kill(os.getpid(), signal.SIGTERM)
+            reached.append("after the kill")  # runs: the handler has run (calls holds the hook), the stop waits
+        self.assertEqual((calls, reached), (["hook"], ["after the kill"]))
+
+    def test_a_critical_block_without_a_term_raises_nothing(self):
+        term.install()
+        with term.critical():
+            pass
+
+    def test_a_term_after_a_critical_block_is_raised_at_once(self):
+        term.install()
+        with term.critical():
+            pass
+        with self.assertRaises(term.Terminated):
+            os.kill(os.getpid(), signal.SIGTERM)
+            signal.pause()  # reached only if the signal were not yet handled
+
+
 class Popen(unittest.TestCase):
     def test_a_stop_inside_popens_own_start_up_kills_the_child_it_had_forked(self):
         # The S1.1b load race: the first TERM raises wherever the program is, and that can be inside Popen's own

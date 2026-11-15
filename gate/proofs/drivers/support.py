@@ -152,7 +152,7 @@ def run_process(argv: list[str], *, cwd: str, env: dict[str, str], out: str, err
     """
     proc = None
     try:
-        with open(out, "wb") as o, open(err, "wb") as e:
+        with term.critical(), open(out, "wb") as o, open(err, "wb") as e:  # a stop waits until proc is held
             proc = term.popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=o, stderr=e)
         return proc.wait(timeout=cap_s)
     except subprocess.TimeoutExpired:

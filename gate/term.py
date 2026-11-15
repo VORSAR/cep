@@ -12,7 +12,7 @@ import contextlib
 import os
 import signal
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 
@@ -20,19 +20,46 @@ class Terminated(BaseException):
     """Raised once, by the first SIGTERM. A BaseException, so an `except Exception` cannot swallow the stop."""
 
 
+_STOP = "stopped by SIGTERM"
+# Inside critical(): a first TERM is held here, raised when the block ends (S1.1c-5's T4, 2026-11-15).
+_held = {"inside": 0, "pending": False}
+
+
 def _ignore(signum: int, frame: object) -> None:
     """The first TERM is already being acted on."""
 
 
 def install(on_term: Callable[[], None] = lambda: None) -> None:
-    """From now on the first SIGTERM calls `on_term`, then raises Terminated in the main thread."""
+    """From now on the first SIGTERM calls `on_term`, then raises Terminated in the main thread — at once, or, inside
+    `critical()`, when the block ends."""
 
     def handler(signum: int, frame: object) -> None:
         signal.signal(signal.SIGTERM, _ignore)
         on_term()
-        raise Terminated("stopped by SIGTERM")
+        if _held["inside"]:
+            _held["pending"] = True
+            return
+        raise Terminated(_STOP)
 
     signal.signal(signal.SIGTERM, handler)
+
+
+@contextlib.contextmanager
+def critical() -> Iterator[None]:
+    """A block a first TERM never interrupts: it is raised when the block ends.
+
+    For starting a child and taking hold of it: `proc = popen(...)` can be stopped after the child exists and before
+    `proc` is set, and the caller's cleanup then holds nothing to stop (T4 hit it once under load; 19/20 under the
+    stress harness). Inside this block the stop waits until the caller holds the child.
+    """
+    _held["inside"] += 1
+    try:
+        yield
+    finally:
+        _held["inside"] -= 1
+        if not _held["inside"] and _held["pending"]:
+            _held["pending"] = False
+            raise Terminated(_STOP)
 
 
 def popen(argv: list[str], **kwargs: Any) -> subprocess.Popen[bytes]:
