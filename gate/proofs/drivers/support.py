@@ -287,7 +287,8 @@ class World:
         return found
 
     def copy_gate(self, *, tests: bool = False) -> None:
-        """The tracked gate/ files, tools.json and ruff.toml. gate/proofs never; tests/ and testdata/ on request."""
+        """The tracked gate/ files, tools.json, ruff.toml and .golangci.toml (the lint configs are gate law).
+        gate/proofs never; tests/ and testdata/ on request."""
         for rel in self.tracked("gate"):
             parts = rel.split("/")
             if parts[1] == "proofs" or (not tests and {"tests", "testdata"} & set(parts[:-1])):
@@ -295,6 +296,7 @@ class World:
             self.copy(rel)
         self.copy("tools.json")
         self.copy("ruff.toml")
+        self.copy(".golangci.toml")  # the smells row reads it at T0-T4 (S1.1c-5)
 
     def copy_proofs_module(self, *packages: str) -> None:
         """gate/proofs's go.mod and the named planted packages, at this repository's root: the coverage rows then
