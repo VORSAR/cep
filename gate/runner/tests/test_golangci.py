@@ -1,8 +1,9 @@
 """The smells row's config pin and report reader (S1.1c-5 design note §2.2; §8 card line 1, rows 1.1-1.6).
 
-The expected document is the design note's §2.1 text, copied here by hand (DESIGN_TOML), never produced by the code
-under test. Every expected difference line is §2.2's format: "<name>: <path>: <got!r> ≠ pinned <want!r>",
-"<name>: <path>: not pinned (remove it)", "<name>: <path>: missing (pinned <want!r>)".
+The expected document (DESIGN_TOML) is the design note's §2.1 text plus the owner's W2 decision 2 rule (the `_test.go`
+`[fmtprint]` exclusion), copied here by hand, never produced by the code under test. Every expected difference line is
+§2.2's format: "<name>: <path>: <got!r> ≠ pinned <want!r>", "<name>: <path>: not pinned (remove it)", "<name>: <path>:
+missing (pinned <want!r>)".
 """
 
 import copy

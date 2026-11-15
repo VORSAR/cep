@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from gate.runner import pin
 
 CONFIG = ".golangci.toml"
-LINTERS = ("errcheck", "forbidigo", "funlen", "gocritic", "gocyclo", "lll", "nolintlint", "revive")
 SIZE_RULES = ("funlen", "gocyclo", "file-length-limit", "argument-limit")  # the size family, as smells.json names them
 REVIVE_RULES = ("file-length-limit", "argument-limit")  # revive's two size rules, named by their Text's prefix
 TESTDATA = "testdata"
@@ -123,6 +122,7 @@ PINNED: dict[str, object] = {
         },
     },
 }
+LINTERS: tuple[str, ...] = tuple(PINNED["linters"]["enable"])  # PINNED's own list, not a copy of it (CA-L1)
 
 
 class ConfigError(ValueError):
