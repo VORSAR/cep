@@ -68,6 +68,20 @@ At most two agents at once. The plan check §1 holds the waves:
   - **Already in place:** an exemption matching nothing is already red in `vulns` (`rows/vulns.py`, "matches nothing: remove it").
 - **Not yet written:** `test_smells_planted.py` (30 cases), whose texts depend on the row's output, goes to lane A, written red first. `test_vulns_planted.py` +4, which needs a world that declares a Go-built tool, goes to lane C, written red first. W0-AC skipped the commit hook with `--no-verify` after its first commit, to keep gate tiers off the shared machine; the combined T2 covers it.
 
+**W1 and W2 (2026-11-14 to 11-15):** lanes A, B and C (the tool-scan half) built the row, the waivers, the pins, the part-level check and the tool scan. Lane C2 then made the whole-tree rules green outside lane D's packages: 74 per-line waivers, the encoder moved to `internal/model/canonical.go`, the golden and baseline switches turned into test flags. Lane D was the calibration run.
+- **Real tree at a98e021:** 471 findings (errcheck 24, forbidigo 89, funlen 19, gocritic 8, gocyclo 116, lll 204, revive argument-limit 2, file-length-limit 9). **After W2:** 0 outside the size family. The size family's 139 findings sit in 31 TEMP exclusions, each capped at its count.
+- **The `smells` row's time on this Mac:** T1 12 s cold and 5 s warm (both GOOS); T0 3 s for one staged file or ten packages. The cap is 180 s, fifteen times the cold run, to be re-checked against the first CI run.
+- **Calibration (lane D):** 11 findings in about 9.2 minutes of package work, about 0.85 minutes per finding (gocyclo: a plain split 0.5 min, with a benchmark pin 1.5 min, with characterisation 1.5 min; lll 0.2 min; gocritic 0.3 min; a waiver 0.5 min).
+  - `fireGroup` is on the per-event walk. Its split was benchmarked at 305–330 → 305–335 ns/op with 0 allocations, so it was kept.
+  - `checkValue`'s split cost about 35 % (12.1–12.6 → 16.4–17.7 ns per row), so it was reverted under decision 6 and kept whole as a waiver citing the measurement.
+- **`astequal <c>^ <c>` over the lanes' commits (after fix-g's two-revision form):**
+  - **Equal (exit 0)** for every reflow-plus-waivers commit and the pure move: event 472116b, expr 12be398, model dec066a (the move), partition eb31f5b, plan f952f6f, validate ed4eccd, runtime 08d2dba. `sink.go` in 296a604 is equal too.
+  - **Unequal (exit 1)** for every split or behaviour commit, as intended: text, parser, playback, root, apipartition, archcheck, and lane D's four packages.
+  - **Exit 2** for a commit with no Go file.
+
+  The G5 step reads `astequal <commit>^ <commit>` (design §7.4 as corrected).
+- **T3 (`make combine-check`) at c6deb91:** exit 0, 96 s. LAW Δ lists 62 files, all intended. That is **G2**.
+
 ## Test material
 
 QA's W0 is an item: every counter-example of the plan check §6 is written red before its code.
@@ -78,7 +92,25 @@ None.
 
 ## Findings
 
-*(Filled at step 7.)*
+**Step 7** on c6deb91. The [architecture review](../reviews/s1-1c-5-combined-architecture.md) found no blocker, 4 should-fix and 2 later. The [break-it](../reviews/s1-1c-5-breakit-qa.md) found 1 blocker, 3 should-fix and 3 later. The owner's answers are in [decisions](decisions.md#owner-decisions-2026-11-14--s11c-5s-review-and-break-it). The one batched fix round (fix-p, fix-g) wrote every test first and saw them red once.
+
+| Finding | From | Severity | Disposition |
+|---|---|---|---|
+| BK-B1 | break-it | blocker | fixed (580c306; `test_parts.OnlyDecisionsMd`, `test_aging` outside-decisions.md pair): only a decisions.md section decides, for forward moves and aging rule 1 (owner, 1) |
+| BK-L3 | break-it | later → decided | fixed (42b5075; `test_allowlists.Cap`, `test_parts.Caps`, `test_rows_smells` over-cap case): each exclusion capped at its count, a raised cap needs a decisions.md section (owner, 2) |
+| CA-S2, BK-S1, BK-L1 | both | should-fix | fixed (0b9a10e; root with a space, revive range, unreadable line, waivers with no marker line, the directive's own line) |
+| CA-S1, BK-S2, BK-S3, BK-L2 | both | should-fix | fixed (d3d32c0; 10 named tests): nothing compared is exit 2, build context in keys, shared imports and split strings equal, two-revision form, every key listed |
+| CA-S3 | architecture | should-fix | fixed (db144b0): the `CEP_TRIPWIRE_FILE` read is gone, `CEP_DETERMINISM_PLANT` is a const anchor the two drivers rewrite (each driver case run alone, green) |
+| CA-S4 | architecture | should-fix | fixed (1efa1df): ADR-0015 §2, §2.1, §2.2, §3 item 10, the tool-scan annotation; DEVELOPMENT.md |
+| CA-L1 | architecture | later | fixed (25e0d91; the design's §2.1 note) |
+| CA-L2 | architecture | later → decided | rejected by the owner (3): the encoder keeps its per-line waivers |
+| (pre-existing) | architecture CA-S3 | later | backlog: the runner's clean environment does not drop `CEP_*` names |
+| (fix-p) | the fix round | later | backlog: the T2 known-issues pin still accepts a decision anchor in any Markdown file (aging rule 1 already ages such an entry) |
+
+**Deviations recorded:**
+- **Design §8, case 10:** its name was reversed against ADR-0015; the driver follows the ADR (`reflect` red in L2).
+- **Design §6's covered rule:** superseded by the owner's W1 decision 2.
+- **The wrong-line waiver check:** it reads golangci-lint's `GL_DEBUG=nolint_filter` stderr, which is not a stable API. It now fails closed on any unreadable line, and planted case 17 is the tripwire on a tool upgrade.
 
 ## Done-done
 
@@ -91,11 +123,11 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-14)
              ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit after the plan check's
 Design (G1)  ☑ architecture + the-fool findings resolved (design §11) ☑ QA testability findings resolved (design §11)
              ☑ owner decisions recorded (2026-11-14) ☐ ADRs written for lasting decisions (ADR-0015 §2, §2.1, §2.2 annotated at G5, design §9)
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
+Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (c6deb91, 96 s)
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
-             ☐ tests on the real code ☐ every breaker's red test committed (step 7)
-Review (G3)  ☐ architecture review of the combined diff: no drift
-             ☐ QA break-it run ☐ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
+             ☑ tests on the real code ☑ every breaker's red test committed (step 7)
+Review (G3)  ☑ architecture review of the combined diff: no drift (no blocker; 4 should-fix fixed)
+             ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☐ T4 strict-gate exit 0, run complete ☐ owner's check passed
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
