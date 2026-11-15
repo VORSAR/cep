@@ -1039,3 +1039,8 @@ T4 on the fixed branch was red once in `gate/runner/tests/test_stop_children.py`
 The root cause is pre-existing; neither the test nor `run_process` changed in S1.1c-5. A first TERM raised between the child's spawn and `run_process` holding it left `proc` unset, so the cleanup stopped nothing and the child, in a session of its own, was orphaned. `gate/term.py`'s popen already covered a stop inside Popen's own start-up, but not this window. One answer, which differs from the recommendation.
 
 1. **The fix goes inside the sprint** (≠ R; the recommendation was its own small PR from main first, as #41 at S1.1c-4). `term.critical()` holds a first TERM until the block ends, and `run_process` and the stress harness's hogs start their child inside it. It is proven red first by `test_term.Critical` and by `test_stop_children`'s forced race, in which popen is made slow after the spawn. Rejected: a separate PR merged before the sprint.
+
+A second pre-existing flake followed on the next T4. `test_parity`'s real-go tests set `HOME` to their temp world, and Go's telemetry wrote counters there (perhaps from a detached child), which under load raced the world's removal ("Directory not empty"). `GOTELEMETRY=off` is not honoured, and `GOTELEMETRYDIR` is not a full override (measured).
+
+2. **That fix goes inside the sprint too** (as recommended this time, following answer 1): the RealCache tests run the pinned `go telemetry off` in their world before any probe, held by `test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world`. The canary's version probe needs no guard: its `HOME` is the run's scratch, which nothing removes during the run. Rejected: a separate PR from main.
+
