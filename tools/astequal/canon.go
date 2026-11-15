@@ -26,72 +26,165 @@ var posFields = map[string]bool{
 	"Switch": true, "To": true, "TokPos": true, "ValueEnd": true, "ValuePos": true,
 }
 
+// headKey ends the key of a directory's file heads: its files' contexts and trailing directives.
+const headKey = ": package"
+
 // item is one keyed top-level declaration of a file, before its directives are attached.
 type item struct {
-	key  string
-	pos  token.Pos
-	text string
+	key      string
+	pos      token.Pos
+	text     string
+	isImport bool
 }
 
-// pkgState numbers init functions and blank value specs across the files of one package.
+// pkgState numbers init functions and blank value specs across the files of one context.
 type pkgState struct {
 	inits, blanks int
-	heads         map[string]bool
 }
 
-// canonical maps "<package dir>: <key>" to the declaration's canonical text for every file in files.
+// sideState collects one side's keyed declarations as its files are read in name order.
+type sideState struct {
+	out     map[string]string          // key: canonical text
+	states  map[string]*pkgState       // file context: its numbering
+	heads   map[string]map[string]bool // package dir: its files' heads
+	imports map[string]map[string]bool // import key: the set of its texts
+}
+
+// canonical maps "<file context>: <key>" to the declaration's canonical text for every file in files, and
+// "<package dir>: package" to the directory's file heads.
 func canonical(files map[string][]byte) (map[string]string, error) {
-	out := map[string]string{}
-	states := map[string]*pkgState{}
+	side := &sideState{
+		out: map[string]string{}, states: map[string]*pkgState{},
+		heads: map[string]map[string]bool{}, imports: map[string]map[string]bool{},
+	}
 	for _, name := range slices.Sorted(maps.Keys(files)) {
-		dir := path.Dir(name)
-		st := states[dir]
-		if st == nil {
-			st = &pkgState{heads: map[string]bool{}}
-			states[dir] = st
-		}
-		if err := canonicalFile(name, files[name], st, out); err != nil {
+		if err := side.file(name, files[name]); err != nil {
 			return nil, err
 		}
 	}
-	for dir, st := range states {
-		out[dir+": package"] = strings.Join(slices.Sorted(maps.Keys(st.heads)), "\n")
+	for dir, h := range side.heads {
+		side.out[dir+headKey] = strings.Join(slices.Sorted(maps.Keys(h)), "\n")
 	}
-	return out, nil
+	for key, texts := range side.imports {
+		side.out[key] = strings.Join(slices.Sorted(maps.Keys(texts)), "\n")
+	}
+	return side.out, nil
 }
 
-func canonicalFile(name string, body []byte, st *pkgState, out map[string]string) error {
+// fileContext is the part of a declaration's key its file decides: the directory, then, when any is set, the
+// package name if it is not the directory's name, "test" for a _test.go file, the name's GOOS and GOARCH suffixes
+// as go/build reads them, "ignored" for a name the go command skips, and the //go:build constraint.
+func fileContext(name, pkg, build string) string {
+	dir, base := path.Dir(name), path.Base(name)
+	var parts []string
+	if pkg != path.Base(dir) {
+		parts = append(parts, "package "+pkg)
+	}
+	stem := strings.TrimSuffix(base, ".go")
+	if s, ok := strings.CutSuffix(stem, "_test"); ok {
+		stem = s
+		parts = append(parts, "test")
+	}
+	parts = append(parts, platform(stem)...)
+	if strings.HasPrefix(base, "_") || strings.HasPrefix(base, ".") {
+		parts = append(parts, "ignored")
+	}
+	if build != "" {
+		parts = append(parts, fmt.Sprintf("build=%q", build))
+	}
+	if len(parts) == 0 {
+		return dir
+	}
+	return dir + " [" + strings.Join(parts, " ") + "]"
+}
+
+// platform returns a file stem's goos= and goarch= parts: *_GOOS, *_GOARCH and *_GOOS_GOARCH, as go/build matches
+// them (the first element of the stem never counts, so linux.go is an ordinary file).
+func platform(stem string) []string {
+	l := strings.Split(stem, "_")
+	n := len(l)
+	switch {
+	case n >= 3 && knownOS[l[n-2]] && knownArch[l[n-1]]:
+		return []string{"goos=" + l[n-2], "goarch=" + l[n-1]}
+	case n >= 2 && knownOS[l[n-1]]:
+		return []string{"goos=" + l[n-1]}
+	case n >= 2 && knownArch[l[n-1]]:
+		return []string{"goarch=" + l[n-1]}
+	}
+	return nil
+}
+
+// knownOS and knownArch are go/build's lists of GOOS and GOARCH values a file name suffix can name.
+var (
+	knownOS = map[string]bool{
+		"aix": true, "android": true, "darwin": true, "dragonfly": true, "freebsd": true, "hurd": true,
+		"illumos": true, "ios": true, "js": true, "linux": true, "nacl": true, "netbsd": true, "openbsd": true,
+		"plan9": true, "solaris": true, "wasip1": true, "windows": true, "zos": true,
+	}
+	knownArch = map[string]bool{
+		"386": true, "amd64": true, "amd64p32": true, "arm": true, "armbe": true, "arm64": true, "arm64be": true,
+		"loong64": true, "mips": true, "mipsle": true, "mips64": true, "mips64le": true, "mips64p32": true,
+		"mips64p32le": true, "ppc": true, "ppc64": true, "ppc64le": true, "riscv": true, "riscv64": true,
+		"s390": true, "s390x": true, "sparc": true, "sparc64": true, "wasm": true,
+	}
+)
+
+// file keys every top-level declaration of one file.
+func (side *sideState) file(name string, body []byte) error {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, name, body, parser.ParseComments|parser.SkipObjectResolution)
 	if err != nil {
 		return err
 	}
 	build, directives := fileDirectives(file)
-	st.heads[fmt.Sprintf("package %s build=%q", file.Name.Name, build)] = true
+	ctx := fileContext(name, file.Name.Name, build)
+	heads := side.heads[path.Dir(name)]
+	if heads == nil {
+		heads = map[string]bool{}
+		side.heads[path.Dir(name)] = heads
+	}
+	heads["package "+file.Name.Name+" in "+ctx] = true
+	st := side.states[ctx]
+	if st == nil {
+		st = &pkgState{}
+		side.states[ctx] = st
+	}
 	stripComments(file)
+	foldStrings(file)
 	var items []item
 	for _, decl := range file.Decls {
 		items = append(items, declItems(decl, st)...)
 	}
-	dir := path.Dir(name)
 	prev := token.NoPos
 	for _, it := range items {
-		text := "build: " + build + "\n" + directivesBefore(directives, prev, it.pos) + it.text
+		text := directivesBefore(directives, prev, it.pos) + it.text
 		prev = it.pos
-		key := dir + ": " + it.key
+		key := ctx + ": " + it.key
+		if it.isImport {
+			side.addImport(key, text)
+			continue
+		}
 		for n := 2; ; n++ {
-			if _, dup := out[key]; !dup {
+			if _, dup := side.out[key]; !dup {
 				break
 			}
-			key = dir + ": " + it.key + "#dup" + strconv.Itoa(n)
+			key = ctx + ": " + it.key + "#dup" + strconv.Itoa(n)
 		}
-		out[key] = text
+		side.out[key] = text
 	}
 	end := token.Pos(fset.File(file.Pos()).Base() + len(body) + 1)
 	if trailing := directivesBefore(directives, prev, end); trailing != "" {
-		st.heads["trailing "+trailing] = true
+		heads["trailing "+trailing] = true
 	}
 	return nil
+}
+
+// addImport adds one import's text to its key's set: two files of one context that import one package count once.
+func (side *sideState) addImport(key, text string) {
+	if side.imports[key] == nil {
+		side.imports[key] = map[string]bool{}
+	}
+	side.imports[key][text] = true
 }
 
 // fileDirectives returns the file's //go:build constraint and its other //go: comments in source order.
