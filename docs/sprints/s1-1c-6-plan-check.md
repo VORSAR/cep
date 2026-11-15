@@ -1,4 +1,4 @@
-# S1.1c-6 — plan check (v2, 2026-11-15; after the blind architecture and QA reviews; for the owner)
+# S1.1c-6 — plan check (v2, 2026-11-15; answered by the owner 2026-11-15 — [decisions.md](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check); the sprint record, `s1-1c-6-record.md`, opens at G0)
 
 *Step 0 of the full loop ([00-sprint-model.md §6](00-sprint-model.md#6-the-full-loop)). Drafted read-only against `main` @ 4d2b9eb. Every code claim cites `file:line` on that commit; "measured" marks a run made for this plan (the pinned golangci-lint v2.15.0 and Go 1.27.4 under both `GOOS`; coverage profiles of the 12 packages); "inferred" marks a reading not proven by a run. "PA-" and "PQ-" mark the blind reviews of v1 ([architecture](../reviews/s1-1c-6-plan-check-architecture.md), [QA](../reviews/s1-1c-6-plan-check-qa.md)); every claim of theirs that changes the plan was verified by the coordinator. Two scope answers were taken while drafting ([owner, 2026-11-15](decisions.md#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check)); nothing else here is an owner decision until the owner answers §11.*
 
@@ -8,7 +8,7 @@ routine: full (no semantics panel) · SP ≈ 13, confirmed or re-cut by the spik
 Entry (G0)   ☐ card complete and approved (§12) ☑ dependencies merged, main green (S1.1c-5, PR #47; close-out #48; main 4d2b9eb)
              ☐ fits the cap, lanes ≤ 8 days (the spike, §1) ☐ test material: the nets are each lane's first item (§7)
              ☐ `gate/current-sprint` set to S1.1c-6 as the first commit after this plan check's
-             ☑ reviewed by the architect ☑ reviewed by QA ☐ answered by the owner (§11)
+             ☑ reviewed by the architect ☑ reviewed by QA ☑ answered by the owner (§11, 2026-11-15: all six as recommended)
 ```
 *At G0 the full done-done block ([§13](00-sprint-model.md#13-done-done-the-exit-checklist)) is copied into the sprint record, `s1-1c-6-record.md`.*
 

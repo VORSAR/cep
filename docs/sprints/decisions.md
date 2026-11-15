@@ -106,6 +106,7 @@
 | 2026-11-15 | [S1.1c-5's T4: a flake found](#owner-decisions-2026-11-15--s11c-5s-t4-a-flake-found) |
 | 2026-11-15 | [S1.1c-5's close-out](#owner-decisions-2026-11-15--s11c-5s-close-out) |
 | 2026-11-15 | [S1.1c-6's scope, before its plan check](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check) |
+| 2026-11-15 | [S1.1c-6's plan check](#owner-decisions-2026-11-15--s11c-6s-plan-check) |
 
 ## The decisions
 
@@ -1075,3 +1076,23 @@ Asked while the plan check was being drafted (the owner's question: are the oddl
    - S1.1c-6 splits each big production file into files named by concern, under a file map per package that the architect reviews.
    - The design note lists every function the architect finds in the wrong package and where it belongs. Each move across packages needs the owner's yes at the design (G1): it changes an internal API and crosses lanes.
    - Rejected: within a package only, with moves across packages to the backlog.
+
+### Owner decisions, 2026-11-15 — S1.1c-6's plan check
+
+After [the plan check](s1-1c-6-plan-check.md) v2 and its blind reviews ([architecture](../reviews/s1-1c-6-plan-check-architecture.md), [QA](../reviews/s1-1c-6-plan-check-qa.md)). Six answers (the plan check's Q3–Q8; Q1 and Q2 are [the scope answers](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check)), all as recommended.
+
+1. **When a split "costs" on a hot path** (Q3; this makes decision 6 of [S1.1c-5's plan check](#owner-decisions-2026-11-14--s11c-5s-plan-check) operational).
+   - Allocations decide first, exactly: allocations equal (`AllocsPerRun` pins and `-benchmem`) and no new heap escape in the function (a `-gcflags=-m=2` diff).
+   - Time second: two prebuilt test binaries, ten interleaved pairs at `-test.cpu=1 -test.benchtime=1s`, measured by the coordinator with nothing else running. A split costs time only if the slowdown is both significant (Mann–Whitney, p < 0.05, a small stdlib-Python comparer with its own tests) and larger than 2 % on the median, re-run once before the verdict stands.
+   - Applied to each leaf function at its split, and to each hot path end to end, `main` against the combined branch, before T4.
+   - Rejected: the stricter interval (p < 0.01, the shift's range wholly above +3 %); the median alone over 20 pairs at 3 %; lane D's overlapping ranges.
+2. **The coverage bar before a split** (Q4). Each function to be split reaches 100 % of its blocks from its own package's tests. Each operand of a compound condition has its case. One mutation is shown red per new test and per control transfer the split moves across a helper boundary. Any block left short is listed in the design with its reason (an invariant panic, or reachable only by scheduling and covered by a named stress test) and reviewed at G1. Rejected: 100 % over all tests; the hot path and lifecycle only; the package floor only.
+3. **The exclusion machinery stays dormant through S1.1c-6 and is retired in S1.1c-7** (Q5): `smells.json`, the `smells` allowlist rule, `parts.py`, the row's cap and liveness steps and their planted cases, and the docs that describe them. Rejected: retiring it in S1.1c-6; keeping it forever.
+4. **The runs that are red by construction** (Q6). From the G0 marker until the last size entry goes, T4, the nightly tier and the `proofs` row are red by S1.1c-5's part-level deadline. Each required run is still made. Before the last removal, it is recorded as "red as expected" only when its failed lines are exactly `aging`'s "has reached its part S1.1c-6" lines for the entries still present and `test_aging_planted.py`'s five cases, quoted in the record; it is never called green. The first green run follows the last removal. Rejected: reworking the aging proof so it stops reading the live list; skipping the runs until the last lane.
+5. **A function that resists a safe split and is not on a hot path** (Q7) is split anyway behind extra nets: the lifecycle tests at `-cpu 1,4`, `race -count=3`, the nightly `race-stress`, and the known issues' behaviour pinned. If the lane still cannot, it stops and the owner decides then. Rejected as defaults: moving that issue's forward to S1.1c-7 (a gate change); a PERMANENT waiver outside decision 6.
+6. **Confirmed** (Q8):
+   - the 38 hot-path functions, with path benchmarks for the runtime's goroutine loops and leaf benchmarks elsewhere;
+   - a time-boxed spike before G0 (`ingest` and `parseRFC3339`, findings only), whose projection decides "fits the cap"; lanes R, V and A as sub-lanes;
+   - one PR within the counted budget of at most 100 commits (two PRs would leave entries red on `main`);
+   - the `proofs` and nightly schedule of the plan check's §7;
+   - the placement candidates as the design's starting list, each move still decided at G1: the three literal-to-value conversions merged into one `model` function; the recording line's size arithmetic to the backlog; `tools/archcheck` split into files inside package main; the two `validateApp` functions, `Deploy` and `bind` staying where they are.
