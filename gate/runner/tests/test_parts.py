@@ -9,6 +9,7 @@ case reads the real tree. ReadBase alone builds fixture git repositories (`git.m
 
 import json
 import unittest
+from unittest import mock
 
 from gate.runner import aging, allowlists, anchors, parts, sprintid
 from gate.runner.tests import support
@@ -68,8 +69,17 @@ def at_base(entries, known) -> parts.Base:
     return parts.Base("0123abcd", tuple(entries), known)
 
 
+class FixtureBound(unittest.TestCase):
+    """The move, cap and no-base rules are judged in ORDER's world, where S1.1c-7 and S1.1c-8 are printed: the bound
+    is the fixture's S1.1c-8, as it was before S1.1c-5's close re-cut the parts to one (owner 2026-11-15). Rules
+    tests the real bound."""
+
+    def setUp(self) -> None:
+        self.enterContext(mock.patch.object(parts, "LAST_PART", "S1.1c-8"))
+
+
 class Rules(unittest.TestCase):
-    """Rules 1-4: the entry's issue, its forward part, the S1.1c-8 bound and the marker reaching the part."""
+    """Rules 1-4: the entry's issue, its forward part, the S1.1c-6 bound and the marker reaching the part."""
 
     def run_rules(self, known, marker="S1.1c-5", tier="T4", entries=None):
         entries = (entry(),) if entries is None else entries
@@ -90,9 +100,16 @@ class Rules(unittest.TestCase):
             faults, [f"aging: smells.json: {TARGET}: forward S1.1c-4 is not a printed part of gate/sprints.json"]
         )
 
-    def test_a_forward_past_s1_1c_8_is_red(self):
-        faults, _ = self.run_rules(issues(issue("S1.1c-5-1", "S1.1c-9")))
-        self.assertEqual(faults, [f"aging: smells.json: {TARGET}: forward S1.1c-9 is past S1.1c-8 (decision 1)"])
+    def test_the_bound_is_s1_1c_6(self):
+        # S1.1c-5's close re-cut the parts to one: S1.1c-6 cleans every size finding (owner 2026-11-15).
+        self.assertEqual(parts.LAST_PART, "S1.1c-6")
+
+    def test_a_forward_past_s1_1c_6_is_red(self):
+        for forward in ("S1.1c-7", "S1.1c-9"):  # printed in ORDER's world, past the bound
+            with self.subTest(forward=forward):
+                faults, _ = self.run_rules(issues(issue("S1.1c-5-1", forward)))
+                want = f"aging: smells.json: {TARGET}: forward {forward} is past S1.1c-6 (decision 1)"
+                self.assertEqual(faults, [want])
 
     def reached(self) -> str:
         return (
@@ -119,7 +136,7 @@ class Rules(unittest.TestCase):
         self.assertEqual((faults, lines), ([], []))
 
 
-class Moves(unittest.TestCase):
+class Moves(FixtureBound):
     """Rule 5, per exclusion target: a later forward needs a new decision naming the issue (DQ-B1)."""
 
     def moved(self, old: str, new: str, base_id: str, id: str) -> str:
@@ -195,7 +212,7 @@ def real_decided(id: str, decision: str) -> bool:
     return aging.decided(id, decision, TRACKED.get)
 
 
-class OnlyDecisionsMd(unittest.TestCase):
+class OnlyDecisionsMd(FixtureBound):
     def move(self, decision: str) -> list[str]:
         base = at_base((entry(),), issues(issue("S1.1c-5-1", "S1.1c-6")))
         now = issues(issue("S1.1c-5-1", "S1.1c-7", decision=decision))
@@ -215,7 +232,7 @@ class OnlyDecisionsMd(unittest.TestCase):
         self.assertEqual(self.move(IN_DECISIONS), [])
 
 
-class Caps(unittest.TestCase):
+class Caps(FixtureBound):
     """Owner 2026-11-14, S1.1c-5's review and break-it, decision 2: a cap raised against the merge base needs a new
     decision naming the entry's issue, as a forward moved later does; a cap lowered is green."""
 
@@ -249,7 +266,7 @@ class Caps(unittest.TestCase):
         self.assertEqual(self.judge(3, 2), [])
 
 
-class Base(unittest.TestCase):
+class Base(FixtureBound):
     """Rule 6: no merge base (DQ-B3); a base file absent at a resolved base is not "no base"."""
 
     NO_BASE = "aging: smells.json: no merge base with origin/main or main: forward moves not checked (decision 1)"

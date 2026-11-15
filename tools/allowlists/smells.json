@@ -6,7 +6,7 @@
     {
       "target": ". funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -15,7 +15,7 @@
     {
       "target": ". gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -24,7 +24,7 @@
     {
       "target": "internal/event file-length-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -33,7 +33,7 @@
     {
       "target": "internal/event funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -42,7 +42,7 @@
     {
       "target": "internal/event gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -51,7 +51,7 @@
     {
       "target": "internal/expr file-length-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -60,7 +60,7 @@
     {
       "target": "internal/expr funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -69,7 +69,7 @@
     {
       "target": "internal/expr gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -78,7 +78,7 @@
     {
       "target": "internal/model gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -87,7 +87,7 @@
     {
       "target": "internal/parser file-length-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -96,7 +96,7 @@
     {
       "target": "internal/parser funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -105,7 +105,7 @@
     {
       "target": "internal/parser gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -114,7 +114,7 @@
     {
       "target": "internal/partition file-length-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -123,7 +123,7 @@
     {
       "target": "internal/partition gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -132,7 +132,7 @@
     {
       "target": "internal/plan argument-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -141,7 +141,7 @@
     {
       "target": "internal/plan funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -150,7 +150,7 @@
     {
       "target": "internal/plan gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -159,7 +159,7 @@
     {
       "target": "internal/playback file-length-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -168,7 +168,7 @@
     {
       "target": "internal/playback funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -177,7 +177,7 @@
     {
       "target": "internal/playback gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-2",
@@ -240,7 +240,7 @@
     {
       "target": "tools/apipartition funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -249,7 +249,7 @@
     {
       "target": "tools/apipartition gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -258,7 +258,7 @@
     {
       "target": "tools/archcheck file-length-limit",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -267,7 +267,7 @@
     {
       "target": "tools/archcheck funlen",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
@@ -276,7 +276,7 @@
     {
       "target": "tools/archcheck gocyclo",
       "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
+      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",

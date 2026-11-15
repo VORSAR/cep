@@ -1,5 +1,7 @@
 # S1.1c-5 combined build: blind architecture review (with the-fool)
 
+> **Historical — S1.1c-5, the strict lint set: the instrument, the whole-tree rules, the first packages; merged in PR #47.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1c-5-plan-check.md) · [design](../sprints/s1-1c-5-design.md) · [record](../sprints/s1-1c-5-record.md) · reviews: [research lint](s1-1c-5-research-lint.md), [plan check architecture](s1-1c-5-plan-check-architecture.md), [plan check qa](s1-1c-5-plan-check-qa.md), [design architecture](s1-1c-5-design-architecture.md), [design qa](s1-1c-5-design-qa.md), [combined architecture](s1-1c-5-combined-architecture.md), [breakit qa](s1-1c-5-breakit-qa.md). **← [S1.1c-4](../sprints/s1-1c-4-record.md) · [S1.1c-6 (next)](../sprints/sprint-plan.md#status) →**
+
 Branch `s1-1c-5/integration` @ c6deb91, base `main` 0fb2b53 (149 files, +9933/−700, 80 commits). I read it only. Experiments are in `s1-1c-5-scratch/arch-final-exp/`: a `--shared` clone for checking each commit, the `astequal` binary, the `strfold` checker and the two lint worlds.
 
 - **GitNexus:** the index is at 4266f65, so it is stale. It lacks `golangci.py`, `pin.py`, `parts.py`, `rows/smells.py` and `tools/astequal`, so I confirmed every claim with grep or by running it.

@@ -1,7 +1,9 @@
 # S1.1c-5 — sprint record
 
+> **Historical — S1.1c-5, the strict lint set: the instrument, the whole-tree rules, the first packages; merged in PR #47.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1c-5-plan-check.md) · [design](s1-1c-5-design.md) · [record](s1-1c-5-record.md) · reviews: [research lint](../reviews/s1-1c-5-research-lint.md), [plan check architecture](../reviews/s1-1c-5-plan-check-architecture.md), [plan check qa](../reviews/s1-1c-5-plan-check-qa.md), [design architecture](../reviews/s1-1c-5-design-architecture.md), [design qa](../reviews/s1-1c-5-design-qa.md), [combined architecture](../reviews/s1-1c-5-combined-architecture.md), [breakit qa](../reviews/s1-1c-5-breakit-qa.md). **← [S1.1c-4](s1-1c-4-record.md) · [S1.1c-6 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S1.1c-5 — the strict lint set: the instrument, the whole-tree rules, the first packages · **Routine:** the full loop without the semantics panel · **Size:** 13 SP (inferred) against the 2-week cap · **Branch:** `s1-1c-5/integration`
-**What to build and how each item is proven:** [the S1.1c-5 card](sprint-plan.md#s11c-5--the-strict-lint-set-the-instrument-the-whole-tree-rules-the-first-packages) · **How it runs:** [the plan check §1](s1-1c-5-plan-check.md#1-routine-shape-sizing) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [the S1.1c-5 card](history.md#s11c-5--the-strict-lint-set-the-instrument-the-whole-tree-rules-the-first-packages) · **How it runs:** [the plan check §1](s1-1c-5-plan-check.md#1-routine-shape-sizing) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -82,6 +84,8 @@ At most two agents at once. The plan check §1 holds the waves:
   The G5 step reads `astequal <commit>^ <commit>` (design §7.4 as corrected).
 - **T3 (`make combine-check`) at c6deb91:** exit 0, 96 s. LAW Δ lists 62 files, all intended. That is **G2**.
 
+**Points and duration.** Card 13 (inferred; the first packages were the calibration run). As built: about 14 — the card's seven items, plus the design reviews' 4 blockers, the switch to TOML, the caps and BK-B1 from the break-it, and two pre-existing flakes fixed inside the sprint at T4 (owner, 2026-11-15). From the plan check (2026-11-14) to the merge (2026-11-15): two calendar days; W2 was cut once by an account's spend limit and resumed.
+
 ## Test material
 
 QA's W0 is an item: every counter-example of the plan check §6 is written red before its code.
@@ -112,6 +116,7 @@ None.
 | OC-L1 | the owner's check | later | backlog: the `smells` summary does not count the package-main `fmt.Print` drops (11 today) |
 | OC-L2 | the owner's check | later | backlog: an over-cap exclusion's message names the entry and the counts, not the new finding's file and line |
 | (fix-p) | the fix round | later | backlog: the T2 known-issues pin still accepts a decision anchor in any Markdown file (aging rule 1 already ages such an entry) |
+| CO-1 | the close-out (coordinator, 2026-11-15) | later | backlog: the part-level move check places a base forward that is no longer printed at its row, so moving earlier from a dropped part (S1.1c-7, S1.1c-8 → S1.1c-6) reads "forward moved … without a decision" — it fails closed, and the re-cut's moves name the close-out section, but the text is misleading |
 
 **Deviations recorded:**
 - **Design §8, case 10:** its name was reversed against ADR-0015; the driver follows the ADR (`reflect` red in L2).
@@ -128,20 +133,26 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-14)
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-14)
              ☑ test material: QA's W0 is an item ☑ `gate/current-sprint` set, the first commit after the plan check's
 Design (G1)  ☑ architecture + the-fool findings resolved (design §11) ☑ QA testability findings resolved (design §11)
-             ☑ owner decisions recorded (2026-11-14) ☐ ADRs written for lasting decisions (ADR-0015 §2, §2.1, §2.2 annotated at G5, design §9)
+             ☑ owner decisions recorded (2026-11-14) ☑ ADRs written for lasting decisions (ADR-0015 §2, §2.1, §2.2, §3 item 10 annotated in the fix round, 1efa1df, design §9)
 Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (c6deb91, 96 s)
              ☐ conformance cases for every construct shipped or changed (n/a: no construct)
              ☑ tests on the real code ☑ every breaker's red test committed (step 7)
 Review (G3)  ☑ architecture review of the combined diff: no drift (no blocker; 4 should-fix fixed)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
 Verify (G4)  ☑ T4 strict-gate exit 0, run complete (4f40ef0: run 20261115T061734Z-b1d49d, 282.2 s wall, proofs 269.1 s covered 39; LAW Δ 74 files) ☑ owner's check passed (2026-11-15: on the owner's word, run by an independent verifier — LAW Δ against the decisions with the waiver count and every cap recounted, the smells summary against `git ls-files`, a plant red in an in-scope package and an over-cap plant red in an excluded one; three non-blocking findings to the backlog)
-             ☐ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled ☐ memory updated ☐ worktrees removed
-             ☐ the row closed in gate/sprints.json as in the plan table — n/a: S1.1c stays open, S1.1c-6 follows
+             ☑ every acceptance line met by its named proof (1: QA's W0 tests, `test_smells_planted` 30 cases; 2: `test_suppressions`, the restored break-it tests, `test_suppressions_planted` 13; 3: `test_parts`; 4: the ruff pin's tests; 5: `test_vulns_row`, `test_vulns_planted` 35; 6: T4 and the measured T0/T1 times above; 7: T4 and the `astequal` table)
+Exit (G5)    ☑ one PR, ≤ 100 commits, merged by the owner (PR #47, 96 commits, rebase-merged as main f7f005c, 2026-11-15)
+             ☐ main CI green on the merge commit (the owner reports; PR #47's CI green, every job)
+             ☑ sprint record + five-line retro ☑ known issues (S1.1c-5-1 to -4 open; S1.1c-5-2 and -3 moved to S1.1c-6 by the re-cut; S3.3-2-2 fixed by #46) ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only; the card to history, banners, the records row, the re-cut) ☑ memory updated
+             ☑ worktrees removed (the 11 worktrees and 10 branches — `s1-1c-5/integration` local and remote — deleted, every commit on main by patch or as its rebased copy; [owner](decisions.md#owner-decisions-2026-11-15--s11c-5s-close-out)) ☑ points and duration recorded
+             ☑ the row closed in gate/sprints.json as in the plan table (S1.1c-5 ticked; S1.1c stays open, S1.1c-6 follows)
 ```
 
 ## Retro
 
-*(Written at close-out.)*
+1. **Worked — the calibration run before the re-cut.** Lane D cleaned four packages behind benchmarks, characterisation tests and the AST-equality check, and measured about 0.85 minutes per finding; the 139 left fit one sprint, not three, so S1.1c-7 and S1.1c-8 left the plan and S4.1 comes sooner.
+2. **Worked — `astequal` as the net for mechanical change.** Every reflow-plus-waivers commit and the encoder's move proved equal and every split unequal, so 74 waivers and the whole-tree fixes needed no line-by-line behaviour review; the break-it found its silent pass (nothing compared read as equal), now exit 2.
+3. **Missed — what only the real tool shows.** The plan check's re-measure ran golangci-lint with a YAML config at one tier, so three facts surfaced late: JSON numbers silence revive's two size limits (at the design), golangci-lint's machine lock serialised the lanes (W1), and the T0 hook refused per-kind lane commits (W2). The lasting rule below.
+4. **Friction — load-only flakes and leftover shells.** Two pre-existing flakes (a stop in `run_process`'s spawn window; Go's telemetry in a temp `HOME`) each cost a red T4 run; an account's spend limit cut W2 mid-lane; finished agents left open-ended shells (`cat` on stdin, a sleep loop, `tail -f`) running for hours.
+5. **Change next sprint.** Smoke the real tool before G1 (sprint model §10, [owner, 2026-11-15](decisions.md#owner-decisions-2026-11-15--s11c-5s-close-out)); every agent brief forbids open-ended waits, and the coordinator stops leftover shells after each wave; S1.1c-6 cleans all 139 size findings.

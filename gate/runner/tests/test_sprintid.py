@@ -80,11 +80,13 @@ class Grammar(unittest.TestCase):
 class TheOrder(unittest.TestCase):
     def test_load_order_reads_todays_table(self):
         rows = order().rows
-        self.assertEqual(len(rows), 30)
+        self.assertEqual(len(rows), 28)
         self.assertEqual(rows[0], sprintid.Row("S1.1a-1", True))
         self.assertEqual(rows[12], sprintid.Row("S1.1c", False))
-        # S1.1c-5 to S1.1c-8 printed after the open S1.1c row (S1.1c-5's design §3.4; owner 2026-11-14).
-        self.assertEqual(rows[13:17], tuple(sprintid.Row(f"S1.1c-{n}", False) for n in (5, 6, 7, 8)))
+        # The parts printed after the open S1.1c row (S1.1c-5's design §3.4; owner 2026-11-14), re-cut at S1.1c-5's
+        # close (owner 2026-11-15): S1.1c-5 closed, S1.1c-6 the one part left, S1.1c-7 and S1.1c-8 dropped.
+        self.assertEqual(rows[13:15], (sprintid.Row("S1.1c-5", True), sprintid.Row("S1.1c-6", False)))
+        self.assertEqual(rows[15], sprintid.Row("S4.1", False))
         self.assertEqual(rows[-1], sprintid.Row("S12", False))
 
     def test_load_order_refuses_a_bad_table(self):
