@@ -39,7 +39,8 @@ At most two agents at once; the plan check §1 holds the order: G0 → the desig
 
 ## Measured results
 
-*(filled as lanes land)*
+- **G0's smoke of the moved bound** (sprint model §10, the retro's rule; a one-row registry holding `aging`, at 6a38bdd's tree): T3 exit 0 with 18 countdown lines; T4 and nightly exit 1 with exactly 18 lines "the marker S1.1c-6 has reached its part S1.1c-6", the entries of S1.1c-5-1 and -2; no move-check fault for S1.1c-5-3's 13 entries and no bound fault.
+- **The `proofs` row after the marker move** (`--tier T4 --job proofs`, at 6a38bdd, run 20261115T113755Z-c5a427, 329 s wall): **red as expected** ([owner](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check), decision 4). Every driver green except `test_aging_planted.py`, 5 failures: its four red cases each fail with their own planted line (QA-AGING-1, -2, -3, -4, so the teeth hold) plus exactly the 18 "has reached its part S1.1c-6" lines; `test_the_real_tree_ages_green` fails on the same aging row. Not green; the first green `proofs` run follows the last lane's removal.
 
 ## Test material
 
