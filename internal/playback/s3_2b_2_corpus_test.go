@@ -198,12 +198,9 @@ var twTracked = []string{"outbox", "sink-depth", "drained_pending", "partial-cou
 
 // TestTripwire is the T4 tripwire row (S3.2b's item 7, exit 6; design s3-2b-2 §8): every tracked metric has a
 // ceiling, and on a live run of the corpus no high-water mark is over a blocking ceiling; one over an advisory
-// ceiling is reported. CEP_TRIPWIRE_FILE overrides the ceilings' file, for the gate's proofs.
+// ceiling is reported. The ceilings are gate/tripwire.json's; the gate's proofs plant that file in their world.
 func TestTripwire(t *testing.T) {
-	path := os.Getenv("CEP_TRIPWIRE_FILE") //nolint:forbidigo // PERMANENT reason="an override of the ceilings' file, a path and not an update switch" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
-	if path == "" {
-		path = filepath.Join("..", "..", "gate", "tripwire.json")
-	}
+	path := filepath.Join("..", "..", "gate", "tripwire.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -267,10 +264,14 @@ func TestTripwire(t *testing.T) {
 
 // TestDeterminismGolden is the T4 determinism row (S3.2b's item 8, exit 7; design s3-2b-2 §9): the corpus replayed
 // through the plan driver gives, byte for byte, the committed golden — on Linux in CI and on macOS, the second OS
-// (owner Q5). The -update flag rewrites the golden; CEP_DETERMINISM_PLANT=maporder plants a nondeterminism in
-// this path — 64 keys in map iteration order — for the gate's proof (review F11).
+// (owner Q5). The -update flag rewrites the golden; determinismPlant, set true, plants a nondeterminism in this
+// path — 64 keys in map iteration order — for the gate's proof (review F11).
 // update rewrites the determinism golden: go test ./internal/playback -run TestDeterminismGolden -args -update.
 var update = flag.Bool("update", false, "rewrite testdata/determinism.golden from the corpus")
+
+// determinismPlant is the determinism proofs' anchor: their drivers rewrite this exact line to true in their world
+// (gate/proofs/drivers/test_tripwire_planted.py, test_determinism_macos_planted.py).
+const determinismPlant = false
 
 func TestDeterminismGolden(t *testing.T) {
 	var b strings.Builder
@@ -296,7 +297,7 @@ func TestDeterminismGolden(t *testing.T) {
 			}
 		}
 	}
-	if os.Getenv("CEP_DETERMINISM_PLANT") == "maporder" { //nolint:forbidigo // PERMANENT reason="the gate's determinism proofs plant a nondeterminism through this switch" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
+	if determinismPlant {
 		keys := map[string]bool{}
 		for i := range 64 {
 			keys[fmt.Sprintf("k%02d", i)] = true

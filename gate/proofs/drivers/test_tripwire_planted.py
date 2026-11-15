@@ -14,7 +14,8 @@ import os
 from gate.proofs.drivers import support
 
 CORPUS_TEST = "internal/playback/s3_2b_2_corpus_test.go"
-PLANT_SWITCH = 'os.Getenv("CEP_DETERMINISM_PLANT") == "maporder"'
+PLANT_SWITCH = "const determinismPlant = false"
+PLANTED = "const determinismPlant = true"
 PLAYBACK = "github.com/vorsar/cep/internal/playback"
 TRIPWIRE_RED = f"exit 1: {PLAYBACK}: TestTripwire"
 
@@ -64,7 +65,7 @@ class TripwireAndDeterminismPlanted(support.DriverTest):
         path = os.path.join(self.world.repo, CORPUS_TEST)
         text = support.read_text(path)
         self.assertEqual(text.count(PLANT_SWITCH), 1, "the plant's anchor moved")
-        self.world.write(CORPUS_TEST, text.replace(PLANT_SWITCH, "true"))
+        self.world.write(CORPUS_TEST, text.replace(PLANT_SWITCH, PLANTED))
         run = self.run_row("determinism", "determinism")
         # The exact reason: TestDeterminismGolden alone is red (S1.1c-2 W0, QA F2: a world without SPEC.md and the
         # conformance baseline made TestBaseline red as well, so a bare "fail" proved nothing about the plant).

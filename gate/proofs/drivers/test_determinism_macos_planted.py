@@ -13,7 +13,8 @@ import os
 from gate.proofs.drivers import support
 
 CORPUS_TEST = "internal/playback/s3_2b_2_corpus_test.go"
-PLANT_SWITCH = 'os.Getenv("CEP_DETERMINISM_PLANT") == "maporder"'
+PLANT_SWITCH = "const determinismPlant = false"
+PLANTED = "const determinismPlant = true"
 PACKAGE = "github.com/vorsar/cep/internal/playback"
 REASON = f"exit 1: {PACKAGE}: TestDeterminismGolden"
 FAILED = [f"failed: {PACKAGE}: TestDeterminismGolden", f"failed: {PACKAGE}: package failed", "failed: go test exit 1"]
@@ -30,7 +31,7 @@ class DeterminismMacosPlanted(support.DriverTest):
                 self.world.copy(rel)
         text = support.read_text(os.path.join(self.world.repo, CORPUS_TEST))
         self.assertEqual(text.count(PLANT_SWITCH), 1, "the plant's anchor moved")
-        self.world.write(CORPUS_TEST, text.replace(PLANT_SWITCH, "true"))
+        self.world.write(CORPUS_TEST, text.replace(PLANT_SWITCH, PLANTED))
         self.world.commit()
 
         run = self.world.run(registry=self.world.registry(support.registry_row("determinism-macos")), tier="T4")
