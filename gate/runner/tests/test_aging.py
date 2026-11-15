@@ -160,6 +160,23 @@ class AgeRule(Case):
         # OLD1's section is NAMING; OLD names a prefix of OLD1 and OLD2 only.
         self.assertOneLine(self.aged([entry("OLD", "S2.2b", decision=NAMING)], THREE_AFTER), "OLD", AGE)
 
+    def test_a_naming_decision_outside_decisions_md_ages(self):
+        # Owner 2026-11-14, S1.1c-5's review and break-it, decision 1 (BK-B1): only a docs/sprints/decisions.md
+        # section counts. A sprint record's and a review's heading name OLD1 in the same words; each ages.
+        for path in ("docs/sprints/s1-1c-5-record.md", "docs/reviews/s1-1c-5-breakit-qa.md"):
+            with self.subTest(path=path):
+                read = {DECISIONS: MARKDOWN, path: MARKDOWN}.get
+                ref = f"{path}#{anchors.slug(NAMING_HEADING)}"
+                lines = aging.aged(
+                    [entry("OLD1", "S2.2b", decision=ref)], THREE_AFTER, "S1.1c-3", today=TODAY, read=read
+                )
+                self.assertOneLine(lines, "OLD1", AGE)
+
+    def test_a_naming_decision_in_decisions_md_stops_the_age_clock_beside_other_files(self):
+        read = {DECISIONS: MARKDOWN, "docs/sprints/s1-1c-5-record.md": MARKDOWN}.get
+        lines = aging.aged([entry("OLD1", "S2.2b", decision=NAMING)], THREE_AFTER, "S1.1c-3", today=TODAY, read=read)
+        self.assertEqual(lines, [])
+
     def test_a_naming_decision_stops_the_age_clock(self):
         self.assertEqual(self.aged([entry("OLD1", "S1.1a-1", decision=NAMING)]), [])
 
