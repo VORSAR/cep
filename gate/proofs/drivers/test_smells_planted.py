@@ -59,6 +59,7 @@ class SmellsPlanted(support.DriverTest):
             "sprint": "S1.1c-5",
             "expiry": "2099-01-01",
             "issue": "S1.1c-5-1",
+            "cap": 99,
         }
 
     def smells_list(self, *targets: str) -> None:

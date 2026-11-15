@@ -89,8 +89,8 @@ GOCYCLO = "cyclomatic complexity 11 of func `F` is high (> 10)"
 FUNLEN = "Function 'F' is too long (61 > 60)"
 
 
-def temp(target: str, kind: str = "TEMP", expiry: str = "2026-12-14") -> dict:
-    entry = {"target": target, "kind": kind, "reason": "size family not yet cleaned", "sprint": "S1.1c-5"}
+def temp(target: str, kind: str = "TEMP", expiry: str = "2026-12-14", cap: int = 9) -> dict:
+    entry = {"target": target, "kind": kind, "reason": "size family not yet cleaned", "sprint": "S1.1c-5", "cap": cap}
     if kind == "TEMP":
         entry |= {"expiry": expiry, "issue": "S1.1c-5-1"}
     else:
@@ -423,6 +423,23 @@ class Exclusions(World):
         self.plant(issue("internal/p/p.go", 3, "gocyclo", GOCYCLO))
         self.assert_green(tier="T3")  # witness: below T4 an expired entry still drops
         self.assert_fault(f"internal/p/p.go:3:2: gocyclo: {GOCYCLO}", tier="T4")
+
+    # Owner 2026-11-14, S1.1c-5's review and break-it, decision 2: each entry is capped at the findings it drops today.
+
+    def test_an_entry_dropping_more_than_its_cap_is_red(self):
+        self.plant(issue("internal/p/p.go", 3, "gocyclo", GOCYCLO), issue("internal/p/p.go", 9, "gocyclo", GOCYCLO))
+        self.smells = [temp("internal/p gocyclo", cap=2)]
+        self.assert_green()  # witness: at its cap
+        self.smells = [temp("internal/p gocyclo", cap=1)]
+        self.assert_fault(
+            "smells.json: internal/p gocyclo drops 2 findings, its cap is 1: fix the new one, or raise the cap by an"
+            " owner decision"
+        )
+
+    def test_an_entry_dropping_fewer_than_its_cap_is_green(self):
+        self.smells = [temp("internal/p gocyclo", cap=5)]
+        self.plant(issue("internal/p/p.go", 3, "gocyclo", GOCYCLO))
+        self.assert_green()
 
     def test_an_entry_that_drops_nothing_is_red(self):
         self.smells = [temp("internal/p gocyclo")]

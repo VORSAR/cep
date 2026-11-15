@@ -7,8 +7,8 @@ repository) serves both `go list -e -json ./...`, which gives the file map and t
 must agree with the report; the report's error, warnings and enabled linters are checked; a finding at a file no
 package claims is red. The two runs merge by (file, line, column, linter, text); a generated.json target, a
 `[fmtprint]` finding in a package-main tool and a live size exclusion drop their findings; any `unsafe` import is red;
-on a full-tree run an exclusion that dropped nothing is red. At T0 only the staged files' packages are linted, with
-the same verdict and the liveness check off.
+on a full-tree run an exclusion that dropped nothing is red, and at any tier one that dropped more than its cap. At T0
+only the staged files' packages are linted, with the same verdict and the liveness check off.
 """
 
 import os
@@ -162,19 +162,23 @@ def silenced(err: str, root: str) -> list[str]:
     return found
 
 
-def size_entries(root: str, tier: str, today: date) -> tuple[dict[tuple[str, str], bool], list[str]]:
-    """(package dir, rule) -> live, from smells.json (§3.1); a missing list holds no exclusion."""
+Caps = dict[tuple[str, str], int]
+
+
+def size_entries(root: str, tier: str, today: date) -> tuple[dict[tuple[str, str], bool], Caps, list[str]]:
+    """(package dir, rule) -> live and -> cap, from smells.json (§3.1); a missing list holds no exclusion."""
     try:
         text = rows.read_text(os.path.join(root, SMELLS_LIST))
     except FileNotFoundError:
-        return {}, []
+        return {}, {}, []
     except OSError as e:
-        return {}, [f"{SMELLS_LIST}: {e.strerror}"]
+        return {}, {}, [f"{SMELLS_LIST}: {e.strerror}"]
     try:
         lst = allowlists.load(text, "smells")
     except ValueError as e:
-        return {}, [str(e)]
+        return {}, {}, [str(e)]
     entries: dict[tuple[str, str], bool] = {}
+    caps: Caps = {}
     faults: list[str] = []
     for entry in lst.entries:
         parts = entry.target.split(" ")
@@ -189,7 +193,9 @@ def size_entries(root: str, tier: str, today: date) -> tuple[dict[tuple[str, str
         except ValueError:
             expired = False  # a malformed expiry is the grammar's fault, the suppressions row's (allowlists.check)
         entries[(parts[0], parts[1])] = not (expired and tier in allowlists.RED_EXPIRED)
-    return entries, faults
+        if entry.cap is not None:
+            caps[(parts[0], parts[1])] = entry.cap
+    return entries, caps, faults
 
 
 def generated_targets(root: str) -> tuple[frozenset[str], list[str]]:
@@ -317,7 +323,7 @@ def main(argv: list[str]) -> int:
 
     ignored_both = frozenset(plats[0].ignored & plats[1].ignored)
     count, data, cover_faults = golangci.covered(tracked, plats[0].files, plats[1].files, ignored_both, mods)
-    entries, list_faults = size_entries(root, tier, rows.today())
+    entries, caps, list_faults = size_entries(root, tier, rows.today())
     generated, gen_faults = generated_targets(root)
     faults = sorted(set(run_faults)) + cover_faults + list_faults + gen_faults
 
@@ -332,6 +338,12 @@ def main(argv: list[str]) -> int:
             for (pkg, rule), n in sorted(dropped.items())
             if n == 0 and entries[(pkg, rule)]
         ]
+    faults += [
+        f"smells.json: {pkg} {rule} drops {n} findings, its cap is {caps[(pkg, rule)]}: fix the new one, or raise the"
+        " cap by an owner decision"
+        for (pkg, rule), n in sorted(dropped.items())
+        if (pkg, rule) in caps and n > caps[(pkg, rule)]
+    ]
     faults += sorted(set(plats[0].silenced) | set(plats[1].silenced))
     faults += sorted(f"{path}: {UNSAFE}" for path in plats[0].unsafe | plats[1].unsafe)
     lines.append(summary(dropped, data))

@@ -181,6 +181,57 @@ class Load(unittest.TestCase):
         self.assertRefused(list_text(entries=[entry, dict(entry)]), want)
 
 
+SMELLS_PREFIX = "tools/allowlists/smells.json: "
+
+
+def smells_text(**over: object) -> str:
+    entry = {
+        "target": "internal/p funlen",
+        "kind": "TEMP",
+        "reason": REASON,
+        "sprint": "S1.1c-5",
+        "expiry": "2026-12-14",
+        "issue": "S1.1c-5-1",
+        "cap": 3,
+    }
+    entry.update(over)
+    return json.dumps({"schema": 1, "note": "n", "rule": "smells", "entries": [entry]})
+
+
+class Cap(unittest.TestCase):
+    """Owner 2026-11-14, S1.1c-5's review and break-it, decision 2: each size exclusion carries the number of findings
+    it drops today, a positive integer `cap`, on rule smells only."""
+
+    def assertRefused(self, text: str, want: str, name: str) -> None:
+        with self.assertRaises(ValueError) as caught:
+            allowlists.load(text, name)
+        self.assertEqual(str(caught.exception), want)
+
+    def test_a_cap_is_read_on_a_smells_entry(self):
+        got = allowlists.load(smells_text(), "smells").entries
+        want = allowlists.Entry(
+            "internal/p funlen", "TEMP", REASON, "S1.1c-5", expiry="2026-12-14", issue="S1.1c-5-1", cap=3
+        )
+        self.assertEqual(got, (want,))
+
+    def test_a_smells_entry_without_a_cap_is_refused(self):
+        entry = json.loads(smells_text())["entries"][0]
+        del entry["cap"]
+        text = json.dumps({"schema": 1, "note": "n", "rule": "smells", "entries": [entry]})
+        self.assertRefused(text, SMELLS_PREFIX + "entries[0]: missing cap", "smells")
+
+    def test_a_cap_not_a_positive_integer_is_refused(self):
+        for bad in (0, -1, True, "3", 2.0, None):
+            with self.subTest(cap=bad):
+                self.assertRefused(
+                    smells_text(cap=bad), SMELLS_PREFIX + "entries[0]: cap is not a positive integer", "smells"
+                )
+
+    def test_a_cap_on_another_rule_is_refused(self):
+        entry = json.loads(list_text())["entries"][0] | {"cap": 3}
+        self.assertRefused(list_text(entries=[entry]), PREFIX + "entries[0]: cap is only for smells.json", "purity")
+
+
 class Fields(unittest.TestCase):
     def test_a_good_permanent_and_a_good_temp_are_green(self):
         self.assertEqual(fields(permanent()), [])
@@ -377,6 +428,7 @@ class LaneDPackages(unittest.TestCase):
                         "sprint": "S1.1c-5",
                         "expiry": "2026-12-14",
                         "issue": "S1.1c-5-1",
+                        "cap": 1,
                     }
                 ],
             }

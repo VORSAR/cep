@@ -1,11 +1,13 @@
 """The exemption grammar's lists and its one set of field validators (S1.1c-2 design §2.2, §2.8).
 
 A list is `tools/allowlists/<rule>.json`: `{"schema": 1, "note": str, "rule": <rule>, "entries": [...]}`, each entry
-`target`, `kind`, `reason`, `sprint` and, by kind, `ref` (PERMANENT) or `expiry` and `issue` (TEMP). `load` reads the
-shape; `fields` holds the field rules, and it is their only implementation: the suppressions row applies it to the
-lists and to every in-code directive, and the deps register calls `sprint_fault` and `ref_fault` (DA-S1). Pure: the
-caller builds `Ctx` (the day, the tier, the sprint order, the marker, the known issues, a ref resolver), so a test
-injects all of it and never reads the clock or the law files (DQ-S9).
+`target`, `kind`, `reason`, `sprint` and, by kind, `ref` (PERMANENT) or `expiry` and `issue` (TEMP); a smells.json
+entry also carries `cap`, a positive integer, the findings it may drop (owner 2026-11-14, S1.1c-5's review and break-it,
+decision 2), and no other list may. `load` reads the shape; `fields` holds the field rules, and it is their only
+implementation: the suppressions row applies it to the lists and to every in-code directive, and the deps register
+calls `sprint_fault` and `ref_fault` (DA-S1). Pure: the caller builds `Ctx` (the day, the tier, the sprint order, the
+marker, the known issues, a ref resolver), so a test injects all of it and never reads the clock or the law files
+(DQ-S9).
 """
 
 import json
@@ -24,6 +26,8 @@ KINDS = ("PERMANENT", "TEMP")
 TOP_KEYS = ("schema", "note", "rule", "entries")
 REQUIRED = ("target", "kind", "reason", "sprint")
 OPTIONAL = ("ref", "expiry", "issue")
+CAP = "cap"  # required on rule CAPPED, refused on every other rule
+CAPPED = "smells"
 REASON_MIN = 12
 AHEAD_MAX = 90
 COUNTDOWN = 14
@@ -50,6 +54,7 @@ class Entry:
     ref: str = ""
     expiry: str = ""
     issue: str = ""
+    cap: int | None = None  # smells.json only: the findings the entry may drop (owner 2026-11-14, decision 2)
 
 
 @dataclass(frozen=True)
@@ -78,12 +83,26 @@ def _show(value: object) -> str:
     return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
-def _entry(where: str, item: object, seen: set[str]) -> Entry:
+def _cap(where: str, item: dict[str, object], rule: str) -> int | None:
+    if rule != CAPPED:
+        if CAP in item:
+            raise ValueError(f"{where}: {CAP} is only for {CAPPED}.json")
+        return None
+    if CAP not in item:
+        raise ValueError(f"{where}: missing {CAP}")
+    value = item[CAP]
+    if type(value) is not int or value < 1:
+        raise ValueError(f"{where}: {CAP} is not a positive integer")
+    return value
+
+
+def _entry(where: str, item: object, seen: set[str], rule: str) -> Entry:
     if type(item) is not dict:
         raise ValueError(f"{where}: not an object")
     for key in sorted(item):
-        if key not in REQUIRED and key not in OPTIONAL:
+        if key not in REQUIRED and key not in OPTIONAL and key != CAP:
             raise ValueError(f"{where}: unknown key {key}")
+    cap = _cap(where, item, rule)
     for key in REQUIRED:
         if key not in item:
             raise ValueError(f"{where}: missing {key}")
@@ -102,6 +121,7 @@ def _entry(where: str, item: object, seen: set[str]) -> Entry:
         ref=item.get("ref", ""),
         expiry=item.get("expiry", ""),
         issue=item.get("issue", ""),
+        cap=cap,
     )
 
 
@@ -130,7 +150,7 @@ def load(text: str, name: str) -> AllowList:
     if type(data["entries"]) is not list:
         raise ValueError(f"{where}: entries is not a list")
     seen: set[str] = set()
-    entries = tuple(_entry(f"{where}: entries[{i}]", item, seen) for i, item in enumerate(data["entries"]))
+    entries = tuple(_entry(f"{where}: entries[{i}]", item, seen, rule) for i, item in enumerate(data["entries"]))
     return AllowList(name, rule, entries)
 
 

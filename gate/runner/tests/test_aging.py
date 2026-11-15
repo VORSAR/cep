@@ -425,6 +425,7 @@ SMELLS_ENTRY = {
     "sprint": "S1.1c-5",
     "expiry": "2026-12-14",
     "issue": "S1.1c-5-1",
+    "cap": 1,
 }
 WORLD_SPRINTS = {
     "schema": 1,

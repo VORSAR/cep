@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "Size exclusions for the smells row (S1.1c-5 design §3.1): one TEMP entry per package directory and size rule, target \"<package dir> <rule>\" with the rule one of funlen, gocyclo, file-length-limit and argument-limit, each naming a known issue whose forward is a printed part no later than S1.1c-8; the aging row runs the part-level check (§3.5). Written by the coordinator from the real tree after W2 (the plan check's tentative order; re-cut at S1.1c-5's close, decision 2).",
+  "note": "Size exclusions for the smells row (S1.1c-5 design §3.1): one TEMP entry per package directory and size rule, target \"<package dir> <rule>\" with the rule one of funlen, gocyclo, file-length-limit and argument-limit, each naming a known issue whose forward is a printed part no later than S1.1c-8; the aging row runs the part-level check (§3.5). Written by the coordinator from the real tree after W2 (the plan check's tentative order; re-cut at S1.1c-5's close, decision 2). Each entry's cap is the number of findings it dropped on the real tree in S1.1c-5's fix round; more is red, fewer is fine, and only an owner decision raises it (owner 2026-11-14, S1.1c-5's review and break-it, decision 2).",
   "rule": "smells",
   "entries": [
     {
@@ -9,7 +9,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 2
     },
     {
       "target": ". gocyclo",
@@ -17,7 +18,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 5
     },
     {
       "target": "internal/event file-length-limit",
@@ -25,7 +27,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 1
     },
     {
       "target": "internal/event funlen",
@@ -33,7 +36,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 2
     },
     {
       "target": "internal/event gocyclo",
@@ -41,7 +45,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 12
     },
     {
       "target": "internal/expr file-length-limit",
@@ -49,7 +54,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 1
     },
     {
       "target": "internal/expr funlen",
@@ -57,7 +63,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 3
     },
     {
       "target": "internal/expr gocyclo",
@@ -65,7 +72,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 5
     },
     {
       "target": "internal/model gocyclo",
@@ -73,7 +81,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 2
     },
     {
       "target": "internal/parser file-length-limit",
@@ -81,7 +90,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 1
     },
     {
       "target": "internal/parser funlen",
@@ -89,7 +99,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 1
     },
     {
       "target": "internal/parser gocyclo",
@@ -97,7 +108,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 5
     },
     {
       "target": "internal/partition file-length-limit",
@@ -105,7 +117,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 1
     },
     {
       "target": "internal/partition gocyclo",
@@ -113,7 +126,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 2
     },
     {
       "target": "internal/plan argument-limit",
@@ -121,7 +135,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 1
     },
     {
       "target": "internal/plan funlen",
@@ -129,7 +144,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 2
     },
     {
       "target": "internal/plan gocyclo",
@@ -137,7 +153,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 5
     },
     {
       "target": "internal/playback file-length-limit",
@@ -145,7 +162,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 1
     },
     {
       "target": "internal/playback funlen",
@@ -153,7 +171,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 1
     },
     {
       "target": "internal/playback gocyclo",
@@ -161,7 +180,8 @@
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2"
+      "issue": "S1.1c-5-2",
+      "cap": 15
     },
     {
       "target": "internal/runtime argument-limit",
@@ -169,7 +189,8 @@
       "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1"
+      "issue": "S1.1c-5-1",
+      "cap": 1
     },
     {
       "target": "internal/runtime file-length-limit",
@@ -177,7 +198,8 @@
       "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1"
+      "issue": "S1.1c-5-1",
+      "cap": 2
     },
     {
       "target": "internal/runtime funlen",
@@ -185,7 +207,8 @@
       "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1"
+      "issue": "S1.1c-5-1",
+      "cap": 3
     },
     {
       "target": "internal/runtime gocyclo",
@@ -193,7 +216,8 @@
       "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1"
+      "issue": "S1.1c-5-1",
+      "cap": 16
     },
     {
       "target": "internal/validate funlen",
@@ -201,7 +225,8 @@
       "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1"
+      "issue": "S1.1c-5-1",
+      "cap": 3
     },
     {
       "target": "internal/validate gocyclo",
@@ -209,7 +234,8 @@
       "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1"
+      "issue": "S1.1c-5-1",
+      "cap": 19
     },
     {
       "target": "tools/apipartition funlen",
@@ -217,7 +243,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 1
     },
     {
       "target": "tools/apipartition gocyclo",
@@ -225,7 +252,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 5
     },
     {
       "target": "tools/archcheck file-length-limit",
@@ -233,7 +261,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 1
     },
     {
       "target": "tools/archcheck funlen",
@@ -241,7 +270,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 1
     },
     {
       "target": "tools/archcheck gocyclo",
@@ -249,7 +279,8 @@
       "reason": "size family not yet cleaned; S1.1c-8 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
       "sprint": "S1.1c-5",
       "expiry": "2027-02-11",
-      "issue": "S1.1c-5-3"
+      "issue": "S1.1c-5-3",
+      "cap": 19
     }
   ]
 }

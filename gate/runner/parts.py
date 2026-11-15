@@ -4,7 +4,9 @@ reviews, decision 1): run by the aging row over tools/allowlists/smells.json, it
 Every size exclusion is TEMP and names a known issue whose `forward` is a printed part, never past S1.1c-8; when the
 marker reaches that part the exclusion is red at T4 and nightly and a countdown line at T3. A forward only the owner
 moves: per exclusion target, an effective forward later than at the merge base needs a new decision naming the issue,
-and a target absent at the base is red after S1.1c-5's own branch. With no merge base the move check cannot run, red
+and a target absent at the base is red after S1.1c-5's own branch. A cap only the owner raises: a cap higher than the
+target's at the base needs the same (owner 2026-11-14, S1.1c-5's review and break-it, decision 2). A decision is a
+docs/sprints/decisions.md section only (`aging.decided`, decision 1). With no merge base the move check cannot run, red
 at T4 and nightly. `forwards` is pure (the order, the marker, the tier, the base and the decision reader injected);
 `read_base` reads git.
 """
@@ -148,8 +150,9 @@ def _moves(
     base: Base,
     decided: Callable[[str, str], bool],
 ) -> list[str]:
-    """Rule 5, per exclusion target: the effective forward now against the one at the base."""
+    """Rule 5, per exclusion target: the effective forward and the cap now against the base's."""
     then = {e.target: e.issue for e in base.entries or ()} if base.issues is not None else {}
+    caps = {e.target: e.cap for e in base.entries or ()}
     faults: list[str] = []
     for entry, forward, decision in judged:
         where = f"aging: smells.json: {entry.target}"
@@ -163,9 +166,16 @@ def _moves(
             if marker != LANDING:
                 faults.append(f"{where}: a new size exclusion after {LANDING}: clean the package instead (decision 1)")
             continue
-        if moved and not (decided(entry.issue, decision) and decision != old[1]):
+        new_decision = decided(entry.issue, decision) and decision != old[1]
+        if moved and not new_decision:
             faults.append(
                 f"{where}: forward moved {old[0]} → {forward} (issue {base_id} → {entry.issue}) without a decision"
                 f" that names {entry.issue} (decision 1: only the owner moves a forward)"
+            )
+        was = caps.get(entry.target)
+        if entry.cap is not None and was is not None and entry.cap > was and not new_decision:
+            faults.append(
+                f"{where}: cap raised {was} → {entry.cap} (issue {entry.issue}) without a decision that names"
+                f" {entry.issue} (decision 2: only the owner raises a cap)"
             )
     return faults
