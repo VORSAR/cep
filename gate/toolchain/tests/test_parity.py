@@ -654,6 +654,21 @@ class RealCache(support.ToolchainTest):
             "CGO_ENABLED": "0",
             "HOME": self.world,
         }
+        # Go's telemetry off in this HOME before any probe: it would write counters into the world (perhaps from a
+        # detached child) while the world is removed (S1.1c-5's T4, 2026-11-15). GOTELEMETRY=off is not honoured.
+        go = shutil.which("go", path=self.env["PATH"])
+        self.assertIsNotNone(go)
+        subprocess.run([go, "telemetry", "off"], env=self.env, cwd=self.world, check=True, capture_output=True)
+
+    def test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world(self):
+        # The world is this test's HOME; go's telemetry (perhaps a detached child of its own) writes counters there,
+        # and under load the world's removal found the folder not empty (S1.1c-5's T4, 2026-11-15).
+        go = [tool for tool in self.tools if tool.name == "go"]
+        parity.check(go, self.real_cache, self.env, full_tree=False, spawn=parity.popen, scratch=self.scratch,
+                     run_id=RUN_ID, handoff_in=None)  # fmt: skip  # aligned arguments
+        written = [os.path.join(d, f) for d, _, files in os.walk(self.world) for f in files if "telemetry" in d]
+        # Only setUp's off switch, written before any probe: no counter, no upload token.
+        self.assertEqual([p for p in written if os.path.basename(p) != "mode"], [], written)
 
     def test_the_installed_tools_pass_every_check_and_their_whole_trees_match(self):
         self.assertEqual(
