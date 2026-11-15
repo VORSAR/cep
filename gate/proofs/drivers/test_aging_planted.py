@@ -41,6 +41,7 @@ class AgingPlanted(support.DriverTest):
     def setUp(self) -> None:
         super().setUp()
         self.world.copy_gate()
+        self.world.copy("tools/allowlists/smells.json")  # the aging row's part-level check reads it (S1.1c-5 §3.5)
         for rel in self.world.tracked("docs"):
             if rel.endswith(".md"):
                 self.world.copy(rel)
@@ -69,6 +70,8 @@ class AgingPlanted(support.DriverTest):
 
     def run_row(self) -> support.Run:
         self.world.commit()
+        # The world as a branch just cut from main: the part-level check reads its merge base (S1.1c-5 §3.5).
+        self.world.git("update-ref", "refs/heads/main", "HEAD")
         return self.world.run(registry=self.world.registry(support.registry_row(ROW)), tier=TIER)
 
     def in_scope(self) -> list[str]:
