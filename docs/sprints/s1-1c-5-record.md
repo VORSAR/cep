@@ -107,6 +107,7 @@ None.
 | (pre-existing) | architecture CA-S3 | later | backlog: the runner's clean environment does not drop `CEP_*` names |
 | T4-1 | T4 (2026-11-15) | blocker (two proof worlds) | fixed (a75dd44, the proof worlds carry the sprint's law files): `test_hook_commit` (no `.golangci.toml` in its world) and `test_aging_planted` (no `smells.json`, no `main`) were red at the first T4 |
 | T4-2 | T4 (2026-11-15) | blocker (flake) | fixed inside the sprint (owner, 2026-11-15, ≠ R): a stop landing between a child's spawn and `run_process` holding it orphaned the child (pre-existing; 19/20 under the stress harness). `term.critical()` holds the stop until the child is held; red first `test_term.Critical`, `test_stop_children`'s forced race; after it 20/20 under the stress harness for all ten tests of both modules |
+| T4-3 | T4 (2026-11-15) | blocker (flake) | fixed inside the sprint (owner, 2026-11-15, 2): Go's telemetry wrote into `test_parity`'s temp `HOME` and raced its removal; `go telemetry off` in RealCache's setUp, red first `test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world` |
 | (fix-p) | the fix round | later | backlog: the T2 known-issues pin still accepts a decision anchor in any Markdown file (aging rule 1 already ages such an entry) |
 
 **Deviations recorded:**
