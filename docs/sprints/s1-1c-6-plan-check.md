@@ -1,16 +1,23 @@
-# S1.1c-6 — plan check (v2, 2026-11-15; answered by the owner 2026-11-15 — [decisions.md](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check); the sprint record, `s1-1c-6-record.md`, opens at G0)
+# S1.1c-6 — plan check (v3, 2026-11-15: v2 answered by the owner 2026-11-15, then re-cut after the spike — [decisions.md](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check); the sprint record, `s1-1c-6-record.md`, opens at G0)
 
 *Step 0 of the full loop ([00-sprint-model.md §6](00-sprint-model.md#6-the-full-loop)). Drafted read-only against `main` @ 4d2b9eb. Every code claim cites `file:line` on that commit; "measured" marks a run made for this plan (the pinned golangci-lint v2.15.0 and Go 1.27.4 under both `GOOS`; coverage profiles of the 12 packages); "inferred" marks a reading not proven by a run. "PA-" and "PQ-" mark the blind reviews of v1 ([architecture](../reviews/s1-1c-6-plan-check-architecture.md), [QA](../reviews/s1-1c-6-plan-check-qa.md)); every claim of theirs that changes the plan was verified by the coordinator. Two scope answers were taken while drafting ([owner, 2026-11-15](decisions.md#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check)); nothing else here is an owner decision until the owner answers §11.*
 
 ```
-Sprint S1.1c-6 — the strict lint set: the size limits in every other package, all 139 findings, no exclusion left
-routine: full (no semantics panel) · SP ≈ 13, confirmed or re-cut by the spike before G0 (§1) · cap 2 weeks · one PR
+Sprint S1.1c-6 — the strict lint set: the size limits in runtime, validate, event, parser, plan and playback (91 findings)
+routine: full (no semantics panel) · SP ≈ 13 (the spike and the re-cut, 2026-11-15) · cap 2 weeks · one PR
 Entry (G0)   ☐ card complete and approved (§12) ☑ dependencies merged, main green (S1.1c-5, PR #47; close-out #48; main 4d2b9eb)
-             ☐ fits the cap, lanes ≤ 8 days (the spike, §1) ☐ test material: the nets are each lane's first item (§7)
+             ☑ fits the cap, lanes ≤ 8 days (the spike, then the re-cut by known issue) ☐ test material: the nets are each lane's first item (§7)
              ☐ `gate/current-sprint` set to S1.1c-6 as the first commit after this plan check's
              ☑ reviewed by the architect ☑ reviewed by QA ☑ answered by the owner (§11, 2026-11-15: all six as recommended)
 ```
 *At G0 the full done-done block ([§13](00-sprint-model.md#13-done-done-the-exit-checklist)) is copied into the sprint record, `s1-1c-6-record.md`.*
+
+**v3 — the re-cut after the spike ([the spike](../reviews/s1-1c-6-spike.md); [owner, 2026-11-15](decisions.md#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike)).** With the decided nets the whole projected at about 18 agent-hours of lane work, over the cap; it is cut by known issue.
+- **S1.1c-6** (this plan): the packages of S1.1c-5-1 and S1.1c-5-2 — `internal/runtime` 22, `internal/validate` 22, `internal/event` 15, `internal/playback` 17, `internal/plan` 8, `internal/parser` 7: **91 findings**, all the concurrency, **31** of the 38 hot-path functions (§3's rows without the root `row`, the three `Eval`s, `keyOf` and `Offer`).
+- **S1.1c-7**: the packages of S1.1c-5-3 — root 7, `internal/expr` 9, `internal/model` 2, `internal/partition` 3, `tools/apipartition` 6, `tools/archcheck` 21 (48 findings) — with the sprint-named test files, the naming check and the exclusion machinery's retirement. Its own plan check.
+- **At G0** the coordinator also moves S1.1c-5-3's forward to S1.1c-7 (`gate/known-issues.json`, its `decision` naming the re-cut section, and its table row) and `LAST_PART` to S1.1c-7 (`gate/runner/parts.py:19`), red first (`gate/runner/tests/test_parts.py:105` pins it); the `aging` row is smoke-run on the real tree at T3 and T4 before G1 (sprint model §10).
+- **Red by construction (§0.2, Q6)** now means the 18 entries of S1.1c-5-1 and -2; the 13 entries of S1.1c-5-3 forward to S1.1c-7, which the marker has not reached. `test_aging.py:544` keeps S1.1c-5-3 and -4 at this sprint's close.
+- Sections §0 and §10 keep the whole tree's measurements and the reviews' dispositions; §1, §2, §4, §7, §9 and §12 below are re-cut. Lane A, the archcheck and apipartition `code` lists (§0.10), the `AppHandle.Start` and `NewStreamRegistry` placements (§0.9) and the archcheck placement candidate (§0.15) move to S1.1c-7. The literal-to-value candidate (§0.15) touches `internal/expr`, an S1.1c-7 package: the design says in which part its move lands.
 
 ## 0. What the code says that the plan does not (read first)
 
@@ -53,13 +60,13 @@ Entry (G0)   ☐ card complete and approved (§12) ☑ dependencies merged, main
 | Design | coordinator; then the architect reviewer and QA blind; then the owner | The design note (§5). **G1.** |
 | W0 | python-engineer (one agent) | The benchmark comparer (Q3), red first, with its tests. `astequal`'s rename map (PA-B1), red first, only if the owner approves a move at G1. |
 | Moves | coordinator, on the integration branch | Each approved cross-package move, one commit each, before any lane branches (§2). |
-| Lanes | go-engineer per sub-lane | R (`internal/runtime`: R1 nets, R2 moves and the hot-path splits, R3 lifecycle and the rest) and V (`internal/validate`: V1 nets and moves, V2 splits) first, per decision 2 of S1.1c-5's plan check; then E (`internal/event`) and X (`internal/expr`, `plan`, `partition`, `model`); then P (`internal/playback`) and T (root, `internal/parser`); A last (`tools/archcheck`: A1, A2; `tools/apipartition` with A2), behind its proofs. |
+| Lanes | go-engineer per sub-lane | R (`internal/runtime`: R1 nets, R2 moves and the hot-path splits, R3 lifecycle and the rest) and V (`internal/validate`: V1 nets and moves, V2 splits) first, per decision 2 of S1.1c-5's plan check; then E (`internal/event`) and P (`internal/playback`); then Q (`internal/parser`, `internal/plan`). |
 | Measure | coordinator, alone (no gate running) | After each lane: the benchmark comparisons of Q3 for its leaf functions (PA-S8). |
 | Combine | coordinator | Cherry-picks; each issue closed when its last lane is in (§4); T3; the review and break-it; one fix round; the nightly job once; the path comparison `main` vs combined (Q3); T4; the owner's check. |
 
 **Each sub-lane, in its own worktree:** (1) its nets, committed before any split (§7); (2) pure file moves to the design's file map, each `astequal` exit 0; (3) splits by concern, one commit per source file or concern, each at or below every cap (§0.7); (4) **hand-back** (PA-S2): 0 size findings on its own packages under the pinned golangci-lint for both `GOOS`, its packages' `go test` green, every commit through T0, its report. Then the coordinator commits the removal of the lane's own `smells.json` entries on the lane's branch and runs T2 and the lane's verifiers itself, reading the `exit:` line.
 
-**Commit budget (line by line, PA-S10):** plan check v2 with its reviews 1 · the owner's answers 1 · G0 1 · design v1 1, its reviews and v2 1, G1's answers 1 · W0 2 (+2 if a move is approved) · moves ≤ 3 · lanes 7 × ≤ 8 (nets 2, file moves 1, splits ≤ 4, removal 1) = 56 · combine: issue closures 3, the docs rows of §4 1, `law.json` code lists 1 · the fix round ≤ 10 · the record, T4 and G5 docs 3. **At most 89; slack 11.** The coordinator counts at each combine; if the projection passes 95, a lane's split commits (which no `astequal` proves) are squashed on its branch before cherry-pick.
+**Commit budget (line by line, PA-S10; v3):** plan check v2 with its reviews 1 · the owner's answers 1 · the spike and the re-cut 1 · G0 2 (the law commit; `LAST_PART` red first) · design v1 1, its reviews and v2 1, G1's answers 1 · W0 2 (+2 if a move is approved) · moves ≤ 3 · lanes: R 3 sub-lanes × ≤ 6 = 18, V 2 × ≤ 6 = 12, E, P and Q ≤ 8 each = 24 · combine: issue closures 2, the docs rows of §4 1 · the fix round ≤ 10 · the record, T4 and G5 docs 3. **At most 85; slack 15.** The coordinator counts at each combine; if the projection passes 95, a lane's split commits (which no `astequal` proves) are squashed on its branch before cherry-pick.
 
 ## 2. Seams
 
@@ -89,12 +96,10 @@ The rest (deploy-time validation, parsing, plan building, lifecycle, the gate to
 | **R** | `internal/runtime/**` |
 | **V** | `internal/validate/**` |
 | **E** | `internal/event/**` |
-| **X** | `internal/expr/**`, `internal/plan/**`, `internal/partition/**`, `internal/model/**` |
 | **P** | `internal/playback/**` |
-| **T** | the root package's `*.go`, `internal/parser/**` |
-| **A** | `tools/archcheck/**`, `tools/apipartition/**` |
+| **Q** | `internal/parser/**`, `internal/plan/**` |
 | **W0** | the benchmark comparer and its tests (path fixed by the design; Python under the pinned interpreter); `tools/astequal/**` if a move is approved |
-| **Coordinator** | the files of §2, and: **G0** — the marker; S1.1c-7 printed; `test_aging.py:520-569` re-derived (ids `["S1.1c-5","S1.1c-6","S1.1c-7"]`, `closing` `{"S1.1c-5","S1.1c-6","S1.1c-7"}`, marker `"S4.1"`, the test renamed for S1.1c-7's close, its docstring; the witness shown red first in a scratch copy). **On each lane's branch** — the removal of that lane's own entries. **At combine** — an issue closed (its `known-issues.json` entry, its table row, `test_aging.py:544` reduced) once its last lane is in; a split archcheck's or apipartition's new files added to the `code` lists of §0.10; the S3.3-1-3 row's pointer to `iBatchEnd` and ADR-0010 §3's `decode.go` if they move (PA-S11). **At G5** — only `S1.1c-6` closed in `gate/sprints.json` (row `S1.1c` closes with S1.1c-7). |
+| **Coordinator** | the files of §2, and: **G0** — the marker; S1.1c-7 printed; `test_aging.py:520-569` re-derived (ids `["S1.1c-5","S1.1c-6","S1.1c-7"]`, `closing` `{"S1.1c-5","S1.1c-6","S1.1c-7"}`, marker `"S4.1"`, the test renamed for S1.1c-7's close, its docstring; the witness shown red first in a scratch copy). **On each lane's branch** — the removal of that lane's own entries. **At combine** — an issue closed (its `known-issues.json` entry, its table row, `test_aging.py:544` reduced) once its last lane is in; the S3.3-1-3 row's pointer to `iBatchEnd` and ADR-0010 §3's `decode.go` if they move (PA-S11). **At G5** — only `S1.1c-6` closed in `gate/sprints.json` (row `S1.1c` closes with S1.1c-7). |
 
 ## 5. The design note (before code)
 
@@ -139,12 +144,10 @@ Written by the coordinator after the owner answers this plan check, reviewed bli
 | R | runtime behaviour unchanged → unit, conformance and baseline (both also at T2, PQ-L1), the boundary, tripwire and goroutine tests; lifecycle → `race` | `go test -race -count=3 ./internal/runtime/...`; the nightly job alone (`--tier nightly --job nightly`, which leaves out `aging`; inferred, confirmed at G0) |
 | V | the same E-codes, positions and messages → conformance, `docsync-b-catalog`, the negative tests | — |
 | E | the same values and errors → the decoder tests, the alloc pins | the nightly job alone (`fuzz-decoder`); `--job proofs` (§0.9) |
-| X | the same values, errors and partitioning → expr, plan, partition tests; the canonical encoding → model's golden and parity tests | — |
 | P | the same recordings and replays → the baselines, the corpus test, `determinism` (darwin locally; linux in CI, PQ-L2) | `--job proofs` |
-| T | the same deploy and parse errors → `fragments`, `docsync-d`, the parser goldens | the nightly job alone (`fuzz-parser`); `--job proofs` |
-| A | archcheck and apipartition judge the same → their tests; the planted proofs | `--job proofs` |
+| Q | the same parse errors and plans → `fragments`, `docsync-d`, the parser goldens; the plan and expect tests | the nightly job alone (`fuzz-parser`); `--job proofs` |
 
-**The `proofs` and T4 schedule (§0.2, Q6):** `--job proofs` after G0, after lanes E, T, P and A, and on the combined branch before T3. Every run before the last lane's removal is red by construction; it is recorded as **red as expected** only when its failed lines are exactly `aging`'s "has reached its part S1.1c-6" lines for the entries still present and `test_aging_planted.py`'s five cases, quoted in the record — never reported green. The first green `proofs` run follows the last removal.
+**The `proofs` and T4 schedule (§0.2, Q6):** `--job proofs` after G0, after lanes E, P and Q, and on the combined branch before T3. Every run before the last lane's removal is red by construction; it is recorded as **red as expected** only when its failed lines are exactly `aging`'s "has reached its part S1.1c-6" lines for the entries still present and `test_aging_planted.py`'s five cases, quoted in the record — never reported green. The first green `proofs` run follows the last removal.
 
 **The combined branch:** T3; the nightly job once; the path benchmarks `main` vs combined under Q3's rule (PA-S7); T4 (`smells`, `aging`, `conformance`, `baseline`, `determinism`, `differential`, `race`, `apidiff` with no public change, `coverage-inclusion` ≥ 90 per package, `proofs`).
 
@@ -154,13 +157,13 @@ Written by the coordinator after the owner answers this plan check, reviewed bli
 2. **A lifecycle regression only load shows.** *Mitigation:* §6.3–6.7; `race -count=3` and the nightly job on lane R; no known-issue fix in passing.
 3. **A function that resists a safe split and is not on a hot path** (`Drain` 23, `Close` 20; PA-S9). *Mitigation:* Q7.
 4. **Benchmark noise deciding a function's shape.** *Mitigation:* Q3's deterministic allocation and escape checks first; the time rule from prebuilt binaries, measured alone (PA-S8).
-5. **A gate tool blinded by its own refactor.** *Mitigation:* lane A last, behind `proofs`.
+5. **A gate tool blinded by its own refactor.** *Mitigation:* archcheck and apipartition moved to S1.1c-7 with the re-cut, still behind `proofs` there.
 6. **Red-by-construction runs read as noise, or worse, as green.** *Mitigation:* Q6's exact expected lines, quoted.
 7. **The size.** *Mitigation:* the spike before G0; sub-lanes for R, V and A.
 8. **The 100-commit cap.** *Mitigation:* §1's budget, counted at each combine.
 9. **Agents that drag or leave shells open.** *Mitigation:* a 30-minute box per sub-lane; no open-ended waits; the coordinator stops leftover shells after each lane.
 
-**Order:** the owner's answers → the spike → G0 → the design → G1 → W0 → the moves → lanes (R, V; E, X; P, T; A) → combine → T3 → review and break-it → one fix round → the nightly job → the path comparison → T4 → the owner's check.
+**Order:** the owner's answers → the spike → G0 → the design → G1 → W0 → the moves → lanes (R, V; E, P; Q) → combine → T3 → review and break-it → one fix round → the nightly job → the path comparison → T4 → the owner's check.
 
 ## 9. Lane briefs (skeletons; the coordinator adds paths, worktree and the report file)
 
@@ -222,20 +225,20 @@ The [architecture review](../reviews/s1-1c-6-plan-check-architecture.md) of v1 f
 - **Q8 — confirms.** The hot-path list of §3 (38), with path benchmarks for the goroutine loops and leaf benchmarks elsewhere. The spike before G0, and sub-lanes for R, V and A. One PR with §1's budget (two PRs would leave entries red on `main`). The `proofs` and nightly schedule of §7. The placement candidates of §0.15 decided at G1 (the literal-to-value merge into `model`; the size arithmetic to the backlog; archcheck split into files inside package main; the `validateApp` pair, `Deploy` and `bind` stay).
 - **Owner's check additions** (refined from the diff at the end): *By reading:* LAW Δ (`smells.json` emptied, S1.1c-5-1…3 closed, `test_aging.py`, the instruments' `code` lists), the record's benchmark and coverage tables, every kept-whole waiver with its samples. *By hand:* plant an over-long function in any package and see it red; open `internal/runtime` and read the file names.
 
-## 12. The card (for the plan's table and §3, approved at G0)
+## 12. The card (for the plan's table and §3, approved at G0; v3, after the re-cut)
 
 | | |
 |---|---|
-| **Goal** | Every package meets ADR-0015 §2's size limits (cyclomatic ≤ 10, function ≤ 60 lines, file ≤ 500 lines, parameters ≤ 5) with no TEMP size exclusion left (`smells.json` empty) and PERMANENT in-code waivers only under decision 6, each citing its measured samples; each big file split into files named by concern and each approved misplaced function moved; with no change in behaviour or hot-path performance. |
-| **Routine · size** | Full loop without the semantics panel · 13 SP, confirmed by the spike before G0 |
+| **Goal** | `internal/runtime`, `internal/validate`, `internal/event`, `internal/playback`, `internal/plan` and `internal/parser` meet ADR-0015 §2's size limits (cyclomatic ≤ 10, function ≤ 60 lines, file ≤ 500 lines, parameters ≤ 5) with no TEMP size exclusion of theirs left and PERMANENT in-code waivers only under decision 6, each citing its measured samples; each of their big files split into files named by concern and each approved misplaced function moved; with no change in behaviour or hot-path performance. |
+| **Routine · size** | Full loop without the semantics panel · 13 SP (the spike and the re-cut) |
 | **Depends on** | S1.1c-5 (PR #47), main green |
-| **In scope** | 1. The 139 size findings in the 12 packages, in seven lanes (R, V and A as sub-lanes). · 2. Each lane's nets first: Q4's coverage, Q3's performance net for the 38 hot-path functions. · 3. The design's file map and the approved cross-package moves, done before the lanes. · 4. W0: the benchmark comparer; `astequal`'s rename map if a move is approved. · 5. `smells.json` emptied; S1.1c-5-1…3 closed. · 6. S1.1c-7 printed after S1.1c-6. |
-| **Not in scope** | The sprint-named test files and the naming check → S1.1c-7. Retiring the exclusion machinery → S1.1c-7 (Q5). The lifecycle known issues S3.3-1-3, S3.3-2-1 → S8, S5.1. The recording line's size arithmetic → backlog unless the owner places it (§0.15). S1.1c-5's backlog (OC-S1, OC-L1, OC-L2, CO-1, the known-issues anchor pin, the runner's `CEP_*` names) → backlog. |
-| **Entry criteria** | The standard ones, plus this plan check answered and the spike's projection inside the cap. |
+| **In scope** | 1. The 91 size findings of S1.1c-5-1 and S1.1c-5-2, in five lanes (R and V as sub-lanes; E, P, Q). · 2. Each lane's nets first: the coverage bar and the performance net for its hot-path functions (31). · 3. The design's file maps and the approved cross-package moves, done before the lanes. · 4. W0: the benchmark comparer; `astequal`'s rename map if a move is approved. · 5. Their 18 entries gone from `smells.json`; S1.1c-5-1 and -2 closed. · 6. At G0: S1.1c-7 printed after S1.1c-6; S1.1c-5-3's forward and `LAST_PART` moved to S1.1c-7. |
+| **Not in scope** | S1.1c-5-3's packages (root, `internal/expr`, `internal/model`, `internal/partition`, `tools/apipartition`, `tools/archcheck`), the sprint-named test files, the naming check and retiring the exclusion machinery → S1.1c-7. The lifecycle known issues S3.3-1-3, S3.3-2-1 → S8, S5.1. The recording line's size arithmetic → backlog unless the owner places it. S1.1c-5's backlog (OC-S1, OC-L1, OC-L2, CO-1, the known-issues anchor pin, the runner's `CEP_*` names) → backlog. |
+| **Entry criteria** | The standard ones, plus this plan check answered (2026-11-15) and the re-cut recorded. |
 | **Exit criteria** | The done-done block, plus: |
-| | 1. **No size finding and no exclusion.** `smells` green on the real tree with its summary `smells: 0 issues dropped by 0 exclusions`, and `aging` green at T4 with the marker at S1.1c-6 (no size entry survives) — **proof:** T4's `smells` and `aging` lines quoted in the record; the teeth `test_smells_planted.py` cases 1–4, 27–28 and `test_aging_planted.py`'s five cases green after the last removal. |
-| | 2. **No behaviour change.** T4 green (conformance, baseline, determinism darwin and linux in CI, differential, race, apidiff with no public change, `coverage-inclusion` ≥ 90 per package); the nightly job once after the last removal; every in-package move commit `astequal` exit 0 and every cross-package move its rename-map proof, both re-run by the coordinator at G5; every split function at Q4's bar at its lane's nets commit, re-derived by the coordinator — **proof:** T4, the nightly run, the record's `astequal` and coverage tables. |
-| | 3. **No hot-path loss.** Each hot-path net landed before its first split and unchanged after it; each split met Q3's rule or the function stays whole with its samples; each hot path end to end met Q3's rule `main` vs combined — **proof:** the alloc pins at T2; the record's benchmark tables. |
-| | 4. **Files by concern, logic in place.** Every production file at most 500 lines; `git ls-files` of production `*.go` in the 12 packages equals the design's file map; every approved move done and no other — **proof:** `smells`; the coordinator's file-map diff quoted; the combined architecture review. |
-| | 5. **The debt closed.** S1.1c-5-1…3 absent from `known-issues.json` and the table — **proof:** T4 `aging`; `test_aging.py`'s re-derived real-file test green at T2. |
+| | 1. **No size finding and no exclusion in the six packages.** `smells` green on the real tree with its summary naming only S1.1c-5-3's packages among the exclusions that dropped findings, and `aging` green at T4 with the marker at S1.1c-6 (no entry of S1.1c-5-1 or -2 survives) — **proof:** T4's `smells` and `aging` lines quoted in the record; `test_smells_planted.py` cases 1–4 and 27–28 and `test_aging_planted.py`'s five cases green after the last removal. |
+| | 2. **No behaviour change.** T4 green (conformance, baseline, determinism darwin and linux in CI, differential, race, apidiff with no public change, `coverage-inclusion` ≥ 90 per package); the nightly job once after the last removal; every in-package move commit `astequal` exit 0 and every cross-package move its rename-map proof, both re-run by the coordinator at G5; every split function at the coverage bar at its lane's nets commit, re-derived by the coordinator — **proof:** T4, the nightly run, the record's `astequal` and coverage tables. |
+| | 3. **No hot-path loss.** Each of the 31 hot-path functions' nets landed before its first split and unchanged after it; each split met decision 1's rule or the function stays whole with its samples; each hot path end to end met the rule `main` vs combined — **proof:** the alloc pins at T2; the record's benchmark tables. |
+| | 4. **Files by concern, logic in place.** Every production file of the six packages at most 500 lines; `git ls-files` of their production `*.go` equals the design's file map; every approved move done and no other — **proof:** `smells`; the coordinator's file-map diff quoted; the combined architecture review. |
+| | 5. **The debt closed and the bound moved.** S1.1c-5-1 and -2 absent from `known-issues.json` and the table; S1.1c-5-3 forwarded to S1.1c-7 with `LAST_PART` — **proof:** T4 `aging`; `test_parts.py`'s bound pin; `test_aging.py`'s re-derived real-file test green at T2. |
 | **Owner's check** | §11's additions. |

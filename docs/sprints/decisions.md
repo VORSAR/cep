@@ -107,6 +107,7 @@
 | 2026-11-15 | [S1.1c-5's close-out](#owner-decisions-2026-11-15--s11c-5s-close-out) |
 | 2026-11-15 | [S1.1c-6's scope, before its plan check](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check) |
 | 2026-11-15 | [S1.1c-6's plan check](#owner-decisions-2026-11-15--s11c-6s-plan-check) |
+| 2026-11-15 | [S1.1c-6 re-cut after the spike](#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike) |
 
 ## The decisions
 
@@ -937,7 +938,7 @@ Ten answers, all as recommended.
 
 1. **The cut: the whole tree strict now for lll, errcheck, gocritic, forbidigo and nolintlint; the size family (gocyclo, funlen, file length, params) by package** (as recommended; the architecture review's option).
    - Each package not yet clean for the size family is a TEMP exclusion in the one grammar, tied to a known issue forwarded to the part that cleans it: S1.1c-6, -7 or -8.
-   - A new part-level check reds the exclusion when the marker reaches its part. A forward moves only by an owner decision, and never past S1.1c-8. An exclusion that waives nothing is red. *(annotated 2026-11-15: re-cut at S1.1c-5's close to one part, so never past S1.1c-6 — [the close-out](#owner-decisions-2026-11-15--s11c-5s-close-out), decision 1)*
+   - A new part-level check reds the exclusion when the marker reaches its part. A forward moves only by an owner decision, and never past S1.1c-8. An exclusion that waives nothing is red. *(annotated 2026-11-15: re-cut at S1.1c-5's close to one part, so never past S1.1c-6 — [the close-out](#owner-decisions-2026-11-15--s11c-5s-close-out), decision 1)* *(annotated 2026-11-15: never past S1.1c-7, with S1.1c-5-3's forward — [the re-cut after the spike](#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike))*
    - This annotates decision 1 of 2026-11-10 ("fixed and loud") and ADR-0015 §2.2 ("nothing is grandfathered"): the size family's debt is held to dated parts, not recorded as maxima.
    - Rejected: every rule by package; fixing everything first and landing the row last.
 2. **The later sprints are re-cut at S1.1c-5's close** (as recommended), from the fix rate the first packages measure (`table`, `clock`, `io/inmemory`, `shape`). runtime and validate come next, behind a performance net; `tools/archcheck` sits behind the `proofs` row. `internal/runtime` splits into files, not packages. Rejected: fixing the order now (the reviews sized S1.1c-6 at about 16 lane-days, over the cap).
@@ -1056,6 +1057,7 @@ After PR #47's CI (every job green) and its merge (rebase, `main` f7f005c, 96 co
    - S1.1c-7 and S1.1c-8 leave the plan's table and `gate/sprints.json`.
    - The known issues S1.1c-5-2 and S1.1c-5-3 move earlier, from S1.1c-7 and S1.1c-8 to S1.1c-6, and their `decision` names this section.
    - The part-level check's bound follows: never past S1.1c-6 (`LAST_PART` in `gate/runner/parts.py`). Decision 1 of the plan check is annotated.
+     *(annotated 2026-11-15: the bound moves to S1.1c-7 with S1.1c-5-3's forward — [the re-cut after the spike](#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike))*
 
    Rejected: two parts (runtime and validate, then the rest); keeping three.
    *(annotated 2026-11-15: S1.1c-7 is printed again with another scope, the sprint-named test files; the size findings stay S1.1c-6's alone — [S1.1c-6's scope](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check), decision 1)*
@@ -1096,3 +1098,14 @@ After [the plan check](s1-1c-6-plan-check.md) v2 and its blind reviews ([archite
    - one PR within the counted budget of at most 100 commits (two PRs would leave entries red on `main`);
    - the `proofs` and nightly schedule of the plan check's §7;
    - the placement candidates as the design's starting list, each move still decided at G1: the three literal-to-value conversions merged into one `model` function; the recording line's size arithmetic to the backlog; `tools/archcheck` split into files inside package main; the two `validateApp` functions, `Deploy` and `bind` staying where they are.
+
+### Owner decisions, 2026-11-15 — S1.1c-6 re-cut after the spike
+
+After [the spike](../reviews/s1-1c-6-spike.md) (decision 6 of [S1.1c-6's plan check](#owner-decisions-2026-11-15--s11c-6s-plan-check)). With the nets decided at the plan check, the lane work projects at about 18 agent-hours, against the roughly 2 hours (139 × 0.85 minutes) that [S1.1c-5's close-out](#owner-decisions-2026-11-15--s11c-5s-close-out) re-cut assumed from lane D's rate; the whole is about one and a half to two times S1.1c-5, over the 13-point cap. One answer, as recommended.
+
+1. **Two parts, cut by known issue** (as recommended).
+   - **S1.1c-6** cleans the packages of S1.1c-5-1 and S1.1c-5-2: `internal/runtime`, `internal/validate`, `internal/event`, `internal/parser`, `internal/plan`, `internal/playback` (91 findings; all the concurrency; 31 of the 38 hot-path functions).
+   - **S1.1c-7** cleans the packages of S1.1c-5-3: the root package, `internal/expr`, `internal/model`, `internal/partition`, `tools/apipartition`, `tools/archcheck` (48 findings), with its scope of [2026-11-15](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check) (the sprint-named test files and the naming check) and of the plan check's decision 3 (retiring the exclusion machinery).
+   - **S1.1c-5-3's forward moves from S1.1c-6 to S1.1c-7**, and its `decision` names this section. The part-level bound moves with it: `LAST_PART` becomes S1.1c-7 (`gate/runner/parts.py`), a gate change made red first at S1.1c-6's G0 and smoke-tested on the real tree at the `aging` row's tiers before G1 (sprint model §10).
+   - `tools/archcheck` stays last, behind its proofs (decision 2 of [S1.1c-5's plan check](#owner-decisions-2026-11-14--s11c-5s-plan-check)).
+   - Rejected: three parts, one per issue (the sprint-named test files to S1.1c-9); one part of about 20 points over the cap.
