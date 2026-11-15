@@ -81,6 +81,36 @@ class StopTest(support.GateTest):
 
 
 class DriverRunProcess(StopTest):
+    def test_a_stop_while_the_child_starts_still_stops_it(self):
+        # The window T4 hit once under load (19/20 under the stress harness, 2026-11-15): the stop arrives after the
+        # child exists and before run_process holds it. Forced here: popen waits, after the spawn, until the
+        # program's own TERM handler has run.
+        w = self.witness("start")
+        termed = os.path.join(self.root, "termed")
+        spawned = os.path.join(self.root, "spawned")
+        got = os.path.join(self.root, "got")
+        child = self.child(w.path, on_term=f"open({termed!r}, 'w').close()")
+        proc = self.program(
+            "from gate import term, wait\n"
+            "from gate.proofs.drivers import support\n"
+            f"term.install(lambda: open({got!r}, 'w').close())\n"
+            "real = term.popen\n"
+            "def slow(*args, **kwargs):\n"
+            "    p = real(*args, **kwargs)\n"
+            f"    open({spawned!r}, 'w').close()\n"
+            f"    wait.until('the TERM handler to have run', lambda: os.path.exists({got!r}), cap_s=60)\n"
+            "    return p\n"
+            "term.popen = slow\n"
+            f"support.run_process([sys.executable, '-I', '-c', {child!r}], cwd=ROOT, env=dict(os.environ),\n"
+            "                     out=os.path.join(ROOT, 'c.out'), err=os.path.join(ROOT, 'c.err'), cap_s=600)\n"
+        )
+        w.started(1)
+        wait.until("the program to be inside its popen", lambda: os.path.exists(spawned), cap_s=CAP_S)
+        proc.send_signal(signal.SIGTERM)
+        self.assertNotEqual(self.exit_code(proc), 0)
+        self.assertGone(w)
+        self.assertTrue(os.path.exists(termed), "the child was killed without the TERM that lets it clean up")
+
     def test_a_stopped_driver_passes_the_term_to_its_nested_gate_before_any_kill(self):
         # A nested gate stops its own rows, each in a session of its own, only if it is told: TERM first, then KILL.
         w = self.witness("start")
