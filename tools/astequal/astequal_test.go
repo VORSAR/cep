@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -20,23 +21,24 @@ func src(pairs ...string) map[string][]byte {
 
 func wantEqual(t *testing.T, before, after map[string][]byte) {
 	t.Helper()
-	key, err := compareSources(before, after)
+	keys, _, err := compareSources(before, after)
 	if err != nil {
 		t.Fatalf("compareSources: %v", err)
 	}
-	if key != "" {
-		t.Fatalf("want equal, got first differing key %q", key)
+	if len(keys) != 0 {
+		t.Fatalf("want equal, got differing keys %q", keys)
 	}
 }
 
-func wantUnequal(t *testing.T, before, after map[string][]byte, wantKey string) {
+// wantUnequal checks that exactly the keys want differ, in sorted order.
+func wantUnequal(t *testing.T, before, after map[string][]byte, want ...string) {
 	t.Helper()
-	key, err := compareSources(before, after)
+	keys, _, err := compareSources(before, after)
 	if err != nil {
 		t.Fatalf("compareSources: %v", err)
 	}
-	if key != wantKey {
-		t.Fatalf("want first differing key %q, got %q", wantKey, key)
+	if !slices.Equal(keys, want) {
+		t.Fatalf("want differing keys %q, got %q", want, keys)
 	}
 }
 
@@ -166,7 +168,7 @@ func TestGoDirectiveRemovedUnequal(t *testing.T) {
 		t.Parallel()
 		before := src("p/a.go", "//go:build linux\n\n"+pkgHead+"func f() int { return 1 }\n")
 		after := src("p/a.go", pkgHead+"func f() int { return 1 }\n")
-		wantUnequal(t, before, after, "p: func f")
+		wantUnequal(t, before, after, `p [build="linux"]: func f`, "p: func f", "p: package")
 	})
 }
 
@@ -174,21 +176,21 @@ func TestImportChangedUnequal(t *testing.T) {
 	t.Parallel()
 	before := src("p/a.go", pkgHead+"import \"strings\"\n\nvar _ = strings.ToUpper\n")
 	after := src("p/a.go", pkgHead+"import strings \"bytes\"\n\nvar _ = strings.ToUpper\n")
-	wantUnequal(t, before, after, "p: import \"bytes\" as strings")
+	wantUnequal(t, before, after, `p: import "bytes" as strings`, `p: import "strings"`)
 }
 
 func TestMovedToAnotherPackageUnequal(t *testing.T) {
 	t.Parallel()
 	before := src("p/a.go", pkgHead+"func f() {}\n\nfunc g() {}\n", "q/b.go", "package q\n")
 	after := src("p/a.go", pkgHead+"func f() {}\n", "q/b.go", "package q\n\nfunc g() {}\n")
-	wantUnequal(t, before, after, "p: func g")
+	wantUnequal(t, before, after, "p: func g", "q: func g")
 }
 
 func TestConstGroupIotaOrderUnequal(t *testing.T) {
 	t.Parallel()
 	before := src("p/a.go", pkgHead+"const (\n\tA = iota\n\tB\n\tC\n)\n")
 	after := src("p/a.go", pkgHead+"const (\n\tA = iota\n\tC\n\tB\n)\n")
-	wantUnequal(t, before, after, "p: const B")
+	wantUnequal(t, before, after, "p: const B", "p: const C")
 }
 
 func TestEllipsisCallUnequal(t *testing.T) {
@@ -200,7 +202,7 @@ func TestEllipsisCallUnequal(t *testing.T) {
 
 func TestParseErrorReported(t *testing.T) {
 	t.Parallel()
-	if _, err := compareSources(src("p/a.go", "package p\nfunc {"), src()); err == nil {
+	if _, _, err := compareSources(src("p/a.go", "package p\nfunc {"), src()); err == nil {
 		t.Fatal("want a parse error, got none")
 	}
 }
@@ -209,20 +211,35 @@ func TestParseErrorReported(t *testing.T) {
 func gitRepo(t *testing.T, files map[string][]byte) string {
 	t.Helper()
 	dir := t.TempDir()
-	git := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid",
-			"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"}, args...)...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
+	gitIn(t, dir, "init", "-q")
+	commitFiles(t, dir, files)
+	return dir
+}
+
+func gitIn(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid",
+		"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"}, args...)...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// commitFiles writes files, removes each path in del, commits everything and returns the new commit's hash.
+func commitFiles(t *testing.T, dir string, files map[string][]byte, del ...string) string {
+	t.Helper()
+	writeFiles(t, dir, files)
+	for _, name := range del {
+		if err := os.Remove(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+			t.Fatal(err)
 		}
 	}
-	git("init", "-q")
-	writeFiles(t, dir, files)
-	git("add", "-A")
-	git("commit", "-q", "-m", "base")
-	return dir
+	gitIn(t, dir, "add", "-A")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "c")
+	return gitIn(t, dir, "rev-parse", "HEAD")
 }
 
 func writeFiles(t *testing.T, dir string, files map[string][]byte) {
@@ -250,9 +267,10 @@ func TestRunExitCodes(t *testing.T) {
 		out   string
 	}{
 		{"equal default paths", src("p/a.go", pkgHead+"func f() int {\n\treturn 1\n}\n\nfunc g() {}\n"),
-			"", func(r string) []string { return []string{r} }, 0, ""},
+			"", func(r string) []string { return []string{r} }, 0, "astequal: 1 files, 2 declarations equal\n"},
 		{"move to new file", src("p/a.go", pkgHead+"func f() int { return 1 }\n", "p/b.go", pkgHead+"func g() {}\n"),
-			"", func(r string) []string { return []string{r, "p/a.go", "p/b.go"} }, 0, ""},
+			"", func(r string) []string { return []string{r, "p/a.go", "p/b.go"} }, 0,
+			"astequal: 2 files, 2 declarations equal\n"},
 		{"unequal", src("p/a.go", pkgHead+"func f() int { return 2 }\n\nfunc g() {}\n"),
 			"", func(r string) []string { return []string{r, "p/a.go"} }, 1, "p: func f"},
 		{"deleted file", nil, "p/a.go", func(r string) []string { return []string{r} }, 1, "p: func f"},
@@ -279,4 +297,141 @@ func TestRunExitCodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runIn runs astequal in dir and returns its exit code, stdout and stderr.
+func runIn(dir string, args ...string) (int, string, string) {
+	var stdout, stderr bytes.Buffer
+	code := run(dir, args, &stdout, &stderr)
+	return code, stdout.String(), stderr.String()
+}
+
+func wantExit(t *testing.T, dir string, code int, stdout, stderr string, args ...string) {
+	t.Helper()
+	gotCode, gotOut, gotErr := runIn(dir, args...)
+	if gotCode != code || gotOut != stdout || !strings.Contains(gotErr, stderr) {
+		t.Fatalf("astequal %q: exit %d stdout %q stderr %q; want exit %d stdout %q stderr containing %q",
+			args, gotCode, gotOut, gotErr, code, stdout, stderr)
+	}
+}
+
+var twoFiles = src("p/a.go", pkgHead+"func f() int { return 1 }\n", "p/b.go", pkgHead+"func g() {}\n")
+
+func TestUnsplitPathListIsUsageError(t *testing.T) {
+	t.Parallel()
+	dir := gitRepo(t, twoFiles)
+	writeFiles(t, dir, src("p/a.go", pkgHead+"func f() int { return 2 }\n"))
+	wantExit(t, dir, 2, "", `astequal: "p/a.go p/b.go" holds whitespace and names no file`, "HEAD", "p/a.go p/b.go")
+}
+
+func TestPathAbsentOnBothSidesIsError(t *testing.T) {
+	t.Parallel()
+	dir := gitRepo(t, twoFiles)
+	wantExit(t, dir, 2, "", `astequal: "p/nope.go" names no file at HEAD or in the work tree`, "HEAD", "p/a.go", "p/nope.go")
+	before := gitIn(t, dir, "rev-parse", "HEAD")
+	after := commitFiles(t, dir, src("p/c.go", pkgHead+"func h() {}\n"))
+	wantExit(t, dir, 2, "", `astequal: "p/nope.go" names no file at `+before+" or "+after, before, after, "p/nope.go")
+}
+
+func TestEmptyDiffIsError(t *testing.T) {
+	t.Parallel()
+	dir := gitRepo(t, twoFiles)
+	wantExit(t, dir, 2, "", "astequal: no Go file differs between HEAD and the work tree; nothing was compared", "HEAD")
+	writeFiles(t, dir, src("README.md", "words\n"))
+	wantExit(t, dir, 2, "", "nothing was compared", "HEAD")
+	wantExit(t, dir, 2, "", "astequal: no Go file differs between HEAD and HEAD; nothing was compared", "HEAD", "HEAD")
+}
+
+// TestMoveIntoNewFileSharingAnImportEqual is dec066a's shape: a function moves into a new file that imports a
+// package the old file still imports.
+func TestMoveIntoNewFileSharingAnImportEqual(t *testing.T) {
+	t.Parallel()
+	before := src("p/a.go", pkgHead+"import (\n\t\"fmt\"\n\t\"strings\"\n)\n\n"+
+		"func f() string { return strings.ToUpper(\"x\") }\n\nfunc g() { fmt.Println(strings.ToLower(\"Y\")) }\n")
+	after := src(
+		"p/a.go", pkgHead+"import \"strings\"\n\nfunc f() string { return strings.ToUpper(\"x\") }\n",
+		"p/b.go", pkgHead+"import (\n\t\"fmt\"\n\t\"strings\"\n)\n\nfunc g() { fmt.Println(strings.ToLower(\"Y\")) }\n")
+	wantEqual(t, before, after)
+	// A local name is part of the import's key: the same path under another name is a different import.
+	renamed := src(
+		"p/a.go", pkgHead+"import \"strings\"\n\nfunc f() string { return strings.ToUpper(\"x\") }\n",
+		"p/b.go", pkgHead+"import (\n\t\"fmt\"\n\ts \"strings\"\n)\n\nfunc g() { fmt.Println(s.ToLower(\"Y\")) }\n")
+	wantUnequal(t, before, renamed, "p: func g", `p: import "strings" as s`)
+}
+
+func TestSplitStringLiteralEqual(t *testing.T) {
+	t.Parallel()
+	before := src("p/a.go", pkgHead+"import \"fmt\"\n\n"+
+		"const m = \"hello, world\"\n\n"+
+		"func f(x string) string { return x + \"abc\" }\n\n"+
+		"func g(n int) string { return fmt.Sprintf(\"%d items here\\n\", n) }\n")
+	after := src("p/a.go", pkgHead+"import \"fmt\"\n\n"+
+		"const m = \"hello, \" +\n\t\"world\"\n\n"+
+		"func f(x string) string { return x + \"a\" + \"b\" + `c` }\n\n"+
+		"func g(n int) string {\n\treturn fmt.Sprintf(\"%d items \"+\n\t\t\"here\\n\", n)\n}\n")
+	wantEqual(t, before, after)
+	// The fold keeps the value: a split that changes one character is unequal, and so is a reordered chain.
+	changed := src("p/a.go", pkgHead+"import \"fmt\"\n\n"+
+		"const m = \"hello, \" + \"World\"\n\n"+
+		"func f(x string) string { return \"abc\" + x }\n\n"+
+		"func g(n int) string { return fmt.Sprintf(\"%d items here\\n\", n) }\n")
+	wantUnequal(t, before, changed, "p: const m", "p: func f")
+}
+
+func TestMovedIntoTestFileUnequal(t *testing.T) {
+	t.Parallel()
+	before := src("p/a.go", pkgHead+"func F() int { return 1 }\n\nfunc g() {}\n")
+	after := src("p/a.go", pkgHead+"func g() {}\n", "p/a_test.go", pkgHead+"func F() int { return 1 }\n")
+	wantUnequal(t, before, after, "p [test]: func F", "p: func F", "p: package")
+}
+
+func TestMovedIntoExternalTestPackageUnequal(t *testing.T) {
+	t.Parallel()
+	before := src("p/a.go", pkgHead+"func F() int { return 1 }\n\nfunc g() {}\n",
+		"p/a_test.go", "package p_test\n\nfunc h() {}\n")
+	after := src("p/a.go", pkgHead+"func g() {}\n",
+		"p/a_test.go", "package p_test\n\nfunc h() {}\n\nfunc F() int { return 1 }\n")
+	wantUnequal(t, before, after, "p [package p_test test]: func F", "p: func F")
+}
+
+func TestGOOSSuffixRenameUnequal(t *testing.T) {
+	t.Parallel()
+	body := pkgHead + "func H() int { return 1 }\n"
+	wantUnequal(t, src("p/h_linux.go", body), src("p/h_windows.go", body),
+		"p [goos=linux]: func H", "p [goos=windows]: func H", "p: package")
+	wantUnequal(t, src("p/h_amd64.go", body), src("p/h_linux_amd64.go", body),
+		"p [goarch=amd64]: func H", "p [goos=linux goarch=amd64]: func H", "p: package")
+	// A suffix that names no platform is an ordinary file: a move into it is equal.
+	wantEqual(t, src("p/h.go", body), src("p/h_util.go", body))
+	// The rename reaches run's default paths too: git diff names both sides, so both are read.
+	dir := gitRepo(t, src("p/h_linux.go", body))
+	if err := os.Rename(filepath.Join(dir, "p", "h_linux.go"), filepath.Join(dir, "p", "h_windows.go")); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "add", "-A")
+	wantExit(t, dir, 1, "astequal: p [goos=linux]: func H differs\nastequal: p [goos=windows]: func H differs\n"+
+		"astequal: p: package differs\n", "", "HEAD")
+}
+
+func TestTwoRevisionForm(t *testing.T) {
+	t.Parallel()
+	dir := gitRepo(t, src("p/a.go", pkgHead+"func f() int { return 1 }\n\nfunc g() {}\n"))
+	base := gitIn(t, dir, "rev-parse", "HEAD")
+	moved := commitFiles(t, dir, twoFiles)
+	changed := commitFiles(t, dir, src("p/b.go", pkgHead+"func g() { _ = 1 }\n"))
+	// The work tree differs from every revision, so a verdict that read it would differ.
+	writeFiles(t, dir, src("p/a.go", pkgHead+"func f() int { return 3 }\n"))
+	wantExit(t, dir, 0, "astequal: 2 files, 2 declarations equal\n", "", base, moved)
+	wantExit(t, dir, 0, "astequal: 2 files, 2 declarations equal\n", "", base, moved, "p/a.go", "p/b.go")
+	wantExit(t, dir, 1, "astequal: p: func g differs\n", "", moved, changed)
+	wantExit(t, dir, 1, "astequal: p: func f differs\n", "", changed, "p/a.go")
+	// A second argument that names no revision is a path, so a mistyped one is an error, never a pass.
+	wantExit(t, dir, 2, "", `"`+moved+`x" names no file at `+base+" or in the work tree", base, moved+"x")
+}
+
+func TestEveryDifferingKeyListed(t *testing.T) {
+	t.Parallel()
+	dir := gitRepo(t, src("p/a.go", pkgHead+"func f() int { return 1 }\n\nfunc g() {}\n\nfunc h() {}\n"))
+	writeFiles(t, dir, src("p/a.go", pkgHead+"func f() int { return 2 }\n\nfunc g() {}\n\nfunc h() { h() }\n"))
+	wantExit(t, dir, 1, "astequal: p: func f differs\nastequal: p: func h differs\n", "", "HEAD")
 }

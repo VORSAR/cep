@@ -66,7 +66,7 @@ func genItems(d *ast.GenDecl, st *pkgState) []item {
 		}
 		switch s := spec.(type) {
 		case *ast.ImportSpec:
-			it.key = importKey(s)
+			it.key, it.isImport = importKey(s), true
 		case *ast.TypeSpec:
 			it.key, it.text = "type "+s.Name.Name, it.text+nodeText(s)
 		case *ast.ValueSpec:
