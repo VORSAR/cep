@@ -35,8 +35,10 @@ D1 = "docs/sprints/decisions.md#owner-decisions-2026-12-01--a-later-forward"
 NEW = f"aging: smells.json: {TARGET}: a new size exclusion after S1.1c-5: clean the package instead (decision 1)"
 
 
-def entry(target: str = TARGET, issue: str = "S1.1c-5-1") -> allowlists.Entry:
-    return allowlists.Entry(target, "TEMP", "size family not yet cleaned", "S1.1c-5", expiry="2026-12-14", issue=issue)
+def entry(target: str = TARGET, issue: str = "S1.1c-5-1", cap: int = 3) -> allowlists.Entry:
+    return allowlists.Entry(
+        target, "TEMP", "size family not yet cleaned", "S1.1c-5", expiry="2026-12-14", issue=issue, cap=cap
+    )
 
 
 def issue(id: str, forward: str, decision: str = D0) -> dict[str, object]:
@@ -213,6 +215,40 @@ class OnlyDecisionsMd(unittest.TestCase):
         self.assertEqual(self.move(IN_DECISIONS), [])
 
 
+class Caps(unittest.TestCase):
+    """Owner 2026-11-14, S1.1c-5's review and break-it, decision 2: a cap raised against the merge base needs a new
+    decision naming the entry's issue, as a forward moved later does; a cap lowered is green."""
+
+    def raised(self, old: int, new: int) -> str:
+        return (
+            f"aging: smells.json: {TARGET}: cap raised {old} → {new} (issue S1.1c-5-1) without a decision that names"
+            " S1.1c-5-1 (decision 2: only the owner raises a cap)"
+        )
+
+    def judge(self, base_cap: int, cap: int, decision: str = D0, decided=NOTHING_DECIDED) -> list[str]:
+        base = at_base((entry(cap=base_cap),), issues(issue("S1.1c-5-1", "S1.1c-7")))
+        now = issues(issue("S1.1c-5-1", "S1.1c-7", decision=decision))
+        faults, _ = parts.forwards((entry(cap=cap),), now, ORDER, "S1.1c-6", "T4", base, decided)
+        return faults
+
+    def test_a_cap_raised_without_a_decision_is_red(self):
+        self.assertEqual(self.judge(3, 4), [self.raised(3, 4)])
+
+    def test_a_cap_raised_with_the_base_decision_is_red(self):
+        self.assertEqual(self.judge(3, 4, decided=decided_by(("S1.1c-5-1", D0))), [self.raised(3, 4)])
+
+    def test_a_cap_raised_with_a_new_naming_decision_is_green(self):
+        self.assertEqual(self.judge(3, 4, decision=D1, decided=decided_by(("S1.1c-5-1", D1))), [])
+
+    def test_a_cap_raised_with_a_decision_outside_decisions_md_is_red(self):
+        self.assertEqual(self.judge(3, 4, decision=RECORD, decided=real_decided), [self.raised(3, 4)])
+        self.assertEqual(self.judge(3, 4, decision=IN_DECISIONS, decided=real_decided), [])  # witness
+
+    def test_a_cap_kept_or_lowered_is_green(self):
+        self.assertEqual(self.judge(3, 3), [])
+        self.assertEqual(self.judge(3, 2), [])
+
+
 class Base(unittest.TestCase):
     """Rule 6: no merge base (DQ-B3); a base file absent at a resolved base is not "no base"."""
 
@@ -260,6 +296,7 @@ ENTRY = {
     "sprint": "S1.1c-5",
     "expiry": "2026-12-14",
     "issue": "S1.1c-5-1",
+    "cap": 3,
 }
 
 
