@@ -79,7 +79,7 @@ class FixtureBound(unittest.TestCase):
 
 
 class Rules(unittest.TestCase):
-    """Rules 1-4: the entry's issue, its forward part, the S1.1c-6 bound and the marker reaching the part."""
+    """Rules 1-4: the entry's issue, its forward part, the S1.1c-7 bound and the marker reaching the part."""
 
     def run_rules(self, known, marker="S1.1c-5", tier="T4", entries=None):
         entries = (entry(),) if entries is None else entries
@@ -100,15 +100,16 @@ class Rules(unittest.TestCase):
             faults, [f"aging: smells.json: {TARGET}: forward S1.1c-4 is not a printed part of gate/sprints.json"]
         )
 
-    def test_the_bound_is_s1_1c_6(self):
-        # S1.1c-5's close re-cut the parts to one: S1.1c-6 cleans every size finding (owner 2026-11-15).
-        self.assertEqual(parts.LAST_PART, "S1.1c-6")
+    def test_the_bound_is_s1_1c_7(self):
+        # S1.1c-5's close re-cut the parts to one (owner 2026-11-15); S1.1c-6's spike re-cut it by known issue, and
+        # S1.1c-7 cleans S1.1c-5-3 (owner 2026-11-15, the re-cut after the spike).
+        self.assertEqual(parts.LAST_PART, "S1.1c-7")
 
-    def test_a_forward_past_s1_1c_6_is_red(self):
-        for forward in ("S1.1c-7", "S1.1c-9"):  # printed in ORDER's world, past the bound
+    def test_a_forward_past_s1_1c_7_is_red(self):
+        for forward in ("S1.1c-8", "S1.1c-9"):  # printed in ORDER's world, past the bound
             with self.subTest(forward=forward):
                 faults, _ = self.run_rules(issues(issue("S1.1c-5-1", forward)))
-                want = f"aging: smells.json: {TARGET}: forward {forward} is past S1.1c-6 (decision 1)"
+                want = f"aging: smells.json: {TARGET}: forward {forward} is past S1.1c-7 (decision 1)"
                 self.assertEqual(faults, [want])
 
     def reached(self) -> str:
