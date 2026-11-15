@@ -103,6 +103,7 @@
 | 2026-11-14 | [during S1.1c-5's W1](#owner-decisions-2026-11-14--during-s11c-5s-w1) |
 | 2026-11-14 | [during S1.1c-5's W2](#owner-decisions-2026-11-14--during-s11c-5s-w2) |
 | 2026-11-14 | [S1.1c-5's review and break-it](#owner-decisions-2026-11-14--s11c-5s-review-and-break-it) |
+| 2026-11-15 | [S1.1c-5's T4: a flake found](#owner-decisions-2026-11-15--s11c-5s-t4-a-flake-found) |
 
 ## The decisions
 
@@ -1030,3 +1031,11 @@ The coordinator verified the blocker: `aging.decided` (`gate/runner/aging.py:32-
 
    No new debt is taken on during the transition; the old debt is still paid on its schedule. Rejected: printing the change in LAW Δ only; no guard.
 3. **The canonical encoder keeps its per-line waivers** (as recommended; CA-L2): every `reflect` line, including any future one, needs its own visible waiver. Rejected: one pinned exclusion rule for `internal/model/canonical.go`.
+
+### Owner decisions, 2026-11-15 — S1.1c-5's T4: a flake found
+
+T4 on the fixed branch was red once in `gate/runner/tests/test_stop_children.py`: "the child started in its own session is still running 20s after its parent was stopped". It passed 5 times out of 5 alone and 19 times out of 20 under the stress harness.
+
+The root cause is pre-existing; neither the test nor `run_process` changed in S1.1c-5. A first TERM raised between the child's spawn and `run_process` holding it left `proc` unset, so the cleanup stopped nothing and the child, in a session of its own, was orphaned. `gate/term.py`'s popen already covered a stop inside Popen's own start-up, but not this window. One answer, which differs from the recommendation.
+
+1. **The fix goes inside the sprint** (≠ R; the recommendation was its own small PR from main first, as #41 at S1.1c-4). `term.critical()` holds a first TERM until the block ends, and `run_process` and the stress harness's hogs start their child inside it. It is proven red first by `test_term.Critical` and by `test_stop_children`'s forced race, in which popen is made slow after the spawn. Rejected: a separate PR merged before the sprint.
