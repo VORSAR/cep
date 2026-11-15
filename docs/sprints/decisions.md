@@ -105,6 +105,7 @@
 | 2026-11-14 | [S1.1c-5's review and break-it](#owner-decisions-2026-11-14--s11c-5s-review-and-break-it) |
 | 2026-11-15 | [S1.1c-5's T4: a flake found](#owner-decisions-2026-11-15--s11c-5s-t4-a-flake-found) |
 | 2026-11-15 | [S1.1c-5's close-out](#owner-decisions-2026-11-15--s11c-5s-close-out) |
+| 2026-11-15 | [S1.1c-6's scope, before its plan check](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check) |
 
 ## The decisions
 
@@ -1056,6 +1057,21 @@ After PR #47's CI (every job green) and its merge (rebase, `main` f7f005c, 96 co
    - The part-level check's bound follows: never past S1.1c-6 (`LAST_PART` in `gate/runner/parts.py`). Decision 1 of the plan check is annotated.
 
    Rejected: two parts (runtime and validate, then the rest); keeping three.
+   *(annotated 2026-11-15: S1.1c-7 is printed again with another scope, the sprint-named test files; the size findings stay S1.1c-6's alone — [S1.1c-6's scope](#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check), decision 1)*
 2. **One lasting rule from the retro** (as recommended): a sprint that adds or changes a gate row runs its real tool, with the decided config, on the real tree, at every tier it lands in (the T0 hook on a staged change included), before G1 (sprint model §10). Rejected: stressing heavy T4 rows before the push; both.
 3. **The sprint's branches and worktrees are deleted** (as recommended, after the coordinator's check): `s1-1c-5/integration` local and remote; `w0-ac`, `w0-b`, `lane-a`, `lane-b`, `lane-c`, `lane-c2`, `lane-d`, `fix-p` and `fix-g` local; their worktrees and the measuring worktree. Every commit is on `main` by patch except two pre-rebase copies on five lane branches (the W0a law commit and the four known issues placed): `main` holds their rebased copies, which differ only by the S3.3-2-2 row that #46 removed.
 4. **The close-out goes up as its own docs PR** (`docs/s1-1c-5-close-out`), as for the last five sprints (as recommended).
+
+### Owner decisions, 2026-11-15 — S1.1c-6's scope, before its plan check
+
+Asked while the plan check was being drafted (the owner's question: are the oddly named files fixed too, and is the logic placed where it belongs?). The coordinator measured first: 64 of the 201 Go test files and about 20 Python gate tests are named after the sprint or review step that wrote them (`breakit_s3_3_1_test.go`, `fixround_s3_2b_1_test.go`, `s3_2b_2_corpus_test.go`, `test_breakit_s11c4.py`); no production file is. Two answers, both as recommended.
+
+1. **The sprint-named test files get their own part, S1.1c-7, right after S1.1c-6 and before S4.1** (as recommended).
+   - Every sprint- or process-named test file (Go and the gate's Python) has its tests moved into the file named for the behaviour they test, and a check refuses a sprint id or a process word in a file name from then on.
+   - Each move is proven by the AST-equality check and an identical list of tests before and after.
+   - S1.1c-7 is printed as a row after S1.1c-6 (`gate/sprints.json` and the plan's table) at S1.1c-6's G0; it gets its own plan check. Tests written in S1.1c-6 are already named for what they test.
+   - Rejected: inside S1.1c-6's lanes (the card grows past the 13-point cap); a rule for new files only.
+2. **Logic in the wrong package moves to the package it belongs in, each move approved by the owner** (as recommended).
+   - S1.1c-6 splits each big production file into files named by concern, under a file map per package that the architect reviews.
+   - The design note lists every function the architect finds in the wrong package and where it belongs. Each move across packages needs the owner's yes at the design (G1): it changes an internal API and crosses lanes.
+   - Rejected: within a package only, with moves across packages to the backlog.
