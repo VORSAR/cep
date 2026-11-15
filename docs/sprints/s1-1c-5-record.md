@@ -108,6 +108,9 @@ None.
 | T4-1 | T4 (2026-11-15) | blocker (two proof worlds) | fixed (a75dd44, the proof worlds carry the sprint's law files): `test_hook_commit` (no `.golangci.toml` in its world) and `test_aging_planted` (no `smells.json`, no `main`) were red at the first T4 |
 | T4-2 | T4 (2026-11-15) | blocker (flake) | fixed inside the sprint (owner, 2026-11-15, ≠ R): a stop landing between a child's spawn and `run_process` holding it orphaned the child (pre-existing; 19/20 under the stress harness). `term.critical()` holds the stop until the child is held; red first `test_term.Critical`, `test_stop_children`'s forced race; after it 20/20 under the stress harness for all ten tests of both modules |
 | T4-3 | T4 (2026-11-15) | blocker (flake) | fixed inside the sprint (owner, 2026-11-15, 2): Go's telemetry wrote into `test_parity`'s temp `HOME` and raced its removal; `go telemetry off` in RealCache's setUp, red first `test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world` |
+| OC-S1 | the owner's check (independent verifier, 2026-11-15) | should-fix | backlog: LAW Δ calls the `go_built` addition to `tools.json` "hashes changed" (`gate/runner/law.py`'s `_delta_tools`, pre-existing); a semantic line per changed field |
+| OC-L1 | the owner's check | later | backlog: the `smells` summary does not count the package-main `fmt.Print` drops (11 today) |
+| OC-L2 | the owner's check | later | backlog: an over-cap exclusion's message names the entry and the counts, not the new finding's file and line |
 | (fix-p) | the fix round | later | backlog: the T2 known-issues pin still accepts a decision anchor in any Markdown file (aging rule 1 already ages such an entry) |
 
 **Deviations recorded:**
@@ -131,7 +134,7 @@ Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (c6deb91, 96 s)
              ☑ tests on the real code ☑ every breaker's red test committed (step 7)
 Review (G3)  ☑ architecture review of the combined diff: no drift (no blocker; 4 should-fix fixed)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☑ T4 strict-gate exit 0, run complete (4f40ef0: run 20261115T061734Z-b1d49d, 282.2 s wall, proofs 269.1 s covered 39; LAW Δ 74 files) ☐ owner's check passed
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (4f40ef0: run 20261115T061734Z-b1d49d, 282.2 s wall, proofs 269.1 s covered 39; LAW Δ 74 files) ☑ owner's check passed (2026-11-15: on the owner's word, run by an independent verifier — LAW Δ against the decisions with the waiver count and every cap recounted, the smells summary against `git ls-files`, a plant red in an in-scope package and an over-cap plant red in an excluded one; three non-blocking findings to the backlog)
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
