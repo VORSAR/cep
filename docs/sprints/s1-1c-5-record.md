@@ -131,7 +131,7 @@ Build (G2)   ☑ every lane at T2 ☑ T3 combine-check exit 0 (c6deb91, 96 s)
              ☑ tests on the real code ☑ every breaker's red test committed (step 7)
 Review (G3)  ☑ architecture review of the combined diff: no drift (no blocker; 4 should-fix fixed)
              ☑ QA break-it run ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason
-Verify (G4)  ☐ T4 strict-gate exit 0, run complete ☐ owner's check passed
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (4f40ef0: run 20261115T061734Z-b1d49d, 282.2 s wall, proofs 269.1 s covered 39; LAW Δ 74 files) ☐ owner's check passed
              ☐ every acceptance line met by its named proof
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
