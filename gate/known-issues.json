@@ -69,8 +69,8 @@
     {
       "id": "S1.1c-5-3",
       "first_seen": "S1.1c-5",
-      "forward": "S1.1c-6",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-15--s11c-5s-close-out",
+      "forward": "S1.1c-7",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike",
       "correctness": false,
       "opened": "2026-11-14"
     },

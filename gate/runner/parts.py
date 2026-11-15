@@ -1,8 +1,9 @@
 """The part-level check on size exclusions (S1.1c-5 design §3.5; owner 2026-11-14, S1.1c-5's design after the
 reviews, decision 1): run by the aging row over tools/allowlists/smells.json, its known issues and the merge base.
 
-Every size exclusion is TEMP and names a known issue whose `forward` is a printed part, never past S1.1c-6 (S1.1c-8
-until S1.1c-5's close re-cut the parts to one, owner 2026-11-15); when the marker reaches that part the exclusion is
+Every size exclusion is TEMP and names a known issue whose `forward` is a printed part, never past S1.1c-7 (S1.1c-8
+until S1.1c-5's close re-cut the parts to one, then S1.1c-6 until its spike re-cut it by known issue, owner 2026-11-15);
+when the marker reaches that part the exclusion is
 red at T4 and nightly and a countdown line at T3. A forward only the owner moves: per exclusion target, an effective
 forward later than at the merge base needs a new decision naming the issue, and a target absent at the base is red
 after S1.1c-5's own branch. A cap only the owner raises: a cap higher than the target's at the base needs the same
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 
 from gate.runner import allowlists, git, knownissues, sprintid
 
-LAST_PART = "S1.1c-6"  # the plan check's decision 1, re-cut at S1.1c-5's close (owner 2026-11-15): one part left
+LAST_PART = "S1.1c-7"  # the plan check's decision 1, re-cut at S1.1c-5's close and after S1.1c-6's spike (2026-11-15)
 LANDING = "S1.1c-5"  # the sprint whose own branch may add size entries without a decision
 SMELLS = "tools/allowlists/smells.json"
 KNOWN_ISSUES = "gate/known-issues.json"
