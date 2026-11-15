@@ -1,5 +1,7 @@
 # S1.1c-5 design note v1 — blind architecture review (with the-fool)
 
+> **Historical — S1.1c-5, the strict lint set: the instrument, the whole-tree rules, the first packages; merged in PR #47.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1c-5-plan-check.md) · [design](../sprints/s1-1c-5-design.md) · [record](../sprints/s1-1c-5-record.md) · reviews: [research lint](s1-1c-5-research-lint.md), [plan check architecture](s1-1c-5-plan-check-architecture.md), [plan check qa](s1-1c-5-plan-check-qa.md), [design architecture](s1-1c-5-design-architecture.md), [design qa](s1-1c-5-design-qa.md), [combined architecture](s1-1c-5-combined-architecture.md), [breakit qa](s1-1c-5-breakit-qa.md). **← [S1.1c-4](../sprints/s1-1c-4-record.md) · [S1.1c-6 (next)](../sprints/sprint-plan.md#status) →**
+
 Tree: `s1-1c-5/integration` @ 215bb3b (the note cites bda6554; 215bb3b adds only docs). Every code claim was checked with grep or by reading the file on this tree. I could not read the GitNexus freshness resource from this session, so no `index.commit` is quoted. The 20-minute deadline cut the investigation short; items marked UNVERIFIED were not measured. Hindsight was not searched; the decisions were read straight from `docs/sprints/decisions.md:919-957`.
 
 ## Findings

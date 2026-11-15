@@ -104,6 +104,7 @@
 | 2026-11-14 | [during S1.1c-5's W2](#owner-decisions-2026-11-14--during-s11c-5s-w2) |
 | 2026-11-14 | [S1.1c-5's review and break-it](#owner-decisions-2026-11-14--s11c-5s-review-and-break-it) |
 | 2026-11-15 | [S1.1c-5's T4: a flake found](#owner-decisions-2026-11-15--s11c-5s-t4-a-flake-found) |
+| 2026-11-15 | [S1.1c-5's close-out](#owner-decisions-2026-11-15--s11c-5s-close-out) |
 
 ## The decisions
 
@@ -934,7 +935,7 @@ Ten answers, all as recommended.
 
 1. **The cut: the whole tree strict now for lll, errcheck, gocritic, forbidigo and nolintlint; the size family (gocyclo, funlen, file length, params) by package** (as recommended; the architecture review's option).
    - Each package not yet clean for the size family is a TEMP exclusion in the one grammar, tied to a known issue forwarded to the part that cleans it: S1.1c-6, -7 or -8.
-   - A new part-level check reds the exclusion when the marker reaches its part. A forward moves only by an owner decision, and never past S1.1c-8. An exclusion that waives nothing is red.
+   - A new part-level check reds the exclusion when the marker reaches its part. A forward moves only by an owner decision, and never past S1.1c-8. An exclusion that waives nothing is red. *(annotated 2026-11-15: re-cut at S1.1c-5's close to one part, so never past S1.1c-6 — [the close-out](#owner-decisions-2026-11-15--s11c-5s-close-out), decision 1)*
    - This annotates decision 1 of 2026-11-10 ("fixed and loud") and ADR-0015 §2.2 ("nothing is grandfathered"): the size family's debt is held to dated parts, not recorded as maxima.
    - Rejected: every rule by package; fixing everything first and landing the row last.
 2. **The later sprints are re-cut at S1.1c-5's close** (as recommended), from the fix rate the first packages measure (`table`, `clock`, `io/inmemory`, `shape`). runtime and validate come next, behind a performance net; `tools/archcheck` sits behind the `proofs` row. `internal/runtime` splits into files, not packages. Rejected: fixing the order now (the reviews sized S1.1c-6 at about 16 lane-days, over the cap).
@@ -980,7 +981,7 @@ Three answers, all as recommended.
      - S1.1c-5-2, for S1.1c-7;
      - S1.1c-5-3, for S1.1c-8;
      - S1.1c-5-4, the tool scan's 15 advisories.
-   - A test pins which ids aging would name red at S1.1c-7's close.
+   - A test pins which ids aging would name red at S1.1c-7's close. *(annotated 2026-11-15: S1.1c-7 and S1.1c-8 dropped at S1.1c-5's close, S1.1c-5-2 and S1.1c-5-3 forwarded to S1.1c-6; the test pins the same clock point, three closed rows after S1.1c, now S4.1's close — [the close-out](#owner-decisions-2026-11-15--s11c-5s-close-out), decision 1)*
    - The coordinator brings S3.3-2-1, S3.3-2-2, S3.3-2-3 and S1.1c-3-4 to the owner for a decision before then.
 
    Rejected: deciding all eight now.
@@ -1044,3 +1045,17 @@ A second pre-existing flake followed on the next T4. `test_parity`'s real-go tes
 
 2. **That fix goes inside the sprint too** (as recommended this time, following answer 1): the RealCache tests run the pinned `go telemetry off` in their world before any probe, held by `test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world`. The canary's version probe needs no guard: its `HOME` is the run's scratch, which nothing removes during the run. Rejected: a separate PR from main.
 
+### Owner decisions, 2026-11-15 — S1.1c-5's close-out
+
+After PR #47's CI (every job green) and its merge (rebase, `main` f7f005c, 96 commits). Four answers, all as recommended.
+
+1. **The re-cut: one more part, S1.1c-6, cleans all 139 size findings** (as recommended; the plan check's decision 2).
+   - Lane D measured about 0.85 minutes per finding on the first packages. The 139 left (gocyclo 110, funlen 19, file length 8, parameters 2, in 12 packages) fit one 13-point sprint with its reviews.
+   - S1.1c-7 and S1.1c-8 leave the plan's table and `gate/sprints.json`.
+   - The known issues S1.1c-5-2 and S1.1c-5-3 move earlier, from S1.1c-7 and S1.1c-8 to S1.1c-6, and their `decision` names this section.
+   - The part-level check's bound follows: never past S1.1c-6 (`LAST_PART` in `gate/runner/parts.py`). Decision 1 of the plan check is annotated.
+
+   Rejected: two parts (runtime and validate, then the rest); keeping three.
+2. **One lasting rule from the retro** (as recommended): a sprint that adds or changes a gate row runs its real tool, with the decided config, on the real tree, at every tier it lands in (the T0 hook on a staged change included), before G1 (sprint model §10). Rejected: stressing heavy T4 rows before the push; both.
+3. **The sprint's branches and worktrees are deleted** (as recommended, after the coordinator's check): `s1-1c-5/integration` local and remote; `w0-ac`, `w0-b`, `lane-a`, `lane-b`, `lane-c`, `lane-c2`, `lane-d`, `fix-p` and `fix-g` local; their worktrees and the measuring worktree. Every commit is on `main` by patch except two pre-rebase copies on five lane branches (the W0a law commit and the four known issues placed): `main` holds their rebased copies, which differ only by the S3.3-2-2 row that #46 removed.
+4. **The close-out goes up as its own docs PR** (`docs/s1-1c-5-close-out`), as for the last five sprints (as recommended).

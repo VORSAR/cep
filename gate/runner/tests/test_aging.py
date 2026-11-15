@@ -414,7 +414,8 @@ if __name__ == "__main__":
 
 
 # S1.1c-5 design §3.4, §3.5, §8 3.10-3.11: the aging row runs the part-level check over tools/allowlists/smells.json
-# (gate/runner/parts.py), and printing S1.1c-5 to S1.1c-8 as rows moves rule 1's clock.
+# (gate/runner/parts.py), and printing the parts as rows moves rule 1's clock (S1.1c-5 and S1.1c-6 since S1.1c-5's
+# close re-cut them, owner 2026-11-15; the world below keeps the four of its own).
 
 
 SMELLS = "tools/allowlists/smells.json"
@@ -517,12 +518,14 @@ class Parts(support.GateTest):
 
 
 class PrintedParts(unittest.TestCase):
-    """§3.4 (owner, S1.1c-5's design after the reviews, decision 2): with S1.1c-5 to S1.1c-8 printed after S1.1c and
-    S1.1c-5, -6 and -7 closed, rule 1 names exactly the four undecided entries first seen at or before row S1.1c, and
-    none of S1.1c-5-1 to -4 (their decision names them). The order and the known issues are the committed files', the
-    closed marks the fixture's; the decisions reader is the tracked Markdown, as RealTree reads it."""
+    """§3.4 (owner, S1.1c-5's design after the reviews, decision 2), re-cut at S1.1c-5's close (owner 2026-11-15):
+    with S1.1c-5 and S1.1c-6 printed after S1.1c, and S1.1c-5, S1.1c-6 and S4.1 closed — three closed rows after
+    S1.1c, the point S1.1c-7's close was before the re-cut — rule 1 names none of the entries first seen at or before
+    row S1.1c (each is decided) and none of S1.1c-5-1 to -4 (their decision names them). The order and the known issues
+    are the committed files', the closed marks the fixture's; the decisions reader is the tracked Markdown, as RealTree
+    reads it."""
 
-    def test_at_s1_1c_7s_close_aging_names_exactly_the_undecided(self):
+    def test_at_s4_1s_close_aging_names_exactly_the_undecided(self):
         def read_repo(rel: str) -> str:
             with open(os.path.join(REPO, rel), encoding="utf-8") as f:
                 return f.read()
@@ -534,29 +537,28 @@ class PrintedParts(unittest.TestCase):
         self.assertIn(DECISIONS, tracked)
         printed = sprintid.load_order(read_repo(sprintid.SPRINTS))
         ids = [row.id for row in printed.rows]
-        for part in ("S1.1c-5", "S1.1c-6", "S1.1c-7", "S1.1c-8"):
-            self.assertIn(part, ids)  # W0a printed them
-        closing = {"S1.1c-5", "S1.1c-6", "S1.1c-7"}
+        self.assertEqual([i for i in ids if i.startswith("S1.1c-")], ["S1.1c-5", "S1.1c-6"])  # the re-cut's parts
+        closing = {"S1.1c-5", "S1.1c-6", "S4.1"}
         order = sprintid.Order(tuple(sprintid.Row(r.id, r.closed or r.id in closing) for r in printed.rows))
         entries = json.loads(read_repo(knownissues.JSON))["entries"]
         self.assertLessEqual({"S1.1c-5-1", "S1.1c-5-2", "S1.1c-5-3", "S1.1c-5-4"}, {e["id"] for e in entries})
         lines = aging.aged(
             entries,
             order,
-            "S1.1c-8",
+            "S4.2",
             today=date(2026, 12, 1),
             read=lambda p: read_repo(p) if p in tracked else None,
         )
         named = sorted({line.split()[1] for line in lines if AGE in line})
         # The four undecided at S1.1c-5's G1 were placed by the owner the same day ("four known issues placed"), so
-        # none ages red at S1.1c-7's close; any undecided issue that would is red here first.
+        # none ages red at S4.1's close; any undecided issue that would is red here first.
         self.assertEqual(named, [])
         # Witness: the same order without the decisions file names the three still open (the rule still bites;
         # S3.3-2-2 was fixed by #46 and left the file).
         undecided = aging.aged(
             entries,
             order,
-            "S1.1c-8",
+            "S4.2",
             today=date(2026, 12, 1),
             read=lambda p: None if p.endswith("decisions.md") else (read_repo(p) if p in tracked else None),
         )

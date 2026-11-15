@@ -24,6 +24,7 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 | [S1.1c-2](#s11c-2--the-exemptions-and-the-teeth) | S1.1c-2, S1.1c's second part (S1.1c-3 and S1.1c-4 open) | [record](s1-1c-2-record.md) | #35 (and #34, the flake's root fix it met) |
 | [S1.1c-3](#s11c-3--the-documents-and-the-clocks) | S1.1c-3, S1.1c's third part (S1.1c-4 and S1.1c-5 open) | [record](s1-1c-3-record.md) | #38 (and #37, the Go 1.27.4 bump it waited on) |
 | [S1.1c-4](#s11c-4--the-scans) | S1.1c-4, S1.1c's fourth part (S1.1c-5 open) | [record](s1-1c-4-record.md) | #40 (and #41, the runtime flake's root fix it met) |
+| [S1.1c-5](#s11c-5--the-strict-lint-set-the-instrument-the-whole-tree-rules-the-first-packages) | S1.1c-5, S1.1c's fifth part (S1.1c-6 open; S1.1c-7 and S1.1c-8 dropped at its close) | [record](s1-1c-5-record.md) | #47 (and #46, the `.gitattributes` fix it met) |
 
 ### S1.1a — The gate runner, CI, coverage and the event kernel
 
@@ -422,24 +423,6 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 
 *How it runs ([plan check](s1-1c-3-plan-check.md) §1, §4, §8):* G0 law commit (the marker, the renaming, the known-issues fields and two new entries, the empty `fragments` list) → `proofs` alone → W0 QA against the coordinator's stubs (the `aging` driver, row and instrument in one commit; `proofs` alone) → G1 design (the before/after list for the owner) → W1 lane B (Go, the fragment test) ‖ lane E2 (Python, aging, BA10, QB10) → lane B's real-document test red → the corrections commit → the markers commit → T2 → `proofs` alone → T3 → review + break-it → fix round → T4 → owner's check → merge.
 
-## Resolved owner items
-
-*Moved from the plan's "Still open for the owner" once done.*
-
-- *Approval of the v3 recalibration — **done** (2026-11-02); the sprint references in ADR-0005 §1, ADR-0012 §1, ADR-0015 and qa-strategy §4 are updated to v3's ids.*
-- *Owner action — **done** (2026-11-02, verified via the GitHub API): ruleset `protect-main` is active on the default branch with deletion and force-push (non-fast-forward) blocked and no bypass actors. S1.1a adds the summary job as a required status check to the same ruleset once its CI has run.* *(Annotated 2026-11-05: the required status check is dropped by the owner — §5, "branch protection".)*
-
-*Resolved 2026-11-06 ([owner](decisions.md#owner-decisions-2026-11-06--the-docs-restructure)): the three lasting rules joined the sprint model; the one-module check joined S1.1c; S2.2a-1 was closed.*
-
-- **Three lasting-rule proposals from retros:** (1) a design claim about a library's behaviour is checked with a scratch program before review ([S3.1-2 retro](s3-1-2-record.md#retro)); (2) a new CI workflow is run once by hand in the sprint that adds it ([S3.2a-2 retro](s3-2a-2-record.md#retro)); (3) a guard test that pins wiring is proven red by a mutation before it counts ([S3.2b-1 retro](s3-2b-1-record.md#retro)).
-- **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1: the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`) has no sprint: S1.1b's slim scope did not build it and S1.1c's list does not name it.
-- **Known issue S2.2a-1** looks resolved by PR #13 (the fuzz rows are blocking): close it, or keep it for the nightly-only cadence ([known issues](../product/known-issues.md)).
-
-*Resolved 2026-11-06 ([owner](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2)): the two lasting-rule proposals from S3.2b-2's retro joined the sprint model; the spec-cleanup pass was placed before S3.3 as S3.2c, with integer overflow decided as an expression error.*
-
-- **Two lasting-rule proposals from S3.2b-2's retro:** a fix round's changes run under the race detector before T4; a sprint that adds a CI job opens its PR as a draft to get that job's first run.
-- **Language questions for a spec-cleanup pass:** the five contradictions (known issue S2.2b-1) and integer overflow (S3.2b-1-1).
-
 ### S1.1c-4 — The scans
 
 *The fourth part of S1.1c ([owner, 2026-11-12](decisions.md#owner-decisions-2026-11-12--s11c-3s-plan-check), decision 1), planned in [S1.1c-3's plan check](s1-1c-3-plan-check.md) ([4] items); its own plan check, short where nothing moved, reviewed by the architect and QA, confirms the shape at its G0.* *(Plan check answered 2026-11-13 ([owner](decisions.md#owner-decisions-2026-11-13--s11c-4s-plan-check); [plan check](s1-1c-4-plan-check.md)): re-sized 8 → 13, S1.1c-3-3 added to item 3, acceptance line 1 reworded — decisions 1, 2, 3 and (h).)*
@@ -460,6 +443,47 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 | | 5. Every new row green on the real tree; `proofs` `min_wants` 37 → 38 — **proof:** the T4 run. |
 | **Owner's check** | *By reading:* the nightly run on the branch with its database date; the canary's first summary with its upgrades; LAW Δ. |
 | **Split line** | Not needed (≈ 7.75 against the 13 cap). |
+
+### S1.1c-5 — The strict lint set: the instrument, the whole-tree rules, the first packages
+
+*The fifth part of S1.1c, planned in its own plan check ([s1-1c-5-plan-check.md](s1-1c-5-plan-check.md), v2, reviewed by architecture and QA) after a read-only re-measure ([research](../reviews/s1-1c-5-research-lint.md)): the wave is about four sprints, so it is cut ([owner, 2026-11-14](decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check), decisions 1 and 2) — this card, then S1.1c-6 to S1.1c-8, re-cut at this card's close from the rate its first packages measure.*
+
+| | |
+|---|---|
+| **Goal** | ADR-0015 §2's strict golangci-lint set runs before merge as the `smells` row, pinned whole. The line, error, critic, forbidden-call and waiver rules are green across the whole tree. The size limits are green on the first packages, and every other package is excluded only until a dated part that only the owner moves. Every waiver is `//nolint` with its metadata. The pinned Go tools' own builds are scanned. |
+| **Routine · size** | Full loop without the semantics panel · 13 SP (inferred; the first packages are the calibration run) |
+| **Depends on** | S1.1c-4; the proof-world speed-up (#44) and the tool upgrade (#45), merged |
+| **In scope** | 1. **The `smells` row.** `.golangci.json` is pinned as a whole document: every default that hides a finding is set explicitly, and generated files are dropped by path from `tools/allowlists/generated.json`. Its JSON goes to a file. Covered is counted from `go list` under both `GOOS`. Any typecheck finding, report error or warning is red. Each hiding setting has a planted proof. · 2. **The whole-tree rules green:** lll (production and tools), errcheck, gocritic, forbidigo (the 15 production panics, the canonical encoder, and the tests' planted panics and child-process markers as PERMANENT in-code waivers; the golden-update switches as a test flag), nolintlint. · 3. **The size family by package.** `tools/allowlists/smells.json` holds TEMP exclusions tied to known issues forwarded to S1.1c-6, -7 or -8, enforced by a new part-level check. A forward moves only by an owner decision, never past S1.1c-8. `table`, `clock`, `io/inmemory` and `shape` are cleaned behind characterisation tests and the AST-equality check. · 4. **Waivers:** a census of every enabled linter's directives, with all but `//nolint` refused; `ENABLED` read from the config; BK-S4's removed red tests restored. · 5. **The ruff pin:** `ruff.toml` pinned whole as a fixed list of keys and values, re-measured on 0.17.5. · 6. **The tool scan:** `tools.json` `"go_built": true`; `vulns` reads `go version -m` of each declared binary (`stdlib` only, never `toolchain`); the 15 advisories as dated exemptions scoped to `golangci-lint` under one known issue. · 7. **Docs:** DEVELOPMENT.md (the suppressions checker built; the waiver policy's example), and ADR-0015 §2's `smells` row, §2.1 and §2.2 annotated. |
+| **Not in scope** | The size family in every other package → S1.1c-6 to S1.1c-8, re-cut at this card's close. Naming the parity proof drivers in the law → backlog. A semantic LAW Δ line for the config → backlog. |
+| **Entry criteria** | The standard ones, plus its plan check answered (2026-11-14). |
+| **Exit criteria** | The done-done block, plus these acceptance lines: |
+| | 1. **The row's rules bite.** Each rule is green at its bound and red one past it. Each forbidigo pattern has its bypass cases (`println`, `os.LookupEnv`, `import _ "unsafe"`). Each hiding default and each hiding config edit is refused, and a typecheck error in another package is red — **proof:** QA's W0 tests and a new planted driver, `gate/proofs/drivers/test_smells_planted.py`. |
+| | 2. **Only `//nolint` waives.** Every directive form in the census is red, and so is an in-code waiver on the wrong line or without its metadata. An accepted `//nolint:<linter> // PERMANENT …` passes — **proof:** `gate/runner/tests/test_suppressions.py` and the restored break-it tests. |
+| | 3. **Exclusions are bounded.** An exclusion past its part is red. So are an exclusion that waives nothing, a new package outside the exclusions that is not clean, and a forward to an unprinted part or past S1.1c-8 — **proof:** the part-level check's tests. |
+| | 4. **The ruff pin is closed.** A `ruff.toml` key or value outside the pinned list is red — **proof:** the ruff pin's tests. |
+| | 5. **Declared tools are scanned.** A declared Go-built tool whose Go version has a standard-library advisory is red unless exempted with a date, and a `toolchain` advisory never applies to a binary. The engine's own scan still checks `toolchain` — **proof:** `test_vulns` and a planted case. |
+| | 6. **Green on the real tree.** The `smells` row is green on the real tree, with the whole-tree rules and the first packages in full scope; its T0/T1 time is measured — **proof:** the T4 run, and the record. |
+| | 7. **No behaviour change.** Conformance, determinism, replay, coverage and apidiff are green, and the first packages' refactors pass the AST-equality check or their characterisation tests — **proof:** the T4 run. |
+| **Owner's check** | *By reading:* LAW Δ (the config, the exclusions with their parts, the waiver count), and the `smells` row's summary. *By hand:* plant an over-long function in a package that is in scope, and see it red. |
+| **Split line** | The wave is cut S1.1c-5 to S1.1c-8 (decision 1); this card ≈ 13. |
+
+## Resolved owner items
+
+*Moved from the plan's "Still open for the owner" once done.*
+
+- *Approval of the v3 recalibration — **done** (2026-11-02); the sprint references in ADR-0005 §1, ADR-0012 §1, ADR-0015 and qa-strategy §4 are updated to v3's ids.*
+- *Owner action — **done** (2026-11-02, verified via the GitHub API): ruleset `protect-main` is active on the default branch with deletion and force-push (non-fast-forward) blocked and no bypass actors. S1.1a adds the summary job as a required status check to the same ruleset once its CI has run.* *(Annotated 2026-11-05: the required status check is dropped by the owner — §5, "branch protection".)*
+
+*Resolved 2026-11-06 ([owner](decisions.md#owner-decisions-2026-11-06--the-docs-restructure)): the three lasting rules joined the sprint model; the one-module check joined S1.1c; S2.2a-1 was closed.*
+
+- **Three lasting-rule proposals from retros:** (1) a design claim about a library's behaviour is checked with a scratch program before review ([S3.1-2 retro](s3-1-2-record.md#retro)); (2) a new CI workflow is run once by hand in the sprint that adds it ([S3.2a-2 retro](s3-2a-2-record.md#retro)); (3) a guard test that pins wiring is proven red by a mutation before it counts ([S3.2b-1 retro](s3-2b-1-record.md#retro)).
+- **The one-module check** ([ADR-0001](../architecture/adr/ADR-0001-module-and-package-layout.md) §1: the tracked `go.mod` files are exactly `go.mod` and `gate/proofs/go.mod`) has no sprint: S1.1b's slim scope did not build it and S1.1c's list does not name it.
+- **Known issue S2.2a-1** looks resolved by PR #13 (the fuzz rows are blocking): close it, or keep it for the nightly-only cadence ([known issues](../product/known-issues.md)).
+
+*Resolved 2026-11-06 ([owner](decisions.md#owner-decisions-2026-11-06--the-open-items-after-s32b-2)): the two lasting-rule proposals from S3.2b-2's retro joined the sprint model; the spec-cleanup pass was placed before S3.3 as S3.2c, with integer overflow decided as an expression error.*
+
+- **Two lasting-rule proposals from S3.2b-2's retro:** a fix round's changes run under the race detector before T4; a sprint that adds a CI job opens its PR as a draft to get that job's first run.
+- **Language questions for a spec-cleanup pass:** the five contradictions (known issue S2.2b-1) and integer overflow (S3.2b-1-1).
 
 ## The status log
 
@@ -513,3 +537,4 @@ In the moved text, "§5" means [decisions.md](decisions.md) and "§Status" means
 - *(Annotated 2026-11-13: Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-3 merged (PRs #1–#38, the last on 2026-11-13). S1.1c-3 is closed — the rule-fragment test over SPEC, SEMANTICS and errors.md (every snippet marked, placeholders bound, wrong examples a named register, the `-> and not` shape red wherever it is written), the error contract with messages in rule words, advisory aging with part forwards and the 30-day correctness clock, BA10 and QB10 fixed → next: S1.1c-4's plan check (the scans: the vulnerability database read by the gate at T4 and nightly, the weekly canary); then S1.1c-5 (the strict lint set), S4.1.)*
 - *(Annotated 2026-11-14: Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-3 merged (PRs #1–#39, the last on 2026-11-13). S1.1c-4's plan check is answered (owner, 2026-11-13; blind architecture and QA reviews; all as recommended) — the scans, re-sized to 13: the vulnerability database read by the gate at T4 and nightly, failing closed unless the dependency register marks a module never built, the copy at most 7 days old; the weekly canary; S1.1c-3-1 to -3 → next: S1.1c-4's G0, then its design note; then S1.1c-5 (the strict lint set, and the pinned Go tools' build information), S4.1.)*
 - **Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-4 merged (PRs #1–#41, the last on 2026-11-14). S1.1c-4 is closed — the scans: the `vulns` row reading the Go vulnerability database itself at T4 and nightly, failing closed unless the dependency register marks a module never built; `make vulndb`; the weekly canary trying each tool's newer patch release; S1.1c-3-1 to -3 closed → next: two small PRs the owner placed first (2026-11-14) — the proof worlds reusing the outer run's tool check (the `proofs` row at 480 s of its 600 s cap on CI), and the tool upgrade (ruff 0.17.5, python-build-standalone 20261110); then S1.1c-5's plan check (the strict lint set, and the pinned Go tools' build information), S4.1.**
+- *(Annotated 2026-11-15: Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-4 merged, then the proof-world speed-up (#44: the `proofs` row 480 → 297 s on CI) and the tool upgrade (#45: ruff 0.17.5, python-build-standalone 20261110), the last on 2026-11-14. S1.1c-5 in progress — the strict lint set: the `smells` row pinned whole, the whole tree strict for line length, unchecked errors, gocritic, forbidden calls and waivers, the size limits by package with dated exclusions to S1.1c-6 to S1.1c-8 (re-cut at S1.1c-5's close), the pinned Go tools' builds scanned ([plan check](s1-1c-5-plan-check.md), [owner, 2026-11-14](decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check)) → then S1.1c-6 to S1.1c-8, S4.1.)*

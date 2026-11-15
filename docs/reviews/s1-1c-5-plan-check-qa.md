@@ -1,5 +1,7 @@
 # S1.1c-5 plan check v1 — blind QA review (2026-11-14)
 
+> **Historical — S1.1c-5, the strict lint set: the instrument, the whole-tree rules, the first packages; merged in PR #47.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](../sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check); what is next is [sprint-plan.md](../sprints/sprint-plan.md#status). **This sprint:** [plan check](../sprints/s1-1c-5-plan-check.md) · [design](../sprints/s1-1c-5-design.md) · [record](../sprints/s1-1c-5-record.md) · reviews: [research lint](s1-1c-5-research-lint.md), [plan check architecture](s1-1c-5-plan-check-architecture.md), [plan check qa](s1-1c-5-plan-check-qa.md), [design architecture](s1-1c-5-design-architecture.md), [design qa](s1-1c-5-design-qa.md), [combined architecture](s1-1c-5-combined-architecture.md), [breakit qa](s1-1c-5-breakit-qa.md). **← [S1.1c-4](../sprints/s1-1c-4-record.md) · [S1.1c-6 (next)](../sprints/sprint-plan.md#status) →**
+
 Reviewed read-only against `main` @ d4b028f: plan-check-v1.md and research.md, the code it relies on, and the binding decisions. Experiments ran with the pinned golangci-lint v2.15.0, Go 1.27.4 and ruff 0.17.3 in `s1-1c-5-scratch/qa-exp/` (the `m/` module, plus `ruff/` and `rev/`). I did not consult GitNexus or Hindsight: this lane is Python gate code plus tool behaviour, so I read and ran it directly. memory: none used.
 
 Severity follows ground rule 15. For a gate instrument, a silent pass is a missed detection.
