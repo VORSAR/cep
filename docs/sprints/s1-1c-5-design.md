@@ -39,6 +39,8 @@ Order inside W2: lane C's scan commit first (it touches no Go file lane D owns),
 
 ### 2.1 The config, `.golangci.toml`
 
+*(Annotated 2026-11-15: the committed `.golangci.toml`, `golangci.PINNED` and `test_golangci.DESIGN_TOML` also carry the owner's W2 decision 2 rule — tests exempt from the `[fmtprint]` pattern — which this section's document predates.)*
+
 The whole document, in this key order (the pin compares parsed values with their types, §2.2, so order and comments are free):
 
 ```toml
