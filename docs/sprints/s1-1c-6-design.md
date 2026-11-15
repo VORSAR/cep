@@ -1,93 +1,121 @@
-# S1.1c-6 — design note (v1, 2026-11-16; for the blind architecture and QA reviews, then the owner at G1)
+# S1.1c-6 — design note (v2, 2026-11-16; after the blind architecture and QA reviews; for the owner at G1)
 
-*Step 1 of the full loop for S1.1c-6, from the answered [plan check](s1-1c-6-plan-check.md) (v3), the owner's answers of 2026-11-15 ([scope](decisions.md#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check), [plan check](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check), [re-cut](decisions.md#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike)) and [the spike](../reviews/s1-1c-6-spike.md). Drafted read-only against `s1-1c-6/integration` @ 6bf339c, whose production Go is identical to `main` 4d2b9eb, so every `file:line` is on that tree. The six package sections (§4–§9) were drafted by the repo's `refactoring-specialist` agent, one per package group, following the repo's skills `gitnexus-refactoring`, `gitnexus-impact-analysis` and `architecture-designer`; the coordinator verified each section's load-bearing claims against the code (noted at the head of each) and wrote §0–§3 and §10–§12. "Measured" marks a run made for this note; "inferred" a reading no run proved; "scratch" an experiment on a copy outside the repo. Nothing here is an owner decision unless it cites one; §10 holds the questions for G1.*
+*Step 1 of the full loop for S1.1c-6, from the answered [plan check](s1-1c-6-plan-check.md) (v3), the owner's answers of 2026-11-15 ([scope](decisions.md#owner-decisions-2026-11-15--s11c-6s-scope-before-its-plan-check), [plan check](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check), [re-cut](decisions.md#owner-decisions-2026-11-15--s11c-6-re-cut-after-the-spike)) and [the spike](../reviews/s1-1c-6-spike.md). Drafted read-only against `s1-1c-6/integration` @ 6bf339c, whose production Go is identical to `main` 4d2b9eb, so every `file:line` is on that tree. The six package sections (§4–§9) were drafted by the repo's `refactoring-specialist`, one per package group, following the repo's skills `gitnexus-refactoring`, `gitnexus-impact-analysis` and `architecture-designer`; the coordinator verified each section's load-bearing claims (noted at the head of each) and wrote §0–§3 and §10–§12. v1 was reviewed blind by the `architect-reviewer` with `the-fool`'s pre-mortem ([review](../reviews/s1-1c-6-design-architecture.md): 1 blocker, 14 should-fix, 11 later) and the `qa-expert` ([review](../reviews/s1-1c-6-design-qa.md): 2 blockers, 14 should-fix, 5 later); v2 places every finding (§12), rewrites §1–§3 and §10, and amends the package sections where they were wrong. "Measured" marks a run made for this note; "inferred" a reading no run proved; "scratch" an experiment on a copy outside the repo. Nothing here is an owner decision unless it cites one; §10 holds the questions for G1.*
 
 ## 0. What the design found that the plan check did not
 
-1. **`internal/validate` collects and sorts its findings; it does not stop at the first** (§5 §0; verified: `internal/validate/validate.go:62-65` sorts by line, column, code, message before returning). The plan check's §6.1 premise ("returns the first error found") is wrong for validate. What a split must keep there is the **multiset** of findings, decided by suppression (`return`/`continue`/`break` after a finding), first-match switches and poison writes before their reads; every two-fault test asserts the exact sorted list. `runtime.validateApp` and the parser's `parseError` do return the first fault, and their sections keep that order.
-2. **`a.ing == nil` is true in production** (§4 Q-R2; verified: `internal/runtime/lifecycle.go:509` sets `a.ing, a.sinks, a.quiet = nil, nil, true` on removal — the tombstone). The spike's item 8 was wrong; the guard stays and its operand gets a real case. The `a == nil` slot guards are the ones never true in production (§10 Q3).
-3. **`parseRFC3339` has an inliner-shaped re-split that may not cost** (§6 E.2.1; scratch, measured: equal to the original on 2,115,410 inputs, re-run by the coordinator; bounds checks 4 → 2 against the spike's 4 → 12; one non-inlined call per timestamp against the spike's four). Decision 1's measurement still decides; the waiver is the fallback in the same commit slot.
-4. **One reordering is proposed:** `runtime.build` defaults `RecordQueue` before the validate loop (§4 item 9) — unobservable (`validateApp` reads no `cfg` field and an error discards `cfg`), but a reordering the reviewers must accept.
-5. **A cross-package merge is concrete and needs no new import edge:** the literal-to-value rule, written three times, becomes `model.LitValue` in a new `internal/model/literal.go` (§5 §4.1), proven over all 72 literal-kind × type pairs. It touches `internal/model` and `internal/expr`, which are S1.1c-7 packages (§10 Q1).
-6. **Blocks a lane can reach only by calling a function directly, and conditions that can never decide alone,** exist in every package (§10 Q2, Q3). Decision 2 names two reasons for a short block (an invariant panic; scheduling with a stress test); the sections propose direct in-package tests where possible and name the rest for the owner.
-7. **Latent defect found in passing:** `internal/parser/parse.go:363` (`strings.Fields(s)[0]`) panics on an all-whitespace notation other than spaces; participle never yields one (inferred). Not fixed in this sprint (ground rule 7); §10 Q6.
-8. **No shared walker for the three object loops** (§6 E.2.2): a per-byte indirect call would cost on the hot path; three splits share one inlinable `isSpace`.
+1. **`internal/validate` collects and sorts its findings; it does not stop at the first** (§5 §0; verified: `internal/validate/validate.go:62-65`). A split there keeps the **multiset** of findings and the **resolved copy** `Check` returns (QA DQ-S2): suppression, first-match switches, poison writes before their reads, and every `${param}` slot write. `runtime.validateApp`, the parser's `parseError`, `event.NewSchema` and playback's reader return the first fault and keep that order, proven per helper boundary (§2.1).
+2. **`a.ing == nil` is true in production** (verified: `internal/runtime/lifecycle.go:509`, the removed app's tombstone). The spike was wrong; the operand gets real cases (§4 §3).
+3. **`parseRFC3339` has an inliner-shaped re-split** (§6 E.2.1; scratch, measured: equal *results* to the original on 2,115,410 inputs, re-run by the coordinator; bounds checks 4 → 2 against the spike's 4 → 12). Decision 1's measurement still decides time; the frozen original becomes a committed reference test (§6 E.3).
+4. **One reordering:** `runtime.build` defaults `RecordQueue` before the validate loop (§4 item 9), unobservable (verified by both reviews).
+5. **The literal-to-value rule** is written three times; v2 recommends merging two of them (validate's `fits` and plan's `value`) into `model.LitValue`, and leaving `expr.literalNode` alone: expr's import of `model` is fenced by an owner decision to "the model's expression types … expr reads `model.Expr` only" (`docs/sprints/decisions.md:274`), and a model function would pass the checker only by its name prefix (architecture DA-B1; §5 §4.1, §10 Q1).
+6. **The nets need tools, not hand procedures.** The reviews showed that a hand mutation can be counted red when it does not compile (QA DQ-B1), that writing a mutant into a tracked file survives a killed run (DQ-S3, observed), that tied integer benchmark times need an exact conditional p-value (DA-S2), and that a plain escape diff calls a free split costly (DQ-B2, measured). W0 builds four small tools (§3) that make these rules mechanical.
+7. **Runtime coverage varies run to run** (QA DQ-S1: `runtime.go:908` covered in 2 of 6 runs). Coverage is measured in five separate runs, and a block counts only if covered in all five (§2.3).
+8. **Latent defect found in passing:** `internal/parser/parse.go:363` panics on the notation `"\t"` (inferred unreachable through participle). Backlog (§10 Q6).
 
 ## 1. Lanes, order and ownership (two agents at a time)
 
+Sub-lanes are sized at the spike's measured rates so each fits a 30-minute box (architecture DA-S11), with a wrap-up report at the box. Each lane's sub-lanes run one after another in one slot.
+
 | Step | Who | What | Commits |
 |---|---|---|---|
-| G1 | owner | the answers to §10 | 1 (coordinator) |
-| Moves | coordinator, on the integration branch | the literal-to-value merge, if approved (§5 §4.1: pin the three callers' tables → add `model.LitValue` red first → switch the callers) | ≤ 3 |
-| W0 | `python-engineer` | the benchmark comparer and the mutation runner (§3), test first | ≤ 3 |
-| Slot A | `go-engineer` per sub-lane | **R1 → R2 → R3** (`internal/runtime`, §4; one after another: `transitions.go` gets `ingest`'s helpers in R2 and `installAck`'s in R3) | ≤ 15 |
-| Slot B | `go-engineer` per lane | **V1 → V2** (`internal/validate`, §5), then **E** (`internal/event`, §6), then **P** (`internal/playback`, §8), then **Q** (`internal/parser` and `internal/plan`, §7 and §9) | ≤ 12 + 8 + 8 + 8 |
-| Measure | coordinator, alone | after each lane with hot-path functions (R2, E, P, Q): decision 1's comparisons per leaf function (§2.4) | — |
-| Combine | coordinator | cherry-picks; each lane's `smells.json` entries removed on its branch at hand-back; S1.1c-5-1 and -2 closed when their last lane is in; the doc rows (§4, §6); T3 | ≤ 6 |
-| Review | `architect-reviewer` (with `the-fool`) and `qa-expert`, blind | the combined diff against this note; the break-it | — |
-| Fix round, T4, owner's check | coordinator | one batched fix round; the nightly job once; the path comparison `main` vs combined; T4 | ≤ 12 |
+| G1 | owner | the answers to §10 | 1 |
+| M | `go-engineer` (lane M), the coordinator verifying | the literal-to-value merge of validate and plan, if approved (§5 §4.1) | ≤ 3 |
+| W0 | `python-engineer` | the four tools of §3, test first: (a) `compare.py` and `escapes.py`; (b) `mutate.py` and `load.py` | 2 |
+| Slot A | `go-engineer` per sub-lane | **R1a** in-place and characterisation nets (router, shard, boundary, build, validate); **R1b** lifecycle deadline, recorder and stress nets; **R1c** benchmarks and allocation pins; **R2a** the pure move, then `ingest`, `take`, `process`; **R2b** `route`, `routeKey` with `broadcast`, `Send` with `SendPayload`; **R3a** `build`, `validateApp`, `(*recQ).run`, `Activate`, `awaitRuns`, `installAck`; **R3b** `Drain`; **R3c** `Remove`, `Close` (§4) | ≤ 16 |
+| Slot B | `go-engineer` per sub-lane | **V1** nets; **V2** the move and the phase 2–5 splits; **V3** the phase 6 and expects splits (§5) · **E1** nets; **E2** the move, the object walkers, `appendUnescaped`, the scanner; **E3** `(*Decoder).value`, `parseRFC3339`, `NewSchema` (§6) · **P1** nets; **P2** the moves, the encoders, `Table`, `Step`, the reader; **P3** the records, `runBlock`, the verdict (§8) · **Q1** parser and plan nets; **Q2** the parser (§7); **Q3** plan (§9) | ≤ 12 + 13 + 9 + 9 |
+| Measure | coordinator, alone | at each hand-back of a sub-lane with hot functions (R2a, R2b, R3a, E2, E3, P2, P3, Q3), with no agent running (the next sub-lane in either slot waits): decision 1 per split commit (`c^` vs `c`) and the lane's path comparison (nets commit vs lane head) (§2.4) | — |
+| Restore | coordinator | a split that costs is restored whole with its waiver by a new commit on the lane branch (§2.4) — no branch rewriting | ≤ 4 |
+| Combine | coordinator | cherry-picks; the lane's own `smells.json` entries removed on its branch at hand-back (5 commits); S1.1c-5-1 and -2 closed when their last lane is in (2); the doc rows (§4, §6) (1); T3 | 8 |
+| Review, fix round, T4, owner's check | `architect-reviewer` (with `the-fool`) and `qa-expert` blind; the coordinator | the combined diff against this note; the break-it; one batched fix round; the nightly job once; the path comparison `main` vs combined; T4 | ≤ 8 + 3 docs |
 
-Lane commit budgets come from the sections' commit plans (R 15, V 12, E 8, P ≤ 8, Q = parser 4 + plan ≤ 4). With the plan check's 7 commits so far, the total stays under 100.
+**Commit budget** (DA-L6, recounted): the plan check, G0, the spike, the design v1 and v2 so far 9 · G1 1 · M 3 · W0 2 · lanes R 16, V 12, E 13, P 9, Q 9 · restores ≤ 4 · combine 8 · fix round ≤ 8 · record, T4 and G5 docs 3. **At most 97 of 100.** The coordinator counts at each combine; if the projection passes 97, a lane's non-hot split commits of one file are squashed on its branch before cherry-pick (they carry no `astequal` proof and no per-commit measurement).
 
-**Ownership** follows the plan check §4: each lane owns its packages' files (law paths inside them read-only); the coordinator owns `tools/allowlists/smells.json`, `gate/known-issues.json`, `docs/product/known-issues.md`, `gate/law.json`, `gate/registry.json`, the proof drivers, and the moves step's files in `internal/model`, `internal/expr` and the callers it switches.
+**Ownership** follows the plan check §4: each lane owns its packages' files (law paths inside them read-only); lane M owns `internal/model/literal.go`, its test and the two callers' edits for its three commits, before V and Q branch; the coordinator owns `tools/allowlists/smells.json`, `gate/known-issues.json`, `docs/product/known-issues.md`, `gate/law.json`, `gate/registry.json` and the proof drivers.
 
 ## 2. Rules every lane follows
 
-**2.1 Refactoring** (S1.1c-5 design §7.3, quoted: "split by concern, each new function named for what it does; no `xPart1..n`, no option struct whose only purpose is to pass > 5 values (a struct that already exists as a domain type may be passed); no behaviour change in the same commit as a move; tests are not reflowed in a refactor commit"), plus, from the sections:
-- No exported identifier changes name or signature (no seams across lanes).
-- On the hot path, helpers take items, messages and events by value; never `&it` or `&m` into a non-inlined callee (§4).
+**2.1 Refactoring** (S1.1c-5 design §7.3, quoted: "split by concern, each new function named for what it does; no `xPart1..n`, no option struct whose only purpose is to pass > 5 values (a struct that already exists as a domain type may be passed); no behaviour change in the same commit as a move; tests are not reflowed in a refactor commit"), plus:
+- No exported identifier changes name or signature. **An internal function a nets test calls directly keeps its signature** (QA DQ-L4: `(*router).ingest`, `(*shard).process`, `(*checker).build`, `(*checker).mayBeNull`, `(*lowerer).str`, `bareDuration`, `diverge` and the rest named in the sections).
+- On the hot path, helpers take items, messages and events by value — never `&it` or `&m` into a non-inlined callee unless the escape tool shows no new heap escape (DA-L2).
 - No handler tables on the hot-path list (plan check §5.2); elsewhere a table is a never-written package-level var.
-- A first-match switch is cut into contiguous runs in its original order, called in that order (§7 Q.2.1).
-- An accumulator a helper returns is never combined with `||` inline (`found = found || f()` skips `f`; §5 2.14).
+- A first-match switch is cut into contiguous runs in its original order, called in that order. **Every function that returns its first error gets one two-fault case per adjacent helper boundary** (QA DQ-S8).
+- An accumulator a helper returns is never combined with `||` inline.
+- **Concurrency** (QA DQ-S14): a `select` moves whole and is never split into sequential checks; a `defer` stays with the code whose return it guards; a Lock and its Unlock stay in one function (except `startAppGoroutines`' documented pair, §4 item 11); an atomic `Store` or `Swap` keeps its place relative to channel sends.
+- An invariant a function sets for its callers stays in that function (`broadcast`'s `admStream = -1`, §4 item 6; DA-S5).
 - The pinned placements stay: `(*Decoder).Decode` in `internal/event/decode.go`, `Parse` in `internal/parser/parse.go`.
 - A per-line `//nolint` stays on its line when the code moves (the `smells` row reds one silenced from another line).
+- A helper's name says what it does; the sections' names are provisional where a reviewer found them wrong (DA-L11: `checkKeyShape`/`checkKeyTypes` are named by the checks they hold).
 
-**2.2 Commits.** (1) The nets commit first: tests only, in new files named for the behaviour they test, never for a sprint; no test file is edited after it (`git diff <nets>..HEAD -- <the package's *_test.go>` empty at hand-back, except a test the moves step moved). (2) The pure move commit: `astequal <c>^ <c>` exit 0. (3) One split commit per source file or concern. Every commit leaves each (package, rule) count at or below its cap (over-cap is red at the commit hook); never `--no-verify`.
+**2.2 Commits.**
+1. **The nets commit(s) first:** tests only, in new files named for the behaviour they test, never for a sprint. **No test file is edited after the lane's nets commits** (`git diff <last nets commit>..HEAD -- <the package's *_test.go>` empty at hand-back; tests that could exist only after a split are dropped, DA-S8).
+2. **The pure move commit:** `astequal <c>^ <c>` exit 0.
+3. **Split commits:** one per source file or concern; a commit may hold several hot-path functions only if each has its own benchmark that reaches no other function of the commit (DA-S3) — functions measured only through a shared path benchmark (`ingest`, `take`, `process`, `route`; the scanner's `top`, `value`, `object`, `str`, `number`; playback's `record`) get one commit each.
+4. Every commit leaves each (package, rule) count at or below its cap; never `--no-verify`.
 
 **2.3 The coverage bar** (decision 2 of the plan check, quoted: "Each function to be split reaches 100 % of its blocks from its own package's tests. Each operand of a compound condition has its case. One mutation is shown red per new test and per control transfer the split moves across a helper boundary. Any block left short is listed in the design with its reason (an invariant panic, or reachable only by scheduling and covered by a named stress test) and reviewed at G1.") The procedure:
-1. `go test -count=1 -coverprofile=<file> ./internal/<pkg>` (no `-coverpkg`: the gate's measure) and `go tool cover -func`; every block of each function to be split covered, or listed in this note with its reason.
-2. Operands: in a scratch copy, replace each operand with `true`, then `false`; where every test stays green, the operand gets its case.
-3. Mutations with the W0 runner (§3.2): one per new test and one per control transfer named in the sections, each quoted with its diff and the failing test.
-4. A new timing- or concurrency-sensitive test is stressed under load before it merges (`-count=50 -cpu 1,4`, or ≥ 64 iterations for a race test).
-5. The coordinator re-derives each lane's coverage table at its nets commit.
+1. **Five separate runs** (QA DQ-S1): `go test -count=1 -coverprofile=<file> ./internal/<pkg>` in five separate processes (no `-coverpkg`: the gate's measure); a block is covered only if covered in all five; the lane's table lists every block missed in any run.
+2. **Operands:** in a scratch copy (never the worktree), each operand replaced with `true`, then `false`, run through `mutate.py`; where every test stays green, the operand gets its case.
+3. **Mutations through `mutate.py` only** (§3.3): each runs the one designated test (`-count=1 -run '^<test>$'`); outcomes red, green, timeout, invalid; only red counts. **Each control transfer's mutation is shown red twice** (QA DQ-S9): at the nets commit, as the equivalent edit on the original code (decision 2's bar), and at the split commit, on the helper. A mutation spec must compile: "drop a propagation" means replacing `if err := f(); err != nil { return err }` by `_ = f()`, never leaving a variable unused. A scheduling-dependent mutant runs N = 20 times under load (`-race -cpu 1,4`, `load.py`) and is reported as k/N; one red in none of the N is named "reasoned, not proven" for G1 (DQ-S5). An equivalent mutant is listed with its argument beside a different mutation of the same transfer shown red (§10 Q4).
+4. **Stress under load** (QA DQ-S6; `docs/development/testing.md`): a new timing- or concurrency-sensitive test passes `go test -race -count=50 -cpu 1,4 -run '^<test>$'` with CPU hogs running (`load.py`), quoted as "50/50 under load"; a block "reachable only by scheduling" is covered only if that stress run's own coverage profile shows it hit.
+5. The coordinator re-derives each lane's tables at its nets commit.
 
 **2.4 The performance rule** (decision 1 of the plan check, quoted: "Allocations decide first, exactly: allocations equal (`AllocsPerRun` pins and `-benchmem`) and no new heap escape in the function (a `-gcflags=-m=2` diff). Time second: two prebuilt test binaries, ten interleaved pairs at `-test.cpu=1 -test.benchtime=1s`, measured by the coordinator with nothing else running. A split costs time only if the slowdown is both significant (Mann–Whitney, p < 0.05 …) and larger than 2 % on the median, re-run once before the verdict stands."). The procedure:
-1. **Allocations:** the nets commit's `AllocsPerRun` pins assert equality and stay unedited; `-benchmem` allocs/op and B/op equal in the comparer's output.
-2. **Escapes:** `go build -gcflags=-m=2 ./internal/<pkg> 2>&1` at the nets commit and at the split commit; keep lines matching `escapes to heap|moved to heap|leaking param`; strip the leading `path:line:col: ` and any trailing ` in <func>`; compare as multisets per package. A line present after and not before is a new escape and costs. `can inline`/`cannot inline` lines and `-d=ssa/check_bce/debug=1` counts are quoted as diagnostics.
-3. **Time:** the coordinator builds `go test -c` at the nets commit and at the split commit and runs the W0 comparer (§3.1) with nothing else running; a "costs" verdict is re-run once before it stands.
-4. **A split that costs** is replaced in its own commit slot on the lane's branch by the original function moved unchanged plus, on its `func` line, `//nolint:gocyclo,funlen // PERMANENT reason="<the measured cost>" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6`, with the samples in the record (precedent `internal/table/table.go:240`). For `parseRFC3339` the waiver also cites the spike's measurement.
-5. **Paths:** before T4 the coordinator compares each path benchmark `main` against the combined branch with the same rule; a path that costs is an owner question with the per-function verdicts beside it.
+1. **Allocations:** the nets commit's `AllocsPerRun` pins assert equality and stay unedited; `compare.py`'s fixed-iteration pass compares allocs/op and B/op exactly. (`AllocsPerRun` and `-benchmem` truncate averages, so an amortised addition below one allocation per operation is invisible; DQ-L5.)
+2. **Escapes** (`escapes.py`, §3.2; QA DQ-B2, DA-S10): per original function, the multiset of `moved to heap` and `escapes to heap` lines over that function and its new helpers (read from `-m=2`'s "… in F:" lines), at `c^` and at `c`. A new such line in the group costs. A `leaking param` line is a diagnostic, counted only when a parameter the original function already had now leaks where it did not. Package-level counts are a backstop. An escape that moves from a cold to a hot path with the same text (playback's E2) is caught by the allocation pins, not by this diff.
+3. **Time:** the coordinator builds `go test -c` at `c^` and at `c` for each split commit (DA-S3) and runs `compare.py` with no agent running; "costs" stands only if the re-run also says costs (both quoted).
+4. **The lane's path:** at each hot sub-lane's hand-back, the coordinator compares each path benchmark at the lane's nets commit against the lane head, so costs below the threshold that add up show before T4.
+5. **A split that costs** is restored by a new commit on the lane branch: the original function back in its moved file, with a per-line waiver naming exactly the size linters that fire on it plus `lll` (the waiver line passes 120 columns), e.g. `//nolint:gocyclo,lll // PERMANENT reason="<the measured cost>" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6` (precedent `internal/table/table.go:240`; DA-S4: `nolintlint`'s `allow-unused = false` reds an unused `funlen`). Its samples go in the record.
+6. **Before T4:** each path benchmark, `main` against the combined branch, under the same rule. A path that costs while each split passed is §10 Q5.
 
-**2.5 Hand-back and the coordinator's steps per lane.** A lane hands back with: 0 size findings in its packages under the pinned golangci-lint for both `GOOS`; its packages' `go test` green; every commit through T0; its report (commits, the coverage table, each mutation red, each `astequal` exit, each new escape or inline line, open items). The coordinator then commits the removal of the lane's own `smells.json` entries on the lane's branch, runs T2 and the lane's verifiers (plan check §7), measures (§2.4), and runs `--job proofs` where §7 of the plan check says (red as expected until the last removal: [owner, decision 4](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check)).
+**2.5 Hand-back and the coordinator's steps per sub-lane.** A sub-lane hands back with: 0 size findings in its packages under the pinned golangci-lint for both `GOOS` (the last sub-lane of a lane), its packages' `go test` green, every commit through T0, and its report (commits; the coverage tables; each mutation's outcome with its diff; each `astequal` exit; each `escapes.py` result; open items). The coordinator then, at the lane's last hand-back, commits the removal of the lane's own `smells.json` entries on the lane's branch, runs T2 and the lane's verifiers (plan check §7), measures (§2.4) with no agent running, and runs `--job proofs` where the plan check's §7 says (red as expected until the last removal: [owner, decision 4](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check)).
 
-## 3. W0 — two small tools (`python-engineer`; stdlib Python under the pinned interpreter; test first)
+## 3. W0 — four small tools (`python-engineer`; stdlib Python under the pinned interpreter; test first)
 
-Both live in a new `gate/bench/` package (a law path, so every change is a LAW Δ line), with their tests in `gate/bench/tests/` (run by the `pytests` row). Neither is a gate row; the coordinator and the lanes run them by hand and quote their output in the record.
+All live in a new package `gate/bench/` with `__init__.py` in `gate/bench/` and `gate/bench/tests/` (the `pytests` row's `missing_init` check, `gate/runner/rows/pytests.py:67-77`; DA-L7), their tests in `gate/bench/tests/` run by the `pytests` row. `gate/` is a law path, so every change is a LAW Δ line. None is a gate row: the coordinator and the lanes run them by hand and quote their output in the record. A shared module, `gate/bench/gorun.py`, runs a `go` command in its own session (`start_new_session`) with a wall-clock limit that kills the whole process group (precedent `gate/runner/tests/test_breakit_leak.py`; DA-S1, DQ-S3), and parses `go test` output. `astequal`'s rename map, planned in the plan check for an approved cross-package move, is not built: the merge of §5 §4.1 is not a move (DA-S13).
 
-**3.1 `gate/bench/compare.py` — decision 1's time and allocation verdict.**
+**3.1 `compare.py` — decision 1's time and allocation verdict** (DA-S2, DQ-S10).
 ```
 python3.15 -I -B gate/bench/compare.py --before <test binary> --after <test binary> --bench <regex> \
-    [--dir <package dir>] [--pairs 10] [--benchtime 1s]
+    [--dir <package dir>] [--pairs 10] [--benchtime 1s] [--alloc-iters 20000]
 ```
-- Runs the two binaries alternately, before first, `pairs` times each, with `-test.run=^$ -test.bench=<regex> -test.benchmem -test.cpu=1 -test.benchtime=<benchtime> -test.count=1`, in `--dir` (the package directory, for testdata).
-- Parses each `Benchmark…` line's `ns/op`, `B/op`, `allocs/op`; a missing benchmark on either side, or a run that exits non-zero, is exit 2 naming it.
-- Per benchmark: the medians, their ratio, the exact two-sided Mann–Whitney U p-value (ties by midranks; exact distribution for n ≤ 20 per side), and the verdict: **costs** if allocs/op or B/op differ in any pair, or if p < 0.05 and median(after) > 1.02 × median(before); else **no cost**.
-- Exit 0 when no benchmark costs, 1 when one does (naming it), 2 on an error. The full samples print as a table for the record.
-- Tests (`gate/bench/tests/test_compare.py`): U and p against hand-computed small cases (including ties and n = 10 vs 10 fully separated: p = 1.083e-5); the 2 % boundary both ways; a significant 1 % shift is no cost; an allocation difference costs whatever the times; a missing benchmark and a failing binary are exit 2; parsing of real `go test -bench` output (fixture text).
+- **Time pass:** the two binaries in ABBA order (before, after, after, before, …) `pairs` times each, `-test.run=^$ -test.bench=<regex> -test.cpu=1 -test.benchtime=<benchtime> -test.count=1`, in `--dir`.
+- **Allocation pass:** each binary once at `-test.benchtime=<alloc-iters>x -test.benchmem`, so both run the same iteration count; allocs/op and B/op compared exactly. A before side whose own repeated runs disagree in allocs/op or B/op is exit 2 (unjudgeable), not "costs".
+- **Statistic:** per benchmark, the medians, their ratio and the **exact two-sided Mann–Whitney p-value conditional on the observed ties** (midranks; a dynamic program over doubled midranks, valid at n ≤ 20 per side).
+- **Verdict:** **costs** if allocations differ, or if p < 0.05 and median(after) > 1.02 × median(before); else **no cost**. Exit 0 no cost, 1 costs (naming it), 2 an error: a benchmark missing on either side, a binary that exits non-zero, **a regex that matches no benchmark**, an unjudgeable allocation pass.
+- **For the record:** the full samples, both binaries' commits and build IDs, `go version`.
+- **Tests** (`gate/bench/tests/test_compare.py`): p against brute-force enumeration of every split for small cases with ties; n = 10 vs 10 fully separated p = 2/C(20,10) = 1.0825e-5; the 2 % boundary both ways; a significant 1 % shift is no cost; an allocation difference costs whatever the times; zero matched benchmarks, a missing benchmark and a failing binary are exit 2; a self-disagreeing before side is exit 2; the ABBA order; parsing real `go test -bench` output (fixture text, including integer ns/op ≥ 1000); an **A/A run** (the same binary on both sides) says no cost — the coordinator also runs one A/A per measuring session.
 
-**3.2 `gate/bench/mutate.py` — one textual mutation, its test run, and a guaranteed restore.**
+**3.2 `escapes.py` — decision 1's escape check** (DQ-B2, DA-S10).
+```
+python3.15 -I -B gate/bench/escapes.py --pkg ./internal/<pkg> --before <rev> --after <rev> \
+    --function <original name> [--helper <name>]...
+```
+- Builds `go build -gcflags=-m=2 <pkg>` at each revision (from `git worktree`-free `git archive` copies outside the tree), groups `moved to heap` and `escapes to heap` lines by the function named in their "… in F:" line, and compares the multiset over the original function and its listed helpers. Exit 1 on a new line in the group (naming it), 0 otherwise; `leaking param` lines are printed as a diagnostic and count only for a parameter of the original function that leaks after and not before.
+- **Tests:** a split that adds only `leaking param: dst to result` lines → no cost (the measured `AppendValue` case); `&it` passed to a non-inlined helper → `moved to heap: it` → cost; an inlined helper holding an escape → counted once; positions and the ` in F:` suffix normalised.
+
+**3.3 `mutate.py` — one mutation, its designated test, and a tree never touched** (DA-S1, DQ-B1, DQ-S3, DQ-S4).
 ```
 python3.15 -I -B gate/bench/mutate.py --file <go file> --find <exact text> --replace <text> \
-    --timeout 120 -- <go test arguments>
+    --test '<TestName>' [--timeout 120s] [--repeat 20 --load] [--race]
 python3.15 -I -B gate/bench/mutate.py --batch <mutations.json>
 ```
-- Refuses to start unless `--file` is tracked and unchanged against `HEAD`, and `--find` occurs exactly once.
-- Writes the mutation, runs `go test <arguments>` with `-timeout` and a wall-clock limit, and restores the file in a `finally` (also on a signal), then checks the file's bytes equal the original.
-- Reports **red** (the command failed: the failing test names and the first lines of their output), **green** (the mutant survived) or **timeout** (red only when the test's own deadline reported it; see §10 Q4), with the diff of the mutation.
-- Batch mode reads `[{"file", "find", "replace", "args", "note"}]` and prints one line per mutation for the record.
-- Tests (`gate/bench/tests/test_mutate.py`): the restore after a pass, a failure, a timeout and a raised exception; a non-unique or absent `--find` refused before any write; a dirty file refused; the report's three outcomes on a fixture module.
+- Refuses to start unless `--file` is tracked and unchanged against `HEAD` and `--find` occurs exactly once.
+- Writes the mutant **outside the tree** and builds it through `go test -overlay=<json>`, so the tracked file is never written (no restore, no window in which a killed run leaves a mutant).
+- Runs `go test -count=1 -run '^<TestName>$' -timeout <timeout>` through `gorun.py`; `--timeout` must exceed the test's own ceiling plus its run time (`rtCeiling` is 60 s, `internal/runtime/helpers_test.go:43`).
+- **Outcomes:** **red** — the build succeeded and `--- FAIL: <TestName>` (or its panic) was printed, including a failure at the test's own context deadline; **green** — the test passed; **timeout** — `go test`'s `-timeout` backstop fired; **invalid** — a build or vet failure, or no `--- FAIL:` line for a non-zero exit. Only red counts.
+- `--repeat N --load` runs it N times under `load.py`'s CPU hogs and reports k/N.
+- Batch mode reads `[{"file", "find", "replace", "test", "note"}]` and prints one line per mutation with its diff.
+- **Tests** (`gate/bench/tests/test_mutate.py`, on a fixture module): the tracked file byte-equal after a red, a green, a timeout, an invalid run and a SIGTERM mid-run; a non-unique or absent `--find` and a dirty file refused before any build; a mutant that does not compile → invalid; a test hanging past `--timeout` → timeout; a hung child killed with its group; `--repeat` reporting k/N.
 
-## 4. internal/runtime (lane R: R1 → R2 → R3)
+**3.4 `load.py` — a `go test` run repeated under load** (DQ-S6).
+```
+python3.15 -I -B gate/bench/load.py [--hogs <n>] [--coverprofile <file>] -- <go test arguments>
+```
+- Starts CPU hogs (one per half-core, as `gate/runner/stress.py` does) in their own process group, runs the `go test` command through `gorun.py`, stops the hogs, and reports the pass count (`-count=50` → "k/50 under load"); with `--coverprofile`, keeps the run's profile so a scheduling-only block can be shown hit.
+- **Tests:** hogs stopped after a pass, a failure and a timeout; the pass count parsed from `go test -json` output.
+
+## 4. internal/runtime (lane R: R1a → R1b → R1c → R2a → R2b → R3a → R3b → R3c)
 
 *Drafted read-only on `s1-1c-6/integration` @ 6bf339c by the refactoring specialist (gitnexus-refactoring, gitnexus-impact-analysis, architecture-designer); production Go identical to `main` 4d2b9eb. "Measured": in-package coverage with the pinned Go 1.27.4 (`-covermode=set`, package 92.5 %), allocation pins and path benchmarks in a `git archive` copy, and the `-gcflags=-m=2` list (all in the coordinator's scratchpad, `rt-design/`). GitNexus risks from `impact` upstream with tests; `detect_changes`: 0 changed symbols. The coordinator verified the caps (gocyclo 16, funlen 3, file length 2, argument limit 1), `go r.route(rt)` (`lifecycle.go:31`) and the tombstone `a.ing, a.sinks, a.quiet = nil, nil, true` (`lifecycle.go:509`).*
 
@@ -101,11 +129,12 @@ Moves first, pure: one commit, `astequal <c>^ <c>` exit 0 (imports re-derived pe
 | `app.go` — one app's runtime-side state | `appState`, `runState`, `route`; `(*Runtime).newAppState`, `(*appState).installRoutes`, `(*Runtime).appList`, `(*appState).write` | runtime.go:181-224, 424-473, 1099-1112 | 110 → 110 |
 | `messages.go` — what the goroutines exchange | `itemKind`+consts, `item`, `reply`, `msgKind`+consts, `message`, `offer`, `outKind`+consts, `outItem`, `shardStats`, `handoff` | runtime.go:240-342 | 115 → 115 |
 | `build.go` — checking and building apps | `build`, `validateApp`; new `withDefaults`, `checkSchemas`, `checkRule`, `checkKeyShape`, `checkKeyTypes`, `checkRuleInputs`, `checkKeyAttrs`, `checkSinks` | runtime.go:365-422, 475-535 | 130 → 215 |
-| `intake.go` — the caller side: gate, queue, waits | `isClosed`, `stopping`, `appOf`, `gate`, `enqueue`, `request`, `await`, `Closed`, `Tick`, `TableWrite`, `tick`; new `awaitSignal`, `awaitMarkers` | runtime.go:537-613, 705-737, 748-765, 1365-1366 | 145 → 175 |
+| `requests.go` — the caller side: gate, queue, waits | `isClosed`, `stopping`, `appOf`, `gate`, `enqueue`, `request`, `await`, `Closed`, `Tick`, `TableWrite`, `tick`; new `awaitSignal`, `awaitMarkers` | runtime.go:537-613, 705-737, 748-765, 1365-1366 | 145 → 175 |
 | `boundary.go` — source-event entry points and the Go boundary's checks | `recordable`, `lineBound`, `rowBound`, `payloadLimit`, `SendPayload` (stay); `Send`, `CheckRows` (move in); new `checkEvent`, `checkValues`, `checkValue`, `nonFinite`, `asDecodeError`, `recordedFault` | boundary.go:1-132; runtime.go:629-703 | 210 → 275 |
 | `stats.go` — the consistent stats cut, end to end | `(*Runtime).Stats`, `streamStats`, `(*shard).stats`; new `(*router).statsCut`, `statsAck`, `completeStats` | runtime.go:615-627, 739-746, 1453-1485 (the line-1453 "stats is…" comment goes with `stats`) | 60 → 135 |
-| `router.go` — the router goroutine and its FIFO | `send`, `drainWait`, `statsWait`, `installWait`, `router`, `newRouter`, `(*router).send`, `route`, `push`, `pop`, `now`, `ingest`, `take`, `broadcast`, `(*router).app`; new `sendHead`, `toSinks`, `ack`, `drainAck` | runtime.go:767-1041, 1114-1121, 1197-1269; lifecycle.go:422-429 | 375 → 270 |
-| `input.go` — the router's step per input item | `event`, `tickApp`, `copyRows`; new `inputApp`, `ingestEvent`, `ingestReject`, `ingestBatchEnd`, `tickApps`, `writeTable` | runtime.go:1043-1089, 1557-1564 | 70 → 160 |
+| `router.go` — the router goroutine and its FIFO | `send`, `drainWait`, `statsWait`, `installWait`, `router`, `newRouter`, `(*router).send`, `route`, `push`, `pop`, `now`, `broadcast`, `(*router).app`; new `sendHead` | runtime.go:767-894, 1114-1121; lifecycle.go:422-429 | ~150 → ~165 |
+| `router_out.go` — the router's step per shard handoff (v2, DA-L1: the dispatcher beside its helpers) | `take`; new `toSinks`, `ack`, `drainAck` | runtime.go:1197-1269 | ~75 → ~110 |
+| `router_in.go` — the router's step per input item (v2, DA-L1: was `input.go`; `ingest` beside its helpers) | `ingest`, `event`, `tickApp`, `copyRows`; new `inputApp`, `ingestEvent`, `ingestReject`, `ingestBatchEnd`, `tickApps`, `writeTable` | runtime.go:895-1089, 1557-1564 | ~210 → ~240 |
 | `transitions.go` — the router's side of each lifecycle step | `add`, `remove`, `installAck`, `drainApp`; new `ingestLifecycle`, `activate`, `beginDrain`, `completeRemove`, `rollBackAdd` | lifecycle.go:431-525; runtime.go:1091-1097 | 115 → 205 |
 | `keys.go` — routing by key | `routeKey`, `shardOf`; new `keyPart` | runtime.go:1123-1195 | 85 → 95 |
 | `shard.go` — the shard goroutine | `shard`, `newShard`, `grow`, `install`, `uninstall`, `newBody`, `(*shard).run`, `process`, `foldBursts`, `offer`, `advance`, `tryAdvance`; new `applyAdvances`, `applyAdmission`, `offerAll`, `ackDrain` | runtime.go:1271-1451, 1454-1461, 1487-1514 | 210 → 255 |
@@ -115,7 +144,7 @@ Moves first, pure: one commit, `astequal <c>^ <c>` exit 0 (imports re-derived pe
 | `shutdown.go` — removing an app, closing the runtime | `Remove`, `Close`; new `(*appState).notifyRemoved`, `shutDown`, `closeApps`, `closeApp`, `stopRuntime`, `awaitGoroutines` | lifecycle.go:301-418 | 125 → 205 |
 | `recorder.go`, `ingest.go`, `sync.go`, `inflight.go` | unchanged, except `recQ.drainQueue` (new) and `sync.go:125`'s call to `broadcast` | — | 266→260; 138; 179; 56 |
 
-After the move every file is ≤ 375 lines and the file-length count is 0; after the splits every file is ≤ 275. No new name collides with a planted proof file (`test_racestress_planted.py` copies `racy.go` and `racy_test.go` into `internal/runtime`). `nosleep_test.go` (law path) scans every non-test file in the directory, so new files are covered without editing it. Coordinator doc edit at combine: known-issues S3.3-1-3's "`runtime.go` `iBatchEnd`" becomes `input.go` `ingestBatchEnd` (plan check §4).
+After the move every file is ≤ 375 lines and the file-length count is 0; after the splits every file is ≤ 275. No new name collides with a planted proof file (`test_racestress_planted.py` copies `racy.go` and `racy_test.go` into `internal/runtime`). `nosleep_test.go` (law path) scans every non-test file in the directory, so new files are covered without editing it. Coordinator doc edit at combine: known-issues S3.3-1-3's "`runtime.go` `iBatchEnd`" becomes `router_in.go` `ingestBatchEnd` (plan check §4). `ingest.go` (the `Ingest` arithmetic shared with playback) keeps its name; v2's `requests.go` and `router_in.go` no longer read as its synonyms (DA-L1).
 
 ### 2. Split plan per finding
 
@@ -125,7 +154,7 @@ Cyclomatic counts use gocyclo's rules (+1 per `if`/`for`/`range`/non-default `ca
 
 1. **`(*router).ingest`** — cc 48, 145 lines, hot; risk LOW (d=1: `route`). Dispatcher (8): `case iAdd, iRemove, iActivate, iQuiet, iDrain: rt.ingestLifecycle(it)` / `iBatchEnd: rt.ingestBatchEnd(it)` / `iEvent: rt.ingestEvent(it)` / `iReject: rt.ingestReject(it)` / `iTick: rt.tickApps(it.now)` / `iWrite: rt.writeTable(it)` / `iStats: rt.statsCut(it.reply)` (the spike's grouping, verified). Helpers: `func (rt *router) ingestLifecycle(it item)` (7); `func (rt *router) activate(it item)` (6); `func (rt *router) inputApp(id AppID, stream int) *appState` (4: nil if the app is gone, `a == nil || a.ing == nil`; nil and `a.after[stream]++` if drained); `func (rt *router) ingestBatchEnd(it item)` (2); `func (rt *router) ingestEvent(it item)` (3); `func (rt *router) ingestReject(it item)` (2); `func (rt *router) tickApps(now int64)` (7); `func (rt *router) writeTable(it item)` (6); `func (rt *router) beginDrain(it item)` (6, transitions.go); `func (rt *router) statsCut(rep chan reply)` (5, stats.go). Control transfers: every `return` in the case bodies (runtime.go:923, 927, 934, 938, 952, 956, 975, 979, 1001, 1008) ended `ingest`, which has nothing after its switch; they become helper returns; the `continue` at :966 stays in `tickApps`' loop. Mutations: delete the `return` after `a.after[stream]++` in `inputApp`; in `beginDrain` delete the `return` after the joined repeated Drain (the spike's surviving mutant, red with `TestRouterRepeatedDrainJoinsTheFirstBarrier`); delete the `return` after `ErrRemoved` and after `ErrDrained` in `writeTable` and `beginDrain`; delete the `!a.activated` `return` in `beginDrain`; swap the `a.drained`/`a.activated` cases in `activate`. **S3.3-1-3 kept:** `inputApp` reads the router's `a.drained`, not the caller's phase, so a batch end queued between Stop and the drain item is still counted and recorded; pinned by a new test (§3).
 
-2. **`(*router).take`** — cc 20, 70 lines, hot; risk LOW (d=1: `route`). Dispatcher (5): `for _, it := range h.items { switch it.kind { case oEvent: rt.toSinks(it); case oAck: rt.ack(it); case oStats: rt.statsAck(h.shard, it) } }`. Helpers: `func (rt *router) toSinks(it outItem)` (4); `func (rt *router) ack(it outItem)` (2: `if w := rt.installs[it.token]; w != nil { rt.installAck(w, it); return }; rt.drainAck(it)`); `func (rt *router) drainAck(it outItem)` (4); `func (rt *router) statsAck(shard int, it outItem)` (4: fold, set parks, `if w.acks < len(rt.r.shards) { return }`, `delete`, then `rt.completeStats(w)`); `func (rt *router) completeStats(w *statsWait)` (6, stats.go). The three `continue` (runtime.go:1211, 1217, 1247) each ended the loop body (nothing follows the switch); they become `return`. Mutations: delete the `return` in `ack` (nil `d` dereference panic); delete the `return` in `drainAck` (the drain completes on the first of 4 shards; `TestDrainBarrier` at 4 shards); delete the `return` in `statsAck` (stats replied after 1 of N acks; a 4-shard stats sum test). `moved to heap: res` (:1226) moves into `drainAck`, the same allocation.
+2. **`(*router).take`** — cc 20, 70 lines, hot; risk LOW (d=1: `route`). Dispatcher (5): `for _, it := range h.items { switch it.kind { case oEvent: rt.toSinks(it); case oAck: rt.ack(it); case oStats: rt.statsAck(h.shard, it) } }`. Helpers: `func (rt *router) toSinks(it outItem)` (4); `func (rt *router) ack(it outItem)` (2: `if w := rt.installs[it.token]; w != nil { rt.installAck(w, it); return }; rt.drainAck(it)`); `func (rt *router) drainAck(it outItem)` (4); `func (rt *router) statsAck(shard int, it outItem)` (4: fold, set parks, `if w.acks < len(rt.r.shards) { return }`, `delete`, then `rt.completeStats(w)`); `func (rt *router) completeStats(w *statsWait)` (6, stats.go). The three `continue` (runtime.go:1211, 1217, 1247) each ended the loop body (nothing follows the switch); they become `return`. Mutations: delete the `return` in `ack` (nil `d` dereference panic); delete the `return` in `drainAck` (the drain completes on the first shard; `TestDrainBarrier` runs at 2 shards, `internal/runtime/drain_test.go:86`, and R1a adds a 4-shard case); delete the `return` in `statsAck` (stats replied after 1 of N acks; a 4-shard stats sum test). `moved to heap: res` (:1226) moves into `drainAck`, the same allocation.
 
 3. **`(*shard).process`** — cc 20, hot; risk LOW (d=1: `(*shard).run`, Sync's step). Stays in `process` (8): the `defer sh.foldBursts()`, the three control cases with their returns, the `rules == nil` branch with its mDrain ack and return. Helpers, in order: `func (sh *shard) applyAdvances(app AppID, adv []clock.WMAdvance, final bool)` (5); `func (sh *shard) applyAdmission(app AppID, stream int, adm int64)` (5); `func (sh *shard) offerAll(app AppID, offers []offer, ev event.Event, tables *table.Snapshot)` (4: the on-arrival advances first, then the offers); the `for ri := range rules { sh.advance(...) }` loop inline; `func (sh *shard) ackDrain(app AppID, token uint64)` (2, when `m.kind == mDrain`). No `return`, `break`, `defer` or `recover` crosses a boundary; only loops move; the helpers re-index `sh.rules[app]`, which nothing writes during a walk (install/uninstall run only on control kinds, which have already returned). Mutations, one per helper: `||`→`&&` in `applyAdvances`; drop `arrival[ri]` in `applyAdmission`; reverse the two loops in `offerAll`; skip the pending sum in `ackDrain`. Possible cost: `ev` copied by value into `offerAll` (88 B) once per message — the path benchmark decides; fallback: pass `m *message` (its parameter does not leak; inferred, checked by the escape diff).
 
@@ -133,7 +162,7 @@ Cyclomatic counts use gocyclo's rules (+1 per `if`/`for`/`range`/non-default `ca
 
 5. **`routeKey`** — cc 11, hot leaf; risk LOW. `func keyPart(v event.Value) (event.Value, bool)` (6) replaces the closure; the call site indexes `values[attr]` first, as the closure did; `routeKey` 6. The closure was already a function boundary: no new transfer. Mutations: drop `v.F = 0`; `||`→`&&`.
 
-6. **`(*router).broadcast`** — 6 parameters, hot (per tick and drain); risk LOW (d=1: `tickApp`, `drainApp`, `(*Sync).End`). New signature `func (rt *router) broadcast(m message)` — the domain type it delivers; cc 2. Callers: runtime.go:1086 → `rt.broadcast(message{kind: mWalk, app: a.id, adv: adv, tables: a.ing.Snapshot(), admStream: -1})`; runtime.go:1095 → the same with `kind: mDrain, token: token, final: true`; sync.go:125 → `kind: mWalk, final: true`. Order unchanged (`Snapshot()` already evaluated before the call). Rejected: reading `a.ing.Snapshot()` inside to reach 5 parameters (hides the caller's snapshot point, D5). Mutation: drop `admStream: -1` at one caller (an on-arrival rule takes stream 0's admission; the in-place process test).
+6. **`(*router).broadcast`** — 6 parameters, hot (per tick and drain); risk LOW (d=1: `tickApp`, `drainApp`, `(*Sync).End`). New signature `func (rt *router) broadcast(m message)` — the domain type it delivers; cc 2. **`broadcast` sets `m.admStream = -1` itself** (v2, DA-S5: a forgotten field would be 0, stream 0, and `process` applies an admission when `m.admStream >= 0 && m.adm != math.MinInt64`, `runtime.go:1425`). Callers set the rest: runtime.go:1086 → `rt.broadcast(message{kind: mWalk, app: a.id, adv: adv, tables: a.ing.Snapshot()})`; runtime.go:1095 → the same with `kind: mDrain, token: token, final: true`; sync.go:125 → `kind: mWalk, final: true`. Order unchanged (`Snapshot()` already evaluated before the call). Rejected: reading `a.ing.Snapshot()` inside to reach 5 parameters (hides the caller's snapshot point, D5). Mutation: drop the `m.admStream = -1` assignment in `broadcast` (an on-arrival rule takes stream 0's admission; the in-place process test).
 
 7. **`(*Runtime).Send`** — cc 20, hot; risk HIGH (15 direct callers, plus 13 call sites dropped by receiver typing: a lower bound). `Send` (3): gate → `checkEvent` → enqueue. Helpers: `func checkEvent(app AppID, a *App, e event.Event) error` (9: stream, value count, `checkValues`, time attribute, `lineBound`); `func checkValues(app AppID, sch event.Schema, values []event.Value) error` (4: per value, `checkValue` then `recordable`); `func checkValue(app AppID, sch event.Schema, i int, v event.Value) error` (7: the four cases in order, the fourth `case nonFinite(v)`); `func nonFinite(v event.Value) bool` (4, inlinable). Every error text byte-identical. Error order: per value kind → null-required → null-time → non-finite → recordable, then the next value; then Ts; then the line bound. Mutations: delete each `if err != nil { return err }` at the two new boundaries; swap the null-required and null-time cases (two-fault case).
 
@@ -167,7 +196,7 @@ The three file-length and funlen findings close with the move (`runtime.go`, `li
 
 | Function | Blocks covered | Uncovered |
 |---|---|---|
-| `ingest` | 48/59 | runtime.go:910, 923-924, 934-935, 937-939, 942-943, 952-953, 955-957, 974-976, 978-980, 991-993, 1023-1025 |
+| `ingest` | 48/59 (one run; `:908` missed in 4 of 6 runs, QA DQ-S1) | runtime.go:908, 910, 923-924, 934-935, 937-939, 942-943, 952-953, 955-957, 974-976, 978-980, 991-993, 1023-1025 |
 | `Send` | 17/19 | runtime.go:656, 673-676 |
 | `SendPayload` | 17/19 | boundary.go:115-116, 120-122 |
 | `route` | 17/18 | runtime.go:850 |
@@ -183,10 +212,11 @@ The three file-length and funlen findings close with the move (`runtime.go`, `li
 
 **Characterisation tests** (package `runtime`, internal; new files named for what they test; every wait bounded by a context deadline, so "red by timeout" is the test's own failure):
 - **`router_intake_internal_test.go`:** the spike's fixture `igNew` and its 8 tests (verified sound; they bring `ingest` to 100 %), with one fix (`TestRouterWriteAndDrainOfAGoneOrDrainedApp` uses one subtest name for both kinds; name them `gn+"/"+kind`); `TestRouterTakesABatchEndBeforeItsDrainItem` (caller phase draining, `a.drained` false → counted in `Batches` and recorded: pins S3.3-1-3 as it stands); `TestShardAcksADrainForAFreedSlot`, `TestShardSkipsAWalkForAFreedSlot` (fixture: `build` + `r.shards[0]` after `uninstall`; covers :1413-1416); take's operand cases `TestRouterDropsAnOutputOfARemovedApp` (tombstone `a.ing == nil`) and `/nil slot`.
-- **`route_stop_internal_test.go`:** `TestCloseStopsTheRouterWaitingOnAFullMailbox` (:850): Mailbox 1, Intake 1, a body held in `OnEvent`; 4 Sends; a 5th Send with a 20 ms ctx fails (the router sits in the head select); Close with a 50 ms ctx; release the body.
+- **v2 additions (QA DQ-S1, S7, S8, S12):** the spike's eight router tests are named in R1a's brief and committed with the fixture (`TestRouterActivateAnswersByTheAppsState`, `TestRouterStreamInputsOfAGoneOrDrainedApp`, `TestRouterStampsAnArrivalTimeEvent`, `TestRouterWriteAndDrainOfAGoneOrDrainedApp`, `TestRouterTickSkipsEachUnreachableApp`, `TestRouterStatsKeepsANilSlotsRow`, `TestRouterTickReachesTheAppsAfterASkippedOne`, `TestRouterRepeatedDrainJoinsTheFirstBarrier`); `TestRouterActivatesADrainedAppWithErrDrained` (`:908`, deterministic, in place); operand rows for `ingest` `:905` (the tombstone and `a.removing`, each alone), `:965` (the tombstone, `!a.activated`, `a.drained`, `a.quiet`, each alone), `process` `:1420` (a non-arrival rule; an arrival rule, not final; final) and `:1425` (each operand alone), `routeKey` `:1133` (`v.Null`; a NaN float), `SendPayload` `boundary.go:100` (its own `{-1, len, derived}` table) and each condition in `take`; two-fault cases at every adjacent boundary of `validateApp` (checkSchemas | the first rule check; case 2 | case 3; case 5 | case 6; the key checks | the input checks | the key-attribute checks; the last rule | `checkSinks`) and of `recordedFault` (a cleaned length past the bound and a depth fault → the length named).
+- **`route_stop_internal_test.go`** (v2, DA-L8, QA DQ-S13): `TestCloseStopsTheRouterWaitingOnAFullMailbox` (:850): Mailbox 1, Intake 1, a body held in `OnEvent`; Sends until the router's pending FIFO holds one item, waited on as a state (the stats' `PendingHigh` or a test hook), never a timer; Close with a short ctx; then, **with the body still held**, wait (under the ceiling) for the router goroutine to have exited, by the goroutine-id helper; then release the body. Without the `case <-r.stopped` arm the router cannot exit while the body is held, so the mutation is red.
 - **`boundary_checks_internal_test.go`:** `TestSendRefusesANullOptionalTimeAttribute` (:656); `TestSendRefusesAnEventOverOneRecordingLine` (:673-676; a string of `MaxLogLine/6+1` bytes); `TestSendPayloadRejectsAPayloadThatGrowsPastOneLineWhenCleaned` (:120-122; inferred that Decode accepts malformed UTF-8 in a string — verify first); operand tables `TestSendRefusesEachNonSourceStream` {-1, len, derived}, null×{required, optional}, null-time×{time attr, other}, float×{NaN, ±Inf, null, finite}, Ts×{arrival-time, mismatch, match}; `TestRouteKeyKeepsANonZeroFloatPart` (the missing operand of `v.Kind == TFloat && v.F == 0`).
 - **`build_validate_internal_test.go`:** `TestBuildRefusesAnInvalidApp` (:385-386); `TestBuildReturnsARuleBuildError` (a `NewBody` that panics; :416-417); `TestValidateAppRefusesEachMalformedRule` (one case per switch case and operand, :496 and :520-521 included); `TestValidateAppNamesTheFirstFault` two-fault cases (no inputs + no body; KeyAttrs count + TTL 0; schema count + bad sink; rule 0 + rule 1 bad; bad input + duplicate); fixture `cgApp` mutated per case.
-- **`lifecycle_deadlines_internal_test.go`** (fixtures `cgHeld`, `cgBlockRouter`, `rdGated`, a new `heldFlushRecorder` whose `Flush` blocks until released, SinkQueue 4 so the router never blocks on the held sink): Drain — `TestDrainOfAnInactiveAppWithAnExpiredContextLeavesItInactive` (:222-223), `TestDrainGivesUpAtItsDeadlineBeforeTheBarrierAnswers` (:229-230), `TestDrainWaitingOnASinkIsErrClosedWhenCloseGivesUp` (:235), `TestDrainWaitingOnTheRecordingReturnsWhenCloseGivesUp` (:247); Remove — `TestRemoveCallsOnRemovedOnce` (:330-331), `TestRemoveWaitingOnASinkIsErrClosedWhenCloseGivesUp` (:337), `TestRemoveGivesUpAtItsDeadlineBehindABlockedSink` (:339), `TestRemoveWaitingOnTheRecorderIsErrClosedWhenCloseGivesUp` (:346), `TestRemoveGivesUpAtItsDeadlineWhileTheRecordingFlushes` (:348); Close — `TestCloseGivesUpWhileARemovedRecordingFlushes` (:384), `TestCloseCallsOnRemovedOfAnAppItCouldNotRemove` (:398-399), `TestASecondCloseWaitsUntilItsOwnDeadline` (:416), `TestCloseReportsTheDrainsStuckRunError`; Recorder — `TestCloseStopsAnIdleRecorderItGaveUpOn` (recorder.go:188-189, 193-194), `TestAnOverflowedRecordingWritesItsQueuedRecordsThenSettles` (stressed `-count=50 -cpu 1,4`); Install — `TestAddKeepsTheFirstShardsError` (operand `it.err != nil && w.err == nil`); after the split, `TestActivationRefusalByPhase`.
+- **`lifecycle_deadlines_internal_test.go`** (fixtures `cgHeld`, `cgBlockRouter`, `rdGated`, a new `heldFlushRecorder` whose `Flush` blocks until released, SinkQueue 4 so the router never blocks on the held sink): Drain — `TestDrainOfAnInactiveAppWithAnExpiredContextLeavesItInactive` (:222-223), `TestDrainGivesUpAtItsDeadlineBeforeTheBarrierAnswers` (:229-230), `TestDrainWaitingOnASinkIsErrClosedWhenCloseGivesUp` (:235), `TestDrainWaitingOnTheRecordingReturnsWhenCloseGivesUp` (:247); Remove — `TestRemoveCallsOnRemovedOnce` (:330-331), `TestRemoveWaitingOnASinkIsErrClosedWhenCloseGivesUp` (:337), `TestRemoveGivesUpAtItsDeadlineBehindABlockedSink` (:339), `TestRemoveWaitingOnTheRecorderIsErrClosedWhenCloseGivesUp` (:346), `TestRemoveGivesUpAtItsDeadlineWhileTheRecordingFlushes` (:348); Close — `TestCloseGivesUpWhileARemovedRecordingFlushes` (:384), `TestCloseCallsOnRemovedOfAnAppItCouldNotRemove` (:398-399), `TestASecondCloseWaitsUntilItsOwnDeadline` (:416), `TestCloseReportsTheDrainsStuckRunError`; Recorder — `TestCloseStopsAnIdleRecorderItGaveUpOn` (recorder.go:188-189, 193-194), `TestAnOverflowedRecordingWritesItsQueuedRecordsThenSettles` (stressed `-count=50 -cpu 1,4`); Install — `TestAddKeepsTheFirstShardsError` (operand `it.err != nil && w.err == nil`). No test is added after the split (§2.2; DA-S8): Activate's phase errors are already pinned.
 - **Blocks left short, for G1 — reachable only by scheduling, each with a named stress test** (`-cpu 1,4`, ≥ 64 iterations): lifecycle.go:99, 190-191, 318 (a Remove stores `phaseRemoved` between `appOf`'s load, runtime.go:556, and the function's own load) — `TestActivateRacingRemoveOfAnInactiveApp`, `TestDrainRacingRemoveOfAnInactiveApp`, `TestRemoveRacingRemove`; lifecycle.go:250 (the recording marker and the deadline both ready) — `TestDrainAtItsDeadlineKeepsARecordingWrittenAsItPassed`; lifecycle.go:411 (`first` written only under `ctx.Err() != nil`, :367, :376-377, :383-384, so `ctx.Done` is always ready and both arms return `first`) — `TestCloseAfterItsDeadlineReturnsTheDeadline`; recorder.go:169, 191 (`q.q` and stop/stopped both ready) — `TestRemoveWritesEveryRecordQueuedBeforeItsStop`, `TestCloseWritesTheRecordsQueuedWhenItGaveUp`.
 - **Never true in production — needs an owner answer (§5):** boundary.go:114-116 (`!errors.As`; inferred: `decode.go` has no `errors.New`/`fmt.Errorf`); the `a == nil` slot operands (§5 Q2).
 
@@ -200,7 +230,7 @@ The three file-length and funlen findings close with the move (`runtime.go`, `li
 | `BenchmarkSendPayloadPath/plain` (`{"k":"ka","ts":"<RFC 3339 ms>"}`, ascending) | 1334 | 746 | 6 |
 | `/recorded` | 1179 | 1054 | 9 |
 
-To add, not measured: `BenchmarkSendPath/emitting` (one output per event: the take→sink path) and `BenchmarkSendPayloadPath/rejected` (the reject path). Do not reuse `twApp` (its rule is key-less, leaving `routeKey`'s keyed branch and `shardOf`'s loop unexercised, though `TestHandoffAllocationBudget` says "five resident keys", s3_2b_2_alloc_test.go:11-12, 34-41). Leaf benchmarks and exact pins (`AllocsPerRun`, measured): `BenchmarkRouteKey/{keyless, one-part, two-parts, float-zero}` 0 / 0 / 1 / not yet measured; `broadcast` in place at 4 shards 0; extra exact nets recommended: `TestRouterIngestAllocations` (no-op deliver: 0 at 1 and 4 shards, 1 for a two-part key; live `rt.send` with the FIFO popped: 3 at 1 shard, 8 at 4, matching the MemStats ceiling's 3.00/8.1), `TestShardProcessAllocations` (mWalk with one offer: 0), `TestRouterTakeAllocations` (one output to one sink: 1, the FIFO's re-grow after `pop` sets it to nil, runtime.go:884-886). `TestHandoffAllocationBudget` stays a ceiling. Escape-diff scope: `go build -gcflags=-m=2 ./internal/runtime` over the whole package; lines matching `escapes to heap|moved to heap|leaking param`; normalised (positions and function names dropped); multisets `main` vs commit. Today's hot-path ranges hold: `Send` 44, `ingest` 20, `SendPayload` 17, `take` 12, `process` 7, `event` 4, `recQ.put` 3, `route` 2, `routeKey` 2, `broadcast` 2, `recQ.handle` 2, `recQ.run` 2. `can inline` lines for `keyPart`, `nonFinite`, `inputApp` are diagnostic only.
+To add, not measured: `BenchmarkSendPath/emitting` (one output per event: the take→sink path) and `BenchmarkSendPayloadPath/rejected` (the reject path). Do not reuse `twApp` (its rule is key-less, leaving `routeKey`'s keyed branch and `shardOf`'s loop unexercised, though `TestHandoffAllocationBudget` says "five resident keys", s3_2b_2_alloc_test.go:11-12, 34-41). Leaf benchmarks and exact pins (`AllocsPerRun`, measured): `BenchmarkRouteKey/{keyless, one-part, two-parts, float-zero}` 0 / 0 / 1 / not yet measured; `broadcast` in place at 4 shards 0; extra exact nets recommended: `TestRouterIngestAllocations` (no-op deliver: 0 at 1 and 4 shards, 1 for a two-part key; live `rt.send` with the FIFO popped: 3 at 1 shard, 8 at 4, matching the MemStats ceiling's 3.00/8.1), `TestShardProcessAllocations` (mWalk with one offer: 0), `TestRouterTakeAllocations` (one output to one sink: 1, the FIFO's re-grow after `pop` sets it to nil, runtime.go:884-886). `TestHandoffAllocationBudget` stays a ceiling. Escape check (v2): `escapes.py` (§2.4, §3.2) per split commit, the original function and its new helpers as one group. Today's hot-path functions hold these `-m=2` escape lines: `Send` 44, `ingest` 20, `SendPayload` 17, `take` 12, `process` 7, `event` 4, `recQ.put` 3, `route` 2, `routeKey` 2, `broadcast` 2, `recQ.handle` 2, `recQ.run` 2. `can inline` lines for `keyPart`, `nonFinite`, `inputApp` are diagnostic only.
 
 ### 4. Placement
 
@@ -217,41 +247,42 @@ To add, not measured: `BenchmarkSendPath/emitting` (one output per event: the ta
 
 Risks: `TestHandoffAllocationBudget`'s comment is misleading (its rule is key-less) — should-fix, to the backlog, the test not edited this sprint; inlining and copying cost — the path verdict decides `process`/`offerAll` (by value vs pointer) and the per-value `checkValue` call; if either costs, apply decision 6's re-split once; S3.3-2-1 is in `apphandle.go`, not runtime — Activate and Run keep gate → `inflight.mu` → `isClosed`, unchanged.
 
-### 6. Commit plan (15 of at most 18; each at or below every cap)
+### 6. Commit plan (15; each at or below every cap; v2: one path-measured hot function per commit, DA-S3)
 
 Caps (`smells.json`): gocyclo 16, funlen 3, file length 2, argument limit 1. Sub-lanes run one after another (R1 → R2 → R3): `transitions.go` gets `ingest`'s helpers in R2 and `installAck`'s in R3.
 
 | # | Sub-lane | Commit | Counts after (gocyclo/funlen/file/arg) |
 |---|---|---|---|
-| 1 | R1 | router-intake, route-stop and shard in-place tests | 16/3/2/1 |
-| 2 | R1 | boundary, routeKey, build and validate characterisation tests | 16/3/2/1 |
-| 3 | R1 | lifecycle deadline, recorder and stress tests | 16/3/2/1 |
-| 4 | R1 | benchmarks and allocation pins (never edited afterwards) | 16/3/2/1 |
-| 5 | R2 | pure move to the file map (`astequal` exit 0) | 16/3/0/1 |
-| 6 | R2 | split `ingest` | 15/2/0/1 |
-| 7 | R2 | split `take` | 14/1/0/1 |
-| 8 | R2 | split `process` | 13/1/0/1 |
-| 9 | R2 | split `route` and `routeKey`; `broadcast(m message)` | 11/1/0/0 |
-| 10 | R2 | split `Send` and `SendPayload` | 9/1/0/0 |
-| 11 | R3 | split `build` and `validateApp` | 7/1/0/0 |
-| 12 | R3 | split `recQ.run` | 6/1/0/0 |
-| 13 | R3 | split `Activate`, `awaitRuns`, `installAck` | 3/1/0/0 |
-| 14 | R3 | split `Drain` (with `awaitSignal`/`awaitMarkers`) | 2/0/0/0 |
-| 15 | R3 | split `Remove` and `Close` (`notifyRemoved`) | 0/0/0/0 |
+| 1 | R1a | router-intake (the spike's eight tests and the v2 additions), route-stop, shard in-place, boundary, routeKey, build and validate characterisation tests | 16/3/2/1 |
+| 2 | R1b | lifecycle deadline, recorder and stress tests | 16/3/2/1 |
+| 3 | R1c | benchmarks and allocation pins (never edited afterwards) | 16/3/2/1 |
+| 4 | R2a | pure move to the file map (`astequal` exit 0) | 16/3/0/1 |
+| 5 | R2a | split `ingest` (path-only: its own commit) | 15/2/0/1 |
+| 6 | R2a | split `take` | 14/1/0/1 |
+| 7 | R2a | split `process` | 13/1/0/1 |
+| 8 | R2b | split `route` | 12/1/0/1 |
+| 9 | R2b | split `routeKey` (leaf benchmark); `broadcast(m message)` (per tick; its in-place pin) | 11/1/0/0 |
+| 10 | R2b | split `Send` and `SendPayload` (each its own path benchmark) | 9/1/0/0 |
+| 11 | R3a | split `build` and `validateApp` | 7/1/0/0 |
+| 12 | R3a | split `recQ.run` | 6/1/0/0 |
+| 13 | R3a | split `Activate`, `awaitRuns`, `installAck` | 3/1/0/0 |
+| 14 | R3b | split `Drain` (with `awaitSignal`/`awaitMarkers`) | 2/0/0/0 |
+| 15 | R3c | split `Remove` and `Close` (`notifyRemoved`) | 0/0/0/0 |
 
 Hand-back: 0 findings in both `GOOS`; `go test -race -count=3 ./internal/runtime/...`; the lifecycle tests at `-cpu 1,4`; the nightly job alone. Gaps: the time medians are single runs under load (the verdict is the coordinator's interleaved pairs); the `CleanLen`-growth and `Decode`-error readings are inferred; no mutation was run in this design step.
 
-## 5. internal/validate (lane V: V1 → V2)
+## 5. internal/validate (lane V: V1 → V2 → V3)
 
 *Drafted read-only on `s1-1c-6/integration` @ 6bf339c by the refactoring specialist (gitnexus-refactoring, gitnexus-impact-analysis, architecture-designer); production Go identical to `main` 4d2b9eb. "Measured" = a run for this section (pinned Go 1.27.4; profile in the coordinator's scratchpad). GitNexus `impact` upstream on all 19 functions: every one risk LOW, d=1 its single in-package caller, module `Validate` only (one false edge: `graph ← TestCycle`; the test calls `cycle`, `units_test.go:300`). The coordinator verified §0's sort (`validate.go:62-65`), the caps (gocyclo 19, funlen 3) and `exprs.go`'s 409 lines.*
 
 ### 0. The one fact that shapes every split here
 
-`check` sorts all findings by (Line, Col, Code, Msg) before returning them (`validate.go:62-65`); nothing reads `c.diags` before that sort (`validate.go:62, 66, 68, 71, 131`); `Fix` and `Lint` are functions of `Code` (`validate.go:131-134`). So **the order in which findings are appended cannot be seen**: a two-fault program's first-named error is set by source position, not by which check ran first. The plan check's §6.1 premise ("returns the first error found") does not hold for validate; it collects every finding. A split must keep **the multiset of findings**, decided by three things:
+`check` sorts all findings by (Line, Col, Code, Msg) before returning them (`validate.go:62-65`); nothing reads `c.diags` before that sort (`validate.go:62, 66, 68, 71, 131`); `Fix` and `Lint` are functions of `Code` (`validate.go:131-134`). So **the order in which findings are appended cannot be seen**: a two-fault program's first-named error is set by source position, not by which check ran first. The plan check's §6.1 premise ("returns the first error found") does not hold for validate; it collects every finding. A split must keep **the multiset of findings and the resolved copy**, decided by four things:
 
 - **(S) suppression:** every `return`, `continue` or `break` that stops later checks on the same item after a finding ("one defect, one finding", `validate.go:4-5`);
 - **(F) first-match switches:** at most one finding per item (e.g. `selects`' 7-case switch, `givenRecord`'s two switches);
-- **(P) poison writes before their reads:** `poisoned`, `noTarget`, `badKey` written in `names`; `effective`, `badParam` in `resolve`'s defaults then overrides; `skipDur`, `skipExpr` in `resolve`; `badTs` in `selects`, carried across rules; `graphFound`, `reported` local accumulators.
+- **(P) poison writes before their reads:** `poisoned`, `noTarget`, `badKey` written in `names`; `effective`, `badParam` in `resolve`'s defaults then overrides; `skipDur`, `skipExpr` in `resolve`; `badTs` in `selects`, carried across rules; `graphFound`, `reported` local accumulators;
+- **(O) the resolved copy** (v2, QA DQ-S2): `Check` also returns the copy with every `${param}` slot resolved (`validate.go:44-46`) — `n.Lit = v`, both `n.Operand.Strings` writes, `d.Ms, d.Param`, `it.Value = v` (`resolve.go`); a split keeps each write.
 
 Every two-fault test below asserts the **exact sorted list** of (code, line:col). Phases stay in `run`'s order (`validate.go:103-109`); no split touches `run`, `report`, `check` or the poison maps' declarations.
 
@@ -462,10 +493,13 @@ Not flagged but touched (no bar): `fits` 87.5 % (`resolve.go:72`), `kindName` 66
 - **H14** `param p int = 5`, override `'x'`, `S[k == ${p}]` → E-PARAM-001 only.
 - **H15** a text operator over `${nope}` → E-PARAM-001 only.
 - **H17** a Go-built model whose plain body carries `Window{Kind: sort, Emit: "due"}` → no E-EMIT-002 (the style of `TestAGoBuiltModel`, `units_test.go:357`).
+- **H12** (v2, QA DQ-S2) an expect block on a rule whose target is unknown → only E-NAME-001 (the `noTarget` poison, `names.go:100`).
+- **H13** (v2) a sort window over an unknown sort attribute plus a second fault in the same rule → one E-NAME-001 (the sort-attribute poison, `names.go:105`).
+- **`TestCheckResolvesEveryParamSlot`** (v2): exact values in the App `Check` returns — a filter literal from `${p}`, a single text operand, a keyword set `"a, b"` → `["a","b"]`, a duration slot, an annotation value.
 
 H5's and H15's operator spellings are inferred; the lane takes them from the existing `${terms}` cases. Direct tests: `internal/validate/regex_test.go` `TestUnsupportedNamesTheFirstNonRE2Construct` (`\1`, `\9`, `\0` [none], `\a` [none], `\k<x>`, `\(?=x)` [none, the escaped parenthesis], a trailing `\`, `(?=`, `(?!`, `(?<=`, `(?<!`, a clean pattern, two constructs [the first offset]); `internal/validate/nullable_test.go` `TestMayBeNullIsConservative` (on `&checker{reg: expr.Builtins()}` with `&scope{bare: -1}`: an unresolvable attribute → true; `Kind: "bogus"` → true; a `LitNull` literal → true — never typeable through `Check`, `nodes.go:37`, `LitNull` "only in expect records", `model.go:113`); `internal/validate/builderror_test.go` `TestABuildErrorWithoutACodeIsETYPE001` (`Descriptor` fields from `registry.go:107-115`; `Kind: expr.Scalar`; factory `errors.New("boom")` → E-TYPE-001 at the node, message "boom"; inferred).
 
-**3.4 Mutations, one per transfer, each shown red with its diff in the record:** T1–T2 (partition): H1, H2; T3 (windowClauses): H17; T4–T7 (before): H4, H5, H3, H6; T8 (captureHint): H7; T9 (unsupported `continue`): `\(?=x)`; T10 (itemType short-circuit): H10; T11 (binding `else`): H9; T12 (broken guard): H8; T13–T14 (accumulators): the existing "E-GRAPH-002 E-GRAPH-002" and H11; T15 (idle default): the plain-rule row; T16 (resolveOperand returns): H15; the defaults-before-overrides swap: H14; one mutation per new test besides. A mutation that stays green gets a new row or is named equivalent with its argument.
+**3.4 Mutations, one per transfer, each shown red with its diff in the record:** T1–T2 (partition): H1, H2; T3 (windowClauses): H17; T4–T7 (before): H4, H5, H3, H6; T8 (captureHint): H7; T9 (unsupported `continue`): `\(?=x)`; T10 (itemType short-circuit): H10; T11 (binding `else`): H9; T12 (broken guard): H8; T13–T14 (accumulators): the existing "E-GRAPH-002 E-GRAPH-002" and H11; T15 (idle default): the plain-rule row; T16 (resolveOperand returns): H15; the defaults-before-overrides swap: H14; (v2, QA DQ-S2) the poison writes `names.go:80` (`TestOneFindingPerDefect`), `:100` (H12), `:105` (H13) and the four slot writes (`TestCheckResolvesEveryParamSlot`) — or an equivalent mutant named with its argument; one mutation per new test besides. A mutation that stays green gets a new row or is named equivalent with its argument.
 
 **3.5 Behaviour nets at hand-back (plan check §7 row V):** `go test ./internal/validate/...` (TestStatic, TestCorpusClean, the negative tests); `./conformance/...`; `docsync-b-catalog` (`docsync_test.go`, a law path, read-only); 0 size findings under the pinned golangci-lint for both `GOOS`; `astequal <c>^ <c>` exit 0 for commit 2. No performance net: none of these is on the hot-path list.
 
@@ -484,16 +518,16 @@ func litPayload(l Literal, t event.Type) event.Value         // switch t: Str/I/
 - **`plan.value`** (`internal/plan/expect.go:181-204`, cc 18, one of the 110, lane Q) → `case LitNull` typed null; `case LitString && TObject` → `CleanObject` (owner 2026-11-10, kept); `if v, ok := model.LitValue(l, t); ok { return v, nil }`; then the same `fmt.Errorf("a %s literal is not a %s", l.Kind, t)`. cc 5, so plan's finding goes by design; the cases are disjoint, only null-first ordering matters, and it is kept.
 - **`expr.literalNode`** (`internal/expr/nodes.go:20-37`, not flagged) → `LitParam` → the same E-PARAM-001 `*Error`; `if v, ok := model.LitValue(lit, model.LitType(lit.Kind)); ok { return &literal{v}, nil }`; then the same `typeErr("a %s literal cannot appear in an expression", lit.Kind)`.
 - Import edges (`tools/importcheck/rules.json`): model → event exists; validate, plan, expr → model exist; expr's fence allows the `Lit` prefix (`:36`), which `LitValue` and `LitType` match. **No new edge.** Tests that move: none (no test calls `fits`, `as`, `value` or `literalNode` directly; grep).
-- Proof (a merge, not a move, so `astequal` and the rename map do not apply): the domain is finite, 9 literal kinds × 8 types = 72 pairs. **A** pin each caller's table, green before the change, in its own package (`TestFitsEveryKindAndType`, validate; `TestValueEveryKindAndType`, plan, values and error texts; `TestLiteralNodeEveryKind`, expr — assumes expr's tests are internal, inferred); **B** add `model.LitValue`, `LitType`, `litPayload` with `TestLitValueEveryKindAndType`, red first in a scratch run; **C** switch the three callers; `git diff A..C` on A's test files empty and green; then T2. Three coordinator commits on the integration branch before lanes V and Q branch (the plan's "moves ≤ 3").
-- **Recommendation: do it, in S1.1c-6, before the lanes.** *For:* one rule instead of three; validate's check accepts exactly what plan converts, by construction rather than by a comment; plan.value's finding goes by design; no new edge; the 72-pair tables are a complete proof. *Against:* it touches `internal/model` and `internal/expr`, S1.1c-7 packages (no S1.1c-6 lane owns them, so no seam, but S1.1c-7's plan check must be told); net lines about even. *Options, healthiest first:* (1) all three now; (2) validate and plan now, expr in S1.1c-7; (3) no merge, split plan.value in place, merge in the backlog.
+- Proof (a merge, not a move, so `astequal` and the rename map do not apply): the domain is finite: 9 literal kinds (8 named plus an unknown `"bogus"`) × 9 types (8 named plus an out-of-range `Type(99)`) = 81 pairs (v2, DA-S14, QA DQ-S11), with `(LitParam, TInvalid)` → false. **A** pin each caller's table, green before the change, in its own package (`TestFitsEveryKindAndType`, validate; `TestValueEveryKindAndType`, plan, values and error texts; `TestLiteralNodeEveryKind`, expr — assumes expr's tests are internal, inferred); **B** add `model.LitValue`, `LitType`, `litPayload` with `TestLitValueEveryKindAndType`, red first in a scratch run; **C** switch the three callers; `git diff A..C` on A's test files empty and green; then T2. Three coordinator commits on the integration branch before lanes V and Q branch (the plan's "moves ≤ 3").
+- **v2 recommendation (DA-B1, DA-L9, DA-L10): validate and plan only, by lane M (a `go-engineer`, the coordinator verifying), before lanes V and Q; `expr.literalNode` stays as it is.** expr's import of `model` is fenced by an owner decision to "the model's expression types … expr reads `model.Expr` only" (`docs/sprints/decisions.md:274`); `LitValue` is behaviour and passes the checker only by its `Lit` name prefix (`tools/archcheck/main.go:500-527`), so the expr leg would need that decision amended. The correctness benefit is all in validate↔plan (validate's check accepts exactly what plan converts, by construction). `validate.as` keeps its own int→float widening for the copy, so the rule lives in two places, not one (DA-L9). expr's tests are all external (`package expr_test`), so an expr pin would go through the public builder (DA-S14). *Options, healthiest first:* (1) validate and plan now, expr untouched; (2) all three, with the fence decision explicitly amended (annotating `decisions.md:274` and the `rules.json` note, a LAW Δ line); (3) no merge, split `plan.value` in place.
 
 **4.2 Others.** None of validate's 19 belongs elsewhere. `deepCopy`/`copyValue` (`validate.go:147-172`) could become a model clone (one caller: backlog). `nearest`/`distance` have no twin (`playback.nearest`, `expect.go:215`, is another concept). `setOp` (`resolve.go:165`) mirrors parser keywords but is validate's own split rule (owner, 2026-11-04): stays. Nothing elsewhere belongs in validate (the two `validateApp`: PA-S5).
 
 ### 5. Risks and owner questions (recommendation first)
 
-1. **Q-V1 — the literal-to-value merge (4.1).** → all three callers in S1.1c-6, three coordinator commits before lanes V and Q.
+1. **Q-V1 — the literal-to-value merge (4.1).** → (v2) validate and plan in S1.1c-6, lane M's three commits before lanes V and Q; expr untouched (§10 Q1).
 2. **Q-V2 — blocks reachable only by a direct in-package call** (`build` `:107-109`; `mayBeNull` `:367-368`, `:400`, its `LitNull` operand). → accept direct-call characterisation tests as meeting decision 2's "from its own package's tests". Others: list them with a "defensive default behind the builder's contract" reason (decision 2 names only an invariant panic or scheduling, so the owner answers at G1); remove the defaults (changes Go-built models' behaviour: no).
-3. **Q-V3 — the V commit cut.** → V1 = nets, the move and the phase 2–5 splits (6 commits); V2 = the phase 6 and expects splits (6).
+3. **Q-V3 — the V commit cut.** → (v2, DA-S11) V1 = the nets (1 commit); V2 = the move and the phase 2–5 splits (5); V3 = the phase 6 and expects splits (6).
 4. **Risk:** re-associating `graph`'s switch and `selects`' first-match switch. *Mitigation:* G1–G7, H8–H11, T11–T14.
 5. **Risk:** a helper accumulator written with `||` (`streamClasses`, `derivedReads`, `partCounts`) would skip findings. *Mitigation:* forbidden by name; T13, T14.
 6. **Risk:** equivalent mutants (T3 observable only on an inconsistent Go-built model). *Mitigation:* H17; any other named in the record with its argument.
@@ -504,23 +538,23 @@ func litPayload(l Literal, t event.Type) event.Value         // switch t: Str/I/
 | # | Sub-lane | Commit | gocyclo / funlen after |
 |---|---|---|---|
 | 1 | V1 | `test(validate)`: the nets (`hiding_test.go`, `operands_test.go`, `regex_test.go`, `nullable_test.go`, `builderror_test.go`); every flagged function at 100 % of its blocks; mutations quoted | 19 / 3 |
-| 2 | V1 | `refactor(validate)`: `exprs.go` → `exprs.go`, `nulls.go`, `regex.go`, `selects.go` (pure move, `astequal` exit 0) | 19 / 3 |
-| 3 | V1 | split `names` | 18 / 3 |
-| 4 | V1 | split `resolve`, `resolveExpr` | 16 / 3 |
-| 5 | V1 | split `graph`, `cycle`, `idle` | 13 / 2 |
-| 6 | V1 | split `partition`, `zeroDurations`, `ttl`, `clauses` | 9 / 1 |
-| 7 | V2 | split `annotations` | 8 / 1 |
-| 8 | V2 | split `expectBlock`, `givenRecord` | 6 / 1 |
-| 9 | V2 | split `before`, `build` (adds `callName`) | 4 / 1 |
-| 10 | V2 | split `nulls`, `mayBeNull` (uses `callName`) | 2 / 1 |
-| 11 | V2 | split `unsupported` | 1 / 1 |
-| 12 | V2 | split `selects` | 0 / 0 |
+| 2 | V2 | `refactor(validate)`: `exprs.go` → `exprs.go`, `nulls.go`, `regex.go`, `selects.go` (pure move, `astequal` exit 0) | 19 / 3 |
+| 3 | V2 | split `names` | 18 / 3 |
+| 4 | V2 | split `resolve`, `resolveExpr` | 16 / 3 |
+| 5 | V2 | split `graph`, `cycle`, `idle` | 13 / 2 |
+| 6 | V2 | split `partition`, `zeroDurations`, `ttl`, `clauses` | 9 / 1 |
+| 7 | V3 | split `annotations` | 8 / 1 |
+| 8 | V3 | split `expectBlock`, `givenRecord` | 6 / 1 |
+| 9 | V3 | split `before`, `build` (adds `callName`) | 4 / 1 |
+| 10 | V3 | split `nulls`, `mayBeNull` (uses `callName`) | 2 / 1 |
+| 11 | V3 | split `unsupported` | 1 / 1 |
+| 12 | V3 | split `selects` | 0 / 0 |
 
-Each split commit leaves the original ≤ 10 and every helper ≤ 10 and ≤ 60 lines, with no lll, revive or other finding. No test file is edited after commit 1 (`git diff <c1>..HEAD -- internal/validate/*_test.go` empty). Hand-back: 0 size findings in `internal/validate` under both `GOOS`; `go test ./internal/validate/... ./conformance/...` green; every commit through T0; then the coordinator removes the two `internal/validate` entries and runs T2. The literal merge (4.1), if approved, is three coordinator commits **before** commit 1.
+Each split commit leaves the original ≤ 10 and every helper ≤ 10 and ≤ 60 lines, with no lll, revive or other finding. No test file is edited after commit 1 (`git diff <c1>..HEAD -- internal/validate/*_test.go` empty). Hand-back: 0 size findings in `internal/validate` under both `GOOS`; `go test ./internal/validate/... ./conformance/...` green; every commit through T0; then the coordinator removes the two `internal/validate` entries and runs T2. The literal merge (4.1), if approved, is lane M's three commits **before** commit 1.
 
 **Gaps:** H5's and H15's parser spellings and H17's Go-built model are the lane's; which operand rows already exist is settled by §3.2's mutation procedure; projected line counts are estimates (~4–6 lines of signature and doc per helper).
 
-## 6. internal/event (lane E)
+## 6. internal/event (lane E: E1 → E2 → E3)
 
 *Drafted read-only on `s1-1c-6/integration` @ 6bf339c by the refactoring specialist (gitnexus-refactoring, gitnexus-impact-analysis, architecture-designer); production Go identical to `main` 4d2b9eb. "Measured" = a run with the pinned Go 1.27.4; "scratch" = an experiment on a copy of `internal/event` in a module outside the repo (`ep-design/exp/` in the coordinator's scratchpad). Hand-counted cyclomatic values are inferred; the lanes confirm them with the pinned golangci-lint. The coordinator verified the caps, `colon`'s two callers (`decode.go:564, :650`), `decode.go:818`/`:834`, and re-ran the scratch re-split's `TestDifferential` (ok).*
 
@@ -566,7 +600,7 @@ No flagged function changes its signature, so no caller is edited. The only symb
 
 **Order of checks:** every rejection returns `(0, false)`, with no error offset, and no reordered check can index out of range; the order of rejection is unobservable. What must stay equal is the accept set and the value (proof: the spike's differential and the 50-case table).
 
-**The one inliner-shaped re-split to try** (built in scratch, iteration 3, `ep-design/exp/ev/decode.go`; matched the original on 2,115,410 inputs — every truncation, every 1-byte substitution and insertion, two-position substitutions over 20 seeds — `ep-design/exp/ev/diff_test.go`, measured and re-run by the coordinator):
+**The one inliner-shaped re-split to try** (built in scratch, iteration 3, `ep-design/exp/ev/decode.go`; gave the original's results — values and accept/reject, not its time — on 2,115,410 inputs — every truncation, every 1-byte substitution and insertion, two-position substitutions over 20 seeds — `ep-design/exp/ev/diff_test.go`, measured and re-run by the coordinator):
 ```go
 // rfc3339.go
 func parseRFC3339(t []byte) (int64, bool) {
@@ -621,7 +655,7 @@ func parseRFC3339(t []byte) (int64, bool) {
 - **Escapes:** no "escapes to heap" or "moved to heap" line in the new range (scratch, measured). **Allocations:** 0, as today.
 - **Residual cost against the spike:** one non-inlined call per timestamp (two for a numeric offset), against the spike's four, with fewer bounds checks than today.
 - **Control transfers crossing a new boundary:** each helper's `false` becomes the caller's `return 0, false` (mutation: each helper's result inverted, e.g. `clockValid`'s `sec <= 60` → `sec < 60`, red by "a leap second reads as :59.999"); the fraction's `case 0` rejection is now `ok = i > 20` (mutation `i >= 20`, red by `"…00.Z"`); the offset's trailing-byte rejection (old `:876`) is now `len(z) == 1` (mutation `len(z) >= 1`, red by `"…Z "`); the digit count's scale (old `:843-850`) is now `fractionScale` (mutation case 1 → 10, red by `".5"`).
-- **Verdict path:** (1) the lane commits the re-split with the spike's `BenchmarkParseRFC3339` from the nets commit unchanged; (2) the coordinator applies decision 1 (prebuilt binaries of the nets commit and the split commit, 10 interleaved pairs, re-run once); (3) **if it costs**, the split commit is replaced on the lane branch, in the same slot (E7), by the original function moved unchanged plus, on its `func` line, `//nolint:gocyclo,funlen // PERMANENT reason="split costs +<x> % median (Mann-Whitney p=<p>, 10 pairs, re-run <x2> %), allocations 0 = 0; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6` (precedent `internal/table/table.go:240`), citing both measurements (the spike's +19.7 %, `docs/reviews/s1-1c-6-spike.md`, and this attempt's).
+- **Verdict path:** (1) the lane commits the re-split with the spike's `BenchmarkParseRFC3339` from the nets commit unchanged; (2) the coordinator applies decision 1 (prebuilt binaries of the nets commit and the split commit, 10 interleaved pairs, re-run once); (3) **if it costs**, the function is restored by a new commit on the lane branch (§2.4): the original function in `rfc3339.go` plus, on its `func` line, `//nolint:gocyclo,funlen,lll // PERMANENT reason="split costs +<x> % median (Mann-Whitney p=<p>, 10 pairs, re-run <x2> %), allocations 0 = 0; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6` (precedent `internal/table/table.go:240`), citing both measurements (the spike's +19.7 %, `docs/reviews/s1-1c-6-spike.md`, and this attempt's).
 
 #### E.2.2 `cleanObject` 13, `CleanLen` 13, `compactAndValid` 12 — hot: three separate splits, no shared walker
 
@@ -693,13 +727,14 @@ func checkTimeAttr(stream string, own []Attr, timeAttr int) error // event.go:12
 
 **Operand cases** (new files, package event):
 - `internal/event/rfc3339_operands_test.go`: the spike's 50-case `rfc3339Cases` table verbatim as `TestParseRFC3339EachOperand`, with `TestParseRFC3339Allocs` and `BenchmarkParseRFC3339` (spike diff lines 183–305); covers `:818-819, :828-829, :837, :860, :865, :884`.
+- `internal/event/rfc3339_reference_test.go` (v2, QA DQ-S12): a frozen copy of today's function as `parseRFC3339Reference` and `TestParseRFC3339MatchesItsReference`, the scratch differential's generator (every truncation, every 1-byte substitution and insertion, two-position substitutions over 20 seeds; 2,115,410 inputs), comparing value and ok — a committed net that outlives the split.
 - `internal/event/value_operands_test.go`: `TestDecodeAbsentAndNullByOptionality` (`:137`, `:146` `a.Optional && !isTime`: optional non-time → null value; required → missing or null error; optional time attribute → error with the time note); `:168` `raw[0] == '-' || (raw[0] >= '0' && raw[0] <= '9')`: `-1`, `0`, `9`, `"x"` (below '0'), `true` (above '9'); `:169` `1e999`.
 - `internal/event/object_operands_test.go` (`TestCleanObjectEachOperand`, `TestCompactAndValidEachOperand`): `:217, :234, :309, :319` — the four whitespace bytes; malformed byte, literal U+FFFD, valid é.
 - `internal/event/unescape_operands_test.go` (`TestAppendUnescapedEachOperand`): each simple escape `b f n r t " \ /`; `:444` `r < 0xDC00 && i+6 <= len(in) && in[i] == '\\' && in[i+1] == 'u'` — a low surrogate first (`\uDC00`), a high surrogate at the end, followed by `x…`, followed by `\nxxxx`, followed by `A`; `:445` a valid pair (😀); `:464` malformed vs U+FFFD.
 - `internal/event/scanner_operands_test.go` (`TestScannerFaultsEachOperand`, offset and text per case): `:550/:637` `{`, `{}`, `{"a":1}`; `:556/:644` `{"a":1,` and `{"a":1,x`; `:610` `-`, `0`, `/`, `:`; `:715` `"\`; `:723-727` `"\u12`, `"\u12g4"`; `:760` a digit run at the end; `:766` `1`, `1.`, `1.5`; `:772` `1`, `1e5`, `1E5`, `1x`; `:774` `1e`, `1e+5`, `1e-5`.
-- `internal/event/schema_operands_test.go` (`TestNewSchemaEachOperand`): `event.go:120` (TInvalid, `Type(8)`), `:127` (−2, `len`).
+- `internal/event/schema_operands_test.go` (`TestNewSchemaEachOperand`): `event.go:120` (TInvalid, `Type(8)`), `:127` (−2, `len`); and (v2, QA DQ-S8) `TestNewSchemaNamesTheFirstFault`: a duplicate attribute plus a bad time attribute → the duplicate named.
 
-**Can never decide alone (E-Q1):** `decode.go:834` `i < len(t)` — always true (`:818` guarantees `len(t) >= 20`, `i = 19`; the spike's example). After the re-split it is `rfc3339Fraction`'s own guard (`len(t) == 19`), still unreachable through `parseRFC3339` but decided by a direct helper case.
+**Can never decide alone (E-Q1):** `decode.go:834` `i < len(t)` — always true (`:818` guarantees `len(t) >= 20`, `i = 19`; the spike's example). After the re-split it is `rfc3339Fraction`'s own guard (`len(t) == 19`), still unreachable through `parseRFC3339` (§10 Q3, list b).
 
 **Mutations:** one per new test, plus each transfer in E.2, each quoted with its diff in the lane report (the shared mutation runner, W0).
 
@@ -718,7 +753,7 @@ func checkTimeAttr(stream string, own []Attr, timeAttr int) error // event.go:12
 
 **`AllocsPerRun` pins** (new `TestDecodeLeafAllocations` in `internal/event/leaf_allocs_test.go`, package event, not parallel; measured today on the scratch copy): `compactAndValid` over the six objects **0**; `CleanLen` **0**; `cleanObject` over the six **7** (compact alone 1, spaced alone 1); `appendUnescaped` over the six into `[128]byte` **0**; `parseRFC3339` **0**; `(*scanner).value` over the three **0**; `Decode` of the 8-attribute payload into `make([]Value, 0, 16)` **3**; the existing `TestDecodeAllocationBudget` stays at **4** (`internal/event/s3_2b_2_alloc_test.go:23-30`). The lane re-measures at E1 and pins equality.
 
-**Escape and inline diff scope:** `go build -gcflags=-m=2 ./internal/event 2>&1` before (E1) and after each split commit; keep the lines of `decode.go`, `object.go`, `unescape.go`, `scanner.go`, `rfc3339.go`; normalise (positions and enclosing names removed; `-m=2` escape lines name no function, so the E.1 line ranges stand in); the "escapes to heap", "moved to heap" and "leaking param" sets must be equal; the `can inline`/`cannot inline` lines of every new helper are quoted; `-d=ssa/check_bce/debug=1` counts per function quoted as a diagnostic.
+**Escape check (v2):** `escapes.py` (§2.4, §3.2) per split commit, the original function and its new helpers as one group (`-m=2` names the function in its "… in F:" lines; DA-S10, QA DQ-L2), `leaking param` lines a diagnostic (QA DQ-B2); the `can inline`/`cannot inline` lines of every new helper are quoted; `-d=ssa/check_bce/debug=1` counts per function quoted as a diagnostic.
 
 **Fuzz:** `FuzzDecode` (`internal/event/fuzz_test.go:14`, nightly `fuzz-decoder`) reaches `value`, the scanner, `parseRFC3339`, `appendUnescaped`, `cleanObject`, `compactAndValid` through `Decode`; not `CleanLen` or `ExactObject` (inferred), hence the property test. `fuzz_test.go` is the driver's `FUZZ_FILE` and is not edited.
 
@@ -728,29 +763,33 @@ Nothing moves in or out: `event` may import nothing; `CleanLen`/`CleanObject` (r
 
 ### E.5 Risks and owner questions (recommendation first)
 
-- **E-Q1 — `decode.go:834`'s `i < len(t)`, which can never decide alone.** → accept the reason "guaranteed by the length check at `:818`" in the design, reviewed at G1; the re-split keeps it as `rfc3339Fraction`'s guard, decided by a direct helper case. Other: remove it in its own commit before the split (the helper would then trust its caller).
+- **E-Q1 — `decode.go:834`'s `i < len(t)`, which can never decide alone.** → (v2) accept the reason "guaranteed by the length check at `:818`" (§10 Q3, list b), code unchanged; no post-split helper test (§2.2, DA-S8). Other: remove it in its own commit before the split (the helper would then trust its caller).
 - **E-Q2 — `decode.go:200`.** → reach it with the white-box `Schema` literal test. Other: list it as unreachable through `NewSchema` (decision 2 names no such reason).
 - **E-Q3 — `cleanObject` and `CleanLen` land exactly at 10.** → accept (zero added calls). Other: extract the non-ASCII arm for margin (one call per non-ASCII rune of non-compact objects).
 - **Risks:** `(*Decoder).value` (+1 call level and a `Value` copy per attribute), `number` (+1 call per number) and `appendUnescaped` (+1 call per escape) may each fail decision 1's time rule; each then becomes a PERMANENT waiver in its commit's slot, with samples (`value` the likeliest). `rfc3339Date` must be brought from 84 to ≤ 80 by the year expression; if not, one more non-inlined call remains and the measurement decides. `colon`'s removal is safe only because its two callers fold into `member`.
 
-### E.6 Lane E commit plan (≤ 8; each at or below every cap)
+### E.6 Lane E commit plan (12; each at or below every cap; v2: one path-shared hot function per commit, DA-S3)
 
-| # | Commit | event file-length / funlen / gocyclo after (cap 1/2/12) |
-|---|---|---|
-| E1 | nets: the operand tests, the `CleanLen` property, the white-box value case, benchmarks, alloc pins (new files only) | 1 / 2 / 12 |
-| E2 | pure move of `decode.go` into the E.1 map (`astequal <E1> <E2>` exit 0; `Decode` stays in `decode.go`) | 0 / 2 / 12 |
-| E3 | `isSpace`; `compactAndValid`, `cleanObject`, `CleanLen` | 0 / 2 / 9 |
-| E4 | `appendUnescaped` split | 0 / 2 / 8 |
-| E5 | scanner: `at`, `atEither`, `member` (with `colon` removed), `unicodeEscape`, `exponent`; `top`, `value`, `object`, `str`, `number` | 0 / 2 / 3 |
-| E6 | `(*Decoder).value` split | 0 / 1 / 2 |
-| E7 | `parseRFC3339` re-split, or its replacement in this slot by the PERMANENT waiver if the coordinator's measurement says it costs | 0 / 0 / 1 |
-| E8 | `NewSchema` split | 0 / 0 / 0 |
+| # | Sub-lane | Commit | event file-length / funlen / gocyclo after (cap 1/2/12) |
+|---|---|---|---|
+| 1 | E1 | nets: the operand tests, the `CleanLen` property, the reference differential, the white-box value case, benchmarks, alloc pins (new files only) | 1 / 2 / 12 |
+| 2 | E2 | pure move of `decode.go` into the E.1 map (`astequal` exit 0; `Decode` stays in `decode.go`) | 0 / 2 / 12 |
+| 3 | E2 | `isSpace`; `compactAndValid`, `cleanObject`, `CleanLen` (each its own leaf benchmark) | 0 / 2 / 9 |
+| 4 | E2 | `appendUnescaped` split | 0 / 2 / 8 |
+| 5 | E2 | `at`, `atEither`, `member`; `top` (`colon` kept until commit 7) | 0 / 2 / 7 |
+| 6 | E2 | `(*scanner).value` | 0 / 2 / 6 |
+| 7 | E2 | `object` (with `member`; `colon` removed) | 0 / 2 / 5 |
+| 8 | E2 | `str` (`unicodeEscape`) | 0 / 2 / 4 |
+| 9 | E2 | `number` (`exponent`) | 0 / 2 / 3 |
+| 10 | E3 | `(*Decoder).value` split | 0 / 1 / 2 |
+| 11 | E3 | `parseRFC3339` re-split | 0 / 0 / 1 |
+| 12 | E3 | `NewSchema` split | 0 / 0 / 0 |
 
-A split in E3–E6 that costs is likewise replaced in its own slot by the original plus the waiver, so the count never passes 8. After each commit: `go test ./internal/event`, the alloc pins, the `-m=2` diff. Hand-back: 0 findings under the pinned golangci-lint on both `GOOS`; then the coordinator runs `fuzz-decoder` alone and `--job proofs` (plan check §7 row E).
+A split that costs is restored whole with its waiver by a new commit on the lane branch (§2.4). After each commit: `go test ./internal/event`, the alloc pins, the `-m=2` diff. Hand-back: 0 findings under the pinned golangci-lint on both `GOOS`; then the coordinator runs `fuzz-decoder` alone and `--job proofs` (plan check §7 row E).
 
 ---
 
-## 7. internal/parser (lane Q, with plan)
+## 7. internal/parser (lane Q, with plan: Q1 → Q2)
 
 Caps: file length 1, funlen 1, gocyclo 5 (S1.1c-5-2); 7 findings, none on a hot path. Imports allowed: event, model, metrics, `github.com/alecthomas/participle/v2`. Law paths (read-only): `errorcounts_test.go`, `keywords_test.go`, `fragment*_test.go`, `parseerror_contract_test.go`, `testdata/fragments/research-spans.jsonl` (`gate/law.json:169-221`); new tests go in new files. Pinned: `func Parse(name, src string) (*Result, error) {` stays in `internal/parser/parse.go` (`test_fuzz_parser_planted.py:18-19`).
 
@@ -811,7 +850,7 @@ func (s *failSite) bareDurationMistake(name string) *Error      // :218-222 (F3'
 
 **Order of checks:** the 18 switch cases are cut into **contiguous runs in their original order**, each a group whose `switch` returns the first match, and the groups are called in the same order — first-match preserved. The `->` guard is factored out (each of the three cases begins with `cur.Value == "->"`; all operands are pure). Then the clause loop, F3, the fallback, as today. Groups mutually exclusive on `cur.Value` (arrow / operator / missing-part) cannot reorder anything; every other adjacent boundary gets a two-fault case in `TestParseErrorFirstMatchAcrossGroups` (e.g. `=` at the file start → E-PRAG-001, not E-SYN-002).
 
-**Transfers:** (1) the recursion's trigger — `filterError` → `nil` always, red by the filter cases of `fragment_test.go` (inferred); (2) F7's `ute.Unexpected = toks[close]` (`:149`) moved into `filterError` — removed, red by the early-ending-filter case; (3) `lexer.Upgrade`'s failure falling through to the switch (`:144`) becomes `filterError` returning `nil`; (4) each group's `nil` fall-through — one mutation per group (always `nil`), red by its first case. **§7.3:** `failSite` has 4 fields; it gives the three closures a home as methods, not a carrier for more than five values (Q-Q3).
+The groups read `cur`, `prev`, `prev2`, `next` and `kind` through `s.tok(…)` and `typeName`, re-derived per group: parse errors are cold, and nothing is held that could go out of step (DA-L5). **Transfers:** (1) the recursion's trigger — `filterError` → `nil` always, red by the filter cases of `fragment_test.go` (inferred); (2) F7's `ute.Unexpected = toks[close]` (`:149`) moved into `filterError` — removed, red by the early-ending-filter case; (3) `lexer.Upgrade`'s failure falling through to the switch (`:144`) becomes `filterError` returning `nil`; (4) each group's `nil` fall-through — one mutation per group (always `nil`), red by its first case. **§7.3:** `failSite` has 4 fields; it gives the three closures a home as methods, not a carrier for more than five values (Q-Q3).
 
 #### Q.2.2 `firstExpected` — cc 13
 ```go
@@ -883,7 +922,7 @@ Verifiers (plan check §7 row Q): `fragments`, `docsync-d`, the parser goldens; 
 
 **Gaps (both packages):** `rfc3339Date`'s ≤ 80 year form is inferred, not built; the inline costs of the `value`, `appendUnescaped` and `NewSchema` helpers are inferred; hand-counted cyclomatic values need the pinned lint; `TestJoinPragmaReportsARelexFailure`'s reachability is inferred; no times were measured (decision 1's comparisons are the coordinator's, run alone).
 
-## 8. internal/playback (lane P)
+## 8. internal/playback (lane P: P1 → P2 → P3)
 
 *Drafted read-only on `s1-1c-6/integration` @ 6bf339c by the refactoring specialist (gitnexus-refactoring, gitnexus-impact-analysis, architecture-designer); production Go identical to `main` 4d2b9eb; measured with the pinned Go 1.27.4 (in-package profiles: playback 90.4 %, plan 95.4 %; `-gcflags=-m=2` for both packages; allocation counts from a `git archive` copy with a scratch test). Every risk level is from `impact` upstream with tests; `detect_changes`: 0 changed symbols. The coordinator verified the caps (playback gocyclo 15, funlen 1, file length 1; plan gocyclo 5, funlen 2, argument limit 1), `plan.value`'s two callers (`internal/plan/expect.go:136, :167`) and the PERMANENT panic at `plan.go:258`.* Nothing on playback's side changes the recording-size arithmetic: no encoded byte changes, `lineBound` and `rowBound` (`internal/runtime/boundary.go:47-84`) stay valid caps, and runtime may not import playback (`tools/importcheck/rules.json:18`): backlog, as §6 says.
 
@@ -967,9 +1006,9 @@ func trimLineEnd(b []byte) []byte          // lines 234-239; cc 5
 // envelope is line decoded against the envelope schema; refused for a decode fault, an unknown key, or a record after the stop.
 func (r *Reader) envelope(line []byte) ([]event.Value, error)          // lines 263-277, r.envBuf = vals kept before the unknown-key check; cc 5
 // recordKind is the line's kind: the first choosing key present; refused when none is, or a key the kind does not allow is present.
-func (r *Reader) recordKind(present func(int) bool) (RecordKind, error) // lines 279-294; returns rk.kind; cc 7
+func (r *Reader) recordKind(vals []event.Value) (RecordKind, error)      // lines 279-294, testing !vals[i].Null directly; returns rk.kind; cc 7
 ```
-`record`: `vals, err := r.envelope(line)`, then `present := func(i int) bool { return !vals[i].Null }` (created in `record` as today; E1), `kind, err := r.recordKind(present)`, then the six-case switch on `kind` with `return r.eventRecord(vals, present)` last; cc 9 (the dispatch stays in `record`: moving it out would copy one more large `Record` per line). Which error a faulty line names, in order: decode fault, unknown key, record after the stop, no choosing key, disallowed key, the per-kind checks — as today. Transfers: `envelope`'s 4 returns, `recordKind`'s 2; mutations: the propagation in `record` dropped per helper. `vals` is never reassigned after `present` captures it.
+`record`: `vals, err := r.envelope(line)`, then `present := func(i int) bool { return !vals[i].Null }` (created in `record` as today; E1), `kind, err := r.recordKind(vals)`, then the six-case switch on `kind` with `return r.eventRecord(vals, present)` last; cc 9 (the dispatch stays in `record`: moving it out would copy one more large `Record` per line). v2 (DA-S6): `recordKind` takes `vals`, not the `present` closure — today the closure inlines at `reader.go:281` and `:291` (about 20 calls per line: 7 kinds, 13 keys), and a func-value parameter of a non-inlined helper would turn them into indirect calls. Which error a faulty line names, in order: decode fault, unknown key, record after the stop, no choosing key, disallowed key, the per-kind checks — as today. Transfers: `envelope`'s 4 returns, `recordKind`'s 2; mutations: the propagation in `record` dropped per helper. `vals` is never reassigned after `present` captures it.
 
 **`(*Reader).rejectedRecord`** (`reader.go:315`; cc 13; hot; risk LOW).
 ```go
@@ -1046,7 +1085,7 @@ func unexpectedOutput(target event.Schema, x *plan.Expect, o []event.Event, i in
 | diverge | `expect.go:184` | `TestDivergeReadsByPositionPastTheAlignmentCap` (internal): o = [X, t0…t1999], t = [t0…t1999]; 2001×2000 > alignCap, so "then-record 1 has no output…" (without the cap the LCS would choose "output 1 was not expected…", so the mutation shows red) |
 | sameValue | `expect.go:246-247, 249-250, 259, 263, 265-267, 269` | `TestSameValueIsTheExpectEquality` (internal, table): both null, a null only, b null only, kinds differ, each kind equal and unequal, +0.0 vs −0.0, NaN vs NaN (false), an object equal / unequal / either side not a string, a non-null TInvalid (false) |
 
-One mutation per new test and per moved control transfer (P.2), each quoted with its diff.
+v2 (QA DQ-S8): `TestReaderNamesTheFirstFaultOfARejectedRecord` (one two-fault case per adjacent boundary of `rejectedFault`) and `TestReaderNamesTheFirstFaultOfAnEvent` (no attrs + an empty batch → "an event needs attrs"; one case per adjacent boundary of `eventKeys` and `arrivalKeys`). One mutation per new test and per moved control transfer (P.2), each quoted with its diff.
 
 **Performance nets (hot functions only).** New files `internal/playback/encode_bench_test.go` and `internal/playback/replay_bench_test.go` (package `playback`), not edited after the nets commit. `AllocsPerRun` equality pins, measured now:
 
@@ -1063,7 +1102,7 @@ One mutation per new test and per moved control transfer (P.2), each quoted with
 | Reader.Next | fixture event / event on a `time arrival` stream / recording event / table put / table delete / batch end / tick / rejected | 6 / 5 / 6 / 6 / 5 / 0 / 0 / 6 |
 | readLine | every kind above | 0 |
 
-Benchmarks: `BenchmarkAppendValue/<kind>`, `BenchmarkAppendStringPlain` (64 B ASCII), `BenchmarkAppendStringEscapes` (the string above), `BenchmarkAppendEvent`, `BenchmarkRecorderTable/{put,delete}`; the recording path `BenchmarkRecordOneEvent/{typed,payload}` to `io.Discard`; tracing `BenchmarkTraceStepTable`; the replay path `BenchmarkReplayLine/<kind>` (the 8 kinds; Next over a reader that repeats the line, after the header for the recording kinds) and the leaf `BenchmarkReadLine`. Escape-diff scope: `go build -gcflags=-m=2 ./internal/playback`, filtered to `encode.go reader.go records.go recorder.go trace.go`, compared per function name (lines move); nothing new in any "escapes to heap", "moved to heap" or "leaking param" line; E1–E5 hold.
+Benchmarks: `BenchmarkAppendValue/<kind>`, `BenchmarkAppendStringPlain` (64 B ASCII), `BenchmarkAppendStringEscapes` (the string above), `BenchmarkAppendEvent`, `BenchmarkRecorderTable/{put,delete}`; the recording path `BenchmarkRecordOneEvent/{typed,payload}` to `io.Discard`; tracing `BenchmarkTraceStepTable`; the replay path `BenchmarkReplayLine/<kind>` (the 8 kinds; Next over a reader that repeats the line, after the header for the recording kinds) and the leaf `BenchmarkReadLine`. Escape check (v2): `escapes.py` (§2.4, §3.2) per split commit, the original function and its new helpers as one group; a helper returning `dst` adds `leaking param: dst to result` lines, which are diagnostics (QA DQ-B2, measured on `AppendValue`'s split); E1–E5 hold, E2 checked by the pins.
 
 ### P.4 Placement
 
@@ -1077,7 +1116,7 @@ Benchmarks: `BenchmarkAppendValue/<kind>`, `BenchmarkAppendStringPlain` (64 B AS
 - **R1 — replay time.** ~7 extra direct calls per event line, projected under 2 % against a µs-scale `Next` (inferred). If the measurement fails decision 1, `eventRecord` keeps `arrivalKeys` inline, and at worst stays whole with a PERMANENT waiver citing the samples.
 - **R2 — `(*Recorder).Table`'s 0-allocation delete path depends on E4** (`cols` passed down, never returned); the pin catches a slip.
 
-### P.6 Commit plan (lane P, 8 commits; caps gocyclo 15, funlen 1, file length 1)
+### P.6 Commit plan (lane P, 9 commits; caps gocyclo 15, funlen 1, file length 1)
 
 1. `test(playback)`: the coverage nets of P.3, mutations quoted. Counts unchanged.
 2. `test(playback)`: the alloc pins and benchmarks (`encode_bench_test.go`, `replay_bench_test.go`). Counts unchanged.
@@ -1085,14 +1124,17 @@ Benchmarks: `BenchmarkAppendValue/<kind>`, `BenchmarkAppendStringPlain` (64 B AS
 4. `refactor(playback)`: `encode.go` (`AppendValue`, `appendString`, `appendEvent`). gocyclo 15 → 12.
 5. `refactor(playback)`: `recorder.go` `Table` and `trace.go` `Step`. 12 → 10.
 6. `refactor(playback)`: `reader.go` (`NewReader`, `validateApp`, `readLine`). 10 → 7.
-7. `refactor(playback)`: `records.go` (`record`, `rejectedRecord`, `tableRecord`, `eventRecord`). 7 → 3.
-8. `refactor(playback)`: `expect.go` `runBlock` and `verdict.go` (`diverge`, `sameValue`). gocyclo 3 → 0, funlen 1 → 0.
+7. `refactor(playback)`: `records.go` `record` alone (every replay kind's benchmark reaches it). 7 → 6.
+8. `refactor(playback)`: `records.go` `rejectedRecord`, `tableRecord`, `eventRecord` (each its own replay-kind benchmark). 6 → 3.
+9. `refactor(playback)`: `expect.go` `runBlock` and `verdict.go` (`diverge`, `sameValue`). gocyclo 3 → 0, funlen 1 → 0.
+
+Sub-lanes: P1 = commits 1–2; P2 = 3–6; P3 = 7–9.
 
 Verifiers: plan check §7 row P (the baselines, the corpus test, `determinism`) and `--job proofs` by the coordinator.
 
 ---
 
-## 9. internal/plan (lane Q, with the parser)
+## 9. internal/plan (lane Q, with the parser: Q1 → Q3)
 
 ### Q.1 File map (after the sprint)
 
@@ -1158,7 +1200,7 @@ func (b *body) project(vals []event.Value) bool // the select loop: an error cou
 | value (a) | operands | int → object → "a int literal is not a object" (the `&&` operands of the TObject case); the `LitValue` pairs tested in model by the merge |
 | OnEvent | operands | a null, false and true filter (`TestFilterTrueFalseNull` exists); a widened int vs an unwidened value |
 
-Performance: the existing pin `TestFilterNoMatchAllocatesNothing` (`body_test.go:367`, 0), and playback's `TestSuppressedMatchAllocatesNothing` and `TestBreakitNoMatchResidentKeyAdvancingAllocs` (0, on OnEvent's replay path); the emitting path pinned at its measured value (expected 1, the `slices.Clone` in `out`; inferred). §3 of the plan check measures OnEvent under the `Send` path benchmark (lane R's net). Escape diff: `-gcflags=-m=2 ./internal/plan` for `OnEvent`, `passes`, `project`.
+Performance (v2, DA-S7): `BenchmarkBodyOnEvent/{filtered-out, projected, widened}` in a new `internal/plan/body_bench_test.go` (package `plan`), in lane Q's nets — the runtime's `Send` path benchmark uses a stub body that never reaches `OnEvent` (`internal/runtime/api_test.go:47-221`). Pins: the existing `TestFilterNoMatchAllocatesNothing` (`body_test.go:367`, 0), and playback's `TestSuppressedMatchAllocatesNothing` and `TestBreakitNoMatchResidentKeyAdvancingAllocs` (0, on OnEvent's replay path); the emitting path pinned at its measured value (expected 1, the `slices.Clone` in `out`; inferred). Escape diff: `-gcflags=-m=2 ./internal/plan` for `OnEvent`, `passes`, `project`.
 
 ### Q.4 Placement
 
@@ -1169,35 +1211,87 @@ Performance: the existing pin `TestFilterNoMatchAllocatesNothing` (`body_test.go
 - **The merge's two conditions** (Q.2 (a) (i), (ii)) → the merge's `model` tests include `LitValue(Literal{Kind: LitParam}, TInvalid)` → false and exact-struct values for all seven pairs; without them, plan's `value` can change on unchecked models (§10 Q1).
 - **R — `OnEvent` time:** two extra direct calls per event per rule, measured under `Send` (µs-scale), projected well under 2 % (inferred); if it fails, `OnEvent` stays whole with a PERMANENT waiver citing the samples.
 
-### Q.6 Commit plan (plan's share of lane Q, 4 commits; caps gocyclo 5, funlen 2, argument limit 1)
+### Q.6 Commit plan (plan's share of lane Q, 5 commits; caps gocyclo 5, funlen 2, argument limit 1)
 
 1. `test(plan)`: the nets of Q.3. Counts unchanged (with the merge already in: gocyclo 4).
 2. `refactor(plan)`: pure move of `plan.go:281-472` to `body.go`; `astequal` exit 0.
 3. `refactor(plan)`: `expect.go` (`expect` dissolved, `values`, and `value` in variant b). Argument limit 1 → 0, funlen 2 → 1, gocyclo 5 → 2 (b) or 4 → 2 (a).
-4. `refactor(plan)`: `plan.go` `rule` and `body.go` `OnEvent`. Funlen 1 → 0, gocyclo 2 → 0 (two concerns in one commit for the 4-commit budget; a fifth commit splits it by file if the budget allows).
+4. `refactor(plan)`: `plan.go` `rule`. Funlen 1 → 0, gocyclo 2 → 1.
+5. `refactor(plan)`: `body.go` `OnEvent` (hot: its own commit). gocyclo 1 → 0.
 
 Verifiers: plan check §7 row Q (the plan and expect tests, `fragments`, `docsync-d`; the nightly `fuzz-parser`; `--job proofs`).
 
 ## 10. Questions for the owner at G1 (recommendation first; options ranked by code health)
 
-- **Q1 — the literal-to-value merge** (§5 §4.1; §9 Q.2). → **Do it now, before lanes V and Q: one `model.LitValue`, `LitType` and `litPayload` in `internal/model/literal.go`, as three coordinator commits (each caller's 72-pair table pinned green first; the model functions added red first; the three callers switched), with model tests that pin `LitValue(Literal{Kind: LitParam}, TInvalid)` → false and the exact value of each of the seven accepted pairs.** One rule instead of three; validate then accepts exactly what plan converts, by construction; plan's `value` finding goes by design; no new import edge. It touches `internal/model` and `internal/expr` (S1.1c-7's packages), which S1.1c-7's plan check is told. Others: validate and plan now, expr in S1.1c-7; no merge (split `plan.value` in place, the merge to the backlog).
-- **Q2 — blocks reachable only by calling the function directly in its own package** (validate `build` `exprs.go:107-109`, `mayBeNull` `:367-368`, `:400`; event `decode.go:200` through a white-box `Schema`; parser `lexer.go:162-163` through hand-built tokens, `lower.go:542`, `:553` through `l.str`; the runtime's in-place router and shard tests). → **Accept a direct in-package test as "its own package's tests" (decision 2).** They exercise the real function; the alternative is listing them unreachable, which proves less.
-- **Q3 — a third reason for a block left short: "defensive code that cannot be reached today", listed here with its argument, code unchanged.** The cases: event `decode.go:834` (`i < len(t)` after a length check that guarantees it); runtime `boundary.go:114-116` (`Decode` returns only `*event.DecodeError`) and the `a == nil` slot guards (`runtime.go:556, 903-905, 1022, 1251`; `lifecycle.go:372, 394`); playback `reader.go:99-110` (three constant schemas), `:269`, `:524` (as runtime's), `:159` (`NumAttrs() == 0` alone), `:234` (`n > 0`). → **Accept the reason, the code unchanged, removals to the backlog.** Decision 2 names only an invariant panic or scheduling; these are neither, and removing them is a behaviour-neutral change that is not a pure split (and has no test that can fail first). Others: turn each into an invariant panic with a PERMANENT waiver; delete them in this sprint, each in its own commit.
-- **Q4 — how a mutation counts.** → **A mutation is red when its test fails, including a test that fails at its own context deadline with a message (the runner's `-timeout 120s` is a backstop, not a verdict); an equivalent mutant is listed with its argument, beside a different mutation of the same transfer that is shown red** (as for `sendHead`, §4 item 4). Others: deadline reds do not count (the drain and stop transfers would then have no proof); equivalent mutants are refused (some transfers cannot be mutated observably).
-- **Q5 — the one reordering:** `runtime.build` defaults `RecordQueue` before the validate loop (§4 item 9). → **Accept** (`validateApp` reads no `cfg` field; an error discards `cfg`). Other: keep the default after the loop and split `build` differently (a helper that takes the loop's result).
-- **Q6 — the latent panic at `internal/parser/parse.go:363`** (`strings.Fields(s)[0]` on an all-whitespace notation other than spaces; participle never yields one, inferred). → **To the backlog, with a red test when it is taken.** Other: fix it now (a behaviour change and a scope change).
-- **Q7 — small shapes, confirmed together:** the parser's 4-field `failSite` type, which gives `parseError`'s three closures a home as methods (§7 Q.2.1; within §7.3: it does not exist to carry more than five values); `cleanObject` and `CleanLen` landing at exactly cyclomatic 10 (§6 E.2.2); plan's fourth commit holding `rule` and `OnEvent` together (§9 Q.6), or a fifth commit split by file. → **Confirm all three.**
-- **Q8 — backlog items found by the design** (no change in this sprint): `TestHandoffAllocationBudget`'s misleading comment (its rule is key-less); the RFC 3339 range written twice (`internal/playback/encode.go:16-19`, `event.TimestampInRange`); `reasonOf`/`reasonNames` as inverse maps in two files; the recording line's size arithmetic owned by runtime while playback owns the format; `validate.deepCopy` as a model clone; the never-true guards of Q3. → **To the backlog.**
+- **Q1 — the literal-to-value merge** (§5 §4.1; §9 Q.2; DA-B1). → **Merge validate's `fits` and plan's `value` into `model.LitValue` (with `LitType`, `litPayload`) in a new `internal/model/literal.go`, by lane M before lanes V and Q; leave `expr.literalNode` as it is.** The proof: each caller's 9 × 9 table (the 8 named kinds plus an unknown; the 8 named types plus `Type(99)`) pinned green first, the model functions added red first with `(LitParam, TInvalid)` → false and the exact value of each of the seven accepted pairs, then the callers switched with their tables unchanged. One rule for what validate accepts and plan converts, by construction; no new import edge; your fence on expr's use of `model` (2026-11-04: "expr reads `model.Expr` only") untouched. Others: all three callers, with that fence decision amended (expr would call model behaviour); no merge (split `plan.value` in place).
+- **Q2 — the W0 tools as new scope** (§3; DA-S13). → **Build the four small tools in `gate/bench/` (the comparer, the escape check, the mutation runner, the load runner), test first, by a `python-engineer` before the lanes.** The reviews showed each hand procedure going wrong in a way that would record a false proof: a mutant that does not compile counted as caught; a killed run leaving a mutant in a tracked file (it happened during the review); a p-value wrong under tied timings; a free split called costly by a plain escape diff (measured). The plan check's `astequal` rename map is dropped (the merge is not a move). Others: hand procedures with these rules written out (cheaper, and the failure modes stay); only the comparer (the plan check's W0).
+- **Q3 — a third reason for a block left short.** Two lists (DA-S9, QA DQ-L3):
+  - **(a) Reached only by a direct call or white-box state in the package's own tests** (validate `build` `exprs.go:107-109`, `mayBeNull` `:367-368`, `:400`; event `decode.go:200`; parser `lexer.go:162-163`, `lower.go:542`, `:553`; runtime's in-place router and shard cases, the `a == nil` slot guards each lane shows reached). → **This meets decision 2 ("from its own package's tests") as it stands, on two conditions: the function keeps its signature (§2.1), and the test says in a comment which contract keeps the block unreachable through the API.** A note, not a question — unless you disagree.
+  - **(b) Unreachable by any test** (runtime `boundary.go:114-116`; playback `reader.go:99-110`, `:269`, `:524`; the redundant operands event `decode.go:834`, playback `reader.go:159`, `:234`; any `a == nil` guard a lane cannot reach). → **Accept a third reason, "defensive: guaranteed by <the named contract>", code unchanged, each with a guard test that fails if the contract changes** (e.g. every error from the decoder's fault table satisfies `errors.As` with a `*event.DecodeError` target; `envelopeSchemas` succeeds), **removals to the backlog.** Others: turn each into an invariant panic with a waiver (a code change with no test that can fail first); delete them now, each in its own commit (behaviour-neutral, but not a pure split).
+- **Q4 — how a mutation counts** (§2.3, §3.3; DA-S1, QA DQ-B1, S4, S5, S9). → **Only "red" counts: the mutant builds and its designated test reports `--- FAIL` — including a failure at the test's own context deadline; `go test`'s `-timeout` backstop is "timeout" and a build or vet failure is "invalid", neither counted; a scheduling-dependent mutant runs 20 times under load and is reported k/N, and one red in none is named "reasoned, not proven"; an equivalent mutant is listed with its argument beside a different mutation of the same transfer shown red; each transfer's mutation is shown red at the nets commit (on the original code) and at the split commit (on the helper).** Others: count deadline reds only at a stricter `-timeout` (the drain and stop transfers would then have no proof); refuse equivalent mutants (some transfers cannot be mutated observably).
+- **Q5 — a path that costs while every split passed** (§2.4 step 6; DA's missing question). → **The lane-level path comparison at each hand-back catches it early; if a path still costs, the split with the largest measured share is restored whole with its waiver first, then the path is re-measured; if it still costs, it comes to you with every per-function verdict beside it.** Other: accept any path cost under a set margin (e.g. 3 %), which needs a number from you.
+- **Q6 — the one reordering:** `runtime.build` defaults `RecordQueue` before the validate loop (§4 item 9). → **Accept** (unobservable: `validateApp` reads no `cfg` field; an error discards `cfg`; verified by both reviews).
+- **Q7 — the latent panic at `internal/parser/parse.go:363`** (`strings.Fields(s)[0]` on the notation `"\t"`; participle never yields one, inferred). → **To the backlog, with `"\t"` recorded now as its failing input and a red test when it is taken.** Other: fix it now (a behaviour change and a scope change).
+- **Q8 — confirms:** the parser's 4-field `failSite` (it gives `parseError`'s three closures a home as methods; within §7.3); `cleanObject` and `CleanLen` landing at exactly cyclomatic 10 (gocyclo reports > 10); the sub-lane cut and the commit budget of §1 (at most 97 of 100, with the squash rule); and the backlog items the design found — `TestHandoffAllocationBudget`'s misleading comment, the RFC 3339 range written twice (`internal/playback/encode.go:16-19`, `event.TimestampInRange`), `reasonOf`/`reasonNames` as inverse maps in two files, the recording line's size arithmetic in runtime, `validate.deepCopy` as a model clone, `CheckRows`' non-finite condition duplicating `nonFinite` (DA-L3, unless lane R uses `nonFinite` when the code moves), and list (b)'s removals.
 
 ## 11. Risks
 
-1. **A hot split that costs time.** The likeliest are `event.(*Decoder).value` (one call level and a `Value` copy per attribute), `(*scanner).number` (one call per number), `appendUnescaped` (one call per escape), `playback.eventRecord` (about seven calls per line), `parseRFC3339`'s residual call and runtime's `offerAll` copy. *Mitigation:* decision 1's rule per function; a costed split replaced in its own slot by the original plus the PERMANENT waiver (§2.4), so commit budgets hold.
-2. **A lifecycle regression only load shows.** *Mitigation:* §4's invariants per function, the deadline and stress tests, `race -count=3`, the nightly `race-stress`; the known issues pinned as they stand.
-3. **Coverage under the gate's floor** (playback 90.4 % against 90). *Mitigation:* nets first; splits only move blocks; the coordinator re-derives each package's figure at hand-back.
-4. **The moves step touches S1.1c-7's packages** (`internal/model`, `internal/expr`). *Mitigation:* only if Q1 is answered so; the coordinator's commits, before the lanes; S1.1c-7's plan check told.
-5. **Mutation work is large** (hundreds of mutants across five lanes). *Mitigation:* the W0 runner (about one second per mutant measured in the spike); batch files quoted in the record.
-6. **Two agents on one machine distort timings.** *Mitigation:* lanes never measure time; the coordinator measures alone (§2.4).
+1. **A hot split that costs time** (likeliest: `event.(*Decoder).value`, `(*scanner).number`, `appendUnescaped`, `playback.eventRecord`, `parseRFC3339`'s residual call, runtime's `offerAll` copy). *Mitigation:* per-function commits and `c^`-vs-`c` verdicts (§2.2, §2.4); a costed split restored by a new commit; the lane-level path check.
+2. **The measurement gate becomes the critical path** (DA pre-mortem 1). *Mitigation:* fixed points at hot hand-backs with no agent running; ABBA order and the exact tied p-value; an A/A run per session — if an A/A run ever says "costs", the comparer is fixed before any verdict stands.
+3. **Nets weaker than recorded** (DA pre-mortem 2). *Mitigation:* `mutate.py`'s outcomes (only a named `--- FAIL` is red); five-run coverage; stress under load with its own coverage profile.
+4. **A lifecycle regression only load shows.** *Mitigation:* §4's invariants, the §2.1 concurrency rules, the deadline and stress tests, Drain's I1 and I3 mutations k/N, `race -count=3`, the nightly `race-stress`.
+5. **Coverage under the gate's floor** (playback 90.4 % against 90). *Mitigation:* nets first; splits only move blocks; the five-run measure at hand-back.
+6. **Sub-lanes overrun their box.** *Mitigation:* the cut of §1 at the spike's rates; a wrap-up at the box; the next sub-lane starts from the last commit.
+7. **The commit budget** (at most 97 of 100). *Mitigation:* counted at each combine; the squash rule for non-hot split commits.
+8. **Mutation cost** (a mutant red only by hanging costs at least the test's own 60 s ceiling, QA DQ-S4). *Mitigation:* one designated test per mutant; deterministic tests preferred to deadline reds; batch runs between agents' work.
 
-## 12. Reviews of this note
+## 12. Reviews of this note and their dispositions
 
-*To be filled: the `architect-reviewer` (with `the-fool`'s pre-mortem, `.claude/skills/the-fool/SKILL.md`) and the `qa-expert` read v1 blind; each finding gets a disposition here, ranked on the ground rules' scale.*
+The [architecture review](../reviews/s1-1c-6-design-architecture.md) of v1 (the `architect-reviewer` with `the-fool`) found 1 blocker, 14 should-fix and 11 later; the [QA review](../reviews/s1-1c-6-design-qa.md) (the `qa-expert`) found 2 blockers, 14 should-fix and 5 later. The coordinator verified each claim that changed the note (noted at the head of each filed review).
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| DA-B1 the merge's expr leg widens an owner fence | blocker | §0.5, §5 §4.1, §10 Q1: the recommendation narrowed to validate and plan; the fence untouched |
+| DQ-B1 non-building or vet-failing mutants counted red | blocker | §2.3 step 3, §3.3: outcomes red / green / timeout / invalid; compilable specs; tests |
+| DQ-B2 the escape rule calls a free split costly | blocker | §2.4 step 2, §3.2: `escapes.py`, moved/escapes lines per function group, `leaking param` a diagnostic |
+| DA-S1 / DQ-S3 the runner writes tracked files; killed runs leave mutants | should-fix | §3.3: `-overlay`, own session, group kill; tests incl. SIGTERM |
+| DA-S2 / DQ-S10 the comparer's statistics | should-fix | §3.1: exact conditional p with ties, ABBA, zero matches exit 2, both runs must say costs, fixed-iteration allocation pass, A/A |
+| DA-S3 bundled hot functions; the baseline mis-attributes | should-fix | §2.2 step 3, §2.4 steps 3–4; the R, E, P, Q commit tables re-cut |
+| DA-S4 the waiver template red at T0 | should-fix | §2.4 step 5; §6 E.2.1 |
+| DA-S5 `broadcast` scatters `admStream = -1` | should-fix | §4 item 6; §2.1 |
+| DA-S6 playback's `recordKind` closure parameter | should-fix | §8 P.2 `record` |
+| DA-S7 `OnEvent` has no time net | should-fix | §9 Q.3 `BenchmarkBodyOnEvent`; Q.6 commit 5 |
+| DA-S8 post-split tests | should-fix | §2.2 step 1 (none); §4 §3, §6 E.3, E.5 amended |
+| DA-S9 / DQ-L3 Q3 mixes reachable and unreachable | should-fix | §10 Q3 lists (a) and (b) |
+| DA-S10 / DQ-L2 three normalisers, one on a wrong premise | should-fix | §2.4 step 2, §3.2; §4 §3, §6 E.3, §8 P.3 amended |
+| DA-S11 the sub-lanes do not fit the box | should-fix | §1 re-cut by the spike's rates |
+| DA-S12 the measurement windows and restores unscheduled | should-fix | §1 (Measure, Restore), §2.4 step 5, §2.5 |
+| DA-S13 the mutation runner as unasked scope; the rename map dropped silently | should-fix | §3 (dropped, said), §10 Q2 |
+| DA-S14 / DQ-S11 the merge's proof framing | should-fix | §5 §4.1: 9 × 9 tables; expr's tests are external |
+| DQ-S1 runtime coverage varies run to run | should-fix | §2.3 step 1 (five runs); §4 §3 `:908` |
+| DQ-S2 validate's poison writes and resolved copy untested | should-fix | §5 §0 (O), §3.3 H12, H13, `TestCheckResolvesEveryParamSlot`, §3.4 |
+| DQ-S4 the timeout outcome; mutation cost | should-fix | §3.3, §10 Q4, §11 risk 8 |
+| DQ-S5 scheduling-dependent mutants | should-fix | §2.3 step 3 (k/N); Drain I1 and I3 mutations to R1b's list |
+| DQ-S6 stress not under load; blocks not shown hit | should-fix | §2.3 step 4, §3.4 |
+| DQ-S7 missing operand cases in runtime | should-fix | §4 §3 v2 additions |
+| DQ-S8 two-fault cases per helper boundary | should-fix | §2.1 rule; §4 §3, §6 E.3, §8 P.3 rows |
+| DQ-S9 when a transfer's mutation runs | should-fix | §2.3 step 3 (shown red twice) |
+| DQ-S12 nets only in the scratchpad | should-fix | §4 §3 (the spike's tests named); §6 E.3 the committed reference differential |
+| DQ-S13 the route-stop test cannot tell the mutant apart | should-fix | §4 §3: waits on state; the router's exit asserted with the body held |
+| DQ-S14 concurrency counter-examples without a rule | should-fix | §2.1 concurrency rules |
+| DA-L1 runtime file names | later | §4 §1: `requests.go`, `router_in.go`, `router_out.go` |
+| DA-L2 by-value rule vs the `m *message` fallback | later | §2.1 |
+| DA-L3 `CheckRows`' duplicated condition | later | §10 Q8 (backlog unless lane R uses `nonFinite`) |
+| DA-L4 `parseRFC3339`'s 13 helpers; "equal results" | later | §0.3, §6 E.2.1 reworded; fewer helpers if the measurement allows (lane E's choice, recorded) |
+| DA-L5 `failSite`'s derived fields | later | §7 Q.2.1 |
+| DA-L6 the commit budget | later | §1 recounted (≤ 97) |
+| DA-L7 W0 home, `__init__.py`, the record's provenance | later | §3 |
+| DA-L8 a timer used as a probe | later | §4 §3 route-stop test |
+| DA-L9 the widening rule stays in two places | later | §5 §4.1 |
+| DA-L10 who writes the merge | later | §1 lane M |
+| DA-L11 small runtime shapes and names | later | §2.1 (names by content); `ingest` → `ingestLifecycle` dispatching twice is gocyclo's shape |
+| DQ-L1 `TestDrainBarrier` at 2 shards | later | §4 item 2 |
+| DQ-L4 signatures nets tests call | later | §2.1 |
+| DQ-L5 truncated allocation averages | later | §2.4 step 1 |
+| DA pre-mortem and inversion | — | §11 risks 1–3, 6, 7 |
+| DQ acceptance-line rewrites | — | to the sprint record's card at G1 (exits 2 and 3 as QA rewrote them, with the rename-map proof dropped) |
