@@ -646,6 +646,7 @@
         "gate/runner/rows/gomods.py",
         "gate/runner/rows/smells.py",
         "gate/runner/sprintid.py",
+        "gate/runner/suppressions.py",
         "gate/runner/workers.py",
         "gate/term.py",
         "gate/toolchain/manifest.py"
