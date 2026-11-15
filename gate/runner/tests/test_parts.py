@@ -10,7 +10,7 @@ case reads the real tree. ReadBase alone builds fixture git repositories (`git.m
 import json
 import unittest
 
-from gate.runner import allowlists, parts, sprintid
+from gate.runner import aging, allowlists, anchors, parts, sprintid
 from gate.runner.tests import support
 
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
@@ -177,6 +177,40 @@ class Moves(unittest.TestCase):
         base = at_base((entry(), removed), known)
         faults, _ = parts.forwards((entry(),), known, ORDER, "S1.1c-6", "T4", base, NOTHING_DECIDED)
         self.assertEqual(faults, [])
+
+
+# Owner 2026-11-14, S1.1c-5's review and break-it, decision 1 (BK-B1): only a docs/sprints/decisions.md section counts
+# as a decision. The reader serves three tracked files whose heading names the id; only decisions.md's decides.
+HEADING = "Owner decisions, 2026-12-01 — a later forward for S1.1c-5-1"
+SECTION = f"# T\n\n## {HEADING}\n\nS1.1c-5-1 moves to S1.1c-7.\n"
+RECORD = f"docs/sprints/s1-1c-5-record.md#{anchors.slug(HEADING)}"
+REVIEW = f"docs/reviews/s1-1c-5-breakit-qa.md#{anchors.slug(HEADING)}"
+IN_DECISIONS = f"docs/sprints/decisions.md#{anchors.slug(HEADING)}"
+TRACKED = {path.split("#")[0]: SECTION for path in (RECORD, REVIEW, IN_DECISIONS)}
+
+
+def real_decided(id: str, decision: str) -> bool:
+    return aging.decided(id, decision, TRACKED.get)
+
+
+class OnlyDecisionsMd(unittest.TestCase):
+    def move(self, decision: str) -> list[str]:
+        base = at_base((entry(),), issues(issue("S1.1c-5-1", "S1.1c-6")))
+        now = issues(issue("S1.1c-5-1", "S1.1c-7", decision=decision))
+        faults, _ = parts.forwards((entry(),), now, ORDER, "S1.1c-6", "T4", base, real_decided)
+        return faults
+
+    def test_a_forward_moved_with_a_decision_outside_decisions_md_is_red(self):
+        want = (
+            f"aging: smells.json: {TARGET}: forward moved S1.1c-6 → S1.1c-7 (issue S1.1c-5-1 → S1.1c-5-1) without a"
+            " decision that names S1.1c-5-1 (decision 1: only the owner moves a forward)"
+        )
+        for ref in (RECORD, REVIEW):
+            with self.subTest(ref=ref):
+                self.assertEqual(self.move(ref), [want])
+
+    def test_a_forward_moved_with_a_decision_in_decisions_md_is_green(self):
+        self.assertEqual(self.move(IN_DECISIONS), [])
 
 
 class Base(unittest.TestCase):

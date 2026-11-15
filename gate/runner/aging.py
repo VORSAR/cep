@@ -4,7 +4,8 @@ as annotated; S1.1c-3's plan check, decisions 8 and 9 and confirm (c)).
 Every known issue ages. Three rules, one line per fault, each naming the entry's id:
 
 1. More than two closed rows of the printed order follow `first_seen`'s position (`Order.index`: a printed part-row
-   such as S1.1a-1 is a row of its own), and no decision names the id: `decision` is empty, does not resolve, or
+   such as S1.1a-1 is a row of its own), and no decision names the id: `decision` is empty, is not a section of
+   docs/sprints/decisions.md (owner 2026-11-14, S1.1c-5's review and break-it, decision 1), does not resolve, or
    resolves to a section that does not name it. A forward does not stop this clock (§7 W0-8).
 2. The entry is still listed, so still open, and `forward` is a row that has closed, or a part the marker has passed
    (`Order.passed`, decision 8). A part-less marker in the part's own row cannot say, and is named (§7 W0-3).
@@ -17,7 +18,7 @@ takes. What aging cannot place (a sprint outside the order, an unreadable day) i
 from collections.abc import Callable
 from datetime import date
 
-from gate.runner import anchors, knownissues, sprintid
+from gate.runner import allowlists, anchors, knownissues, sprintid
 
 CLOSED_ROWS_ALLOWED = 2
 CORRECTNESS_DAYS = 30
@@ -30,10 +31,14 @@ def _outside(sprint: str) -> str:
 
 
 def decided(id: str, decision: str, read: Reader) -> bool:
-    """Whether the decision resolves to a heading of tracked Markdown whose section names the id."""
+    """Whether the decision resolves to a heading of docs/sprints/decisions.md whose section names the id: no other
+    file decides, for rule 1 and for the part-level check alike (owner 2026-11-14, S1.1c-5's review and break-it,
+    decision 1; BK-B1)."""
     if not decision or anchors.resolves(decision, read):
         return False
     path, anchor = anchors.split_ref(decision)
+    if path != allowlists.DECISIONS:
+        return False
     return knownissues.names(knownissues.section(read(path) or "", anchor), id)
 
 
