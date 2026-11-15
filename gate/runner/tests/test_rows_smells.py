@@ -109,11 +109,13 @@ UNCLAIMED = (
 class World(unittest.TestCase):
     """A repository, the fake tools, a scenario; `run` executes the row once and returns (exit, lines, calls)."""
 
+    REPO_DIR = "repo"
+
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = os.path.realpath(tmp.name)
-        self.repo = os.path.join(self.root, "repo")
+        self.repo = os.path.join(self.root, self.REPO_DIR)
         self.bin = os.path.join(self.root, "bin")
         self.row_dir = os.path.join(self.root, "row")
         self.cache = os.path.join(self.root, "toolcache")
@@ -610,13 +612,16 @@ class Lock(World):
         self.assertEqual(lints, want)
 
 
-def ignored(path: str, line: int, col: int, linter: str, first: int, last: int, expanded: bool) -> str:
+def ignored(
+    path: str, line: int, col: int, linter: str, first: int, last: int, expanded: bool, line_range: str = "<nil>"
+) -> str:
     """One `GL_DEBUG=nolint_filter` line for an issue a //nolint silenced, as golangci-lint v2.15.0 writes it
-    (recorded by hand from the pinned binary, pkg/result/processors/nolint_filter.go:128)."""
+    (recorded by hand from the pinned binary, pkg/result/processors/nolint_filter.go:128). `line_range` is the
+    issue's LineRange pointer: <nil>, or 0x… for an issue that sets one (revive's, QA break-it BK-S1 plant (b))."""
     ptr = "0x6e04262e0b40" if expanded else "<nil>"
     return (
         f'level=debug msg="[nolint_filter] found ignored range for issue &{{{linter} use of `panic` forbidden because'
-        f' \\"[panic]\\"  [] planted.example/internal/p {path}:{line}:{col} <nil> 0 [] false  internal/p/p.go'
+        f' \\"[panic]\\"  [] planted.example/internal/p {path}:{line}:{col} {line_range} 0 [] false  internal/p/p.go'
         f' internal/p/p.go}}: {{[{linter}] map[] {{{first} {last}}} 8 {ptr}}}"\n'
     )
 
@@ -639,6 +644,73 @@ class Silenced(World):
         path = os.path.join(self.repo, "internal", "p", "p.go")
         self.lint["linux"] = clean() | {"stderr": ignored(path, 4, 8, "nolintlint", 3, 3, False)}
         self.assert_green()
+
+    # CA-S2 / BK-S1 / BK-L1: the check fails closed.
+
+    def test_a_wrong_line_revive_waiver_is_red(self):
+        path = os.path.join(self.repo, "internal", "p", "p.go")
+        rng = "0x53efba923460"
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 6, 1, "revive", 6, 6, False, rng)}
+        self.assert_green()  # witness: the revive form read, on its own line
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 6, 1, "revive", 5, 6, True, rng)}
+        self.assert_fault(
+            "internal/p/p.go:6:1: revive: silenced by the //nolint on line 5; a //nolint waives only its own line"
+        )
+
+    def test_an_unparseable_silenced_line_is_a_fault(self):
+        path = os.path.join(self.repo, "internal", "p", "p.go")
+        good = ignored(path, 9, 2, "forbidigo", 9, 9, False)
+        self.lint["linux"] = clean() | {"stderr": "level=info msg=start\n" + good}
+        self.assert_green()  # witness: a readable marker line among others
+        bad = good.replace(f"{path}:9:2 <nil> 0 ", f"{path}:9:2 [0 0] 0 ")
+        self.lint["linux"] = clean() | {"stderr": "level=info msg=start\n" + bad}
+        self.assert_fault(
+            "unreadable nolint_filter line 2 of smells-linux.stderr: the pinned golangci-lint's debug format changed?"
+        )
+
+    def write_go(self, rel: str, text: str) -> str:
+        path = os.path.join(self.repo, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+
+    def test_the_message_names_the_directives_own_line(self):
+        # BK-L1: the range starts at the comment group's first line (8, a doc comment); the directive is line 9.
+        source = (
+            "package p\n" + "\n" * 6 + "// F is planted.\n//nolint:revive // planted\nfunc F(a, b, c, d, e, f int) {}\n"
+        )
+        path = self.write_go("internal/p/p.go", source)
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 10, 1, "revive", 8, 10, True, "0x53efba923460")}
+        self.assert_fault(
+            "internal/p/p.go:10:1: revive: silenced by the //nolint on line 9; a //nolint waives only its own line"
+        )
+
+    def test_a_tree_with_a_nolint_and_no_marker_line_is_red(self):
+        path = self.write_go("internal/p/p.go", 'package p\n\nfunc F() { panic("x") } //nolint:forbidigo // planted\n')
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 3, 12, "forbidigo", 3, 3, False)}
+        self.assert_green()  # witness: the directive's marker line is there
+        self.lint["linux"] = clean()
+        self.assert_fault(
+            "1 in-code //nolint directives and no nolint_filter line from golangci-lint under linux or darwin:"
+            " the pinned golangci-lint's debug key changed?"
+        )
+        code, lines, _ = self.run_row(tier="T0", files=["internal/p/p.go"])
+        self.assertEqual((code, self.faults(lines)), (0, []), lines)  # a staged run lints part of the tree
+
+
+class SilencedUnderASpace(World):
+    """BK-S1 plant (a): the same check with the repository under a path that holds a space."""
+
+    REPO_DIR = "sp ace/repo"
+
+    def test_a_wrong_line_waiver_under_a_root_with_a_space_is_red(self):
+        self.assertIn(" ", self.repo)
+        path = os.path.join(self.repo, "internal", "p", "p.go")
+        self.lint["linux"] = clean() | {"stderr": ignored(path, 5, 2, "forbidigo", 4, 5, True)}
+        self.assert_fault(
+            "internal/p/p.go:5:2: forbidigo: silenced by the //nolint on line 4; a //nolint waives only its own line"
+        )
 
 
 class Summary(World):

@@ -7,8 +7,10 @@ repository) serves both `go list -e -json ./...`, which gives the file map and t
 must agree with the report; the report's error, warnings and enabled linters are checked; a finding at a file no
 package claims is red. The two runs merge by (file, line, column, linter, text); a generated.json target, a
 `[fmtprint]` finding in a package-main tool and a live size exclusion drop their findings; any `unsafe` import is red;
-on a full-tree run an exclusion that dropped nothing is red, and at any tier one that dropped more than its cap. At T0
-only the staged files' packages are linted, with the same verdict and the liveness check off.
+on a full-tree run an exclusion that dropped nothing is red, and at any tier one that dropped more than its cap. An
+issue a //nolint silenced from another line is red; a nolint_filter line the row cannot read is a fault, and on a
+full-tree run a tree with an in-code //nolint and no nolint_filter line is red (fail closed, CA-S2). At T0 only the
+staged files' packages are linted, with the same verdict and the liveness check off.
 """
 
 import os
@@ -20,7 +22,7 @@ from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from gate.runner import allowlists, golangci, jsonstream, rows
+from gate.runner import allowlists, golangci, jsonstream, rows, suppressions
 from gate.runner.rows import gomods
 from gate.toolchain import manifest
 
@@ -36,9 +38,17 @@ IMPORT_LISTS = ("Imports", "TestImports", "XTestImports")
 # it (pkg/result/processors/nolint_filter.go:128); From is the directive's own line, To is widened to a node on the
 # next line that starts at the comment's column (:270-292). The pinned binary's format; a tool upgrade re-checks it.
 NOLINT_DEBUG = {"GL_DEBUG": "nolint_filter"}
+SILENCED_MARK = "[nolint_filter] found ignored range"  # any line holding it is read, or it is a fault
 SILENCED = "[nolint_filter] found ignored range for issue &{"
 SILENCED_RANGE = re.compile(r"\}: \{\[[^\]]*\] map\[[^\]]*\] \{(\d+) (\d+)\} \d+ (?:<nil>|0x[0-9a-f]+)\}\"$")
-SILENCED_AT = re.compile(r" (/\S+?\.go):(\d+):(\d+) <nil> \d+ ")
+# The issue's Pos, after the literal realpath(root) + "/" (a root may hold a space), then its LineRange: <nil>, or a
+# pointer for an issue that sets one (revive's); then HunkPos.
+SILENCED_AT = r"(.+?\.go):(\d+):(\d+) (?:<nil>|0x[0-9a-f]+) \d+ "
+UNREADABLE = "unreadable nolint_filter line {n} of {name}: the pinned golangci-lint's debug format changed?"
+NO_MARKER = (
+    "{n} in-code //nolint directives and no nolint_filter line from golangci-lint under linux or darwin:"
+    " the pinned golangci-lint's debug key changed?"
+)
 TEMP_ONLY = "a size exclusion is TEMP, with an expiry and a known issue"
 Key = tuple[str, int, int, str, str]
 
@@ -53,6 +63,7 @@ class Platform:
         self.unsafe: set[str] = set()
         self.report: golangci.Report | None = None
         self.silenced: list[str] = []
+        self.markers = 0  # nolint_filter lines in its stderr
 
 
 def run(argv: list[str], env: dict[str, str], cwd: str, out: str, err: str) -> int:
@@ -134,32 +145,74 @@ def lint(plat: Platform, env: dict[str, str], root: str, row_dir: str, targets: 
     if rep.enabled != want:
         faults.append(f"golangci-lint ({goos}) ran {', '.join(sorted(rep.enabled))} not {', '.join(sorted(want))}")
     plat.report = rep
-    plat.silenced = silenced(err, root)
+    plat.silenced, plat.markers = silenced(err, root)
     return faults
 
 
-def silenced(err: str, root: str) -> list[str]:
-    """Each issue a //nolint silenced from another line (coordinator, S1.1c-5 W1: a waiver on the wrong line is red)."""
+def directive_line(path: str, first: int, row: int) -> int:
+    """The line of the first honoured //nolint in [first, row] of the file (BK-L1: a range starts at its comment
+    group's first line, which may be a doc comment); `first` when the file cannot be read or holds none there."""
+    try:
+        source = rows.read_text(path)
+    except OSError:
+        return first
+    for c in suppressions.go_all_comments(source):
+        if not c.block and first <= c.line <= row and suppressions.HONOURED.match(c.text):
+            return c.line
+    return first
+
+
+def silenced(err: str, root: str) -> tuple[list[str], int]:
+    """(faults, nolint_filter lines): each issue a //nolint silenced from another line (coordinator, S1.1c-5 W1: a
+    waiver on the wrong line is red), and each nolint_filter line that cannot be read (fail closed, CA-S2, BK-S1)."""
+    real = os.path.realpath(root)
+    prefix = " " + real + "/"
+    at_re = re.compile(re.escape(prefix) + SILENCED_AT)
+    name = os.path.basename(err)
     found: list[str] = []
-    for line in rows.read_text(err).splitlines():
+    markers = 0
+    for n, line in enumerate(rows.read_text(err).splitlines(), 1):
+        if SILENCED_MARK not in line:
+            continue
+        markers += 1
         start = line.find(SILENCED)
         end = SILENCED_RANGE.search(line)
-        if start < 0 or end is None:
+        at = None
+        if start >= 0 and end is not None:
+            pos = end.start()
+            while at is None and (pos := line.rfind(prefix, start, pos)) >= 0:
+                at = at_re.match(line, pos, end.start())
+        if at is None:
+            found.append(UNREADABLE.format(n=n, name=name))
             continue
-        issue = line[start + len(SILENCED) : end.start()]
-        linter = issue.split(" ", 1)[0]
-        at = list(SILENCED_AT.finditer(issue))
-        if linter == "nolintlint" or not at:
+        linter = line[start + len(SILENCED) :].split(" ", 1)[0]
+        if linter == "nolintlint":
             continue  # nolintlint's own reports are how golangci finds unused directives
-        path, row, col = at[-1].group(1), int(at[-1].group(2)), int(at[-1].group(3))
-        directive = int(end.group(1))
+        rel, row, col = at.group(1), int(at.group(2)), int(at.group(3))
+        directive = directive_line(os.path.join(real, rel), int(end.group(1)), row)
         if row != directive:
-            rel = os.path.relpath(path, root).replace(os.sep, "/")
             found.append(
                 f"{rel}:{row}:{col}: {linter}: silenced by the //nolint on line {directive};"
                 " a //nolint waives only its own line"
             )
-    return found
+    return found, markers
+
+
+def nolint_count(root: str, tracked: list[str]) -> int:
+    """The in-code //nolint directives golangci-lint can see: line comments of the tracked Go files on disk, testdata
+    aside (a file deleted from the work tree is not linted)."""
+    count = 0
+    for rel in tracked:
+        if golangci.is_testdata(rel):
+            continue
+        try:
+            source = rows.read_text(os.path.join(root, rel))
+        except FileNotFoundError:
+            continue
+        count += sum(
+            1 for c in suppressions.go_all_comments(source) if not c.block and suppressions.HONOURED.match(c.text)
+        )
+    return count
 
 
 Caps = dict[tuple[str, str], int]
@@ -338,6 +391,8 @@ def main(argv: list[str]) -> int:
             for (pkg, rule), n in sorted(dropped.items())
             if n == 0 and entries[(pkg, rule)]
         ]
+        if plats[0].markers + plats[1].markers == 0 and (n := nolint_count(root, tracked)):
+            faults.append(NO_MARKER.format(n=n))
     faults += [
         f"smells.json: {pkg} {rule} drops {n} findings, its cap is {caps[(pkg, rule)]}: fix the new one, or raise the"
         " cap by an owner decision"
