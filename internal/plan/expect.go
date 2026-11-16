@@ -182,23 +182,12 @@ func value(l model.Literal, t event.Type) (event.Value, error) {
 	switch {
 	case l.Kind == model.LitNull:
 		return event.Value{Kind: t, Null: true}, nil
-	case l.Kind == model.LitString && t == event.TString:
-		return event.Value{Kind: t, Str: l.Str}, nil
 	// its JSON text, in the boundary's stored form (owner, 2026-11-10)
 	case l.Kind == model.LitString && t == event.TObject:
 		return event.Value{Kind: t, Obj: event.CleanObject([]byte(strings.TrimSpace(l.Str)))}, nil
-	case l.Kind == model.LitInt && t == event.TInt:
-		return event.Value{Kind: t, I: l.Int}, nil
-	case l.Kind == model.LitInt && t == event.TFloat:
-		return event.Value{Kind: t, F: float64(l.Int)}, nil
-	case l.Kind == model.LitFloat && t == event.TFloat:
-		return event.Value{Kind: t, F: l.Float}, nil
-	case l.Kind == model.LitBool && t == event.TBool:
-		return event.Value{Kind: t, B: l.Bool}, nil
-	case l.Kind == model.LitDuration && t == event.TDuration:
-		return event.Value{Kind: t, D: l.Ms}, nil
-	case l.Kind == model.LitTimestamp && t == event.TTimestamp:
-		return event.Value{Kind: t, T: l.Ms}, nil
+	}
+	if v, ok := model.LitValue(l, t); ok {
+		return v, nil
 	}
 	return event.Value{}, fmt.Errorf("a %s literal is not a %s", l.Kind, t)
 }

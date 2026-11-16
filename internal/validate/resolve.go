@@ -53,23 +53,11 @@ func (c *checker) resolve() {
 	}
 }
 
-// fits says whether a literal can stand for a value of the declared type (an int literal fits a float).
+// fits says whether a literal can stand for a value of the declared type (an int literal fits a float): exactly
+// the pairs model.LitValue converts.
 func fits(l model.Literal, t event.Type) bool {
-	switch l.Kind {
-	case model.LitString:
-		return t == event.TString
-	case model.LitInt:
-		return t == event.TInt || t == event.TFloat
-	case model.LitFloat:
-		return t == event.TFloat
-	case model.LitBool:
-		return t == event.TBool
-	case model.LitDuration:
-		return t == event.TDuration
-	case model.LitTimestamp:
-		return t == event.TTimestamp
-	}
-	return false
+	_, ok := model.LitValue(l, t)
+	return ok
 }
 
 // as is the literal as a value of type t: an int literal for a float param becomes a float.
