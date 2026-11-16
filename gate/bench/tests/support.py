@@ -67,3 +67,64 @@ def compare(argv: list[str], cwd: str, env: dict[str, str] | None = None) -> tup
         ).returncode
         out.seek(0)
         return code, out.read().decode("utf-8", errors="replace")
+
+
+GIT_ENV = {
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@example.com",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@example.com",
+}
+
+
+def git(repo: str, env: dict[str, str], *argv: str) -> str:
+    done = subprocess.run(["git", *argv], cwd=repo, env=env, check=True, capture_output=True)
+    return done.stdout.decode().strip()
+
+
+def write(directory: str, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        path = os.path.join(directory, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+
+def fake_go(directory: str, body: str) -> str:
+    """A directory holding an executable `go` (Python under this interpreter) running `body`; put it first on PATH."""
+    bin_dir = os.path.join(directory, "fakebin")
+    os.makedirs(bin_dir, exist_ok=True)
+    path = os.path.join(bin_dir, "go")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"#!{PY} -I\n{body}")
+    os.chmod(path, 0o755)
+    return bin_dir
+
+
+def tool(name: str, argv: list[str], cwd: str, env: dict[str, str], out_path: str) -> tuple[int, str]:
+    """Run gate/bench/<name>.py as a lane does; its exit code and combined output."""
+    script = os.path.join(REPO, "gate", "bench", f"{name}.py")
+    with open(out_path, "w+b") as out:
+        code = subprocess.run(
+            [PY, "-I", "-B", script, *argv], cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=out
+        ).returncode
+        out.seek(0)
+        return code, out.read().decode("utf-8", errors="replace")
+
+
+def pids_line(out: str, prefix: str) -> list[int]:
+    """The pids a tool printed on its `<prefix> ... pids a b c` line."""
+    for line in out.splitlines():
+        if line.startswith(prefix) and "pids " in line:
+            return [int(p) for p in line.split("pids ", 1)[1].split()]
+    raise AssertionError(f"no {prefix!r} line with pids in:\n{out}")
+
+
+def alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
