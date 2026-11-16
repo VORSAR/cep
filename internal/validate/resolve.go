@@ -12,6 +12,18 @@ import (
 // type, and every ${param} slot takes that value in the copy. A slot whose param does not resolve is poisoned, so
 // no later phase reports it a second time.
 func (c *checker) resolve() {
+	c.defaults()
+	c.overrides()
+	for i := range c.app.Streams {
+		c.resolveAnnotations(c.app.Streams[i].Annotations)
+	}
+	for _, r := range c.rules() {
+		c.resolveRule(r)
+	}
+}
+
+// defaults: each param's default is of its declared type and becomes its effective value; one that is not is bad.
+func (c *checker) defaults() {
 	for i := range c.app.Params {
 		p := &c.app.Params[i]
 		if !fits(p.Default, p.Type) {
@@ -22,6 +34,11 @@ func (c *checker) resolve() {
 		}
 		c.effective[p.Name] = as(p.Default, p.Type)
 	}
+}
+
+// overrides: in name order, each deployment override names a declared param and is of its type, and then replaces
+// the default; one that is not leaves the param bad, with no effective value. It runs after defaults.
+func (c *checker) overrides() {
 	names := make([]string, 0, len(c.opts.Overrides))
 	for name := range c.opts.Overrides {
 		names = append(names, name)
@@ -40,16 +57,15 @@ func (c *checker) resolve() {
 			c.effective[name] = as(v, p.Type)
 		}
 	}
-	for i := range c.app.Streams {
-		c.resolveAnnotations(c.app.Streams[i].Annotations)
+}
+
+// resolveRule resolves every duration slot of r, then every ${param} in its expressions.
+func (c *checker) resolveRule(r *model.Rule) {
+	for _, d := range durationSlots(r) {
+		c.resolveDuration(d)
 	}
-	for _, r := range c.rules() {
-		for _, d := range durationSlots(r) {
-			c.resolveDuration(d)
-		}
-		for _, root := range expressions(r) {
-			c.resolveExpr(root, root)
-		}
+	for _, root := range expressions(r) {
+		c.resolveExpr(root, root)
 	}
 }
 
@@ -165,37 +181,48 @@ func (c *checker) resolveExpr(n, root *model.Expr) {
 	}
 	switch {
 	case n.Kind == model.ExprLiteral && n.Lit.Kind == model.LitParam:
-		if v, ok := c.value(n.Lit.Param, n.Pos); ok {
-			n.Lit = v
-		} else {
-			c.skipExpr[root] = true
-		}
+		c.resolveLiteral(n, root)
 	case n.Kind == model.ExprText && n.Operand.Param != "":
-		name, at := n.Operand.Param, n.Operand.Pos
-		v, ok := c.value(name, at)
-		if !ok {
-			c.skipExpr[root] = true
-			return
-		}
-		if v.Kind != model.LitString {
-			c.report("E-PARAM-001", at, "${%s} is a %s; %s takes a string", name, kindName(v), n.Op)
-			c.skipExpr[root] = true
-			return
-		}
-		if !setOp(n.Op) {
-			n.Operand.Strings, n.Operand.Param = []string{v.Str}, ""
-			return
-		}
-		// Owner, 2026-11-04 (SPEC §4.1 as annotated): a keyword-set slot splits the string at commas.
-		items := strings.Split(v.Str, ",")
-		for i := range items {
-			items[i] = strings.TrimSpace(items[i])
-			if items[i] == "" {
-				c.report("E-PARAM-001", at, "${%s} = %q: item %d of the comma-separated list is empty", name, v.Str, i+1)
-				c.skipExpr[root] = true
-				return
-			}
-		}
-		n.Operand.Strings, n.Operand.Param = items, ""
+		c.resolveOperand(n, root)
 	}
+}
+
+// resolveLiteral: a ${param} literal takes the param's value; one whose param does not resolve poisons root.
+func (c *checker) resolveLiteral(n, root *model.Expr) {
+	if v, ok := c.value(n.Lit.Param, n.Pos); ok {
+		n.Lit = v
+	} else {
+		c.skipExpr[root] = true
+	}
+}
+
+// resolveOperand: a text operator's ${param} operand takes the param's string, split at commas for a keyword-set
+// operator; one that does not resolve, is not a string or holds an empty item poisons root.
+func (c *checker) resolveOperand(n, root *model.Expr) {
+	name, at := n.Operand.Param, n.Operand.Pos
+	v, ok := c.value(name, at)
+	if !ok {
+		c.skipExpr[root] = true
+		return
+	}
+	if v.Kind != model.LitString {
+		c.report("E-PARAM-001", at, "${%s} is a %s; %s takes a string", name, kindName(v), n.Op)
+		c.skipExpr[root] = true
+		return
+	}
+	if !setOp(n.Op) {
+		n.Operand.Strings, n.Operand.Param = []string{v.Str}, ""
+		return
+	}
+	// Owner, 2026-11-04 (SPEC §4.1 as annotated): a keyword-set slot splits the string at commas.
+	items := strings.Split(v.Str, ",")
+	for i := range items {
+		items[i] = strings.TrimSpace(items[i])
+		if items[i] == "" {
+			c.report("E-PARAM-001", at, "${%s} = %q: item %d of the comma-separated list is empty", name, v.Str, i+1)
+			c.skipExpr[root] = true
+			return
+		}
+	}
+	n.Operand.Strings, n.Operand.Param = items, ""
 }
