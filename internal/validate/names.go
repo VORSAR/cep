@@ -51,61 +51,94 @@ func (c *checker) names() {
 		c.annotations(&c.app.Streams[i])
 	}
 	for i := range c.app.Tables {
-		t := &c.app.Tables[i]
-		for _, k := range t.PrimaryKey {
-			if !slices.Contains(attrNames(t.Attrs), k) {
-				c.unknown(t.Pos, "primary key column of "+t.Name, k, attrNames(t.Attrs))
-				continue
-			}
-			// E-TBL-002 (S3.1-2's D3; SPEC rev 7 §4.3): a key column is neither optional nor an object.
-			for ai := range t.Attrs {
-				a := &t.Attrs[ai]
-				if a.Name != k {
-					continue
-				}
-				switch {
-				case a.Optional:
-					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is optional: a null cannot key a row", a.Name, t.Name)
-				case a.Type == event.TObject:
-					c.report("E-TBL-002", a.Pos, "primary key column %s of %s is an object: an object cannot key a row", a.Name,
-						t.Name)
+		c.primaryKey(&c.app.Tables[i])
+	}
+	for _, r := range c.rules() {
+		c.usedNames(r)
+	}
+}
+
+// primaryKey: each primary key column of t is a declared column, and a column that can key a row.
+func (c *checker) primaryKey(t *model.Table) {
+	for _, k := range t.PrimaryKey {
+		if !slices.Contains(attrNames(t.Attrs), k) {
+			c.unknown(t.Pos, "primary key column of "+t.Name, k, attrNames(t.Attrs))
+			continue
+		}
+		c.keyColumn(t, k)
+	}
+}
+
+// keyColumn is E-TBL-002 (S3.1-2's D3; SPEC rev 7 §4.3): a key column is neither optional nor an object.
+func (c *checker) keyColumn(t *model.Table, k string) {
+	for ai := range t.Attrs {
+		a := &t.Attrs[ai]
+		if a.Name != k {
+			continue
+		}
+		switch {
+		case a.Optional:
+			c.report("E-TBL-002", a.Pos, "primary key column %s of %s is optional: a null cannot key a row", a.Name, t.Name)
+		case a.Type == event.TObject:
+			c.report("E-TBL-002", a.Pos, "primary key column %s of %s is an object: an object cannot key a row", a.Name,
+				t.Name)
+		}
+	}
+}
+
+// usedNames: every stream, attribute and capture name rule r uses, in the order the rule is written.
+func (c *checker) usedNames(r *model.Rule) {
+	c.sourceNames(r)
+	c.partitionNames(r)
+	c.targetName(r)
+	c.sortAttr(r)
+	c.captures(r)
+}
+
+// sourceNames: each stream r reads is declared; a rule reading an unknown stream is poisoned.
+func (c *checker) sourceNames(r *model.Rule) {
+	for _, s := range sources(r) {
+		if c.streams[s.Stream] == nil {
+			c.unknown(s.Pos, "stream", s.Stream, streamNames(c.app.Streams))
+			c.poisoned[r] = true
+		}
+	}
+}
+
+// partitionNames: each partition key names a declared stream and its attributes; a key that does not is bad.
+func (c *checker) partitionNames(r *model.Rule) {
+	for i := range r.Partition.Keys {
+		k := &r.Partition.Keys[i]
+		switch s := c.streams[k.Stream]; {
+		case s == nil:
+			c.unknown(k.StreamPos, "stream", k.Stream, streamNames(c.app.Streams))
+			c.badKey[k] = true
+		default:
+			for _, a := range k.Attrs {
+				if attrOf(s, a.Name) == nil {
+					c.unknown(a.Pos, "attribute of "+s.Name, a.Name, attrNames(s.Attrs))
+					c.badKey[k] = true
 				}
 			}
 		}
 	}
-	for _, r := range c.rules() {
-		for _, s := range sources(r) {
-			if c.streams[s.Stream] == nil {
-				c.unknown(s.Pos, "stream", s.Stream, streamNames(c.app.Streams))
-				c.poisoned[r] = true
-			}
+}
+
+// targetName: the stream r inserts into is declared; a rule whose target is not has no target.
+func (c *checker) targetName(r *model.Rule) {
+	if c.streams[r.InsertInto] == nil {
+		c.unknown(r.InsertIntoPos, "stream", r.InsertInto, streamNames(c.app.Streams))
+		c.noTarget[r] = true
+	}
+}
+
+// sortAttr: a sort window's sort attribute is an attribute of its source; a rule whose is not is poisoned.
+func (c *checker) sortAttr(r *model.Rule) {
+	if w := r.Body.Window; r.Body.Kind == model.BodyWindow && w.Kind == model.WindowSort {
+		if s := c.streams[w.Source.Stream]; s != nil && attrOf(s, w.SortAttr) == nil {
+			c.unknown(w.SortAttrPos, "attribute of "+s.Name, w.SortAttr, attrNames(s.Attrs))
+			c.poisoned[r] = true
 		}
-		for i := range r.Partition.Keys {
-			k := &r.Partition.Keys[i]
-			switch s := c.streams[k.Stream]; {
-			case s == nil:
-				c.unknown(k.StreamPos, "stream", k.Stream, streamNames(c.app.Streams))
-				c.badKey[k] = true
-			default:
-				for _, a := range k.Attrs {
-					if attrOf(s, a.Name) == nil {
-						c.unknown(a.Pos, "attribute of "+s.Name, a.Name, attrNames(s.Attrs))
-						c.badKey[k] = true
-					}
-				}
-			}
-		}
-		if c.streams[r.InsertInto] == nil {
-			c.unknown(r.InsertIntoPos, "stream", r.InsertInto, streamNames(c.app.Streams))
-			c.noTarget[r] = true
-		}
-		if w := r.Body.Window; r.Body.Kind == model.BodyWindow && w.Kind == model.WindowSort {
-			if s := c.streams[w.Source.Stream]; s != nil && attrOf(s, w.SortAttr) == nil {
-				c.unknown(w.SortAttrPos, "attribute of "+s.Name, w.SortAttr, attrNames(s.Attrs))
-				c.poisoned[r] = true
-			}
-		}
-		c.captures(r)
 	}
 }
 
