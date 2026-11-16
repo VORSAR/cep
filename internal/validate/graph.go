@@ -13,6 +13,16 @@ import (
 // E-GRAPH-004, E-IDLE-001). By its producers: a stream no rule inserts into is a source, one with no time clause
 // and a producer is derived (E-TIME-001, E-TIME-002, E-GRAPH-003).
 func (c *checker) graph() {
+	producers, readers := c.producersAndReaders()
+	found := c.streamClasses(producers, readers)
+	derived := c.derivedReads(producers)
+	c.unexplainedCycle(found || derived)
+	c.idle()
+}
+
+// producersAndReaders: the rules inserting into each stream (a rule with no target produces nothing), and every
+// stream a rule reads, in its body or as a partition key.
+func (c *checker) producersAndReaders() (map[string][]*model.Rule, map[string]bool) {
 	producers := map[string][]*model.Rule{}
 	readers := map[string]bool{}
 	for _, r := range c.rules() {
@@ -26,76 +36,123 @@ func (c *checker) graph() {
 			readers[k.Stream] = true
 		}
 	}
-	graphFound := false // an E-GRAPH-002 or E-GRAPH-004: every v0.1 cycle has one, so E-GRAPH-001 stays silent
+	return producers, readers
+}
+
+// streamClasses classifies every stream, then checks its time attribute and its text_invisibles declaration. It
+// reports whether any stream was an E-GRAPH-002; every stream is checked whatever an earlier one found.
+func (c *checker) streamClasses(producers map[string][]*model.Rule, readers map[string]bool) bool {
+	found := false
 	for i := range c.app.Streams {
 		s := &c.app.Streams[i]
-		timed, prod := s.Time.Kind != model.TimeNone, producers[s.Name]
-		switch {
-		case !timed && len(prod) == 0:
-			c.report("E-TIME-001", s.Pos, "no rule produces %s, so it is a source stream, and it has no time clause", s.Name)
-		case timed && len(prod) > 0 && (readers[s.Name] || hasAnnotation(s, "source")):
-			graphFound = true
-			for _, r := range prod {
-				c.report("E-GRAPH-002", r.InsertIntoPos,
-					"rule %s inserts into %s, a source stream (it has a time clause and is read)", r.Name, s.Name)
-			}
-		case timed && len(prod) > 0:
-			c.report("E-TIME-002", s.Time.Pos, "%s is only the output of rule %s, so it is derived and takes no time clause",
-				s.Name, prod[0].Name)
-		case !timed && len(prod) > 1:
-			for _, r := range prod[1:] {
-				c.report("E-GRAPH-003", r.InsertIntoPos, "rule %s is a second producer of %s, after rule %s", r.Name, s.Name,
-					prod[0].Name)
-			}
+		if c.classify(s, producers[s.Name], readers[s.Name]) {
+			found = true
 		}
 		c.timeAttr(s)
 		c.invisiblesDecl(s)
 	}
-	derived := func(name string) *model.Rule {
-		if s := c.streams[name]; s != nil && s.Time.Kind == model.TimeNone && len(producers[name]) > 0 {
-			return producers[name][0]
-		}
-		return nil
+	return found
+}
+
+// classify checks s by its time clause and its producers prod; read says a rule reads s. It reports whether s is
+// an E-GRAPH-002.
+func (c *checker) classify(s *model.Stream, prod []*model.Rule, read bool) bool {
+	if s.Time.Kind == model.TimeNone {
+		c.untimedStream(s, prod)
+		return false
 	}
+	return c.timedStream(s, prod, read)
+}
+
+// untimedStream: a stream with no time clause needs a producer (else it is a source, E-TIME-001), and only one
+// (E-GRAPH-003 at each later one).
+func (c *checker) untimedStream(s *model.Stream, prod []*model.Rule) {
+	switch {
+	case len(prod) == 0:
+		c.report("E-TIME-001", s.Pos, "no rule produces %s, so it is a source stream, and it has no time clause", s.Name)
+	case len(prod) > 1:
+		for _, r := range prod[1:] {
+			c.report("E-GRAPH-003", r.InsertIntoPos, "rule %s is a second producer of %s, after rule %s", r.Name, s.Name,
+				prod[0].Name)
+		}
+	}
+}
+
+// timedStream: a stream with a time clause and a producer is a source a rule writes when it is read or a @source
+// (E-GRAPH-002 at each producer, and true), else derived with a time clause it does not take (E-TIME-002).
+func (c *checker) timedStream(s *model.Stream, prod []*model.Rule, read bool) bool {
+	if len(prod) == 0 {
+		return false
+	}
+	if read || hasAnnotation(s, "source") {
+		for _, r := range prod {
+			c.report("E-GRAPH-002", r.InsertIntoPos,
+				"rule %s inserts into %s, a source stream (it has a time clause and is read)", r.Name, s.Name)
+		}
+		return true
+	}
+	c.report("E-TIME-002", s.Time.Pos, "%s is only the output of rule %s, so it is derived and takes no time clause",
+		s.Name, prod[0].Name)
+	return false
+}
+
+// streamRef is a stream a rule reads, at the place it names it.
+type streamRef struct {
+	name string
+	at   model.Pos
+}
+
+// streamRefs: every stream r reads, its body's sources first, then its partition keys'.
+func streamRefs(r *model.Rule) []streamRef {
+	refs := []streamRef{}
+	for _, s := range sources(r) {
+		refs = append(refs, streamRef{s.Stream, s.Pos})
+	}
+	for _, k := range r.Partition.Keys {
+		refs = append(refs, streamRef{k.Stream, k.StreamPos})
+	}
+	return refs
+}
+
+// producerOf is the rule a derived stream (no time clause, a producer) is the output of; nil for any other name.
+func (c *checker) producerOf(name string, producers map[string][]*model.Rule) *model.Rule {
+	if s := c.streams[name]; s != nil && s.Time.Kind == model.TimeNone && len(producers[name]) > 0 {
+		return producers[name][0]
+	}
+	return nil
+}
+
+// derivedReads: a rule reads source streams only (E-GRAPH-004). It reports whether it found one; every rule is
+// checked whatever an earlier one found.
+func (c *checker) derivedReads(producers map[string][]*model.Rule) bool {
+	found := false
 	for _, r := range c.rules() {
 		if c.poisoned[r] {
 			continue
 		}
 		// One finding per rule and derived stream: at its first read in the body, else at its partition key.
-		refs := []struct {
-			name string
-			at   model.Pos
-		}{}
-		for _, s := range sources(r) {
-			refs = append(refs, struct {
-				name string
-				at   model.Pos
-			}{s.Stream, s.Pos})
-		}
-		for _, k := range r.Partition.Keys {
-			refs = append(refs, struct {
-				name string
-				at   model.Pos
-			}{k.Stream, k.StreamPos})
-		}
 		var seen []string
-		for _, ref := range refs {
-			if p := derived(ref.name); p != nil && !slices.Contains(seen, ref.name) {
+		for _, ref := range streamRefs(r) {
+			if p := c.producerOf(ref.name, producers); p != nil && !slices.Contains(seen, ref.name) {
 				seen = append(seen, ref.name)
 				c.report("E-GRAPH-004", ref.at, "rule %s reads %s, the output of rule %s: v0.1 rules read source streams only",
 					r.Name, ref.name, p.Name)
-				graphFound = true
+				found = true
 			}
 		}
 	}
-	// E-GRAPH-001 cannot be reached in v0.1: a cycle passes through a stream some rule both reads and inserts into,
-	// which is E-GRAPH-004 when it is derived and E-GRAPH-002 when it has a time clause. The search stays for
-	// Phase 2's rule chaining, and reports only what nothing else explains.
+	return found
+}
+
+// unexplainedCycle reports a cycle in the rule graph unless graphFound: an E-GRAPH-002 or E-GRAPH-004 explains it.
+func (c *checker) unexplainedCycle(graphFound bool) {
+	// E-GRAPH-001 reports a cycle nothing else explained. In v0.1 that is a cycle through a rule a name finding
+	// poisoned, whose derived read derivedReads skips (TestEachConditionOperandDecides/cycle_through_a_poisoned_rule);
+	// the search stays for Phase 2's rule chaining.
 	if cyc := cycle(c.app.Rules); len(cyc) > 0 && !graphFound {
 		c.report("E-GRAPH-001", c.app.Rules[cyc[0]].InsertIntoPos, "rules %s form a cycle", strings.Join(ruleNames(
 			c.app.Rules, cyc), " -> "))
 	}
-	c.idle()
 }
 
 // invisiblesDecl: a stream may declare `text_invisibles` only as a non-optional bool, the engine's flag's type; any
@@ -132,16 +189,7 @@ func (c *checker) timeAttr(s *model.Stream) {
 // cycle finds a cycle in the rule graph (rule p feeds rule r when r reads p's output), as rule indexes in order,
 // starting from the earliest rule on it; nil when there is none. The walk follows declaration order throughout.
 func cycle(rules []model.Rule) []int {
-	feeds := make([][]int, len(rules))
-	for p := range rules {
-		for r := range rules {
-			for _, s := range read(&rules[r]) {
-				if s == rules[p].InsertInto && !slices.Contains(feeds[p], r) {
-					feeds[p] = append(feeds[p], r)
-				}
-			}
-		}
-	}
+	feeds := feedEdges(rules)
 	const (
 		unseen = iota
 		open
@@ -177,6 +225,21 @@ func cycle(rules []model.Rule) []int {
 	return nil
 }
 
+// feedEdges: for each rule p, the rules that read its output, each once, in declaration order.
+func feedEdges(rules []model.Rule) [][]int {
+	feeds := make([][]int, len(rules))
+	for p := range rules {
+		for r := range rules {
+			for _, s := range read(&rules[r]) {
+				if s == rules[p].InsertInto && !slices.Contains(feeds[p], r) {
+					feeds[p] = append(feeds[p], r)
+				}
+			}
+		}
+	}
+	return feeds
+}
+
 func ruleNames(rules []model.Rule, idx []int) []string {
 	out := make([]string, len(idx)+1)
 	for i, j := range idx {
@@ -194,19 +257,9 @@ func (c *checker) idle() {
 		if c.poisoned[r] {
 			continue
 		}
-		why := ""
 		streams := read(r)
-		switch {
-		case r.Body.Kind == model.BodyWindow:
-			why = "a window"
-		case len(streams) > 1:
-			why = "it reads " + strings.Join(streams, " and ")
-		case r.Body.Kind == model.BodyPattern && slices.ContainsFunc(r.Body.Pattern.Elements, func(
-			e model.PatternElement) bool {
-			return e.Kind == model.ElemAbsence
-		}):
-			why = "an absence"
-		default:
+		why := timerReason(r, streams)
+		if why == "" {
 			continue
 		}
 		for _, name := range streams {
@@ -219,4 +272,20 @@ func (c *checker) idle() {
 				r.Name, why)
 		}
 	}
+}
+
+// timerReason says why rule r, reading streams, holds timers; "" when it holds none.
+func timerReason(r *model.Rule, streams []string) string {
+	switch {
+	case r.Body.Kind == model.BodyWindow:
+		return "a window"
+	case len(streams) > 1:
+		return "it reads " + strings.Join(streams, " and ")
+	case r.Body.Kind == model.BodyPattern && slices.ContainsFunc(r.Body.Pattern.Elements, func(
+		e model.PatternElement) bool {
+		return e.Kind == model.ElemAbsence
+	}):
+		return "an absence"
+	}
+	return ""
 }
