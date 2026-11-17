@@ -84,30 +84,44 @@ func (c *checker) connectorOf(s *model.Stream, annotation string) *connector {
 func (c *checker) annotations(s *model.Stream) {
 	for i := range s.Annotations {
 		a := &s.Annotations[i]
-		var table []connector
-		switch a.Name {
-		case "source":
-			table = c.conn.Sources
-		case "sink":
-			table = c.conn.Sinks
-		default:
+		table, ok := c.connectorTable(a.Name)
+		if !ok {
 			c.unknown(a.Pos, "annotation", "@"+a.Name, []string{"@source", "@sink"})
 			continue
 		}
-		name, typeItem := typeOf(a)
-		kind := find(table, name)
-		if typeItem != nil && kind == nil {
-			c.unknown(typeItem.ValuePos, "@"+a.Name+" type", "'"+name+"'", quoted(connectorNames(table)))
-		}
-		for j := range a.Items {
-			it := &a.Items[j]
-			switch {
-			case len(it.Nested) > 0:
-				c.mapAnnotation(&it.Nested[0])
-			case it.Key == "type":
-			case kind != nil && !slices.Contains(kind.Keys, it.Key):
-				c.unknown(it.Pos, "key of @"+a.Name+"(type = '"+kind.Name+"')", it.Key, append([]string{"type"}, kind.Keys...))
-			}
+		c.connectorItems(a, table)
+	}
+}
+
+// connectorTable is the connector vocabulary an annotation named name opens: the sources for @source, the sinks
+// for @sink; false for any other name.
+func (c *checker) connectorTable(name string) ([]connector, bool) {
+	switch name {
+	case "source":
+		return c.conn.Sources, true
+	case "sink":
+		return c.conn.Sinks, true
+	default:
+		return nil, false
+	}
+}
+
+// connectorItems checks a connector annotation's type against table and each item's key against that type's keys;
+// a nested item goes to mapAnnotation.
+func (c *checker) connectorItems(a *model.Annotation, table []connector) {
+	name, typeItem := typeOf(a)
+	kind := find(table, name)
+	if typeItem != nil && kind == nil {
+		c.unknown(typeItem.ValuePos, "@"+a.Name+" type", "'"+name+"'", quoted(connectorNames(table)))
+	}
+	for j := range a.Items {
+		it := &a.Items[j]
+		switch {
+		case len(it.Nested) > 0:
+			c.mapAnnotation(&it.Nested[0])
+		case it.Key == "type":
+		case kind != nil && !slices.Contains(kind.Keys, it.Key):
+			c.unknown(it.Pos, "key of @"+a.Name+"(type = '"+kind.Name+"')", it.Key, append([]string{"type"}, kind.Keys...))
 		}
 	}
 }
