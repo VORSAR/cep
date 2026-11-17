@@ -215,6 +215,44 @@ func TestEachConditionOperandDecides(t *testing.T) {
 		{name: "two_empty_keyword_items", rules: "param kw string = 'a,,b,';\n" +
 			"rule P intent 'x' from S[k has_any_ci(${kw})] select k insert into Out;\n", want: "E-PARAM-001",
 			msg: "${kw} = \"a,,b,\": item 2 of the comma-separated list is empty", not: "item 4"},
+		// Statements a mutation showed no test watched (owner, 2026-11-16, S1.1c-6 lane V, decision 2).
+		// keyColumn: an optional or object column that is not a key column is no E-TBL-002.
+		{name: "non_key_columns_optional_and_object", rules: "table O (k string, v string optional, o object) primary key (k);\n" +
+			plain},
+		// producersAndReaders: a partition key reads its stream, so a timed stream a rule writes and another keys is a
+		// source written (E-GRAPH-002), not a derived stream with a time clause (E-TIME-002).
+		{name: "timed_produced_read_by_a_partition_key", rules: "stream Q (k string, ts timestamp)" + clocked +
+			"rule A intent 'x' from S select k insert into Q;\nrule B intent 'x' partition by k of S, k of Q ttl 1 hour" +
+			" from every a = S" + patTail + "a.k insert into Out;\n", want: "E-GRAPH-002",
+			msg: "rule A inserts into Q, a source stream"},
+		// streamRefs: a partition key naming a derived stream the body does not read is E-GRAPH-004.
+		{name: "derived_read_by_a_partition_key_only", rules: "stream D (k string, ts timestamp);\n" +
+			"rule A intent 'x' from S select k insert into D;\nrule B intent 'x' partition by k of S, k of D ttl 1 hour" +
+			" from every a = S" + patTail + "a.k insert into Out;\n", want: "E-GRAPH-004",
+			msg: "rule B reads D, the output of rule A"},
+		// repeatedAttrs, repeatedStreams: the key they report leaves the live keys, so its parts' types are not compared.
+		{name: "key_naming_an_attribute_twice_is_not_typed", rules: "rule P intent 'x' partition by (k, k) of S, (k, m) of R" +
+			" ttl 1 hour from every a = S -> b = R" + patTail + "a.k insert into Out;\n", want: "E-PART-006"},
+		{name: "stream_keyed_again_is_not_typed", rules: "rule P intent 'x' partition by k of S, n of S, k of R ttl 1 hour" +
+			" from every a = S -> b = R" + patTail + "a.k insert into Out;\n", want: "E-PART-004"},
+		// boundSlots: the ttl is a bound slot; ttlBounds: the ttl covers `output first every`.
+		{name: "zero_ttl", rules: "rule P intent 'x' partition by k of S ttl 0 ms from every a = S" + patTail +
+			"a.k insert into Out;\n", want: "E-DUR-003", msg: "is zero"},
+		{name: "ttl_below_output_first_every", rules: "rule P intent 'x' partition by k of S ttl 1 min from every a = S" +
+			" within 1 min after match skip past last late events drop select a.k output first every 5 min insert into Out;\n",
+			want: "E-TTL-002", msg: "below its rate-limit interval `output first every` 5 min"},
+		// lateness: a window's own late-events clause.
+		{name: "window_late_events_allow", rules: "rule P intent 'x' partition by k of S ttl 1 hour from S window" +
+			" sort(3, n, desc) emit on change late events allow 0 ms select k insert into Out;\n", want: "E-LATE-002"},
+		// givenRecord: a field it reports is not checked further, though its value would be a second finding.
+		{name: "given_stream_invisibles_field_wrong_type", rules: "stream SI (k string, text_invisibles bool, ts timestamp)" +
+			clocked + expectRule("SI", "given SI [ {k: 'a', text_invisibles: 'x', ts: "+given+"} ]"),
+			want: "E-EXP-002", msg: "SI.text_invisibles is computed by the engine"},
+		{name: "given_field_twice_wrong_type", rules: expectRule("S", "given S [ {k: 'a', n: 1, n: 'x', ts: "+given+"} ]"),
+			want: "E-EXP-002", msg: "field n is written twice in one record"},
+		// callName: a call's registry name keeps its namespace, so nope:count is unknown, not the aggregate count.
+		{name: "namespaced_unknown_function", rules: "rule P intent 'x' from S[nope:count() > 1] select k insert into Out;\n",
+			want: "E-NAME-001", msg: "unknown function nope:count", not: "aggregate"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
