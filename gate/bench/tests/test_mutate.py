@@ -89,6 +89,22 @@ func TestHold(t *testing.T) {
 }
 """
 
+GUARD = """\
+package g
+
+import (
+\t"testing"
+
+\t"example.com/m/m"
+)
+
+func TestGuard(t *testing.T) {
+\tif m.Add(2, 3) != 5 {
+\t\tt.Fatal("m.Add(2, 3) != 5")
+\t}
+}
+"""
+
 FIND = "return a + b"
 CAUGHT = "return a - b"
 BROKEN = "return a +"
@@ -105,7 +121,7 @@ class Base(unittest.TestCase):
         self.repo = os.path.join(self.tmp, "repo")
         os.mkdir(self.repo)
         self.env = {**os.environ, **support.GIT_ENV}
-        support.write(self.repo, {"go.mod": MODULE, "m/m.go": SOURCE, "m/m_test.go": TESTS})
+        support.write(self.repo, {"go.mod": MODULE, "m/m.go": SOURCE, "m/m_test.go": TESTS, "g/g_test.go": GUARD})
         self.git("init", "-q")
         self.git("add", "-A")
         self.git("commit", "-q", "-m", "c")
@@ -167,6 +183,34 @@ class Outcomes(Base):
         code, out = self.single("TestNoSuchTest")
         self.assertEqual(code, 1, out)
         self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+
+
+class OtherPackage(Base):
+    """--pkg: the designated test lives in another package (a guard test of the mutated package's contract)."""
+
+    def test_a_mutation_caught_by_a_test_in_another_package_is_red(self):
+        code, out = self.single("TestGuard", CAUGHT, "--pkg", "g")
+        self.assertEqual(code, 0, out)
+        self.assertIn("package: ./g", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_without_pkg_the_files_own_package_runs_and_finds_no_such_test(self):
+        code, out = self.single("TestGuard")
+        self.assertEqual(code, 1, out)
+        self.assertIn("package: ./m", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+
+    def test_a_batch_entry_takes_its_own_pkg(self):
+        path = os.path.join(self.tmp, "batch.json")
+        entries = [
+            {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestGuard", "pkg": "g"},
+            {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"},
+        ]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(entries, f)
+        code, out = self.mutate("--batch", path)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "counts: red 2, green 0, timeout 0, invalid 0", out)
 
 
 class Refusals(Base):
@@ -231,6 +275,14 @@ class Refusals(Base):
     def test_a_subtest_name_is_refused(self):
         out = self.refused("--file", "m/m.go", "--find", FIND, "--replace", CAUGHT, "--test", "TestAdd/sub")
         self.assertIn("TestAdd/sub", out)
+
+    def test_a_pkg_that_is_not_a_tracked_directory_is_refused(self):
+        for pkg, reason in (("nope", "not a directory"), ("../m", "repo-relative"), ("/abs", "repo-relative")):
+            with self.subTest(pkg=pkg):
+                out = self.refused(
+                    "--file", "m/m.go", "--find", FIND, "--replace", CAUGHT, "--test", "TestAdd", "--pkg", pkg
+                )
+                self.assertIn(reason, out)
 
     def test_a_batch_entry_with_an_extra_key_is_refused_before_any_build(self):
         good = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
