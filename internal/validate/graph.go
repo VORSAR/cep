@@ -123,13 +123,10 @@ func (c *checker) producerOf(name string, producers map[string][]*model.Rule) *m
 }
 
 // derivedReads: a rule reads source streams only (E-GRAPH-004). It reports whether it found one; every rule is
-// checked whatever an earlier one found.
+// checked whatever an earlier one found, a poisoned one too (producerOf ignores an unknown stream).
 func (c *checker) derivedReads(producers map[string][]*model.Rule) bool {
 	found := false
 	for _, r := range c.rules() {
-		if c.poisoned[r] {
-			continue
-		}
 		// One finding per rule and derived stream: at its first read in the body, else at its partition key.
 		var seen []string
 		for _, ref := range streamRefs(r) {
@@ -144,15 +141,25 @@ func (c *checker) derivedReads(producers map[string][]*model.Rule) bool {
 	return found
 }
 
-// unexplainedCycle reports a cycle in the rule graph unless graphFound: an E-GRAPH-002 or E-GRAPH-004 explains it.
+// unexplainedCycle reports a cycle in the rule graph unless graphFound (an E-GRAPH-002 or E-GRAPH-004 explains it)
+// or a rule on it has a name finding.
 func (c *checker) unexplainedCycle(graphFound bool) {
-	// E-GRAPH-001 reports a cycle nothing else explained. In v0.1 that is a cycle through a rule a name finding
-	// poisoned, whose derived read derivedReads skips (TestEachConditionOperandDecides/cycle_through_a_poisoned_rule);
-	// the search stays for Phase 2's rule chaining.
-	if cyc := cycle(c.app.Rules); len(cyc) > 0 && !graphFound {
+	// E-GRAPH-001 reports a cycle nothing else explained. It is unreachable in v0.1 (SPEC §3.3): a cycle over declared
+	// streams passes through a rule reading a derived stream, which derivedReads reports as E-GRAPH-004, and a cycle
+	// through an undeclared stream passes through a rule with a name finding. It stays for Phase 2's rule chaining.
+	if cyc := cycle(c.app.Rules); len(cyc) > 0 && !graphFound && !c.namedFault(cyc) {
 		c.report("E-GRAPH-001", c.app.Rules[cyc[0]].InsertIntoPos, "rules %s form a cycle", strings.Join(ruleNames(
 			c.app.Rules, cyc), " -> "))
 	}
+}
+
+// namedFault says whether a rule of cyc (indexes into the rules) has a name finding already reported: an unknown
+// source stream (poisoned) or an unknown target (noTarget) (owner, 2026-11-16, S1.1c-6 lane V, decision 3).
+func (c *checker) namedFault(cyc []int) bool {
+	return slices.ContainsFunc(cyc, func(i int) bool {
+		r := &c.app.Rules[i]
+		return c.poisoned[r] || c.noTarget[r]
+	})
 }
 
 // invisiblesDecl: a stream may declare `text_invisibles` only as a non-optional bool, the engine's flag's type; any
