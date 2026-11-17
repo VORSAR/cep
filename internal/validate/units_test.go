@@ -319,13 +319,13 @@ func TestCycle(t *testing.T) {
 	if got := strings.Join(ruleNames(cases[2].rules, cases[2].want), " -> "); got != "A -> C -> B -> D -> A" {
 		t.Errorf("names: %s", got)
 	}
-	// Through Check with no E-GRAPH-002 or -004 to explain it, a cycle is reported (no v0.1 program builds one):
-	// streams with no time clause that nothing marks as produced cannot occur, so build the App by hand.
+	// With nothing to explain it, a cycle is reported. No v0.1 program builds one (over declared streams it is an
+	// E-GRAPH-002 or -004; through an undeclared one its rules have name findings), so build the checker by hand and
+	// skip names: X is undeclared, so producerOf finds no producer, and no rule is poisoned or without a target.
 	c := &checker{app: &model.App{Rules: []model.Rule{rule("A", "X", "X")}}, conn: builtin, streams: map[string]*model.Stream{},
 		tables: map[string]*model.Table{}, params: map[string]*model.Param{}, noTarget: map[*model.Rule]bool{},
 		poisoned: map[*model.Rule]bool{}}
 	c.app.Rules[0].Body.Source.Stream = "X"
-	c.poisoned[&c.app.Rules[0]] = true // so no E-GRAPH-004 runs for it
 	c.graph()
 	if len(c.diags) != 1 || c.diags[0].Code != "E-GRAPH-001" || !strings.Contains(c.diags[0].Msg, "A -> A") {
 		t.Fatalf("got %v", c.diags)

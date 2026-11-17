@@ -169,11 +169,6 @@ func TestEachConditionOperandDecides(t *testing.T) {
 			"rule P intent 'x' partition by u of A, v of B ttl 1 hour from every a = A -> b = B" + patTail +
 			"b.u as k insert into Out;\n", want: "E-NULL-003"},
 		// graph: G1-G7 over the time clause and the producers; a derived read.
-		// A rule poisoned by its unknown sort attribute skips the derived-read pass, so its self-read is the cycle
-		// finding; a timed stream with no producer (S, read) must not count as having explained it.
-		{name: "cycle_through_a_poisoned_rule", rules: "stream X (k string, ts timestamp);\n" +
-			"rule A intent 'x' partition by k of X ttl 1 hour from X window sort(3, nope, desc) emit on change late events drop" +
-			" select k insert into X;\n" + plain, want: "E-NAME-001 E-GRAPH-001", msg: "rules A -> A form a cycle"},
 		{name: "G1_untimed_unproduced", rules: "stream U (k string);\n" + plain, want: "E-TIME-001"},
 		{name: "G2_untimed_one_producer", rules: plain},
 		{name: "G3_untimed_two_producers", rules: "stream D (k string, ts timestamp);\n" +
@@ -261,6 +256,51 @@ func TestEachConditionOperandDecides(t *testing.T) {
 			t.Fatalf("got %v, want none", diags)
 		}
 	})
+	// derivedReads: a rule a name finding poisoned still reads source streams only, so its read of its own output is
+	// E-GRAPH-004 at its first read in the body (not at its partition key), and no E-GRAPH-001 (SPEC §3.3).
+	t.Run("a_poisoned_rule_reading_its_own_output_is_E_GRAPH_004", func(t *testing.T) {
+		t.Parallel()
+		src := base + "stream X (k string, ts timestamp);\nrule A intent 'x' partition by k of X ttl 1 hour from X window" +
+			" sort(3, nope, desc) emit on change late events drop select k insert into X;\n" + plain
+		want := []string{"E-GRAPH-004@" + posOf(t, src, "from X", 1, 5), "E-NAME-001@" + posOf(t, src, "nope", 1, 0)}
+		_, diags := Check(parse(t, src), Options{})
+		if got := codesAt(diags); strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Fatalf("got %v, want %v\n%v", got, want, diags)
+		}
+		if msg := "rule A reads X, the output of rule A: v0.1 rules read source streams only"; diags[0].Msg != msg {
+			t.Fatalf("message %q, want %q", diags[0].Msg, msg)
+		}
+	})
+	// unexplainedCycle: a cycle through an undeclared stream passes through rules with a name finding (an unknown
+	// source, an unknown target), so it is those E-NAME-001 findings alone, never E-GRAPH-001 (SPEC §3.3; owner,
+	// 2026-11-16, decision 3).
+	type at struct {
+		code, tok string
+	}
+	undeclared := []struct {
+		name, rules string
+		want        []at
+	}{
+		{name: "undeclared_stream_cycle_one_rule", rules: "rule A intent 'x' from X select k insert into X;\n" + plain,
+			want: []at{{"E-NAME-001", "from X"}, {"E-NAME-001", "into X"}}},
+		{name: "undeclared_stream_cycle_two_rules", rules: "rule A intent 'x' from X select k insert into Y;\n" +
+			"rule B intent 'x' from Y select k insert into X;\n" + plain,
+			want: []at{{"E-NAME-001", "from X"}, {"E-NAME-001", "into Y"}, {"E-NAME-001", "from Y"}, {"E-NAME-001", "into X"}}},
+	}
+	for _, u := range undeclared {
+		t.Run(u.name, func(t *testing.T) {
+			t.Parallel()
+			src := base + u.rules
+			want := make([]string, 0, len(u.want))
+			for _, w := range u.want {
+				want = append(want, w.code+"@"+posOf(t, src, w.tok, 1, 5)) // the stream name, after `from ` or `into `
+			}
+			_, diags := Check(parse(t, src), Options{})
+			if got := codesAt(diags); strings.Join(got, " ") != strings.Join(want, " ") {
+				t.Fatalf("got %v, want %v\n%v", got, want, diags)
+			}
+		})
+	}
 	// cycle: a rule reading one producer's output from two steps is one edge, so the cycle names each rule once.
 	t.Run("cycle_two_steps_one_edge", func(t *testing.T) {
 		t.Parallel()
