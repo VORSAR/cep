@@ -24,23 +24,43 @@ func (c *checker) regex(root *model.Expr) {
 	})
 }
 
-// unsupported finds the first construct outside RE2 in a pattern: a backreference or a lookaround.
+// unsupported finds the first construct outside RE2 in a pattern: a backreference or a lookaround. An escaped
+// character is skipped, so `\(?=` is no lookahead.
 func unsupported(p string) (string, int) {
 	for i := 0; i < len(p); i++ {
-		switch {
-		case p[i] == '\\' && i+1 < len(p):
-			if c := p[i+1]; c >= '1' && c <= '9' {
-				return fmt.Sprintf("the backreference \\%c", c), i
-			}
-			if strings.HasPrefix(p[i+1:], "k<") {
-				return "a named backreference", i
+		if p[i] == '\\' && i+1 < len(p) {
+			if w := backreference(p[i+1:]); w != "" {
+				return w, i
 			}
 			i++
-		case strings.HasPrefix(p[i:], "(?=") || strings.HasPrefix(p[i:], "(?!"):
-			return "a lookahead", i
-		case strings.HasPrefix(p[i:], "(?<=") || strings.HasPrefix(p[i:], "(?<!"):
-			return "a lookbehind", i
+			continue
+		}
+		if w := lookaround(p[i:]); w != "" {
+			return w, i
 		}
 	}
 	return "", 0
+}
+
+// backreference names the backreference an escape's rest (the text after a backslash) starts with: a digit 1-9 or
+// a named `k<`; "" when it is none.
+func backreference(rest string) string {
+	if c := rest[0]; c >= '1' && c <= '9' {
+		return fmt.Sprintf("the backreference \\%c", c)
+	}
+	if strings.HasPrefix(rest, "k<") {
+		return "a named backreference"
+	}
+	return ""
+}
+
+// lookaround names the lookahead or lookbehind s starts with; "" when it is none.
+func lookaround(s string) string {
+	switch {
+	case strings.HasPrefix(s, "(?=") || strings.HasPrefix(s, "(?!"):
+		return "a lookahead"
+	case strings.HasPrefix(s, "(?<=") || strings.HasPrefix(s, "(?<!"):
+		return "a lookbehind"
+	}
+	return ""
 }
