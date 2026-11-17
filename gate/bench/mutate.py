@@ -1,11 +1,13 @@
 """One mutation, its one designated test, and a tracked file never written (S1.1c-6 design note §2.3, §3.3).
 
     python3.15 -I -B gate/bench/mutate.py --file <repo-relative go file> --find <exact text> --replace <text> \\
-        --test <TopLevelTestName> [--timeout 120s] [--race] [--cpu <list>] [--repeat N --load]
+        --test <TopLevelTestName> [--pkg <dir>] [--timeout 120s] [--race] [--cpu <list>] [--repeat N --load]
     python3.15 -I -B gate/bench/mutate.py --batch <mutations.json> [--timeout 120s] [--race] [--cpu <list>]
 
-Run from the repo's top level. Refused (exit 2) before any go command: a file not tracked or differing from HEAD, a
-find text occurring other than exactly once, a test name that is not a top-level Test identifier, a malformed batch
+Run from the repo's top level. The designated test runs in the file's own package, or in --pkg's (a batch entry's
+"pkg"), since a guard test of a package's contract may live in a package that imports it. Refused (exit 2) before any
+go command: a file not tracked or differing from HEAD, a find text occurring other than exactly once, a --pkg that is
+not a tracked directory, a test name that is not a top-level Test identifier, a malformed batch
 (every entry is checked before the first build). The mutant is written outside the tree and built through
 `go test -overlay`, so the tracked file is never opened for writing. Outcomes, judged in order: timeout (go test's
 own -timeout backstop), red (the line `--- FAIL: <Test> (`), green (exit 0 and `--- PASS: <Test> (`), invalid
@@ -36,7 +38,7 @@ WALL_EXTRA_S = 120.0
 LOOKUP_TIMEOUT_S = 60.0
 TAIL = 20
 OUTCOMES = ("red", "green", "timeout", "invalid")
-ENTRY_KEYS = frozenset({"file", "find", "replace", "test", "note"})
+ENTRY_KEYS = frozenset({"file", "find", "replace", "test", "note", "pkg"})
 REQUIRED_KEYS = frozenset({"file", "find", "replace", "test"})
 _DURATION = re.compile(r"(?:[0-9]+(?:\.[0-9]*)?(?:ns|us|µs|ms|s|m|h))+")
 _UNIT_S = {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "ms": 1e-3, "s": 1.0, "m": 60.0, "h": 3600.0}
@@ -58,6 +60,7 @@ class Mutation:
     replace: str
     test: str
     note: str
+    pkg: str
     original: str
     mutant: str
 
@@ -85,7 +88,7 @@ def _occurrences(text: str, find: str) -> int:
     return count
 
 
-def check(file: str, find: str, replace: str, test: str, note: str = "") -> Mutation:
+def check(file: str, find: str, replace: str, test: str, note: str = "", pkg: str | None = None) -> Mutation:
     """Every refusal of one mutation, before any go command."""
     if not test.isidentifier() or not test.startswith("Test"):
         raise Refused(f"--test {test!r} is not a top-level Test identifier")
@@ -93,6 +96,12 @@ def check(file: str, find: str, replace: str, test: str, note: str = "") -> Muta
         raise Refused(f"--file {file!r} is not a repo-relative path")
     if not find:
         raise Refused("--find is empty")
+    if pkg is None:
+        pkg = os.path.dirname(file) or "."
+    elif not pkg or os.path.isabs(pkg) or ".." in pkg.split("/"):
+        raise Refused(f"--pkg {pkg!r} is not a repo-relative directory")
+    elif not os.path.isdir(pkg) or not _git("ls-files", "--", pkg).stdout.strip():
+        raise Refused(f"--pkg {pkg!r} is not a directory holding tracked files")
     if _git("ls-files", "--error-unmatch", "--", file).exit != 0:
         raise Refused(f"{file} is not tracked")
     if _git("diff", "--quiet", "HEAD", "--", file).exit != 0:
@@ -102,7 +111,7 @@ def check(file: str, find: str, replace: str, test: str, note: str = "") -> Muta
     count = _occurrences(original, find)
     if count != 1:
         raise Refused(f"--find occurs {count} times in {file}, not exactly once")
-    return Mutation(file, find, replace, test, note, original, original.replace(find, replace, 1))
+    return Mutation(file, find, replace, test, note, pkg, original, original.replace(find, replace, 1))
 
 
 def read_batch(path: str) -> list[Mutation]:
@@ -125,7 +134,14 @@ def read_batch(path: str) -> list[Mutation]:
             raise Refused(f"batch entry {index}: every value must be a string")
         try:
             mutations.append(
-                check(entry["file"], entry["find"], entry["replace"], entry["test"], entry.get("note", ""))
+                check(
+                    entry["file"],
+                    entry["find"],
+                    entry["replace"],
+                    entry["test"],
+                    entry.get("note", ""),
+                    entry.get("pkg"),
+                )
             )
         except Refused as e:
             raise Refused(f"batch entry {index}: {e}") from None
@@ -172,7 +188,7 @@ def run_one(m: Mutation, args: argparse.Namespace, scratch: str) -> tuple[str, g
     with open(overlay, "w", encoding="utf-8") as f:
         json.dump({"Replace": {os.path.join(top, m.file): mutant}}, f, sort_keys=True, ensure_ascii=False)
         f.write("\n")
-    package = "./" + (os.path.dirname(m.file) or ".")
+    package = "./" + m.pkg
     argv = ["go", "test", f"-overlay={overlay}", "-count=1", "-v", "-run", f"^{m.test}$", "-timeout", args.timeout]
     if args.race:
         argv.append("-race")
@@ -197,6 +213,7 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--find")
     parser.add_argument("--replace")
     parser.add_argument("--test")
+    parser.add_argument("--pkg")
     parser.add_argument("--batch")
     parser.add_argument("--timeout", default="120s")
     parser.add_argument("--race", action="store_true")
@@ -206,8 +223,8 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     args = parser.parse_args(argv)
     single = (args.file, args.find, args.replace, args.test)
     if args.batch is not None:
-        if any(value is not None for value in single) or args.repeat is not None or args.load:
-            raise Refused("--batch takes no --file, --find, --replace, --test, --repeat or --load")
+        if any(value is not None for value in (*single, args.pkg, args.repeat)) or args.load:
+            raise Refused("--batch takes no --file, --find, --replace, --test, --pkg, --repeat or --load")
     elif any(value is None for value in single):
         raise Refused("--file, --find, --replace and --test are all required without --batch")
     if (args.repeat is None) != (not args.load):
@@ -225,14 +242,14 @@ def _print(lines: Sequence[str]) -> None:
 
 
 def single(m: Mutation, args: argparse.Namespace, scratch: str) -> tuple[int, list[str]]:
-    _print([f"test: {m.test}", *diff(m), *record()])
+    _print([f"test: {m.test}", f"package: ./{m.pkg}", *diff(m), *record()])
     outcome, result = run_one(m, args, scratch)
     lines = tail(result) if outcome == "invalid" else []
     return (0 if outcome == "red" else 1), [*lines, f"outcome: {outcome}"]
 
 
 def repeat(m: Mutation, args: argparse.Namespace, scratch: str) -> tuple[int, list[str]]:
-    _print([f"test: {m.test}", *diff(m), *record()])
+    _print([f"test: {m.test}", f"package: ./{m.pkg}", *diff(m), *record()])
     caught = 0
     with stress.hogs(stress.hog_count(), sys.executable) as procs:
         _print([f"load: {len(procs)} hogs, pids {' '.join(str(p) for p in sorted(p.pid for p in procs))}"])
@@ -247,7 +264,7 @@ def batch(mutations: list[Mutation], args: argparse.Namespace, scratch: str) -> 
     _print(record())
     counts = dict.fromkeys(OUTCOMES, 0)
     for index, m in enumerate(mutations, 1):
-        _print([f"entry {index}", f"note: {m.note}", f"test: {m.test}", *diff(m)])
+        _print([f"entry {index}", f"note: {m.note}", f"test: {m.test}", f"package: ./{m.pkg}", *diff(m)])
         with tempfile.TemporaryDirectory(dir=scratch) as own:
             outcome, result = run_one(m, args, own)
         counts[outcome] += 1
@@ -260,7 +277,7 @@ def mutate(args: argparse.Namespace) -> tuple[int, list[str]]:
     if args.batch is not None:
         mutations = read_batch(args.batch)
     else:
-        mutations = [check(args.file, args.find, args.replace, args.test)]
+        mutations = [check(args.file, args.find, args.replace, args.test, pkg=args.pkg)]
     with tempfile.TemporaryDirectory(prefix="mutate-") as scratch:
         if args.batch is not None:
             return batch(mutations, args, scratch)
