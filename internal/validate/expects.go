@@ -31,37 +31,54 @@ func (c *checker) expectBlock(r *model.Rule, n int, b *model.Expect) {
 	for gi := range b.Givens {
 		g := &b.Givens[gi]
 		if g.Table {
-			t := c.tables[g.Name]
-			switch {
-			case t == nil:
-				c.mistake(g.NamePos, at+c.unknownText("table", g.Name, tableNames(c.app.Tables)))
-			case !readsTable(r, g.Name):
-				c.mistake(g.NamePos, at+fmt.Sprintf("rule %s does not read table %s", r.Name, g.Name))
-			default:
-				for ri := range g.Records {
-					c.givenRecord(at, g.Name, t.Attrs, "", &g.Records[ri])
-				}
-			}
+			c.givenTable(r, at, g)
 			continue
 		}
-		s := c.streams[g.Name]
-		switch {
-		case s == nil:
-			c.mistake(g.NamePos, at+c.unknownText("stream", g.Name, streamNames(c.app.Streams)))
-		case !slices.Contains(read(r), g.Name):
-			c.mistake(g.NamePos, at+fmt.Sprintf("rule %s does not read %s", r.Name, g.Name))
-		case s.Time.Kind == model.TimeArrival:
-			c.mistake(g.NamePos, at+fmt.Sprintf("%s is stamped on arrival; a block cannot give it events", g.Name))
-		case given[g.Name]:
-			c.mistake(g.NamePos, at+fmt.Sprintf("%s is given twice; give each stream one list", g.Name))
-		default:
-			given[g.Name] = true
-			for ri := range g.Records {
-				c.givenRecord(at, g.Name, s.Attrs, s.Time.Attr, &g.Records[ri])
-			}
+		c.givenStream(r, at, g, given)
+	}
+	c.thenSection(r, at, &b.Then)
+}
+
+// givenTable checks a given-table section: the table must exist (X1) and be one the rule reads (X7) before its
+// records are checked.
+func (c *checker) givenTable(r *model.Rule, at string, g *model.Given) {
+	t := c.tables[g.Name]
+	switch {
+	case t == nil:
+		c.mistake(g.NamePos, at+c.unknownText("table", g.Name, tableNames(c.app.Tables)))
+	case !readsTable(r, g.Name):
+		c.mistake(g.NamePos, at+fmt.Sprintf("rule %s does not read table %s", r.Name, g.Name))
+	default:
+		for ri := range g.Records {
+			c.givenRecord(at, g.Name, t.Attrs, "", &g.Records[ri])
 		}
 	}
-	th := &b.Then
+}
+
+// givenStream checks a given section: the stream must exist (X1), be one the rule reads (X7), not be stamped on
+// arrival (X8) and not be given twice (X9); only a stream that passes is marked in given and has its records checked.
+func (c *checker) givenStream(r *model.Rule, at string, g *model.Given, given map[string]bool) {
+	s := c.streams[g.Name]
+	switch {
+	case s == nil:
+		c.mistake(g.NamePos, at+c.unknownText("stream", g.Name, streamNames(c.app.Streams)))
+	case !slices.Contains(read(r), g.Name):
+		c.mistake(g.NamePos, at+fmt.Sprintf("rule %s does not read %s", r.Name, g.Name))
+	case s.Time.Kind == model.TimeArrival:
+		c.mistake(g.NamePos, at+fmt.Sprintf("%s is stamped on arrival; a block cannot give it events", g.Name))
+	case given[g.Name]:
+		c.mistake(g.NamePos, at+fmt.Sprintf("%s is given twice; give each stream one list", g.Name))
+	default:
+		given[g.Name] = true
+		for ri := range g.Records {
+			c.givenRecord(at, g.Name, s.Attrs, s.Time.Attr, &g.Records[ri])
+		}
+	}
+}
+
+// thenSection checks the then section: the stream must exist (X1) and be the rule's target (X7) before its records
+// are checked.
+func (c *checker) thenSection(r *model.Rule, at string, th *model.Then) {
 	s := c.streams[th.Name]
 	switch {
 	case s == nil:
@@ -94,20 +111,36 @@ func (c *checker) givenRecord(at, owner string, attrs []model.Attr, timeAttr str
 			continue
 		}
 		seen[f.Name] = true
-		required := !a.Optional || a.Name == timeAttr
-		switch {
-		case f.Value.Kind == model.LitNull && required:
-			c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is required; the block gives it null", owner, f.Name))
-		case f.Value.Kind != model.LitNull:
-			c.blockValue(at, owner, a, f)
-		}
+		c.givenValue(at, owner, a, f, timeAttr)
 	}
+	for _, name := range leftOut(attrs, timeAttr, seen) {
+		c.mistake(rec.Pos, at+fmt.Sprintf("%s.%s is required; the block leaves it out", owner, name))
+	}
+}
+
+// givenValue checks a given field's value against its attribute: null only where the attribute is optional and not
+// the time attribute (X4), any other value through blockValue.
+func (c *checker) givenValue(at, owner string, a *model.Attr, f *model.Field, timeAttr string) {
+	required := !a.Optional || a.Name == timeAttr
+	switch {
+	case f.Value.Kind == model.LitNull && required:
+		c.mistake(f.ValuePos, at+fmt.Sprintf("%s.%s is required; the block gives it null", owner, f.Name))
+	case f.Value.Kind != model.LitNull:
+		c.blockValue(at, owner, a, f)
+	}
+}
+
+// leftOut names, in attrs order, the required attributes a record leaves out: those not in seen, other than an
+// optional one that is not the time attribute and, for a stream, the engine-computed invisibles attribute.
+func leftOut(attrs []model.Attr, timeAttr string, seen map[string]bool) []string {
+	var names []string
 	for _, a := range attrs {
 		if seen[a.Name] || (a.Optional && a.Name != timeAttr) || (timeAttr != "" && a.Name == event.InvisiblesAttr) {
 			continue
 		}
-		c.mistake(rec.Pos, at+fmt.Sprintf("%s.%s is required; the block leaves it out", owner, a.Name))
+		names = append(names, a.Name)
 	}
+	return names
 }
 
 // thenRecord checks one then-record against the target stream's attributes (X2, X6, X3, X5); an omitted attribute is
