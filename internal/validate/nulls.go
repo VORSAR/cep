@@ -14,6 +14,17 @@ import (
 // the lint E-NULL-002. An attribute the filter tests with `is [not] null` is handled; one wrapped in coalesce is no
 // direct operand.
 func (c *checker) nulls(root *model.Expr, sc *scope, inAbsence bool) {
+	handled := nullTested(root, sc)
+	walk(root, func(n *model.Expr) {
+		if !nullBlind(n, inAbsence) {
+			return
+		}
+		c.nullFinding(n, optionalOperands(n, sc, handled), inAbsence)
+	})
+}
+
+// nullTested is the attributes root tests with `is [not] null`, complete before any comparison is judged.
+func nullTested(root *model.Expr, sc *scope) map[*model.Attr]bool {
 	handled := map[*model.Attr]bool{}
 	walk(root, func(n *model.Expr) {
 		if n.Kind == model.ExprIsNull && isAttr(n.Args[0]) {
@@ -22,31 +33,41 @@ func (c *checker) nulls(root *model.Expr, sc *scope, inAbsence bool) {
 			}
 		}
 	})
-	walk(root, func(n *model.Expr) {
-		blind := n.Kind == model.ExprIn || (n.Kind == model.ExprCompare && (inAbsence || n.Op == "!="))
-		if !blind {
-			return
+	return handled
+}
+
+// nullBlind says whether a null operand makes n false unseen: membership always; a comparison inside an absence, or
+// `!=` anywhere.
+func nullBlind(n *model.Expr, inAbsence bool) bool {
+	return n.Kind == model.ExprIn || (n.Kind == model.ExprCompare && (inAbsence || n.Op == "!="))
+}
+
+// optionalOperands names, in argument order, n's direct attribute operands that are optional and not handled.
+func optionalOperands(n *model.Expr, sc *scope, handled map[*model.Attr]bool) []string {
+	var offenders []string
+	for i := range n.Args {
+		if !isAttr(n.Args[i]) {
+			continue
 		}
-		var offenders []string
-		for i := range n.Args {
-			if !isAttr(n.Args[i]) {
-				continue
-			}
-			if a := sc.attr(&n.Args[i]); a != nil && a.Optional && !handled[a] {
-				offenders = append(offenders, dotted(n.Args[i]))
-			}
+		if a := sc.attr(&n.Args[i]); a != nil && a.Optional && !handled[a] {
+			offenders = append(offenders, dotted(n.Args[i]))
 		}
-		switch {
-		case len(offenders) == 0:
-		case inAbsence:
-			c.report("E-NULL-001", n.Pos, "comparison over the optional attribute %s inside an absence: a null makes it "+
-				"false, so the absence would fire; wrap it in coalesce(...) or test `is null` explicitly", strings.Join(offenders,
-				", "))
-		default:
-			c.report("E-NULL-002", n.Pos, "%s is optional, and `%s` is false when it is null; wrap it in coalesce(...) "+
-				"or test `is null` explicitly", strings.Join(offenders, ", "), opName(n))
-		}
-	})
+	}
+	return offenders
+}
+
+// nullFinding reports n's offenders, if any: E-NULL-001 inside an absence, else the lint E-NULL-002.
+func (c *checker) nullFinding(n *model.Expr, offenders []string, inAbsence bool) {
+	switch {
+	case len(offenders) == 0:
+	case inAbsence:
+		c.report("E-NULL-001", n.Pos, "comparison over the optional attribute %s inside an absence: a null makes it "+
+			"false, so the absence would fire; wrap it in coalesce(...) or test `is null` explicitly", strings.Join(offenders,
+			", "))
+	default:
+		c.report("E-NULL-002", n.Pos, "%s is optional, and `%s` is false when it is null; wrap it in coalesce(...) "+
+			"or test `is null` explicitly", strings.Join(offenders, ", "), opName(n))
+	}
 }
 
 func opName(n *model.Expr) string {
@@ -68,45 +89,59 @@ func (c *checker) mayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
 	case model.ExprLiteral:
 		return n.Lit.Kind == model.LitNull
 	case model.ExprAttr, model.ExprRaw:
-		if n.Kind == model.ExprAttr && n.Name == event.InvisiblesAttr {
-			return false // the engine's flag: a non-optional bool, declared or not (S3.2b's Q3)
-		}
-		slot, i, _, ok := sc.Attr(n.Qualifier, n.Name)
-		if !ok {
-			return true
-		}
-		st := sc.slots[slot]
-		if !st.Attrs[i].Optional {
-			return false
-		}
-		// A rule's own partition key is never null where the rule runs: a null key never reaches it (SEMANTICS §1.1,
-		// §9; break-it L1 of S3.2b-1).
-		return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool {
-			return k.Stream == st.Name && k.Has(
-				n.Name)
-		})
+		return attrMayBeNull(n, sc, r)
 	case model.ExprNeg, model.ExprArith:
-		return slices.ContainsFunc(n.Args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
+		return c.anyMayBeNull(n.Args, sc, r)
 	case model.ExprNot, model.ExprAnd, model.ExprOr, model.ExprCompare, model.ExprIsNull, model.ExprIn, model.ExprText:
 		return false
 	case model.ExprCall:
-		name := n.Name
-		if n.Namespace != "" {
-			name = n.Namespace + ":" + n.Name
-		}
-		d, _ := c.reg.Lookup(name)
-		args := n.Args
-		switch d.Null {
-		case expr.NullNever:
-			return false
-		case expr.NullIfAll:
-			return !slices.ContainsFunc(args, func(x model.Expr) bool { return !c.mayBeNull(&x, sc, r) })
-		case expr.NullIfBranch:
-			args = args[1:]
-		}
-		return slices.ContainsFunc(args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
+		return c.callMayBeNull(n, sc, r)
 	}
 	return true
+}
+
+// attrMayBeNull: an attribute can be null when it is optional and not the rule's own partition key; the engine's
+// text_invisibles never is, and one that does not resolve is taken to be.
+func attrMayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
+	if n.Kind == model.ExprAttr && n.Name == event.InvisiblesAttr {
+		return false // the engine's flag: a non-optional bool, declared or not (S3.2b's Q3)
+	}
+	slot, i, _, ok := sc.Attr(n.Qualifier, n.Name)
+	if !ok {
+		return true
+	}
+	st := sc.slots[slot]
+	if !st.Attrs[i].Optional {
+		return false
+	}
+	// A rule's own partition key is never null where the rule runs: a null key never reaches it (SEMANTICS §1.1,
+	// §9; break-it L1 of S3.2b-1).
+	return !slices.ContainsFunc(r.Partition.Keys, func(k model.PartitionKey) bool {
+		return k.Stream == st.Name && k.Has(
+			n.Name)
+	})
+}
+
+// anyMayBeNull says whether any of args can be null.
+func (c *checker) anyMayBeNull(args []model.Expr, sc *scope, r *model.Rule) bool {
+	return slices.ContainsFunc(args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
+}
+
+// callMayBeNull follows the function's own null rule in expr's registry: never null, null only when every argument
+// is, the branches' arguments only (the first, the condition, left out), or null when any argument is.
+func (c *checker) callMayBeNull(n *model.Expr, sc *scope, r *model.Rule) bool {
+	name := callName(n)
+	d, _ := c.reg.Lookup(name)
+	args := n.Args
+	switch d.Null {
+	case expr.NullNever:
+		return false
+	case expr.NullIfAll:
+		return !slices.ContainsFunc(args, func(x model.Expr) bool { return !c.mayBeNull(&x, sc, r) })
+	case expr.NullIfBranch:
+		args = args[1:]
+	}
+	return slices.ContainsFunc(args, func(x model.Expr) bool { return c.mayBeNull(&x, sc, r) })
 }
 
 // exprText names a select item in a message: its dotted name when it is an attribute, else "the select item".
