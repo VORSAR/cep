@@ -6,13 +6,16 @@
 
 Time: `pairs` ABBA pairs (before then after when the pair's index is even, after then before when odd) at
 -test.cpu=1 -test.count=1, one ns/op sample per benchmark per run. Allocations: each binary twice at a fixed
--test.benchtime=<alloc-iters>x -test.benchmem (alloc-iters is a plain count; the x is added here); allocs/op and
-B/op compared exactly, and a side whose own two runs disagree is unjudgeable. The statistic is the exact two-sided
+-test.benchtime=<alloc-iters>x -test.benchmem (alloc-iters is a plain count; the x is added here); allocs/op compared
+exactly, and a side whose own two runs disagree on it is unjudgeable; B/op compared exactly when each side's two runs
+agree, else each side's range is printed and B/op is left out of that benchmark's verdict (scheduling-dependent
+batching moves bytes, never counts; owner, 2026-11-17, S1.1c-6 lane R decision 2). The statistic is the exact two-sided
 Mann-Whitney p conditional on the observed ties. A benchmark costs if its allocations differ, or if p < 0.05 and
 median(after) > 1.02 x median(before). Exit 0 no cost, 1 costs, 2 an error; the last line says which.
 """
 
 import argparse
+import dataclasses
 import math
 import os
 import shutil
@@ -141,10 +144,24 @@ def _time_pass(args: argparse.Namespace) -> tuple[list[str], dict[str, dict[str,
     return sorted(names), samples
 
 
-def _alloc_pass(args: argparse.Namespace, names: list[str]) -> dict[str, dict[str, tuple[int, int]]]:
+@dataclasses.dataclass(frozen=True)
+class Allocs:
+    """One side's allocation pass for one benchmark: allocs/op, which both runs must agree on, and B/op's range over
+    the runs (lo == hi when they agree; otherwise the bytes are left out of the verdict, owner 2026-11-17)."""
+
+    count: int
+    bytes_lo: int
+    bytes_hi: int
+
+    @property
+    def stable(self) -> bool:
+        return self.bytes_lo == self.bytes_hi
+
+
+def _alloc_pass(args: argparse.Namespace, names: list[str]) -> dict[str, dict[str, Allocs]]:
     flags = ["-test.run=^$", f"-test.bench={args.bench}", "-test.cpu=1", f"-test.benchtime={args.alloc_iters}x"]
     flags.append("-test.benchmem")
-    allocs: dict[str, dict[str, tuple[int, int]]] = {}
+    allocs: dict[str, dict[str, Allocs]] = {}
     for side in ("before", "after"):
         runs = []
         for k in range(2):
@@ -155,13 +172,31 @@ def _alloc_pass(args: argparse.Namespace, names: list[str]) -> dict[str, dict[st
             first, second = runs[0][name], runs[1][name]
             if None in first or None in second:
                 raise Error(f"{side}'s allocation run printed no allocs/op or B/op for {name}")
-            if first != second:
+            if first[0] != second[0]:
                 raise Error(
                     f"unjudgeable: {side}'s two allocation runs disagree on {name}: "
                     f"allocs/op {first[0]} and {second[0]}, B/op {first[1]} and {second[1]}"
                 )
-        allocs[side] = runs[0]
+        allocs[side] = {
+            name: Allocs(
+                runs[0][name][0], min(runs[0][name][1], runs[1][name][1]), max(runs[0][name][1], runs[1][name][1])
+            )
+            for name in names
+        }
     return allocs
+
+
+def _alloc_verdict(before: Allocs, after: Allocs) -> tuple[bool, str]:
+    """Whether the allocations differ, and their text: counts always exactly; bytes exactly when both sides' runs agree,
+    else each side's range, left out of the verdict."""
+    if before.stable and after.stable:
+        differs = (before.count, before.bytes_lo) != (after.count, after.bytes_lo)
+        return differs, f"allocs/op {before.count}/{after.count}, B/op {before.bytes_lo}/{after.bytes_lo}"
+    text = (
+        f"allocs/op {before.count}/{after.count}, B/op unstable (before {before.bytes_lo}-{before.bytes_hi}, "
+        f"after {after.bytes_lo}-{after.bytes_hi}), left out"
+    )
+    return before.count != after.count, text
 
 
 def _lookup(argv: list[str], cwd: str) -> str:
@@ -195,8 +230,7 @@ def judge(args: argparse.Namespace) -> tuple[int, list[str]]:
         before, after = samples["before"][name], samples["after"][name]
         m_before, m_after = statistics.median(before), statistics.median(after)
         p = mann_whitney_p(before, after)
-        (a_before, b_before), (a_after, b_after) = allocs["before"][name], allocs["after"][name]
-        alloc_differs = (a_before, b_before) != (a_after, b_after)
+        alloc_differs, alloc_text = _alloc_verdict(allocs["before"][name], allocs["after"][name])
         slower = p < ALPHA and m_after > MARGIN * m_before
         verdict = "costs" if alloc_differs or slower else "no cost"
         if verdict == "costs":
@@ -204,7 +238,7 @@ def judge(args: argparse.Namespace) -> tuple[int, list[str]]:
         ratio = m_after / m_before if m_before else Fraction(0)
         lines.append(
             f"{name}: median before {_num(m_before)} ns/op, after {_num(m_after)} ns/op, ratio {float(ratio):.4f}, "
-            f"p {float(p):.4g}, allocs/op {a_before}/{a_after}, B/op {b_before}/{b_after}: {verdict}"
+            f"p {float(p):.4g}, {alloc_text}: {verdict}"
         )
     for name in names:
         for side in ("before", "after"):
