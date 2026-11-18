@@ -104,36 +104,53 @@ func NewSchema(stream string, attrs []Attr, timeAttr int) (Schema, error) {
 	// Check the copy, not the caller's slice, so the schema holds exactly what was checked.
 	own := make([]Attr, len(attrs))
 	copy(own, attrs)
+	if err := checkAttrs(stream, own); err != nil {
+		return Schema{}, err
+	}
+	if err := checkTimeAttr(stream, own, timeAttr); err != nil {
+		return Schema{}, err
+	}
+	return Schema{stream: stream, attrs: own, timeAttr: timeAttr}, nil
+}
+
+// checkAttrs checks each attribute of own in declaration order: its name is not empty, it is not declared twice
+// (compared case-sensitively), and its type is TString to TObject. It returns the first fault.
+func checkAttrs(stream string, own []Attr) error {
 	declaredAt := make(map[string]int, len(own))
 	for i, a := range own {
 		if a.Name == "" {
-			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d: %w",
+			return fmt.Errorf("event: invalid schema for stream %q: attribute %d: %w",
 				stream, i, errEmptyAttrName)
 		}
 		if first, dup := declaredAt[a.Name]; dup {
-			return Schema{}, fmt.Errorf(
+			return fmt.Errorf(
 				"event: invalid schema for stream %q: attribute %d %q: %w, first declared as attribute %d (names are "+
 					"case-sensitive)",
 				stream, i, a.Name, errDuplicateAttrName, first)
 		}
 		declaredAt[a.Name] = i
 		if a.Type < TString || a.Type > TObject {
-			return Schema{}, fmt.Errorf(
+			return fmt.Errorf(
 				"event: invalid schema for stream %q: attribute %d %q: %w (%v); want one of %v, %v, %v, %v, %v, %v, %v",
 				stream, i, a.Name, errInvalidAttrType, a.Type, TString, TInt, TFloat, TBool, TTimestamp, TDuration, TObject)
 		}
 	}
+	return nil
+}
+
+// checkTimeAttr checks timeAttr: ArrivalTime, or the index of an attribute of own whose type is TTimestamp.
+func checkTimeAttr(stream string, own []Attr, timeAttr int) error {
 	if timeAttr != ArrivalTime {
 		if timeAttr < 0 || timeAttr >= len(own) {
-			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: %w: index %d; want ArrivalTime (%d) or 0 to %d",
+			return fmt.Errorf("event: invalid schema for stream %q: %w: index %d; want ArrivalTime (%d) or 0 to %d",
 				stream, errTimeAttrRange, timeAttr, ArrivalTime, len(own)-1)
 		}
 		if a := own[timeAttr]; a.Type != TTimestamp {
-			return Schema{}, fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w (its type is %v)",
+			return fmt.Errorf("event: invalid schema for stream %q: attribute %d %q: %w (its type is %v)",
 				stream, timeAttr, a.Name, errTimeAttrType, a.Type)
 		}
 	}
-	return Schema{stream: stream, attrs: own, timeAttr: timeAttr}, nil
+	return nil
 }
 
 // Stream is the stream's name.
