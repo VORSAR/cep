@@ -146,6 +146,31 @@ class Verdict(unittest.TestCase):
         self.assertIn("unjudgeable", out.splitlines()[-1])
         self.assertIn("BenchmarkA", out.splitlines()[-1])
 
+    def test_unstable_bytes_are_left_out_and_the_counts_still_judge(self):
+        # owner, 2026-11-17, S1.1c-6 lane R decision 2: scheduling-dependent batching moves B/op, never allocs/op
+        before, after = self.pair(
+            [run_out(1000)], [run_out(1000)], [alloc_out(2082, 3), alloc_out(2140, 3)], [alloc_out(2100, 3)]
+        )
+        code, out = self.compare(before, after)
+        self.assertEqual(code, 0, out)
+        self.assertIn("allocs/op 3/3, B/op unstable (before 2082-2140, after 2100-2100), left out: no cost", out)
+        self.assertEqual(out.splitlines()[-1], "verdict: no cost", out)
+
+    def test_unstable_bytes_never_hide_a_changed_allocation_count(self):
+        before, after = self.pair(
+            [run_out(1000)], [run_out(1000)], [alloc_out(2082, 3), alloc_out(2140, 3)], [alloc_out(2100, 4)]
+        )
+        code, out = self.compare(before, after)
+        self.assertEqual(code, 1, out)
+        self.assertIn("allocs/op 3/4", out)
+        self.assertEqual(out.splitlines()[-1], "verdict: costs (BenchmarkA)", out)
+
+    def test_stable_bytes_are_still_compared_exactly(self):
+        before, after = self.pair([run_out(1000)], [run_out(1000)], [alloc_out(64, 2)], [alloc_out(65, 2)])
+        code, out = self.compare(before, after)
+        self.assertEqual(code, 1, out)
+        self.assertIn("allocs/op 2/2, B/op 64/65: costs", out)
+
     def test_bad_arguments_are_exit_2(self):
         before, after = self.pair([run_out(1000)], [run_out(1000)])
         for extra in (["--pairs", "21"], ["--alloc-iters", "1000x"], ["--pairs", "0"]):
