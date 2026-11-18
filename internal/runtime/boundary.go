@@ -111,25 +111,39 @@ func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payloa
 	}
 	values, info, err := a.dec[stream].Decode(payload, nil)
 	if err != nil {
-		var de *event.DecodeError
-		if !errors.As(err, &de) {
-			de = &event.DecodeError{Reason: event.DecodeSyntax, Msg: err.Error()}
-		}
-		return reject(de)
+		return reject(asDecodeError(err))
 	}
-	if n := event.CleanLen(payload); n > payloadLimit(name) { // the recorded form: malformed UTF-8 grows (review C1)
-		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
-			"the payload is %d bytes as a recording keeps it; a recording line holds %d", n, payloadLimit(name))})
-	}
-	if info.Depth > event.MaxDepth-1 {
-		return reject(&event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
-			"the payload is nested %d deep; a recording line holds %d", info.Depth, event.MaxDepth-1)})
+	if fault := recordedFault(name, payload, info); fault != nil {
+		return reject(fault)
 	}
 	it := item{kind: iEvent, app: app, ev: event.Event{StreamID: stream, Ts: info.Ts, Values: values}, info: info}
 	if a.rec != nil {
 		it.payload = []byte(event.CleanObject(payload)) // the payload as sent, the record's own (owner D3; review F6)
 	}
 	return r.enqueue(ctx, it)
+}
+
+// asDecodeError is the decoder's fault as a rejected item carries it: every decoder error is an *event.DecodeError
+// (defensive conversion otherwise).
+func asDecodeError(err error) *event.DecodeError {
+	var de *event.DecodeError
+	if !errors.As(err, &de) {
+		de = &event.DecodeError{Reason: event.DecodeSyntax, Msg: err.Error()}
+	}
+	return de
+}
+
+// recordedFault is a decoded payload's fault in its recorded form, the cleaned length first, then the depth; nil: none.
+func recordedFault(name string, payload []byte, info event.Decoded) *event.DecodeError {
+	if n := event.CleanLen(payload); n > payloadLimit(name) { // the recorded form: malformed UTF-8 grows (review C1)
+		return &event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
+			"the payload is %d bytes as a recording keeps it; a recording line holds %d", n, payloadLimit(name))}
+	}
+	if info.Depth > event.MaxDepth-1 {
+		return &event.DecodeError{Reason: event.DecodeSyntax, Msg: fmt.Sprintf(
+			"the payload is nested %d deep; a recording line holds %d", info.Depth, event.MaxDepth-1)}
+	}
+	return nil
 }
 
 // Send hands one source event of app to the intake; it blocks for backpressure and respects ctx. It checks the event
@@ -139,35 +153,25 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 	if err != nil {
 		return err
 	}
-	if e.StreamID < 0 || e.StreamID >= len(a.app.Streams) || a.app.Streams[e.StreamID].Derived {
+	if err := checkEvent(app, &a.app, e); err != nil {
+		return err
+	}
+	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
+}
+
+// checkEvent is Send's check of e, in order: a source stream, one value per attribute, each value (checkValues), an
+// event-time stream's Ts equal to its time attribute, and one recording line.
+func checkEvent(app AppID, a *App, e event.Event) error {
+	if e.StreamID < 0 || e.StreamID >= len(a.Streams) || a.Streams[e.StreamID].Derived {
 		return fmt.Errorf("runtime: app %d: stream %d is not a source stream", app, e.StreamID)
 	}
-	sch := a.app.Schemas[e.StreamID]
+	sch := a.Schemas[e.StreamID]
 	if len(e.Values) != sch.NumAttrs() {
 		return fmt.Errorf("runtime: app %d stream %q: %d values for %d attributes", app, sch.Stream(), len(e.Values),
 			sch.NumAttrs())
 	}
-	for i, v := range e.Values {
-		at := sch.Attr(i)
-		switch {
-		case v.Kind != at.Type:
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(),
-				at.Name, v.Kind, at.Type)
-		case v.Null && !at.Optional:
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app,
-				sch.Stream(), at.Name)
-		case v.Null && i == sch.TimeAttr():
-			// the decoder refuses a null time attribute (event.DecodeNull); the Go boundary agrees, so no event enters
-			// at timestamp 0 (S3.3-1's break-it S1)
-			return fmt.Errorf("runtime: app %d stream %q: the time attribute %q is null", app, sch.Stream(), at.Name)
-		case v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)",
-				app, sch.Stream(), at.Name, v.F)
-		}
-		if err := recordable(v); err != nil {
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(),
-				at.Name, err)
-		}
+	if err := checkValues(app, sch, e.Values); err != nil {
+		return err
 	}
 	if ta := sch.TimeAttr(); ta != event.ArrivalTime && e.Ts != e.Values[ta].T {
 		return fmt.Errorf(
@@ -180,7 +184,49 @@ func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
 			"runtime: app %d stream %q: the event could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)",
 			app, sch.Stream(), event.MaxLogLine)
 	}
-	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
+	return nil
+}
+
+// checkValues checks each value in order: its kind, null and finiteness (checkValue), then that a recording can copy
+// it; the first fault is the error.
+func checkValues(app AppID, sch event.Schema, values []event.Value) error {
+	for i, v := range values {
+		at := sch.Attr(i)
+		if err := checkValue(app, sch, i, at, v); err != nil {
+			return err
+		}
+		if err := recordable(v); err != nil {
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(),
+				at.Name, err)
+		}
+	}
+	return nil
+}
+
+// checkValue is value i's first fault, in order: a kind other than its attribute's, a null in a required attribute, a
+// null time attribute, a float that is not finite; nil: none.
+func checkValue(app AppID, sch event.Schema, i int, at event.Attr, v event.Value) error {
+	switch {
+	case v.Kind != at.Type:
+		return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(),
+			at.Name, v.Kind, at.Type)
+	case v.Null && !at.Optional:
+		return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app,
+			sch.Stream(), at.Name)
+	case v.Null && i == sch.TimeAttr():
+		// the decoder refuses a null time attribute (event.DecodeNull); the Go boundary agrees, so no event enters
+		// at timestamp 0 (S3.3-1's break-it S1)
+		return fmt.Errorf("runtime: app %d stream %q: the time attribute %q is null", app, sch.Stream(), at.Name)
+	case nonFinite(v):
+		return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)",
+			app, sch.Stream(), at.Name, v.F)
+	}
+	return nil
+}
+
+// nonFinite says v is a float NaN or infinity, never a value (S3.1-2's D2).
+func nonFinite(v event.Value) bool {
+	return v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0))
 }
 
 // CheckRows is TableWrite's per-row check, shared with the facade so a deploy's starting rows are refused at Deploy,
