@@ -228,15 +228,9 @@ func (s *scanner) str() error {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 				s.i += 2
 			case 'u':
-				for k := 2; k < 6; k++ {
-					if s.i+k >= len(s.b) {
-						return s.syntax(len(s.b), "unterminated string")
-					}
-					if !isHex(s.b[s.i+k]) {
-						return s.syntax(s.i+k, "want four hex digits after \\u")
-					}
+				if err := s.unicodeEscape(); err != nil {
+					return err
 				}
-				s.i += 6
 			default:
 				return s.syntax(s.i+1, "invalid escape")
 			}
@@ -247,6 +241,21 @@ func (s *scanner) str() error {
 		}
 	}
 	return s.syntax(len(s.b), "unterminated string")
+}
+
+// unicodeEscape checks the \u escape whose backslash is at s.i: four hex digits after the u, each fault at its
+// offset. It leaves s.i just after the escape.
+func (s *scanner) unicodeEscape() error {
+	for k := 2; k < 6; k++ {
+		if s.i+k >= len(s.b) {
+			return s.syntax(len(s.b), "unterminated string")
+		}
+		if !isHex(s.b[s.i+k]) {
+			return s.syntax(s.i+k, "want four hex digits after \\u")
+		}
+	}
+	s.i += 6
+	return nil
 }
 
 func isHex(c byte) bool {
