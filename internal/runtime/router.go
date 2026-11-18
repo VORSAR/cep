@@ -78,28 +78,8 @@ func (r *Runtime) route(rt *router) {
 			return
 		}
 		if len(rt.pending) > 0 {
-			head := &rt.pending[0]
-			if head.shard >= 0 {
-				mb := r.shards[head.shard].mailbox
-				select {
-				case mb <- head.msg:
-					rt.mailboxHigh[head.shard] = max(rt.mailboxHigh[head.shard], len(mb))
-					rt.pop()
-				case h := <-r.handoff:
-					rt.take(h)
-				case <-r.stopped:
-					return
-				}
-			} else {
-				select {
-				case head.sink.q <- head.si:
-					head.sink.high = max(head.sink.high, len(head.sink.q))
-					rt.pop()
-				case h := <-r.handoff:
-					rt.take(h)
-				case <-r.stopped:
-					return
-				}
+			if !rt.sendHead() {
+				return
 			}
 			continue
 		}
@@ -112,6 +92,36 @@ func (r *Runtime) route(rt *router) {
 			return
 		}
 	}
+}
+
+// sendHead offers the pending head to its shard's mailbox, or its sink's queue, taking a handoff while that is full
+// (each select whole, its priority unchanged); false: the runtime stopped.
+func (rt *router) sendHead() bool {
+	r := rt.r
+	head := &rt.pending[0]
+	if head.shard >= 0 {
+		mb := r.shards[head.shard].mailbox
+		select {
+		case mb <- head.msg:
+			rt.mailboxHigh[head.shard] = max(rt.mailboxHigh[head.shard], len(mb))
+			rt.pop()
+		case h := <-r.handoff:
+			rt.take(h)
+		case <-r.stopped:
+			return false
+		}
+	} else {
+		select {
+		case head.sink.q <- head.si:
+			head.sink.high = max(head.sink.high, len(head.sink.q))
+			rt.pop()
+		case h := <-r.handoff:
+			rt.take(h)
+		case <-r.stopped:
+			return false
+		}
+	}
+	return true
 }
 
 func (rt *router) push(s send) {
