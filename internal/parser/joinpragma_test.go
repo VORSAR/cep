@@ -73,6 +73,8 @@ func TestJoinPragmaEachOperand(t *testing.T) {
 		{"a keyword as the id", "language from/0.1", []string{"Keyword:language", "Pragma:from/0.1"}},
 		{"a space before the slash", "language cep /0.1", []string{"Keyword:language", "Ident:cep", "Punct:/", "Number:0.1"}},
 		{"a space after the slash", "language cep/ 0.1", []string{"Keyword:language", "Ident:cep", "Punct:/", "Number:0.1"}},
+		// lexer.go:145-148: the joined text must still be pragmaPattern (a lowercase name).
+		{"an id the pattern refuses", "language Cep/0.1", []string{"Keyword:language", "Ident:Cep", "Punct:/", "Number:0.1"}},
 		// lexer.go:154-155: a name, a keyword or a mixed-case keyword straight after the number joins its rest.
 		{"a name after the rest", "language cep/0.1e5x", []string{"Keyword:language", "Pragma:cep/0.1", "Ident:e5x"}},
 		{"a keyword after the rest", "language cep/0.1e5and", []string{"Keyword:language", "Pragma:cep/0.1", "Ident:e5and"}},
