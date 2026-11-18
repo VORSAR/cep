@@ -16,7 +16,7 @@ func cleanObject(raw []byte) string {
 		c := raw[i]
 		switch {
 		case !inStr:
-			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+			if !isSpace(c) {
 				out = append(out, c)
 				inStr = c == '"'
 			}
@@ -59,7 +59,7 @@ func CleanLen(raw []byte) int {
 		c := raw[i]
 		switch {
 		case !inStr:
-			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+			if !isSpace(c) {
 				n++
 				inStr = c == '"'
 			}
@@ -105,7 +105,7 @@ func compactAndValid(raw []byte) bool {
 		c := raw[i]
 		switch {
 		case !inStr:
-			if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			if isSpace(c) {
 				return false
 			}
 			inStr = c == '"'
@@ -123,3 +123,6 @@ func compactAndValid(raw []byte) bool {
 	}
 	return true
 }
+
+// isSpace says c is JSON whitespace: a space, tab, line feed or carriage return.
+func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
