@@ -34,50 +34,65 @@ func appendUnescaped(dst, in []byte) []byte {
 		c := in[i]
 		switch {
 		case c == '\\':
-			switch e := in[i+1]; e {
-			case 'b':
-				dst = append(dst, '\b')
-			case 'f':
-				dst = append(dst, '\f')
-			case 'n':
-				dst = append(dst, '\n')
-			case 'r':
-				dst = append(dst, '\r')
-			case 't':
-				dst = append(dst, '\t')
-			case 'u':
-				r := hex4(in[i+2 : i+6])
-				i += 6
-				if utf16.IsSurrogate(r) {
-					if r < 0xDC00 && i+6 <= len(in) && in[i] == '\\' && in[i+1] == 'u' {
-						if pair := utf16.DecodeRune(r, hex4(in[i+2:i+6])); pair != utf8.RuneError {
-							dst = utf8.AppendRune(dst, pair)
-							i += 6
-							continue
-						}
-					}
-					r = utf8.RuneError
-				}
-				dst = utf8.AppendRune(dst, r)
-				continue
-			default: // '"', '\\', '/'
-				dst = append(dst, e)
-			}
-			i += 2
+			dst, i = appendEscape(dst, in, i)
 		case c < utf8.RuneSelf:
 			dst = append(dst, c)
 			i++
 		default:
-			r, size := utf8.DecodeRune(in[i:])
-			if r == utf8.RuneError && size == 1 {
-				dst = utf8.AppendRune(dst, utf8.RuneError)
-			} else {
-				dst = append(dst, in[i:i+size]...)
-			}
-			i += size
+			dst, i = appendRune(dst, in, i)
 		}
 	}
 	return dst
+}
+
+// appendEscape appends the decoded text of the escape at in[i] and returns the index after it.
+func appendEscape(dst, in []byte, i int) ([]byte, int) {
+	switch e := in[i+1]; e {
+	case 'b':
+		dst = append(dst, '\b')
+	case 'f':
+		dst = append(dst, '\f')
+	case 'n':
+		dst = append(dst, '\n')
+	case 'r':
+		dst = append(dst, '\r')
+	case 't':
+		dst = append(dst, '\t')
+	case 'u':
+		return appendUnicodeEscape(dst, in, i)
+	default: // '"', '\\', '/'
+		dst = append(dst, e)
+	}
+	return dst, i + 2
+}
+
+// appendUnicodeEscape appends the rune of the \u escape at in[i] (a surrogate pair's when a low half's escape follows
+// a high half's, U+FFFD for a lone surrogate) and returns the index after the escapes it read.
+func appendUnicodeEscape(dst, in []byte, i int) ([]byte, int) {
+	r := hex4(in[i+2 : i+6])
+	i += 6
+	if utf16.IsSurrogate(r) {
+		if r < 0xDC00 && i+6 <= len(in) && in[i] == '\\' && in[i+1] == 'u' {
+			if pair := utf16.DecodeRune(r, hex4(in[i+2:i+6])); pair != utf8.RuneError {
+				dst = utf8.AppendRune(dst, pair)
+				return dst, i + 6
+			}
+		}
+		r = utf8.RuneError
+	}
+	dst = utf8.AppendRune(dst, r)
+	return dst, i
+}
+
+// appendRune appends the UTF-8 sequence at in[i], or U+FFFD for a malformed byte, and returns the index after it.
+func appendRune(dst, in []byte, i int) ([]byte, int) {
+	r, size := utf8.DecodeRune(in[i:])
+	if r == utf8.RuneError && size == 1 {
+		dst = utf8.AppendRune(dst, utf8.RuneError)
+	} else {
+		dst = append(dst, in[i:i+size]...)
+	}
+	return dst, i + size
 }
 
 func hex4(h []byte) rune {
