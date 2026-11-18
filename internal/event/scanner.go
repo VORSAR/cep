@@ -33,6 +33,8 @@ func (s *scanner) ws() {
 
 func (s *scanner) at(c byte) bool { return s.i < len(s.b) && s.b[s.i] == c }
 
+func (s *scanner) atEither(a, b byte) bool { return s.i < len(s.b) && (s.b[s.i] == a || s.b[s.i] == b) }
+
 // document reads the whole payload: one JSON object and nothing after it but whitespace. It returns the offset of
 // the object's closing brace.
 func (s *scanner) document(d *Decoder, spans []span, info *Decoded) (int, error) {
@@ -281,22 +283,25 @@ func (s *scanner) number() error {
 	default:
 		return s.syntax(s.i, "want a digit")
 	}
-	if s.i < len(s.b) && s.b[s.i] == '.' {
+	if s.at('.') {
 		s.i++
 		if err := s.digits(); err != nil {
 			return err
 		}
 	}
-	if s.i < len(s.b) && (s.b[s.i] == 'e' || s.b[s.i] == 'E') {
-		s.i++
-		if s.i < len(s.b) && (s.b[s.i] == '+' || s.b[s.i] == '-') {
-			s.i++
-		}
-		if err := s.digits(); err != nil {
-			return err
-		}
+	return s.exponent()
+}
+
+// exponent checks a number's optional exponent, [eE][+-]?[0-9]+, at s.i.
+func (s *scanner) exponent() error {
+	if !s.atEither('e', 'E') {
+		return nil
 	}
-	return nil
+	s.i++
+	if s.atEither('+', '-') {
+		s.i++
+	}
+	return s.digits()
 }
 
 func (s *scanner) digits() error {
