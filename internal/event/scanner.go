@@ -114,16 +114,6 @@ func (s *scanner) member() (key []byte, vstart int, err error) {
 	return key, vstart, nil
 }
 
-func (s *scanner) colon() error {
-	s.ws()
-	if s.i >= len(s.b) || s.b[s.i] != ':' {
-		return s.syntax(s.i, "want ':'")
-	}
-	s.i++
-	s.ws()
-	return nil
-}
-
 // value checks one JSON value starting at s.i and leaves s.i just after it.
 func (s *scanner) value() error {
 	if s.i >= len(s.b) {
@@ -163,23 +153,13 @@ func (s *scanner) object() error {
 	if err := s.enter(); err != nil {
 		return err
 	}
-	if s.i < len(s.b) && s.b[s.i] == '}' {
+	if s.at('}') {
 		s.i++
 		s.depth--
 		return nil
 	}
 	for {
-		s.ws()
-		if s.i >= len(s.b) || s.b[s.i] != '"' {
-			return s.syntax(s.i, "want a member name")
-		}
-		if err := s.str(); err != nil {
-			return err
-		}
-		if err := s.colon(); err != nil {
-			return err
-		}
-		if err := s.value(); err != nil {
+		if _, _, err := s.member(); err != nil {
 			return err
 		}
 		s.ws()
