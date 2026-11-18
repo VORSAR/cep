@@ -6,7 +6,7 @@ import "unicode/utf8"
 // — every whitespace byte outside a string removed, member order and every token's text kept, a string's escapes as
 // written — with malformed UTF-8 inside a string replaced by U+FFFD, as for a string attribute (P8). Every reader then
 // sees one form, and a log line holding it never breaks.
-func cleanObject(raw []byte) string {
+func cleanObject(raw []byte) string { //nolint:gocyclo,lll // PERMANENT reason="kept whole: its isSpace split costs +13.2 % median (BenchmarkCleanObject, Mann-Whitney p=1.1e-05, 10 pairs; re-run +9.9 %, p=1.1e-05), allocations 7 = 7; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6
 	if compactAndValid(raw) {
 		return string(raw)
 	}
@@ -16,7 +16,7 @@ func cleanObject(raw []byte) string {
 		c := raw[i]
 		switch {
 		case !inStr:
-			if !isSpace(c) {
+			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
 				out = append(out, c)
 				inStr = c == '"'
 			}
@@ -50,7 +50,7 @@ func cleanObject(raw []byte) string {
 func CleanObject(raw []byte) string { return cleanObject(raw) }
 
 // CleanLen is len(CleanObject(raw)) without building it: what a recording line holds of a payload (review C1).
-func CleanLen(raw []byte) int {
+func CleanLen(raw []byte) int { //nolint:gocyclo,lll // PERMANENT reason="kept whole: its isSpace split costs +23.9 % median (BenchmarkCleanLen, Mann-Whitney p=1.1e-05, 10 pairs; re-run +21.4 %, p=1.1e-05), allocations 0 = 0; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6
 	if compactAndValid(raw) {
 		return len(raw)
 	}
@@ -59,7 +59,7 @@ func CleanLen(raw []byte) int {
 		c := raw[i]
 		switch {
 		case !inStr:
-			if !isSpace(c) {
+			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
 				n++
 				inStr = c == '"'
 			}
