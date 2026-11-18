@@ -176,6 +176,6 @@ func (rt *router) beginDrain(it item) {
 func (rt *router) drainApp(a *appState, token uint64) []clock.WMAdvance {
 	a.drained = true
 	adv := a.ing.Drain()
-	rt.broadcast(a, mDrain, adv, a.ing.Snapshot(), token, true)
+	rt.broadcast(message{kind: mDrain, app: a.id, adv: adv, tables: a.ing.Snapshot(), token: token, final: true})
 	return adv
 }
