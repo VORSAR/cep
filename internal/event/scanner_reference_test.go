@@ -1,0 +1,348 @@
+package event
+
+import "fmt"
+
+// scannerReference is a frozen copy of the scanner as it stood before the name reader and the register-loop str
+// replaced its member, colon, object, top and str (scanner.go at 2b86876), with isHex and isDigit copied beside it
+// under a Reference suffix, so no change to scanner.go can change the reference; DecodeError, MaxDepth and
+// (*Decoder).record stay the package's. TestScannerMatchesTheReference holds the live scanner to it (owner,
+// 2026-11-18, the architecture review of lane E's walkers and scanner, decision 4).
+type scannerReference struct {
+	b     []byte
+	i     int
+	depth int
+	most  int // the deepest depth reached
+}
+
+func (s *scannerReference) syntax(at int, what string) error {
+	near := " at the end of the payload"
+	if at < len(s.b) {
+		end := min(at+16, len(s.b))
+		near = fmt.Sprintf(" near %q", s.b[at:end])
+	}
+	return &DecodeError{Reason: DecodeSyntax, Offset: at, Msg: fmt.Sprintf("invalid JSON at offset %d: %s%s", at, what,
+		near)}
+}
+
+func (s *scannerReference) ws() {
+	for s.i < len(s.b) {
+		switch s.b[s.i] {
+		case ' ', '\t', '\n', '\r':
+			s.i++
+		default:
+			return
+		}
+	}
+}
+
+func (s *scannerReference) at(c byte) bool { return s.i < len(s.b) && s.b[s.i] == c }
+
+func (s *scannerReference) atEither(a, b byte) bool {
+	return s.i < len(s.b) && (s.b[s.i] == a || s.b[s.i] == b)
+}
+
+// document reads the whole payload: one JSON object and nothing after it but whitespace. It returns the offset of
+// the object's closing brace.
+func (s *scannerReference) document(d *Decoder, spans []span, info *Decoded) (int, error) {
+	s.ws()
+	start := s.i
+	closing := 0
+	var err error
+	if start < len(s.b) && s.b[start] == '{' {
+		closing, err = s.top(d, spans, info)
+	} else {
+		err = s.value()
+	}
+	if err != nil {
+		return 0, err
+	}
+	s.ws()
+	if s.i != len(s.b) {
+		return 0, s.syntax(s.i, "data after the JSON value")
+	}
+	if s.b[start] != '{' {
+		return 0, s.syntax(start, "the payload is not a JSON object")
+	}
+	return closing, nil
+}
+
+// top reads the top-level object, recording each member.
+func (s *scannerReference) top(d *Decoder, spans []span, info *Decoded) (int, error) {
+	s.i++
+	s.depth = 1
+	s.ws()
+	if s.at('}') {
+		s.i++
+		return s.i - 1, nil
+	}
+	for {
+		key, vstart, err := s.member()
+		if err != nil {
+			return 0, err
+		}
+		d.record(key, vstart, s.i, spans, info)
+		s.ws()
+		if s.i >= len(s.b) {
+			return 0, s.syntax(s.i, "unterminated object")
+		}
+		switch s.b[s.i] {
+		case ',':
+			s.i++
+		case '}':
+			s.i++
+			return s.i - 1, nil
+		default:
+			return 0, s.syntax(s.i, "want ',' or '}'")
+		}
+	}
+}
+
+// member reads one `"name": value` pair from s.i, whitespace first, and leaves s.i just after the value; it returns
+// the name's text between its quotes and where the value starts.
+func (s *scannerReference) member() (key []byte, vstart int, err error) {
+	s.ws()
+	if !s.at('"') {
+		return nil, 0, s.syntax(s.i, "want a member name")
+	}
+	kstart := s.i
+	if err := s.str(); err != nil {
+		return nil, 0, err
+	}
+	key = s.b[kstart+1 : s.i-1]
+	s.ws()
+	if !s.at(':') {
+		return nil, 0, s.syntax(s.i, "want ':'")
+	}
+	s.i++
+	s.ws()
+	vstart = s.i
+	if err := s.value(); err != nil {
+		return nil, 0, err
+	}
+	return key, vstart, nil
+}
+
+func (s *scannerReference) colon() error {
+	s.ws()
+	if s.i >= len(s.b) || s.b[s.i] != ':' {
+		return s.syntax(s.i, "want ':'")
+	}
+	s.i++
+	s.ws()
+	return nil
+}
+
+// value checks one JSON value starting at s.i and leaves s.i just after it.
+func (s *scannerReference) value() error {
+	if s.i >= len(s.b) {
+		return s.syntax(s.i, "unexpected end of the payload")
+	}
+	switch c := s.b[s.i]; {
+	case c == '{':
+		return s.object()
+	case c == '[':
+		return s.array()
+	case c == '"':
+		return s.str()
+	case c == '-' || scannerIsDigitReference(c):
+		return s.number()
+	case c == 't':
+		return s.literal("true")
+	case c == 'f':
+		return s.literal("false")
+	case c == 'n':
+		return s.literal("null")
+	}
+	return s.syntax(s.i, "want a JSON value")
+}
+
+func (s *scannerReference) enter() error {
+	s.depth++
+	s.most = max(s.most, s.depth)
+	if s.depth > MaxDepth {
+		return s.syntax(s.i, "nested deeper than 10000")
+	}
+	s.i++
+	s.ws()
+	return nil
+}
+
+func (s *scannerReference) object() error {
+	if err := s.enter(); err != nil {
+		return err
+	}
+	if s.i < len(s.b) && s.b[s.i] == '}' {
+		s.i++
+		s.depth--
+		return nil
+	}
+	for {
+		s.ws()
+		if s.i >= len(s.b) || s.b[s.i] != '"' {
+			return s.syntax(s.i, "want a member name")
+		}
+		if err := s.str(); err != nil {
+			return err
+		}
+		if err := s.colon(); err != nil {
+			return err
+		}
+		if err := s.value(); err != nil {
+			return err
+		}
+		s.ws()
+		if s.i >= len(s.b) {
+			return s.syntax(s.i, "unterminated object")
+		}
+		switch s.b[s.i] {
+		case ',':
+			s.i++
+		case '}':
+			s.i++
+			s.depth--
+			return nil
+		default:
+			return s.syntax(s.i, "want ',' or '}'")
+		}
+	}
+}
+
+func (s *scannerReference) array() error {
+	if err := s.enter(); err != nil {
+		return err
+	}
+	if s.i < len(s.b) && s.b[s.i] == ']' {
+		s.i++
+		s.depth--
+		return nil
+	}
+	for {
+		s.ws()
+		if err := s.value(); err != nil {
+			return err
+		}
+		s.ws()
+		if s.i >= len(s.b) {
+			return s.syntax(s.i, "unterminated array")
+		}
+		switch s.b[s.i] {
+		case ',':
+			s.i++
+		case ']':
+			s.i++
+			s.depth--
+			return nil
+		default:
+			return s.syntax(s.i, "want ',' or ']'")
+		}
+	}
+}
+
+// str checks a string token: no raw control byte, only JSON's escapes. Any other byte, malformed UTF-8 included,
+// is legal here (encoding/json replaces it when it decodes).
+func (s *scannerReference) str() error {
+	s.i++
+	for s.i < len(s.b) {
+		c := s.b[s.i]
+		switch {
+		case c == '"':
+			s.i++
+			return nil
+		case c == '\\':
+			if s.i+1 >= len(s.b) {
+				return s.syntax(len(s.b), "unterminated string")
+			}
+			switch s.b[s.i+1] {
+			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+				s.i += 2
+			case 'u':
+				for k := 2; k < 6; k++ {
+					if s.i+k >= len(s.b) {
+						return s.syntax(len(s.b), "unterminated string")
+					}
+					if !scannerIsHexReference(s.b[s.i+k]) {
+						return s.syntax(s.i+k, "want four hex digits after \\u")
+					}
+				}
+				s.i += 6
+			default:
+				return s.syntax(s.i+1, "invalid escape")
+			}
+		case c < 0x20:
+			return s.syntax(s.i, "control byte in a string")
+		default:
+			s.i++
+		}
+	}
+	return s.syntax(len(s.b), "unterminated string")
+}
+
+func scannerIsHexReference(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+func scannerIsDigitReference(c byte) bool { return c >= '0' && c <= '9' }
+
+// number checks JSON's number grammar: -?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?
+func (s *scannerReference) number() error {
+	if s.b[s.i] == '-' {
+		s.i++
+	}
+	switch {
+	case s.i >= len(s.b):
+		return s.syntax(s.i, "unterminated number")
+	case s.b[s.i] == '0':
+		s.i++
+	case scannerIsDigitReference(s.b[s.i]):
+		for s.i < len(s.b) && scannerIsDigitReference(s.b[s.i]) {
+			s.i++
+		}
+	default:
+		return s.syntax(s.i, "want a digit")
+	}
+	if s.at('.') {
+		s.i++
+		if err := s.digits(); err != nil {
+			return err
+		}
+	}
+	return s.exponent()
+}
+
+// exponent checks a number's optional exponent, [eE][+-]?[0-9]+, at s.i.
+func (s *scannerReference) exponent() error {
+	if !s.atEither('e', 'E') {
+		return nil
+	}
+	s.i++
+	if s.atEither('+', '-') {
+		s.i++
+	}
+	return s.digits()
+}
+
+func (s *scannerReference) digits() error {
+	if s.i >= len(s.b) {
+		return s.syntax(s.i, "unterminated number")
+	}
+	if !scannerIsDigitReference(s.b[s.i]) {
+		return s.syntax(s.i, "want a digit")
+	}
+	for s.i < len(s.b) && scannerIsDigitReference(s.b[s.i]) {
+		s.i++
+	}
+	return nil
+}
+
+func (s *scannerReference) literal(word string) error {
+	for k := 0; k < len(word); k++ {
+		if s.i >= len(s.b) {
+			return s.syntax(s.i, "unterminated literal")
+		}
+		if s.b[s.i] != word[k] {
+			return s.syntax(s.i, "want "+word)
+		}
+		s.i++
+	}
+	return nil
+}
