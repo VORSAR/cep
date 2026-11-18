@@ -31,6 +31,8 @@ func (s *scanner) ws() {
 	}
 }
 
+func (s *scanner) at(c byte) bool { return s.i < len(s.b) && s.b[s.i] == c }
+
 // document reads the whole payload: one JSON object and nothing after it but whitespace. It returns the offset of
 // the object's closing brace.
 func (s *scanner) document(d *Decoder, spans []span, info *Decoded) (int, error) {
@@ -61,25 +63,13 @@ func (s *scanner) top(d *Decoder, spans []span, info *Decoded) (int, error) {
 	s.i++
 	s.depth = 1
 	s.ws()
-	if s.i < len(s.b) && s.b[s.i] == '}' {
+	if s.at('}') {
 		s.i++
 		return s.i - 1, nil
 	}
 	for {
-		s.ws()
-		if s.i >= len(s.b) || s.b[s.i] != '"' {
-			return 0, s.syntax(s.i, "want a member name")
-		}
-		kstart := s.i
-		if err := s.str(); err != nil {
-			return 0, err
-		}
-		key := s.b[kstart+1 : s.i-1]
-		if err := s.colon(); err != nil {
-			return 0, err
-		}
-		vstart := s.i
-		if err := s.value(); err != nil {
+		key, vstart, err := s.member()
+		if err != nil {
 			return 0, err
 		}
 		d.record(key, vstart, s.i, spans, info)
@@ -97,6 +87,31 @@ func (s *scanner) top(d *Decoder, spans []span, info *Decoded) (int, error) {
 			return 0, s.syntax(s.i, "want ',' or '}'")
 		}
 	}
+}
+
+// member reads one `"name": value` pair from s.i, whitespace first, and leaves s.i just after the value; it returns
+// the name's text between its quotes and where the value starts.
+func (s *scanner) member() (key []byte, vstart int, err error) {
+	s.ws()
+	if !s.at('"') {
+		return nil, 0, s.syntax(s.i, "want a member name")
+	}
+	kstart := s.i
+	if err := s.str(); err != nil {
+		return nil, 0, err
+	}
+	key = s.b[kstart+1 : s.i-1]
+	s.ws()
+	if !s.at(':') {
+		return nil, 0, s.syntax(s.i, "want ':'")
+	}
+	s.i++
+	s.ws()
+	vstart = s.i
+	if err := s.value(); err != nil {
+		return nil, 0, err
+	}
+	return key, vstart, nil
 }
 
 func (s *scanner) colon() error {
