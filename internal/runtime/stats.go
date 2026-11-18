@@ -56,6 +56,52 @@ func (rt *router) statsCut(rep chan reply) {
 	}
 }
 
+// statsAck folds one shard's part of a Stats cut; the last part completes it.
+func (rt *router) statsAck(shard int, it outItem) {
+	r := rt.r
+	w := rt.stats[it.token]
+	w.acks++
+	for ai := range it.stats.rules {
+		for ri, ps := range it.stats.rules[ai] {
+			rs := &w.stats.Rules[ai][ri]
+			rs.ConstructLate += int64(ps.ConstructLate)
+			rs.Purged += int64(ps.Purged)
+			rs.Panics += int64(ps.Panics) + it.stats.panics[ai][ri]
+			rs.Suppressed += int64(it.stats.emits[ai][ri].Suppressed)
+			rs.Errored += int64(it.stats.emits[ai][ri].Errored)
+			rs.OutboxHigh = max(rs.OutboxHigh, it.stats.outHigh[ai][ri])
+		}
+	}
+	w.stats.SaturatedParks[shard] = it.stats.parks
+	if w.acks < len(r.shards) {
+		return
+	}
+	delete(rt.stats, it.token)
+	rt.completeStats(w)
+}
+
+// completeStats adds each app's sink counters to a cut every shard has answered, and replies with it.
+func (rt *router) completeStats(w *statsWait) {
+	r := rt.r
+	for _, a := range r.appList() {
+		if a == nil || a.ing == nil {
+			w.stats.SinkErrors, w.stats.SinkHigh = append(w.stats.SinkErrors, nil), append(w.stats.SinkHigh, nil)
+			continue
+		}
+		errs := make([]int64, len(a.all))
+		for i, q := range a.all {
+			errs[i] = q.errors.Load()
+		}
+		w.stats.SinkErrors = append(w.stats.SinkErrors, errs)
+		high := make([]int, len(a.all))
+		for i, q := range a.all {
+			high[i] = q.high
+		}
+		w.stats.SinkHigh = append(w.stats.SinkHigh, high)
+	}
+	w.reply <- reply{stats: w.stats}
+}
+
 // stats is the shard's counters for a Stats cut.
 func (sh *shard) stats() *shardStats {
 	st := &shardStats{parks: sh.parks}
