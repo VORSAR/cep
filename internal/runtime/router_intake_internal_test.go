@@ -8,6 +8,7 @@ package runtime
 import (
 	"errors"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/vorsar/cep/internal/clock"
@@ -516,20 +517,50 @@ func TestShardAppliesAnAdmissionOnlyToOnArrivalRules(t *testing.T) {
 }
 
 // broadcast's messages carry no admission (admStream -1), so process applies none: a zero admStream would be stream
-// 0's admission at 0.
+// 0's admission at 0 (a message's adm is 0 unless set), which the on-arrival rule's clock would take. Reached only
+// through broadcast's callers, never called directly (so broadcast's signature is free to change): ingest's iTick
+// (tickApp) and iDrain (drainApp), at 4 shards, each message processed in place by its shard. Both the messages'
+// field and its effect on every shard's rule are checked, and the effect alone catches a zero admission in each
+// subtest: no event is admitted, so the rule's clock stays MinInt64 unless an admission lands. The tick's one
+// advance (stream 0 quiet 60 s past IdleAfter 1 s: its floor, start cgT0 plus the 60 000 ms elapsed, delay 0) is a
+// walk's, which an on-arrival rule does not take; the drain has no advance (nothing admitted: clock's Drain). A drain
+// after an admitted event would hide the zero admission behind its final advance (one past that event's time).
 func TestBroadcastCarriesNoAdmission(t *testing.T) {
 	t.Parallel()
-	w := igBuild(t, 1, 4, nil)
-	var got []message
-	w.rt.deliver = func(_ int, m message) { got = append(got, m) }
-	w.rt.broadcast(w.a, mWalk, []clock.WMAdvance{{StreamID: 0, Contribution: cgT0, Moved: true}}, nil, 0, false)
-	if len(got) != 4 {
-		t.Fatalf("broadcast at 4 shards: %d messages; want 4", len(got))
-	}
-	for _, m := range got {
-		if m.admStream != -1 || m.kind != mWalk || m.app != 0 || len(m.adv) != 1 {
-			t.Fatalf("a broadcast message %+v; want an mWalk of app 0 with its advance and admStream -1", m)
-		}
+	for name, c := range map[string]struct {
+		it    item
+		kind  msgKind
+		adv   []clock.WMAdvance
+		final bool
+	}{
+		"tick": {item{kind: iTick, now: cgT0 + 60_000}, mWalk,
+			[]clock.WMAdvance{{StreamID: 0, Contribution: cgT0 + 60_000, Moved: true}}, false},
+		"drain": {item{kind: iDrain, app: 0, reply: make(chan reply, 1)}, mDrain, nil, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			w := igBuild(t, 1, 4, func(app *App) { app.Streams[0].IdleAfter = 1_000 })
+			var got []int // the shards delivered to, in order
+			w.rt.deliver = func(sid int, m message) {
+				got = append(got, sid)
+				if m.admStream != -1 || m.kind != c.kind || m.app != 0 || m.final != c.final ||
+					!slices.Equal(m.adv, c.adv) {
+					t.Errorf("a %s's message to shard %d: %+v; want kind %d of app 0, final %v, advances %v and "+
+						"admStream -1", name, sid, m, c.kind, c.final, c.adv)
+				}
+				w.r.shards[sid].process(m)
+			}
+			w.rt.ingest(c.it)
+			if !slices.Equal(got, []int{0, 1, 2, 3}) { // the witness: the caller broadcast once to every shard
+				t.Fatalf("a %s at 4 shards delivered to shards %v; want 0, 1, 2, 3", name, got)
+			}
+			for sid, sh := range w.r.shards {
+				if clk := sh.rules[0][0].Clock(); clk != math.MinInt64 {
+					t.Errorf("a %s: shard %d's on-arrival rule's clock %d; want MinInt64, no admission taken", name,
+						sid, clk)
+				}
+			}
+		})
 	}
 }
 
