@@ -70,11 +70,17 @@ func (s *scanner) top(d *Decoder, spans []span, info *Decoded) (int, error) {
 		return s.i - 1, nil
 	}
 	for {
-		key, vstart, err := s.member()
+		s.ws()
+		kstart := s.i
+		kend, err := s.name()
 		if err != nil {
 			return 0, err
 		}
-		d.record(key, vstart, s.i, spans, info)
+		vstart := s.i
+		if err := s.value(); err != nil {
+			return 0, err
+		}
+		d.record(s.b[kstart+1:kend], vstart, s.i, spans, info)
 		s.ws()
 		if s.i >= len(s.b) {
 			return 0, s.syntax(s.i, "unterminated object")
@@ -91,39 +97,23 @@ func (s *scanner) top(d *Decoder, spans []span, info *Decoded) (int, error) {
 	}
 }
 
-// member reads one `"name": value` pair from s.i, whitespace first, and leaves s.i just after the value; it returns
-// the name's text between its quotes and where the value starts.
-func (s *scanner) member() (key []byte, vstart int, err error) {
-	s.ws()
+// name reads a member's name and its colon at s.i - the name's string, whitespace, ':' and whitespace - and leaves
+// s.i at the member's value. It returns the offset of the name's closing quote.
+func (s *scanner) name() (int, error) {
 	if !s.at('"') {
-		return nil, 0, s.syntax(s.i, "want a member name")
+		return 0, s.syntax(s.i, "want a member name")
 	}
-	kstart := s.i
 	if err := s.str(); err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	key = s.b[kstart+1 : s.i-1]
+	end := s.i - 1
 	s.ws()
 	if !s.at(':') {
-		return nil, 0, s.syntax(s.i, "want ':'")
+		return 0, s.syntax(s.i, "want ':'")
 	}
 	s.i++
 	s.ws()
-	vstart = s.i
-	if err := s.value(); err != nil {
-		return nil, 0, err
-	}
-	return key, vstart, nil
-}
-
-func (s *scanner) colon() error {
-	s.ws()
-	if s.i >= len(s.b) || s.b[s.i] != ':' {
-		return s.syntax(s.i, "want ':'")
-	}
-	s.i++
-	s.ws()
-	return nil
+	return end, nil
 }
 
 // value checks one JSON value starting at s.i and leaves s.i just after it.
@@ -165,20 +155,14 @@ func (s *scanner) object() error {
 	if err := s.enter(); err != nil {
 		return err
 	}
-	if s.i < len(s.b) && s.b[s.i] == '}' {
+	if s.at('}') {
 		s.i++
 		s.depth--
 		return nil
 	}
 	for {
 		s.ws()
-		if s.i >= len(s.b) || s.b[s.i] != '"' {
-			return s.syntax(s.i, "want a member name")
-		}
-		if err := s.str(); err != nil {
-			return err
-		}
-		if err := s.colon(); err != nil {
+		if _, err := s.name(); err != nil {
 			return err
 		}
 		if err := s.value(); err != nil {
@@ -235,40 +219,52 @@ func (s *scanner) array() error {
 // str checks a string token: no raw control byte, only JSON's escapes. Any other byte, malformed UTF-8 included,
 // is legal here (encoding/json replaces it when it decodes).
 func (s *scanner) str() error {
-	s.i++
-	for s.i < len(s.b) {
-		c := s.b[s.i]
-		switch {
+	b := s.b
+	for i := s.i + 1; i < len(b); i++ {
+		switch c := b[i]; {
+		case strByte[c]:
 		case c == '"':
-			s.i++
+			s.i = i + 1
 			return nil
 		case c == '\\':
-			if s.i+1 >= len(s.b) {
-				return s.syntax(len(s.b), "unterminated string")
+			if i+1 >= len(b) {
+				s.i = i
+				return s.syntax(len(b), "unterminated string")
 			}
-			switch s.b[s.i+1] {
+			switch b[i+1] {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
-				s.i += 2
+				i++
 			case 'u':
-				for k := 2; k < 6; k++ {
-					if s.i+k >= len(s.b) {
-						return s.syntax(len(s.b), "unterminated string")
-					}
-					if !isHex(s.b[s.i+k]) {
-						return s.syntax(s.i+k, "want four hex digits after \\u")
-					}
+				s.i = i
+				if err := s.unicodeEscape(); err != nil {
+					return err
 				}
-				s.i += 6
+				i = s.i - 1
 			default:
-				return s.syntax(s.i+1, "invalid escape")
+				s.i = i
+				return s.syntax(i+1, "invalid escape")
 			}
-		case c < 0x20:
-			return s.syntax(s.i, "control byte in a string")
 		default:
-			s.i++
+			s.i = i
+			return s.syntax(i, "control byte in a string")
 		}
 	}
-	return s.syntax(len(s.b), "unterminated string")
+	s.i = len(b)
+	return s.syntax(len(b), "unterminated string")
+}
+
+// unicodeEscape checks the \u escape at s.i - a backslash, 'u' and four hex digits - and leaves s.i just after it.
+func (s *scanner) unicodeEscape() error {
+	for k := 2; k < 6; k++ {
+		if s.i+k >= len(s.b) {
+			return s.syntax(len(s.b), "unterminated string")
+		}
+		if !isHex(s.b[s.i+k]) {
+			return s.syntax(s.i+k, "want four hex digits after \\u")
+		}
+	}
+	s.i += 6
+	return nil
 }
 
 func isHex(c byte) bool {
@@ -339,4 +335,24 @@ func (s *scanner) literal(word string) error {
 		s.i++
 	}
 	return nil
+}
+
+// strByte says which bytes a string holds with nothing to check: any but '"', '\\' and the control bytes.
+// Written out, as the globals check takes a lookup table (ADR-0015 §2.2): 0x00 to 0x1f false, then row k holds bytes
+// 16k to 16k+15, false at 0x22 and 0x5c.
+var strByte = [256]bool{
+	0x20: true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x20-0x2f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x30-0x3f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x40-0x4f
+	true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, // 0x50-0x5f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x60-0x6f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x70-0x7f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x80-0x8f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x90-0x9f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xa0-0xaf
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xb0-0xbf
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xc0-0xcf
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xd0-0xdf
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xe0-0xef
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xf0-0xff
 }
