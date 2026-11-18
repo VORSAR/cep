@@ -84,18 +84,7 @@ func (t *Trace) Step(s *Step) {
 		t.str("stream", t.streamName(s.Event.StreamID))
 		t.time("ts", s.Event.Ts)
 	case StepTable:
-		t.open(s.Line)
-		t.str("k", "table")
-		op := "put"
-		if s.Op == OpDelete {
-			op = "delete"
-		}
-		t.str("op", op)
-		name := "#" + strconv.Itoa(s.Table)
-		if s.Table >= 0 && s.Table < len(t.app.Tables) {
-			name = t.app.Tables[s.Table].Name
-		}
-		t.str("table", name)
+		t.tableEntry(s)
 	case StepBatchEnd:
 		t.open(s.Line)
 		t.str("batch", s.Batch)
@@ -115,6 +104,22 @@ func (t *Trace) Step(s *Step) {
 		return // StepEvent: what an event does is recorded by its rules
 	}
 	t.close()
+}
+
+// tableEntry is the table entry: k, op and the table's name ("#" and its id for a table the app does not hold).
+func (t *Trace) tableEntry(s *Step) {
+	t.open(s.Line)
+	t.str("k", "table")
+	op := "put"
+	if s.Op == OpDelete {
+		op = "delete"
+	}
+	t.str("op", op)
+	name := "#" + strconv.Itoa(s.Table)
+	if s.Table >= 0 && s.Table < len(t.app.Tables) {
+		name = t.app.Tables[s.Table].Name
+	}
+	t.str("table", name)
 }
 
 // eventEntry is the event and construct_late entries: at, k, key, rule, seq, stream, ts.

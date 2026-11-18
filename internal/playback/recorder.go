@@ -164,30 +164,38 @@ func (r *Recorder) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 		}
 	}
 	for _, row := range rows {
-		if len(row) != len(cols) {
-			return fmt.Errorf("playback: recorder: table %q: a %s row of %d values for %d columns", t.Name, opName, len(row),
-				len(cols))
-		}
-		b := r.buf[:0]
-		b = append(b, `{"op":`...)
-		b = appendString(b, opName)
-		b = append(b, `,"row":{`...)
-		for i, a := range cols {
-			if i > 0 {
-				b = append(b, ',')
-			}
-			b = appendString(b, a.Name)
-			b = append(b, ':')
-			var err error
-			if b, err = AppendValue(b, row[i]); err != nil {
-				return fmt.Errorf("playback: recorder: table %q column %q: %w", t.Name, a.Name, err)
-			}
-		}
-		b = append(b, `},"table":`...)
-		b = appendString(b, t.Name)
-		if err := r.line(append(b, '}')); err != nil {
+		if err := r.tableLine(t, opName, cols, row); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// tableLine writes one table record: {"op":…,"row":{…},"table":…}, row's values under cols' names.
+func (r *Recorder) tableLine(t Table, opName string, cols []event.Attr, row []event.Value) error {
+	if len(row) != len(cols) {
+		return fmt.Errorf("playback: recorder: table %q: a %s row of %d values for %d columns", t.Name, opName, len(row),
+			len(cols))
+	}
+	b := r.buf[:0]
+	b = append(b, `{"op":`...)
+	b = appendString(b, opName)
+	b = append(b, `,"row":{`...)
+	for i, a := range cols {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = appendString(b, a.Name)
+		b = append(b, ':')
+		var err error
+		if b, err = AppendValue(b, row[i]); err != nil {
+			return fmt.Errorf("playback: recorder: table %q column %q: %w", t.Name, a.Name, err)
+		}
+	}
+	b = append(b, `},"table":`...)
+	b = appendString(b, t.Name)
+	if err := r.line(append(b, '}')); err != nil {
+		return err
 	}
 	return nil
 }
