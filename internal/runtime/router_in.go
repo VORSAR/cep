@@ -157,7 +157,7 @@ func (rt *router) event(a *appState, e *event.Event, arrival int64, info event.D
 func (rt *router) tickApp(a *appState, stamp int64) []clock.WMAdvance {
 	adv := a.ing.Tick(stamp)
 	if len(adv) > 0 {
-		rt.broadcast(a, mWalk, adv, a.ing.Snapshot(), 0, false)
+		rt.broadcast(message{kind: mWalk, app: a.id, adv: adv, tables: a.ing.Snapshot()})
 	}
 	return adv
 }

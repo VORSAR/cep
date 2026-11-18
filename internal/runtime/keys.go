@@ -13,7 +13,7 @@ import (
 // when a part is null or a NaN float. A float zero part is stored as +0.0 (one key, one shard); the router is the only
 // writer of a key's parts (MUST 16). A key-less route's key is the pseudo-key "". Rest is fresh per event: the
 // message owns it (ADR-0010 §4).
-func routeKey(attrs []int, values []event.Value) (partition.Key, bool) {
+func routeKey(attrs []int, values []event.Value) (partition.Key, bool) { //nolint:gocyclo,lll // PERMANENT reason="kept whole: its keyPart split costs +2.0 % median on BenchmarkRouteKey/float-zero (Mann-Whitney p=1.1e-05, 10 pairs; re-run +2.6 %, p=0.015), allocations 0 = 0; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6
 	if attrs == nil {
 		return partition.Single(event.Value{Kind: event.TString}), true
 	}

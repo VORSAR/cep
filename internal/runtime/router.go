@@ -1,9 +1,6 @@
 package runtime
 
-import (
-	"github.com/vorsar/cep/internal/clock"
-	"github.com/vorsar/cep/internal/table"
-)
+import "github.com/vorsar/cep/internal/clock"
 
 // ---- the router ----
 
@@ -144,11 +141,12 @@ func (rt *router) now(t int64) int64 {
 }
 
 // broadcast delivers one advance-only (or drain) message to every shard, with the app's snapshot (owner D5 of
-// S3.2a-1); final marks a drain or the end, whose advances on-arrival rules take too (owner D1 of S3.2b-1).
-func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, tables *table.Snapshot, token uint64,
-	final bool) {
+// S3.2a-1); m.final marks a drain or the end, whose advances on-arrival rules take too (owner D1 of S3.2b-1). It
+// carries no admission: broadcast sets m.admStream to -1 itself.
+func (rt *router) broadcast(m message) {
+	m.admStream = -1
 	for sid := range rt.r.shards {
-		rt.deliver(sid, message{kind: kind, app: a.id, adv: adv, tables: tables, token: token, admStream: -1, final: final})
+		rt.deliver(sid, m)
 	}
 }
 

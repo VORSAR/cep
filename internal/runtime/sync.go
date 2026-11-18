@@ -122,7 +122,7 @@ func (s *Sync) Drain() ([]clock.WMAdvance, DrainResult) {
 func (s *Sync) End() []clock.WMAdvance {
 	adv := s.a.ing.End()
 	if len(adv) > 0 {
-		s.rt.broadcast(s.a, mWalk, adv, s.a.ing.Snapshot(), 0, true)
+		s.rt.broadcast(message{kind: mWalk, app: s.a.id, adv: adv, tables: s.a.ing.Snapshot(), final: true})
 	}
 	return adv
 }
