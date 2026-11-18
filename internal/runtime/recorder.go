@@ -163,37 +163,29 @@ func (q *recQ) run(r *Runtime) {
 		case it := <-q.q:
 			q.handle(it)
 		case <-q.stop: // Remove: every record queued before it is in q (the router put them first): write, flush, return
-			for {
-				select {
-				case it := <-q.q:
-					q.handle(it)
-				default:
-					q.flush()
-					return
-				}
-			}
+			q.drainQueue()
+			q.flush()
+			return
 		case <-q.overflow: // every record queued before the overflow is in q: write them, then flush (review C3)
-			for {
-				select {
-				case it := <-q.q:
-					q.handle(it)
-					continue
-				default:
-				}
-				break
-			}
+			q.drainQueue()
 			q.flush()
 			q.settle() // the output is final: nothing is put after a full queue; a drain waiting for it goes on
 		case <-r.stopped:
-			for {
-				select {
-				case it := <-q.q:
-					q.handle(it)
-				default:
-					q.flush()
-					return
-				}
-			}
+			q.drainQueue()
+			q.flush()
+			return
+		}
+	}
+}
+
+// drainQueue writes every record already queued and returns when the queue is empty.
+func (q *recQ) drainQueue() {
+	for {
+		select {
+		case it := <-q.q:
+			q.handle(it)
+		default:
+			return
 		}
 	}
 }
