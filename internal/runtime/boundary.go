@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"unicode/utf8"
 
 	"github.com/vorsar/cep/internal/event"
@@ -129,4 +130,80 @@ func (r *Runtime) SendPayload(ctx context.Context, app AppID, stream int, payloa
 		it.payload = []byte(event.CleanObject(payload)) // the payload as sent, the record's own (owner D3; review F6)
 	}
 	return r.enqueue(ctx, it)
+}
+
+// Send hands one source event of app to the intake; it blocks for backpressure and respects ctx. It checks the event
+// first (review F9) and takes e.Values: the caller MUST NOT change them afterwards (review F4).
+func (r *Runtime) Send(ctx context.Context, app AppID, e event.Event) error {
+	a, err := r.gate(app)
+	if err != nil {
+		return err
+	}
+	if e.StreamID < 0 || e.StreamID >= len(a.app.Streams) || a.app.Streams[e.StreamID].Derived {
+		return fmt.Errorf("runtime: app %d: stream %d is not a source stream", app, e.StreamID)
+	}
+	sch := a.app.Schemas[e.StreamID]
+	if len(e.Values) != sch.NumAttrs() {
+		return fmt.Errorf("runtime: app %d stream %q: %d values for %d attributes", app, sch.Stream(), len(e.Values),
+			sch.NumAttrs())
+	}
+	for i, v := range e.Values {
+		at := sch.Attr(i)
+		switch {
+		case v.Kind != at.Type:
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(),
+				at.Name, v.Kind, at.Type)
+		case v.Null && !at.Optional:
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app,
+				sch.Stream(), at.Name)
+		case v.Null && i == sch.TimeAttr():
+			// the decoder refuses a null time attribute (event.DecodeNull); the Go boundary agrees, so no event enters
+			// at timestamp 0 (S3.3-1's break-it S1)
+			return fmt.Errorf("runtime: app %d stream %q: the time attribute %q is null", app, sch.Stream(), at.Name)
+		case v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)):
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)",
+				app, sch.Stream(), at.Name, v.F)
+		}
+		if err := recordable(v); err != nil {
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(),
+				at.Name, err)
+		}
+	}
+	if ta := sch.TimeAttr(); ta != event.ArrivalTime && e.Ts != e.Values[ta].T {
+		return fmt.Errorf(
+			"runtime: app %d stream %q: Ts %d differs from the time attribute %q, %d: an event-time stream's time is its "+
+				"attribute (S3.2a-1's D2; owner D1 of S3.2b-2's design)",
+			app, sch.Stream(), e.Ts, sch.Attr(ta).Name, e.Values[ta].T)
+	}
+	if lineBound(sch, e) > event.MaxLogLine {
+		return fmt.Errorf(
+			"runtime: app %d stream %q: the event could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)",
+			app, sch.Stream(), event.MaxLogLine)
+	}
+	return r.enqueue(ctx, item{kind: iEvent, app: app, ev: e})
+}
+
+// CheckRows is TableWrite's per-row check, shared with the facade so a deploy's starting rows are refused at Deploy,
+// not at Start (S3.3-1's break-it B5): every value a recording can copy exactly (owner D1 of S3.2b-2's design), every
+// row within one recording line.
+func CheckRows(table string, attrs []event.Attr, rows [][]event.Value) error {
+	for ri, row := range rows {
+		for ci, v := range row {
+			name := fmt.Sprint(ci)
+			if ci < len(attrs) {
+				name = fmt.Sprintf("%d %q", ci, attrs[ci].Name)
+			}
+			if v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)) {
+				return fmt.Errorf("row %d: attribute %s: the float %v is not finite (S3.1-2's D2)", ri, name, v.F)
+			}
+			if err := recordable(v); err != nil {
+				return fmt.Errorf("row %d: attribute %s %v (owner D1 of S3.2b-2's design)", ri, name, err)
+			}
+		}
+		if rowBound(table, attrs, row) > event.MaxLogLine {
+			return fmt.Errorf("row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", ri,
+				event.MaxLogLine)
+		}
+	}
+	return nil
 }
