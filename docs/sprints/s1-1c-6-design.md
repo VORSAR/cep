@@ -694,6 +694,8 @@ func objectValue(a Attr, raw []byte, at int) (Value, error)       // :195-198; 3
 ```
 Order: reserved, absent, null, type, exactly as today; every `fmt.Sprintf` and `typeErr` argument moves verbatim (texts and offsets equal). Transfers: each case's two returns become the helper's results. One mutation per helper: `stringValue` dropping the `'"'` test (red by a number for a string attribute); `intValue` swapping TInt and TDuration; `floatValue` ignoring `err` (red by `1e999`); `boolValue` swapping `t`/`f`; `timestampValue` skipping the unescape (red by `"2026-01-01T10:00:00Z"`); `objectValue` refusing `[`; `absentValue`/`nullValue` with `nullable` inverted, plus the time note. Inline: every per-type helper calls a non-inlined function (> 80, inferred): one extra call level per present attribute and an 11-word `Value` returned through memory (inferred) — the split most likely to show time. If decision 1 says it costs: the PERMANENT waiver on `value` (no cheaper shape keeps cc ≤ 10).
 
+*(Annotated 2026-11-18: the split above cost `BenchmarkDecoderValue` +37 %: `Value` exceeds the compiler's 4-field register limit, so every helper that returns one adds an 88-byte store, copy and reload. "No cheaper shape keeps cc ≤ 10" no longer holds: under ground rule 13a the owner chose the review's option O1, readers returning plain values into `value`'s named result, with an exception to decision 1 for its measured +4.7 % to +5.9 % leaf cost — [owner](decisions.md#owner-decisions-2026-11-18--the-review-of-decodervalue-and-the-scanners-u-cost), decision 1; [the review](../reviews/s1-1c-6-decoder-value-review.md).)*
+
 #### E.2.5 The scanner — `top` 12, `value` 11, `object` 13, `str` 11, `number` 17, all hot
 
 New inlinable predicates (measured):
