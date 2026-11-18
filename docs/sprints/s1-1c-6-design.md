@@ -665,6 +665,8 @@ func parseRFC3339(t []byte) (int64, bool) {
 
 Splits (no new call on the loop path): `compactAndValid` `decode.go:309`'s `c == ' ' || c == '\t' || c == '\n' || c == '\r'` → `isSpace(c)` (12 → 9); `cleanObject` `:217`'s `c != ' ' && c != '\t' && c != '\n' && c != '\r'` → `!isSpace(c)` (13 → 10); `CleanLen` `:260` the same (13 → 10). Operands evaluated in the same order; no control transfer crosses (a predicate only). One mutation per site: `isSpace` dropping `'\r'`, red by the `\r` operand case. **Margin option** (E-Q3): extracting the non-ASCII arm (`decode.go:232-239`, `:275-282`) into `appendCleanRune` and `cleanRuneLen` brings both to 8, at one non-inlined call per non-ASCII rune of a non-compact object (inferred).
 
+*(Annotated 2026-11-18: the `isSpace` split cost `CleanLen` +23.9 % and `CleanObject` +13.2 % (an inverted branch fall-through, four taken branches more per byte); under ground rule 13a the owner chose one run walker with byte tables instead, reversing "no shared walker" above — [owner](decisions.md#owner-decisions-2026-11-18--the-architecture-review-of-lane-es-walkers-and-scanner), decision 1; [the review](../reviews/s1-1c-6-event-walkers-review.md).)*
+
 #### E.2.3 `appendUnescaped` — cc 18, hot (only for strings with an escape or malformed UTF-8: `needsUnescape`)
 ```go
 func appendUnescaped(dst, in []byte) []byte                   // loop: case '\\' → appendEscape; < RuneSelf → append; default → appendRune; cc 4
@@ -710,6 +712,8 @@ Body: `ws`; `!s.at('"')` → "want a member name"; `str`; `key = s.b[kstart+1 : 
 Splits: **`top`** — `if s.at('}')`, the loop `key, vstart, err := s.member()`, `d.record(…)`, the separator switch inline (`:572-584` verbatim): 12 → 7. **`object`** — `enter`, `if s.at('}')`, the loop `if _, _, err := s.member()`, the separator switch inline (`:656-669`): 13 → 8. **`(*scanner).value`** — `:610` becomes `case c == '-' || isDigit(c):` (`isDigit` cost 8, inlined): 11 → 10. **`str`** — the `\u` arm (`:722-730`) becomes `func (s *scanner) unicodeEscape() error` (k loop and both faults, `s.i += 6`; cost 190, not inlined; only per `\u` escape): 11 → 9. **`number`** — sign and integer switch (`:751-765`) stay; `if s.at('.') { s.i++; digits }`; then `return s.exponent()`, with `func (s *scanner) exponent() error { if !s.atEither('e', 'E') { return nil }; s.i++; if s.atEither('+', '-') { s.i++ }; return s.digits() }` (cost 127, not inlined: **one extra call per number**): 17 → 9.
 
 Order and offsets: each `syntax(…)` moves with its check, same `at`, same text; `!s.at('"')` is exactly De Morgan of `:556`. Transfers: `member`'s three error returns (mutation: return `nil` on a `str` fault, red by an unterminated key); `unicodeEscape`'s two faults plus the advance (mutations: no `s.i += 6`, red by `"A"`; drop the bound check, red by `"\u12`); `exponent`'s `nil` for "no exponent" (mutation: `return s.digits()` always, red by `1`). Decision 1 decides `member` and `exponent` per function.
+
+*(Annotated 2026-11-18: `object` through `member` and `str` through `unicodeEscape` cost the scanner's path +8.5 % then +8.1 %; under ground rule 13a the owner chose one `name` reader for `object` and `top` and a register-loop `str` instead (`member` and `colon` removed) — [owner](decisions.md#owner-decisions-2026-11-18--the-architecture-review-of-lane-es-walkers-and-scanner), decision 2.)*
 
 #### E.2.6 `NewSchema` — cc 12, deploy-time
 ```go

@@ -113,6 +113,8 @@
 | 2026-11-17 | [during S1.1c-6's lane R](#owner-decisions-2026-11-17--during-s11c-6s-lane-r) |
 | 2026-11-18 | [during S1.1c-6's lane R, sub-lane R2b](#owner-decisions-2026-11-18--during-s11c-6s-lane-r-sub-lane-r2b) |
 | 2026-11-18 | [a refactor's large slowdown triggers an architecture review](#owner-decisions-2026-11-18--a-refactors-large-slowdown-triggers-an-architecture-review) |
+| 2026-11-18 | [the architecture review of lane E's walkers and scanner](#owner-decisions-2026-11-18--the-architecture-review-of-lane-es-walkers-and-scanner) |
+| 2026-11-18 | [during S1.1c-6's lane R, sub-lane R3c](#owner-decisions-2026-11-18--during-s11c-6s-lane-r-sub-lane-r3c) |
 
 ## The decisions
 
@@ -1157,3 +1159,16 @@ Asked by the owner during S1.1c-6's build, after lane E's `isSpace` split cost `
 2. **The function stays unsplit and the lane waits on it** (≠ R; recommended was restoring first and reviewing alongside): when the trigger fires, the function is kept whole (within its package's size cap while the lane is open), an architecture review of its area (the repo's `architect-reviewer` with `the-fool`) seeks a better design or algorithm and brings the owner options with pros, cons and a recommendation, and the lane does not hand back that package until the owner has decided; the chosen design replaces the split directly. Rejected: restore with a waiver and review alongside (waiver churn).
 3. **This sprint's two cases are reviewed now** (as recommended): `cleanObject` and `CleanLen` (lane E, already kept whole in c54fe6c), studied with `compactAndValid`; the review takes one of the two agent slots when one frees.
 4. **Where it is written** (as recommended): here, in the ground rules (13a, so rules 14–22 keep their numbers), and as an annotation of S1.1c-6's design §2.4.
+
+### Owner decisions, 2026-11-18 — the architecture review of lane E's walkers and scanner
+
+Ground rule 13a's first review ([the review](../reviews/s1-1c-6-event-walkers-review.md), the repo's `architect-reviewer` with `the-fool`; its prototypes checked by the coordinator: each changes one file, passes the event suite with the review's differential tests, and is lint-clean). Its numbers are indicative (other agents were running); the chosen designs are re-measured alone before lane E hands back.
+
+1. **The object walkers become one run walker** (as recommended, prototype P7): `cleanRun` reads the bytes the stored form keeps as they are and stops at the first it does not (whitespace outside a string, a malformed byte inside one), with two 256-entry tables (`jsonSpace`, `strPlain`) and an inlined whitespace-run skip; `compactAndValid`, `CleanLen` and `cleanObject` become its callers (cyclomatic 1, 4, 4; the walker 9), the PERMANENT waivers go. This reverses design §6 E.2.2's "no shared walker" (annotated there): no per-byte callback, a per-run return. Rejected: a lookup table alone (three copies of the cleaning rules, two functions at the limit); keeping them whole with waivers.
+2. **The scanner's member name is read once, and `str` loops with its index in a register** (as recommended, prototype S11): one `name` reader for `object` and `top` (`member` and `colon` removed), `str` over locals with a `strByte` table and only the `\u` check out of line (`unicodeEscape`); `object` 9, `top` 8, `str` 9. Rejected: cutting `object` at its separator (`object` at the limit, two copies of the name rule); keeping them whole with waivers.
+3. **Decision 1's 2 % bar stays as it is** (≠ R; recommended was placement controls for leaf verdicts between 2 % and 5 % on benchmarks under ~200 ns): the review measured that moving unchanged code alone shifts `BenchmarkScannerValue` (~92 ns) by 3–4 % (p = 1.1e-05); the bar is not changed, and `routeKey`'s restore stands.
+4. **The redesigns land behind new nets** (as recommended): one test-only commit first, the owner's exception to the frozen nets, holding a differential test that runs the new walkers and scanner against verbatim copies of today's on generated inputs (shown red first against a planted difference) and four benchmarks (a heavily indented object, an escape-dense string, a `\u`-dense string, a document with many members); then the two redesign commits. Rejected: building on the existing nets only.
+
+### Owner decisions, 2026-11-18 — during S1.1c-6's lane R, sub-lane R3c
+
+1. **`Close`'s in-flight deadline guard gets a test now** (as recommended): in `shutDown`, `if first == nil` keeps `Close` from draining and removing apps after its in-flight wait met its deadline; replacing it with `true` was caught 0 of 20 times under load at the nets commit and at the split, since only a race shows it. Design §4 item 15 called the guard a pure read; it is needed for correct behaviour. Lane R adds one test-only commit, the owner's exception to the frozen nets: a `Close` whose in-flight wait meets its deadline sends no Drain or Remove (counted through the existing `removeFault` hook while an `Add` is held), so the mutant shows as a named failure. Rejected: listing it "reasoned, not proven".
