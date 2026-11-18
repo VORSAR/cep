@@ -56,10 +56,13 @@ class Base(unittest.TestCase):
         self.tmp = tmp.name
         self.log = os.path.join(self.tmp, "go.log")
 
-    def fake(self, stdout: str, exit_code: int = 0, *, hang: bool = False) -> dict[str, str]:
-        """A fake go that logs its pid and argv, prints `stdout`, then exits or blocks until stopped."""
+    def fake(self, stdout: str, exit_code: int = 0, *, hang: bool = False, log: bool = True) -> dict[str, str]:
+        """A fake go that logs its pid and argv, prints `stdout`, then exits or blocks until stopped. With log=False it
+        blocks before logging: a go the wall clock stops before its first line, as on a loaded machine."""
         body = (
             "import os, signal, sys\n"
+            f"while not {log!r}:\n"
+            "    signal.pause()\n"
             f"with open({self.log!r}, 'a', encoding='utf-8') as f:\n"
             "    f.write(str(os.getpid()) + ' ' + ' '.join(sys.argv[1:]) + '\\n')\n"
             f"sys.stdout.write({stdout!r})\n"
@@ -81,6 +84,16 @@ class Base(unittest.TestCase):
     def logged(self) -> list[str]:
         with open(self.log, encoding="utf-8") as f:
             return f.read().splitlines()
+
+    def has_logged(self) -> bool:
+        """The fake wrote its line (the file exists from its open, before the write)."""
+        return os.path.exists(self.log) and bool(self.logged())
+
+    def running_fakes(self) -> list[str]:
+        """The processes still running this test's fake go, found by its path: covers one stopped before it logged."""
+        fake = os.path.join(self.tmp, "fakebin", "go")
+        ps = subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True, text=True, check=True)
+        return [line.strip() for line in ps.stdout.splitlines() if fake in line]
 
 
 class Fake(Base):
@@ -105,8 +118,18 @@ class Fake(Base):
         self.assertEqual(code, 2, out)
         self.assertIn("killed", out)
         self.assertHogsGone(out)
-        go_pid = int(self.logged()[0].split()[0])
-        self.assertFalse(support.alive(go_pid))
+        self.assertEqual(self.running_fakes(), [], out)
+        # on a loaded machine the wall clock may stop the fake before it logs (the next test): its pid, when logged
+        if self.has_logged():
+            self.assertFalse(support.alive(int(self.logged()[0].split()[0])), out)
+
+    def test_a_go_stopped_by_the_wall_clock_before_it_logs_is_exit_2_and_leaves_no_go(self):
+        code, out = self.load(["--hogs", "2", "--wall", "2", "--", "./..."], self.fake("", log=False))
+        self.assertEqual(code, 2, out)
+        self.assertIn("killed", out)
+        self.assertHogsGone(out)
+        self.assertEqual(self.running_fakes(), [], out)
+        self.assertFalse(os.path.exists(self.log), out)  # the witness: stopped before its first line
 
     def test_no_test_ran_is_exit_2(self):
         code, out = self.load(["--hogs", "2", "--", "./..."], self.fake(event("pass")))
@@ -128,9 +151,10 @@ class Fake(Base):
             )
         self.addCleanup(proc.wait)
         self.addCleanup(self.kill, proc)
-        wait.until("the fake go to log its start", lambda: os.path.exists(self.log), cap_s=CAP_S)
+        wait.until("the fake go to log its start", self.has_logged, cap_s=CAP_S)
         go_pid = int(self.logged()[0].split()[0])
         self.assertTrue(support.alive(go_pid))  # the witness
+        self.assertNotEqual(self.running_fakes(), [])  # running_fakes sees a live fake
         proc.send_signal(signal.SIGTERM)
         self.assertEqual(proc.wait(timeout=CAP_S), 2)
         with open(out_path, encoding="utf-8") as f:
