@@ -125,77 +125,170 @@ func (d *Decoder) record(key []byte, start, end int, spans []span, info *Decoded
 }
 
 // value is attribute i's value from its last occurrence (design note §4.1 steps 3–4).
-func (d *Decoder) value(b []byte, i int, sp span, closing int) (Value, error) {
+//
+// Its result is named and filled in place, and no helper on this path takes or returns a Value. Value has more fields
+// than the compiler's limit of 4 for keeping a struct in registers, so each Value handed to or from a helper, inlined
+// or not, is an 88-byte copy through the stack, and a local v returned by value is copied again at every return (the
+// architecture review of (*Decoder).value, section 1). Each reader below returns a plain Go value and its type's zero
+// on a fault, so v is still Value{} when value returns an error.
+func (d *Decoder) value(b []byte, i int, sp span, closing int) (v Value, err error) {
 	a := d.schema.attrs[i]
 	if i == d.reserved {
 		return Value{Kind: TBool}, nil
 	}
 	isTime := i == d.schema.timeAttr
 	if !sp.seen {
-		if a.Optional && !isTime {
-			return Value{Kind: a.Type, Null: true}, nil
-		}
-		return Value{}, &DecodeError{Reason: DecodeMissing, Attr: a.Name, Offset: closing,
-			Msg: fmt.Sprintf("attribute %q (%v) is missing from the object that ends at offset %d%s", a.Name, a.Type, closing,
-				timeNote(isTime))}
+		err = nullInto(&v, a, absentFault(a, isTime, closing))
+		return v, err
 	}
 	raw := b[sp.start:sp.end]
 	if raw[0] == 'n' {
-		if a.Optional && !isTime {
-			return Value{Kind: a.Type, Null: true}, nil
-		}
-		return Value{}, &DecodeError{Reason: DecodeNull, Attr: a.Name, Offset: sp.start,
-			Msg: fmt.Sprintf("attribute %q (%v) at offset %d is null%s", a.Name, a.Type, sp.start, timeNote(isTime))}
+		err = nullInto(&v, a, nullFault(a, isTime, sp.start))
+		return v, err
 	}
+	want := "a value of a declared type"
 	switch a.Type {
 	case TString:
-		if raw[0] == '"' {
-			return Value{Kind: TString, Str: decodeString(raw)}, nil
-		}
-		return Value{}, typeErr(a, sp.start, "a string", raw)
+		v.Str, want = stringOf(raw)
 	case TInt, TDuration:
-		n, ok := parseInt(raw)
-		if !ok {
-			return Value{}, typeErr(a, sp.start, "an integer in the int64 range, with no fraction or exponent", raw)
-		}
-		if a.Type == TInt {
-			return Value{Kind: TInt, I: n}, nil
-		}
-		return Value{Kind: TDuration, D: n}, nil
+		var n int64
+		n, want = intOf(raw)
+		*intField(&v, a.Type) = n
 	case TFloat:
-		if raw[0] == '-' || (raw[0] >= '0' && raw[0] <= '9') {
-			if f, err := strconv.ParseFloat(string(raw), 64); err == nil {
-				return Value{Kind: TFloat, F: f}, nil
-			}
-		}
-		return Value{}, typeErr(a, sp.start, "a number in the float64 range", raw)
+		v.F, want = floatOf(raw)
 	case TBool:
-		switch raw[0] {
-		case 't':
-			return Value{Kind: TBool, B: true}, nil
-		case 'f':
-			return Value{Kind: TBool}, nil
-		}
-		return Value{}, typeErr(a, sp.start, "true or false", raw)
+		v.B, want = boolOf(raw)
 	case TTimestamp:
-		if raw[0] == '"' {
-			var buf [64]byte
-			text := raw[1 : len(raw)-1]
-			if needsUnescape(text) {
-				text = appendUnescaped(buf[:0], text)
-			}
-			if ms, ok := parseRFC3339(text); ok {
-				return Value{Kind: TTimestamp, T: ms}, nil
-			}
-		}
-		return Value{}, typeErr(a, sp.start, "an RFC 3339 timestamp string", raw)
+		v.T, want = timestampOf(raw)
 	case TObject:
-		if raw[0] == '{' || raw[0] == '[' {
-			return Value{Kind: TObject, Obj: cleanObject(raw)}, nil
-		}
-		return Value{}, typeErr(a, sp.start, "a JSON object or array", raw)
+		v.Obj, want = objectOf(raw)
 	}
-	return Value{}, typeErr(a, sp.start, "a value of a declared type", raw)
+	err = kindInto(&v, a, sp.start, want, raw)
+	return v, err
+}
+
+// nullInto sets *v, which is Value{}, to attribute a's null value when fault is nil, and returns fault.
+func nullInto(v *Value, a Attr, fault error) error {
+	if fault == nil {
+		v.Kind, v.Null = a.Type, true
+	}
+	return fault
+}
+
+// absentFault is nil when attribute a may be absent, else its missing fault at the object closing at offset closing.
+func absentFault(a Attr, isTime bool, closing int) error {
+	if a.Optional && !isTime {
+		return nil
+	}
+	return missingErr(a, isTime, closing)
+}
+
+// nullFault is nil when attribute a may be null, else its null fault at offset at.
+func nullFault(a Attr, isTime bool, at int) error {
+	if a.Optional && !isTime {
+		return nil
+	}
+	return nullErr(a, isTime, at)
+}
+
+// missingErr is attribute a's missing fault at the object closing at offset closing, with the event time's note
+// when isTime.
+func missingErr(a Attr, isTime bool, closing int) error {
+	return &DecodeError{Reason: DecodeMissing, Attr: a.Name, Offset: closing,
+		Msg: fmt.Sprintf("attribute %q (%v) is missing from the object that ends at offset %d%s", a.Name, a.Type, closing,
+			timeNote(isTime))}
+}
+
+// nullErr is attribute a's null fault at offset at, with the event time's note when isTime.
+func nullErr(a Attr, isTime bool, at int) error {
+	return &DecodeError{Reason: DecodeNull, Attr: a.Name, Offset: at,
+		Msg: fmt.Sprintf("attribute %q (%v) at offset %d is null%s", a.Name, a.Type, at, timeNote(isTime))}
+}
+
+// kindInto sets v.Kind to attribute a's type and returns nil when want is "": the type's reader accepted raw and
+// set its field. Otherwise v is still Value{} (each reader returns its zero on a fault) and kindInto returns a's type
+// fault at offset at, want naming what a wants.
+func kindInto(v *Value, a Attr, at int, want string, raw []byte) error {
+	if want != "" {
+		return typeErr(a, at, want, raw)
+	}
+	v.Kind = a.Type
+	return nil
+}
+
+// intField is the field of v an int64 of type t is kept in: I for TInt, D for TDuration.
+func intField(v *Value, t Type) *int64 {
+	if t == TInt {
+		return &v.I
+	}
+	return &v.D
+}
+
+// stringOf reads raw as a string attribute's value, with want "". It returns its type's zero on a fault, with want
+// naming what a string attribute wants.
+func stringOf(raw []byte) (s, want string) {
+	if raw[0] != '"' {
+		return "", "a string"
+	}
+	return decodeString(raw), ""
+}
+
+// intOf reads raw as an int or duration attribute's int64 (parseInt's rules), with want "". It returns its type's
+// zero on a fault, with want naming what the attribute wants.
+func intOf(raw []byte) (n int64, want string) {
+	n, ok := parseInt(raw)
+	if !ok {
+		return 0, "an integer in the int64 range, with no fraction or exponent"
+	}
+	return n, ""
+}
+
+// floatOf reads raw, a JSON number in the float64 range, as a float attribute's value, with want "". It returns its
+// type's zero on a fault, with want naming what the attribute wants.
+func floatOf(raw []byte) (f float64, want string) {
+	if raw[0] == '-' || (raw[0] >= '0' && raw[0] <= '9') {
+		if f, err := strconv.ParseFloat(string(raw), 64); err == nil {
+			return f, ""
+		}
+	}
+	return 0, "a number in the float64 range"
+}
+
+// boolOf reads raw, true or false, as a bool attribute's value, with want "". It returns its type's zero on a
+// fault, with want naming what the attribute wants.
+func boolOf(raw []byte) (b bool, want string) {
+	switch raw[0] {
+	case 't':
+		return true, ""
+	case 'f':
+		return false, ""
+	}
+	return false, "true or false"
+}
+
+// timestampOf reads raw, an RFC 3339 string unescaped first when it holds an escape, as a timestamp attribute's
+// milliseconds, with want "". It returns its type's zero on a fault, with want naming what the attribute wants.
+func timestampOf(raw []byte) (ms int64, want string) {
+	if raw[0] == '"' {
+		var buf [64]byte
+		text := raw[1 : len(raw)-1]
+		if needsUnescape(text) {
+			text = appendUnescaped(buf[:0], text)
+		}
+		if ms, ok := parseRFC3339(text); ok {
+			return ms, ""
+		}
+	}
+	return 0, "an RFC 3339 timestamp string"
+}
+
+// objectOf reads raw, a JSON object or array, as an object attribute's stored form (cleanObject), with want "". It
+// returns its type's zero on a fault, with want naming what the attribute wants.
+func objectOf(raw []byte) (o any, want string) {
+	if raw[0] == '{' || raw[0] == '[' {
+		return cleanObject(raw), ""
+	}
+	return nil, "a JSON object or array"
 }
 
 func timeNote(isTime bool) string {
