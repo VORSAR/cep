@@ -42,19 +42,9 @@ func NewReader(r io.Reader, app *App) (*Reader, error) {
 	if err := validateApp(app); err != nil {
 		return nil, err
 	}
-	envSchema, err := event.NewSchema("log", envelopeAttrs[:], event.ArrivalTime)
+	envSchema, hdrSchema, rejSchema, err := envelopeSchemas()
 	if err != nil {
-		return nil, fmt.Errorf("playback: the envelope schema: %w", err)
-	}
-	hdrSchema, err := event.NewSchema("recording", []event.Attr{{Name: "start", Type: event.TTimestamp}},
-		event.ArrivalTime)
-	if err != nil {
-		return nil, fmt.Errorf("playback: the header schema: %w", err)
-	}
-	rejSchema, err := event.NewSchema("rejected", []event.Attr{{Name: "attr", Type: event.TString, Optional: true}, {
-		Name: "reason", Type: event.TString}}, event.ArrivalTime)
-	if err != nil {
-		return nil, fmt.Errorf("playback: the rejected record's schema: %w", err)
+		return nil, err
 	}
 	rd := &Reader{
 		br: bufio.NewReaderSize(r, 64<<10), app: app, env: event.NewDecoder(envSchema), header: event.NewDecoder(hdrSchema),
@@ -66,33 +56,62 @@ func NewReader(r io.Reader, app *App) (*Reader, error) {
 		rd.sdec = append(rd.sdec, event.NewDecoder(s.Schema))
 	}
 	for i, t := range app.Tables {
-		rd.tables[t.Name] = i
-		full, err := event.NewSchema(t.Name, t.Attrs, event.ArrivalTime)
-		if err != nil {
-			return nil, fmt.Errorf("playback: table %q: %w", t.Name, err)
+		if err := rd.addTable(i, t); err != nil {
+			return nil, err
 		}
-		keyAttrs := make([]event.Attr, len(t.Key))
-		keyIdx := make([]int, len(t.Key))
-		for j, col := range t.Key {
-			keyIdx[j] = -1
-			for k, a := range t.Attrs {
-				if a.Name == col {
-					keyAttrs[j], keyIdx[j] = event.Attr{Name: a.Name, Type: a.Type}, k
-				}
-			}
-			if keyIdx[j] < 0 {
-				return nil, fmt.Errorf("playback: table %q: key column %q is not declared", t.Name, col)
-			}
-		}
-		keys, err := event.NewSchema(t.Name, keyAttrs, event.ArrivalTime)
-		if err != nil {
-			return nil, fmt.Errorf("playback: table %q's key: %w", t.Name, err)
-		}
-		rd.tput = append(rd.tput, event.NewDecoder(full))
-		rd.tdel = append(rd.tdel, event.NewDecoder(keys))
-		rd.tkey = append(rd.tkey, keyIdx)
 	}
 	return rd, nil
+}
+
+// envelopeSchemas are the schemas every log line is first decoded against: the envelope, the recording header and
+// the rejected record.
+func envelopeSchemas() (env, header, rejected event.Schema, err error) {
+	envSchema, err := event.NewSchema("log", envelopeAttrs[:], event.ArrivalTime)
+	if err != nil {
+		return env, header, rejected, fmt.Errorf("playback: the envelope schema: %w", err)
+	}
+	hdrSchema, err := event.NewSchema("recording", []event.Attr{{Name: "start", Type: event.TTimestamp}},
+		event.ArrivalTime)
+	if err != nil {
+		return env, header, rejected, fmt.Errorf("playback: the header schema: %w", err)
+	}
+	rejSchema, err := event.NewSchema("rejected", []event.Attr{{Name: "attr", Type: event.TString, Optional: true}, {
+		Name: "reason", Type: event.TString}}, event.ArrivalTime)
+	if err != nil {
+		return env, header, rejected, fmt.Errorf("playback: the rejected record's schema: %w", err)
+	}
+	return envSchema, hdrSchema, rejSchema, nil
+}
+
+// addTable adds table t, id i: its name, its full-row and key-column decoders and its key columns' attribute indexes;
+// a key column t does not declare is an error.
+func (rd *Reader) addTable(i int, t Table) error {
+	rd.tables[t.Name] = i
+	full, err := event.NewSchema(t.Name, t.Attrs, event.ArrivalTime)
+	if err != nil {
+		return fmt.Errorf("playback: table %q: %w", t.Name, err)
+	}
+	keyAttrs := make([]event.Attr, len(t.Key))
+	keyIdx := make([]int, len(t.Key))
+	for j, col := range t.Key {
+		keyIdx[j] = -1
+		for k, a := range t.Attrs {
+			if a.Name == col {
+				keyAttrs[j], keyIdx[j] = event.Attr{Name: a.Name, Type: a.Type}, k
+			}
+		}
+		if keyIdx[j] < 0 {
+			return fmt.Errorf("playback: table %q: key column %q is not declared", t.Name, col)
+		}
+	}
+	keys, err := event.NewSchema(t.Name, keyAttrs, event.ArrivalTime)
+	if err != nil {
+		return fmt.Errorf("playback: table %q's key: %w", t.Name, err)
+	}
+	rd.tput = append(rd.tput, event.NewDecoder(full))
+	rd.tdel = append(rd.tdel, event.NewDecoder(keys))
+	rd.tkey = append(rd.tkey, keyIdx)
+	return nil
 }
 
 // validateApp checks what a log is read against: unique, non-empty stream and table names, no negative bound.
@@ -100,6 +119,14 @@ func validateApp(app *App) error {
 	if app == nil {
 		return errors.New("playback: no app")
 	}
+	if err := validateStreams(app); err != nil {
+		return err
+	}
+	return validateTables(app)
+}
+
+// validateStreams checks app's streams in order: each has a schema, a name declared once and no negative bound.
+func validateStreams(app *App) error {
 	seen := map[string]bool{}
 	for i, s := range app.Streams {
 		name := s.Schema.Stream()
@@ -113,7 +140,12 @@ func validateApp(app *App) error {
 		}
 		seen[name] = true
 	}
-	seen = map[string]bool{}
+	return nil
+}
+
+// validateTables checks app's tables in order: each has a name, declared once.
+func validateTables(app *App) error {
+	seen := map[string]bool{}
 	for i, t := range app.Tables {
 		switch {
 		case t.Name == "":
@@ -160,6 +192,23 @@ func (r *Reader) Next() (Record, error) {
 
 // readLine is the next line without its line ending; io.EOF when there is none.
 func (r *Reader) readLine() ([]byte, error) {
+	chunk, err := r.rawLine()
+	if errors.Is(err, io.EOF) && len(chunk) == 0 {
+		return nil, io.EOF
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	chunk = trimLineEnd(chunk)
+	if len(chunk) > maxLine {
+		return nil, errLongLine
+	}
+	return chunk, nil
+}
+
+// rawLine is the next line with its ending, read whole across buffer-full chunks, and ReadSlice's error;
+// errLongLine past maxLine+2 bytes.
+func (r *Reader) rawLine() ([]byte, error) {
 	var long []byte
 	for {
 		chunk, err := r.br.ReadSlice('\n')
@@ -173,23 +222,19 @@ func (r *Reader) readLine() ([]byte, error) {
 		if long != nil {
 			chunk = append(long, chunk...)
 		}
-		if errors.Is(err, io.EOF) && len(chunk) == 0 {
-			return nil, io.EOF
-		}
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
-		}
-		if n := len(chunk); n > 0 && chunk[n-1] == '\n' {
-			chunk = chunk[:n-1]
-		}
-		if n := len(chunk); n > 0 && chunk[n-1] == '\r' {
-			chunk = chunk[:n-1]
-		}
-		if len(chunk) > maxLine {
-			return nil, errLongLine
-		}
-		return chunk, nil
+		return chunk, err
 	}
+}
+
+// trimLineEnd strips one trailing "\n", then one trailing "\r".
+func trimLineEnd(chunk []byte) []byte {
+	if n := len(chunk); n > 0 && chunk[n-1] == '\n' {
+		chunk = chunk[:n-1]
+	}
+	if n := len(chunk); n > 0 && chunk[n-1] == '\r' {
+		chunk = chunk[:n-1]
+	}
+	return chunk
 }
 
 // blank says a line holds only JSON whitespace.
