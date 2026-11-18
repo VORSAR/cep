@@ -147,46 +147,70 @@ func (sh *shard) process(m message) {
 		sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token})
 		return
 	}
-	rules, arrival := sh.rules[m.app], sh.arrival[m.app]
+	rules := sh.rules[m.app]
 	if rules == nil { // a message for a slot this shard freed (a remove raced a drain's last advances): nothing to walk
 		if m.kind == mDrain {
 			sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token})
 		}
 		return
 	}
-	for _, a := range m.adv {
-		for _, ri := range sh.reads[m.app][a.StreamID] {
-			if !arrival[ri] || m.final {
+	sh.applyAdvances(m.app, m.adv, m.final)
+	sh.applyAdmission(m.app, m.admStream, m.adm)
+	sh.offerAll(m.app, m.offers, m.ev, m.tables)
+	for ri := range rules {
+		sh.advance(m.app, ri, m.tables)
+	}
+	if m.kind == mDrain {
+		sh.ackDrain(m.app, m.token)
+	}
+}
+
+// applyAdvances applies a message's advances to the rules reading each stream: an on-arrival rule only at a drain or
+// the end (owner D1 of S3.2b-1).
+func (sh *shard) applyAdvances(app AppID, adv []clock.WMAdvance, final bool) {
+	rules, arrival := sh.rules[app], sh.arrival[app]
+	for _, a := range adv {
+		for _, ri := range sh.reads[app][a.StreamID] {
+			if !arrival[ri] || final {
 				rules[ri].Apply(a)
 			}
 		}
 	}
-	if m.admStream >= 0 && m.adm != math.MinInt64 {
-		adv := clock.WMAdvance{StreamID: m.admStream, Contribution: m.adm, Moved: true}
-		for _, ri := range sh.reads[m.app][m.admStream] {
+}
+
+// applyAdmission applies an event's admission watermark to the on-arrival rules reading its stream, if it has one.
+func (sh *shard) applyAdmission(app AppID, stream int, adm int64) {
+	rules, arrival := sh.rules[app], sh.arrival[app]
+	if stream >= 0 && adm != math.MinInt64 {
+		adv := clock.WMAdvance{StreamID: stream, Contribution: adm, Moved: true}
+		for _, ri := range sh.reads[app][stream] {
 			if arrival[ri] {
 				rules[ri].Apply(adv)
 			}
 		}
 	}
-	for _, o := range m.offers {
+}
+
+// offerAll walks each on-arrival rule offered first, then makes every offer of the event.
+func (sh *shard) offerAll(app AppID, offers []offer, ev event.Event, tables *table.Snapshot) {
+	arrival := sh.arrival[app]
+	for _, o := range offers {
 		if arrival[o.rule] { // a purge that fell due before this event comes first (design s3-2b-1 v2 §3)
-			sh.advance(m.app, o.rule, m.tables)
+			sh.advance(app, o.rule, tables)
 		}
 	}
-	for _, o := range m.offers {
-		sh.offer(m.app, o, m.ev)
+	for _, o := range offers {
+		sh.offer(app, o, ev)
 	}
-	for ri := range rules {
-		sh.advance(m.app, ri, m.tables)
+}
+
+// ackDrain acks a drain barrier with the items the app's rules still hold.
+func (sh *shard) ackDrain(app AppID, token uint64) {
+	var pending int64
+	for _, pr := range sh.rules[app] {
+		pending += int64(pr.Pending())
 	}
-	if m.kind == mDrain {
-		var pending int64
-		for _, pr := range rules {
-			pending += int64(pr.Pending())
-		}
-		sh.outbox = append(sh.outbox, outItem{kind: oAck, app: m.app, token: m.token, pending: pending})
-	}
+	sh.outbox = append(sh.outbox, outItem{kind: oAck, app: app, token: token, pending: pending})
 }
 
 // foldBursts ends a message: each rule's outputs from it become its high-water mark if higher (ADR-0006 §5).
