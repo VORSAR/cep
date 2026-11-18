@@ -115,6 +115,7 @@
 | 2026-11-18 | [a refactor's large slowdown triggers an architecture review](#owner-decisions-2026-11-18--a-refactors-large-slowdown-triggers-an-architecture-review) |
 | 2026-11-18 | [the architecture review of lane E's walkers and scanner](#owner-decisions-2026-11-18--the-architecture-review-of-lane-es-walkers-and-scanner) |
 | 2026-11-18 | [during S1.1c-6's lane R, sub-lane R3c](#owner-decisions-2026-11-18--during-s11c-6s-lane-r-sub-lane-r3c) |
+| 2026-11-18 | [the review of (*Decoder).value, and the scanner's \\u cost](#owner-decisions-2026-11-18--the-review-of-decodervalue-and-the-scanners-u-cost) |
 
 ## The decisions
 
@@ -1172,3 +1173,10 @@ Ground rule 13a's first review ([the review](../reviews/s1-1c-6-event-walkers-re
 ### Owner decisions, 2026-11-18 — during S1.1c-6's lane R, sub-lane R3c
 
 1. **`Close`'s in-flight deadline guard gets a test now** (as recommended): in `shutDown`, `if first == nil` keeps `Close` from draining and removing apps after its in-flight wait met its deadline; replacing it with `true` was caught 0 of 20 times under load at the nets commit and at the split, since only a race shows it. Design §4 item 15 called the guard a pure read; it is needed for correct behaviour. Lane R adds one test-only commit, the owner's exception to the frozen nets: a `Close` whose in-flight wait meets its deadline sends no Drain or Remove (counted through the existing `removeFault` hook while an `Add` is held), so the mutant shows as a named failure. Rejected: listing it "reasoned, not proven".
+
+### Owner decisions, 2026-11-18 — the review of (*Decoder).value, and the scanner's \u cost
+
+`(*Decoder).value`'s split (design §6 E.2.4) cost `BenchmarkDecoderValue` +37.0 % then +37.2 %, so ground rule 13a kept it whole and a second review ran ([the review](../reviews/s1-1c-6-decoder-value-review.md)): `Value` (9 fields, 88 bytes) is over the compiler's 4-field register limit, so each helper boundary that hands a `Value` over stores, copies and reloads it. The coordinator re-measured its recommended option alone.
+
+1. **`value` is rebuilt as option O1, with an exception to decision 1 of the plan check for this one function** (as recommended): small readers return the plain Go value and `value` fills its named result once; cyclomatic 28 to 10, no waiver, identical results (a differential test against a verbatim copy of today's `value`, 13,608 exhaustive and 300,000 random cases, kept permanently). Measured alone: `BenchmarkDecoderValue` +5.85 %, then +4.68 % (p = 1.1e-05; a placement control level at −0.4 %), a whole 16-attribute `Decode` −1.1 %, then −1.0 % (not significant). The exception covers this leaf cost; the comments on `value` carry the two habits the speed rests on (the named result, a reader's zero on a fault). Rejected: keeping `value` whole under a PERMANENT waiver.
+2. **The scanner's new string reader stays on the lane branch while one variant is tried** (as recommended): S11 (the review's decision 2 of the earlier section) measured faster everywhere (documents −11 %, escape-dense strings −36 % and −39 %, `ScannerValue` −3 % to −4 %) except strings dense with `\u` escapes, +21.2 % then +21.9 %, because each `\u` escape is a call. Ground rule 13a fired on `str`. One variant that keeps `\u` inline is prototyped and measured alone; the owner then chooses: the variant if it is slower nowhere, otherwise S11 with a written exception for `\u`-dense text. Nothing reaches `main` before the sprint's single merge. Rejected: restoring the old reader first (the common case would lose its gain meanwhile, for more churn); accepting S11 as it is without trying the variant.
