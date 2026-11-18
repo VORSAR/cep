@@ -104,38 +104,52 @@ func (rt *router) installAck(w *installWait, it outItem) {
 	a := w.app
 	switch {
 	case w.remove:
-		res := reply{}
-		if a.activated {
-			for _, q := range a.all {
-				m := make(chan struct{})
-				res.markers = append(res.markers, m)
-				rt.push(send{shard: -1, sink: q, si: sinkItem{marker: m, last: true}})
-			}
-			if a.rec != nil {
-				close(a.rec.stop)
-				res.recMarker = a.rec.returned
-			}
-		}
-		// The slot keeps a tombstone: the phase removed, the state dropped, so Stats keeps zero rows of the app's
-		// length and the id is never reused (design s3-3-1 MUST 2).
-		// Only the router's own fields are dropped: a.dec and a.rec stay, because caller goroutines read them past the
-		// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4).
-		a.phase.Store(int32(phaseRemoved))
-		a.ing, a.sinks, a.quiet = nil, nil, true
-		if w.rollback {
-			res.err = w.err
-		}
-		w.reply <- res
+		rt.completeRemove(w)
 	case w.err != nil: // a shard failed: undo the others, keep the id
-		a.phase.Store(int32(phaseRemoved))
-		rt.token++
-		rt.installs[rt.token] = &installWait{app: a, reply: w.reply, remove: true, rollback: true, err: w.err}
-		for sid := range r.shards {
-			rt.push(send{shard: sid, msg: message{kind: mRemove, app: a.id, token: rt.token}})
-		}
+		rt.rollBackAdd(w)
 	default:
 		a.installRoutes() // the app is reachable from here
 		w.reply <- reply{id: a.id}
+	}
+}
+
+// completeRemove completes an mRemove (or an add's rollback) all shards acked: the flushers' and recorder's markers,
+// then the tombstone, then the reply.
+func (rt *router) completeRemove(w *installWait) {
+	a := w.app
+	res := reply{}
+	if a.activated {
+		for _, q := range a.all {
+			m := make(chan struct{})
+			res.markers = append(res.markers, m)
+			rt.push(send{shard: -1, sink: q, si: sinkItem{marker: m, last: true}})
+		}
+		if a.rec != nil {
+			close(a.rec.stop)
+			res.recMarker = a.rec.returned
+		}
+	}
+	// The slot keeps a tombstone: the phase removed, the state dropped, so Stats keeps zero rows of the app's
+	// length and the id is never reused (design s3-3-1 MUST 2).
+	// Only the router's own fields are dropped: a.dec and a.rec stay, because caller goroutines read them past the
+	// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4).
+	a.phase.Store(int32(phaseRemoved))
+	a.ing, a.sinks, a.quiet = nil, nil, true
+	if w.rollback {
+		res.err = w.err
+	}
+	w.reply <- res
+}
+
+// rollBackAdd undoes an add a shard failed: the app removed from every shard, its id kept.
+func (rt *router) rollBackAdd(w *installWait) {
+	r := rt.r
+	a := w.app
+	a.phase.Store(int32(phaseRemoved))
+	rt.token++
+	rt.installs[rt.token] = &installWait{app: a, reply: w.reply, remove: true, rollback: true, err: w.err}
+	for sid := range r.shards {
+		rt.push(send{shard: sid, msg: message{kind: mRemove, app: a.id, token: rt.token}})
 	}
 }
 
