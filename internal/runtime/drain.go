@@ -20,6 +20,35 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	if appPhase(a.phase.Load()) == phaseRemoved {
 		return DrainResult{}, ErrRemoved
 	}
+	was := a.markDraining()
+	var runs []error
+	if a.started.Load() {
+		runs, err = r.awaitRuns(ctx, a)
+		if err != nil {
+			if !a.waited { // the quiet item was never queued: live, as before this Drain
+				a.revertDrain(was)
+			}
+			return DrainResult{Runs: runs}, err
+		}
+	}
+	ch, err := r.queueDrain(ctx, a, app, was)
+	if err != nil {
+		return DrainResult{Runs: runs}, err
+	}
+	rep, err := r.await(ctx, ch)
+	if err != nil {
+		return DrainResult{Runs: runs}, err
+	}
+	if err := r.awaitMarkers(ctx, rep.markers); err != nil {
+		return DrainResult{Runs: runs}, err
+	}
+	// every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
+	r.awaitRecordingStop(ctx, a, rep.recMarker)
+	return DrainResult{Pending: rep.pending, Runs: runs}, nil
+}
+
+// markDraining moves the app to phaseDraining and returns the phase it moved from.
+func (a *appState) markDraining() appPhase {
 	// was is the phase this Drain moved from — taken from the CAS that succeeded, so a revert never restores a phase
 	// another call changed meanwhile (review B1); phaseDraining: this Drain moved nothing, so it reverts nothing.
 	was := phaseDraining
@@ -29,62 +58,52 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	case a.phase.CompareAndSwap(int32(phaseActive), int32(phaseDraining)):
 		was = phaseActive
 	}
-	revert := func() { // nothing was queued: the app is not drained (QA Q15; break-it R1)
-		if was != phaseDraining {
-			a.phase.CompareAndSwap(int32(phaseDraining), int32(was))
-		}
+	return was
+}
+
+// revertDrain moves the app back to was, the phase markDraining moved it from: nothing was queued, so the app is not
+// drained (QA Q15; break-it R1).
+func (a *appState) revertDrain(was appPhase) {
+	if was != phaseDraining {
+		a.phase.CompareAndSwap(int32(phaseDraining), int32(was))
 	}
-	var runs []error
-	if a.started.Load() {
-		runs, err = r.awaitRuns(ctx, a)
-		if err != nil {
-			if !a.waited { // the quiet item was never queued: live, as before this Drain
-				revert()
-			}
-			return DrainResult{Runs: runs}, err
-		}
-	}
+}
+
+// queueDrain sets the drain flag, then queues the drain item and returns its reply channel. When nothing was queued
+// and no earlier Drain set the flag, it clears the flag and, if the quiet item was never queued, reverts the phase.
+func (r *Runtime) queueDrain(ctx context.Context, a *appState, app AppID, was appPhase) (chan reply, error) {
 	set := !a.draining.Swap(true)
 	it := item{kind: iDrain, app: app, reply: make(chan reply, 1)}
 	if err := r.enqueue(ctx, it); err != nil {
 		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
 			a.draining.Store(false)
 			if !a.waited {
-				revert()
+				a.revertDrain(was)
 			}
 		}
-		return DrainResult{Runs: runs}, err
+		return nil, err
 	}
-	rep, err := r.await(ctx, it.reply)
-	if err != nil {
-		return DrainResult{Runs: runs}, err
-	}
-	for _, m := range rep.markers {
-		select {
-		case <-m:
-		case <-r.stopped:
-			return DrainResult{Runs: runs}, ErrClosed
-		case <-ctx.Done():
-			return DrainResult{Runs: runs}, ctx.Err()
-		}
-	}
-	// every alert is out: the recording is waited for only until the deadline (owner, 2026-11-06)
-	if rep.recMarker != nil {
+	return it.reply, nil
+}
+
+// awaitRecordingStop waits for the recording's marker m, if there is one, until ctx's deadline: a marker still open
+// at the deadline cuts the recording.
+func (r *Runtime) awaitRecordingStop(ctx context.Context, a *appState, m chan struct{}) {
+	if m != nil {
 		if r.recordingWait != nil { // the package's tests only
 			r.recordingWait()
 		}
 		select {
-		case <-rep.recMarker:
+		case <-m:
 		case <-r.stopped:
 		case <-ctx.Done():
 			select {
-			case <-rep.recMarker: // written as the deadline passed: complete
+			case <-m: // written as the deadline passed: complete
 			default: // a live recording's stop, or a stopped recording's queued records, still unwritten (owner, 2026-11-11)
 				a.rec.cut()
 			}
 		}
 	}
-	return DrainResult{Pending: rep.pending, Runs: runs}, nil
 }
 
 // awaitRuns quiets the ticks, cancels the source context and waits for every Run goroutine, once per app; a repeated
@@ -106,18 +125,14 @@ func (r *Runtime) awaitRuns(ctx context.Context, a *appState) ([]error, error) {
 		if again { // a repeated Drain runs the barrier without waiting for the runs again (design s3-3-1 §2.4)
 			select {
 			case <-rs.done:
-				if !errors.Is(rs.err, context.Canceled) {
-					runs[i] = rs.err
-				}
+				runs[i] = runReturn(rs.err)
 			default:
 			}
 			continue
 		}
 		select {
 		case <-rs.done:
-			if !errors.Is(rs.err, context.Canceled) {
-				runs[i] = rs.err
-			}
+			runs[i] = runReturn(rs.err)
 		case <-ctx.Done():
 			stuck++
 		}
@@ -127,4 +142,12 @@ func (r *Runtime) awaitRuns(ctx context.Context, a *appState) ([]error, error) {
 			ctx.Err())
 	}
 	return runs, nil
+}
+
+// runReturn is a run's return as Drain reports it: context.Canceled, the cancel Drain sent, reads as nil.
+func runReturn(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }

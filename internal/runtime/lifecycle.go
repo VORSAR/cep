@@ -90,13 +90,8 @@ func (r *Runtime) Activate(ctx context.Context, app AppID) error {
 	if err != nil {
 		return err
 	}
-	switch appPhase(a.phase.Load()) {
-	case phaseActive:
-		return ErrStarted
-	case phaseDraining:
-		return ErrDrained
-	case phaseRemoved:
-		return ErrRemoved
+	if err := activationRefusal(appPhase(a.phase.Load())); err != nil {
+		return err
 	}
 	if _, err := r.requestQueued(ctx, item{kind: iActivate, app: app}); err != nil {
 		return err
@@ -108,6 +103,26 @@ func (r *Runtime) Activate(ctx context.Context, app AppID) error {
 	// a Drain begun meanwhile does to the phase — the router's drain of an activated app pushes markers they consume.
 	// Starting them and Close's stop exclude each other (the combined review's R-S3): once Close has given up at its
 	// deadline and stopped the runtime, nothing starts and the caller is told ErrClosed.
+	return r.startAppGoroutines(a)
+}
+
+// activationRefusal is Activate's answer for an app in phase p that cannot be activated, nil for an inactive one.
+func activationRefusal(p appPhase) error {
+	switch p {
+	case phaseActive:
+		return ErrStarted
+	case phaseDraining:
+		return ErrDrained
+	case phaseRemoved:
+		return ErrRemoved
+	}
+	return nil
+}
+
+// startAppGoroutines starts an activated app's flushers and recorder and makes it active, all under inflight.mu,
+// which Close's close(r.stopped) also takes: nothing starts after the stop (S1.1c-6 design §4 §2 item 11, the one
+// Lock and deferred Unlock a helper holds for its caller). Its Unlock runs before Activate's deferred inflight.leave.
+func (r *Runtime) startAppGoroutines(a *appState) error {
 	r.inflight.mu.Lock()
 	defer r.inflight.mu.Unlock()
 	if r.isClosed() {

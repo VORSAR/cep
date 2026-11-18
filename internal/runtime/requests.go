@@ -86,6 +86,28 @@ func (r *Runtime) await(ctx context.Context, ch chan reply) (reply, error) {
 	}
 }
 
+// awaitSignal waits for ch to close: ErrClosed once Close has stopped the runtime, ctx's error at its deadline.
+func (r *Runtime) awaitSignal(ctx context.Context, ch <-chan struct{}) error {
+	select {
+	case <-ch:
+		return nil
+	case <-r.stopped:
+		return ErrClosed
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// awaitMarkers waits, in order, for every marker to close, as awaitSignal waits for one.
+func (r *Runtime) awaitMarkers(ctx context.Context, markers []chan struct{}) error {
+	for _, m := range markers {
+		if err := r.awaitSignal(ctx, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Closed says Close has begun: the facade checks it before reading a program (§3.7: Deploy after Close is ErrClosed).
 func (r *Runtime) Closed() bool { return r.isClosed() || r.inflight.closed() }
 
