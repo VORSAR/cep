@@ -20,6 +20,7 @@ Binding on the owner, the coordinator and every agent. They override other proce
 11. Stop the line for red main, flaky tests, non-deterministic replay or correctness bugs. Fix the root; never retry, quarantine or suppress.
 12. Green = the real exit code of a completed run, read yourself.
 13. The gate (pinned toolchain, same checks locally and in CI) comes before the first feature.
+13a. A refactor that leaves a function or path at least 5 % slower than the code before it (median, significant, confirmed by a re-run) stops there: the function stays unsplit and an architecture review of its area seeks a better design or algorithm; the owner decides from its options (pros, cons, a recommendation).
 
 **Review**
 14. Architecture and QA review the plan, design and combined build; releases add a whole-engine break-it. Reviewers never review their own work.
