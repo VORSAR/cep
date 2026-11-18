@@ -136,7 +136,7 @@ func (s *scanner) value() error {
 		return s.array()
 	case c == '"':
 		return s.str()
-	case c == '-' || (c >= '0' && c <= '9'):
+	case c == '-' || isDigit(c):
 		return s.number()
 	case c == 't':
 		return s.literal("true")
