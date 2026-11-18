@@ -132,70 +132,113 @@ func (d *Decoder) value(b []byte, i int, sp span, closing int) (Value, error) {
 	}
 	isTime := i == d.schema.timeAttr
 	if !sp.seen {
-		if a.Optional && !isTime {
-			return Value{Kind: a.Type, Null: true}, nil
-		}
-		return Value{}, &DecodeError{Reason: DecodeMissing, Attr: a.Name, Offset: closing,
-			Msg: fmt.Sprintf("attribute %q (%v) is missing from the object that ends at offset %d%s", a.Name, a.Type, closing,
-				timeNote(isTime))}
+		return absentValue(a, isTime, closing)
 	}
 	raw := b[sp.start:sp.end]
 	if raw[0] == 'n' {
-		if a.Optional && !isTime {
-			return Value{Kind: a.Type, Null: true}, nil
-		}
-		return Value{}, &DecodeError{Reason: DecodeNull, Attr: a.Name, Offset: sp.start,
-			Msg: fmt.Sprintf("attribute %q (%v) at offset %d is null%s", a.Name, a.Type, sp.start, timeNote(isTime))}
+		return nullValue(a, isTime, sp)
 	}
 	switch a.Type {
 	case TString:
-		if raw[0] == '"' {
-			return Value{Kind: TString, Str: decodeString(raw)}, nil
-		}
-		return Value{}, typeErr(a, sp.start, "a string", raw)
+		return stringValue(a, raw, sp.start)
 	case TInt, TDuration:
-		n, ok := parseInt(raw)
-		if !ok {
-			return Value{}, typeErr(a, sp.start, "an integer in the int64 range, with no fraction or exponent", raw)
-		}
-		if a.Type == TInt {
-			return Value{Kind: TInt, I: n}, nil
-		}
-		return Value{Kind: TDuration, D: n}, nil
+		return intValue(a, raw, sp.start)
 	case TFloat:
-		if raw[0] == '-' || (raw[0] >= '0' && raw[0] <= '9') {
-			if f, err := strconv.ParseFloat(string(raw), 64); err == nil {
-				return Value{Kind: TFloat, F: f}, nil
-			}
-		}
-		return Value{}, typeErr(a, sp.start, "a number in the float64 range", raw)
+		return floatValue(a, raw, sp.start)
 	case TBool:
-		switch raw[0] {
-		case 't':
-			return Value{Kind: TBool, B: true}, nil
-		case 'f':
-			return Value{Kind: TBool}, nil
-		}
-		return Value{}, typeErr(a, sp.start, "true or false", raw)
+		return boolValue(a, raw, sp.start)
 	case TTimestamp:
-		if raw[0] == '"' {
-			var buf [64]byte
-			text := raw[1 : len(raw)-1]
-			if needsUnescape(text) {
-				text = appendUnescaped(buf[:0], text)
-			}
-			if ms, ok := parseRFC3339(text); ok {
-				return Value{Kind: TTimestamp, T: ms}, nil
-			}
-		}
-		return Value{}, typeErr(a, sp.start, "an RFC 3339 timestamp string", raw)
+		return timestampValue(a, raw, sp.start)
 	case TObject:
-		if raw[0] == '{' || raw[0] == '[' {
-			return Value{Kind: TObject, Obj: cleanObject(raw)}, nil
-		}
-		return Value{}, typeErr(a, sp.start, "a JSON object or array", raw)
+		return objectValue(a, raw, sp.start)
 	}
 	return Value{}, typeErr(a, sp.start, "a value of a declared type", raw)
+}
+
+// nullable says attribute a may be null or absent: optional, and not the event time.
+func nullable(a Attr, isTime bool) bool { return a.Optional && !isTime }
+
+// absentValue is the value of attribute a when the object that ends at offset closing does not carry it.
+func absentValue(a Attr, isTime bool, closing int) (Value, error) {
+	if nullable(a, isTime) {
+		return Value{Kind: a.Type, Null: true}, nil
+	}
+	return Value{}, &DecodeError{Reason: DecodeMissing, Attr: a.Name, Offset: closing,
+		Msg: fmt.Sprintf("attribute %q (%v) is missing from the object that ends at offset %d%s", a.Name, a.Type, closing,
+			timeNote(isTime))}
+}
+
+// nullValue is the value of attribute a when the payload carries null for it at offset at.
+func nullValue(a Attr, isTime bool, sp span) (Value, error) {
+	if nullable(a, isTime) {
+		return Value{Kind: a.Type, Null: true}, nil
+	}
+	return Value{}, &DecodeError{Reason: DecodeNull, Attr: a.Name, Offset: sp.start,
+		Msg: fmt.Sprintf("attribute %q (%v) at offset %d is null%s", a.Name, a.Type, sp.start, timeNote(isTime))}
+}
+
+// stringValue reads raw, at offset at, as the string attribute a.
+func stringValue(a Attr, raw []byte, at int) (Value, error) {
+	if raw[0] == '"' {
+		return Value{Kind: TString, Str: decodeString(raw)}, nil
+	}
+	return Value{}, typeErr(a, at, "a string", raw)
+}
+
+// intValue reads raw, at offset at, as the int or duration attribute a.
+func intValue(a Attr, raw []byte, at int) (Value, error) {
+	n, ok := parseInt(raw)
+	if !ok {
+		return Value{}, typeErr(a, at, "an integer in the int64 range, with no fraction or exponent", raw)
+	}
+	if a.Type == TInt {
+		return Value{Kind: TInt, I: n}, nil
+	}
+	return Value{Kind: TDuration, D: n}, nil
+}
+
+// floatValue reads raw, at offset at, as the float attribute a.
+func floatValue(a Attr, raw []byte, at int) (Value, error) {
+	if raw[0] == '-' || (raw[0] >= '0' && raw[0] <= '9') {
+		if f, err := strconv.ParseFloat(string(raw), 64); err == nil {
+			return Value{Kind: TFloat, F: f}, nil
+		}
+	}
+	return Value{}, typeErr(a, at, "a number in the float64 range", raw)
+}
+
+// boolValue reads raw, at offset at, as the bool attribute a.
+func boolValue(a Attr, raw []byte, at int) (Value, error) {
+	switch raw[0] {
+	case 't':
+		return Value{Kind: TBool, B: true}, nil
+	case 'f':
+		return Value{Kind: TBool}, nil
+	}
+	return Value{}, typeErr(a, at, "true or false", raw)
+}
+
+// timestampValue reads raw, at offset at, as the timestamp attribute a.
+func timestampValue(a Attr, raw []byte, at int) (Value, error) {
+	if raw[0] == '"' {
+		var buf [64]byte
+		text := raw[1 : len(raw)-1]
+		if needsUnescape(text) {
+			text = appendUnescaped(buf[:0], text)
+		}
+		if ms, ok := parseRFC3339(text); ok {
+			return Value{Kind: TTimestamp, T: ms}, nil
+		}
+	}
+	return Value{}, typeErr(a, at, "an RFC 3339 timestamp string", raw)
+}
+
+// objectValue reads raw, at offset at, as the object attribute a.
+func objectValue(a Attr, raw []byte, at int) (Value, error) {
+	if raw[0] == '{' || raw[0] == '[' {
+		return Value{Kind: TObject, Obj: cleanObject(raw)}, nil
+	}
+	return Value{}, typeErr(a, at, "a JSON object or array", raw)
 }
 
 func timeNote(isTime bool) string {
