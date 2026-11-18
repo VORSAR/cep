@@ -43,6 +43,15 @@ The full plan is [s1-1c-6-plan-check.md](s1-1c-6-plan-check.md) (v3), drafted re
 7. **The parser's latent panic is fixed now** (≠ R, a scope change): lane Q, its own commit, red first.
 8. **Confirmed:** `failSite`; cyclomatic 10; the sub-lane cut and the budget (≤ 98 of 100); the design's backlog items.
 
+**During the build — the owner, 2026-11-16** ([decisions](decisions.md#owner-decisions-2026-11-16--during-s11c-6s-lane-v-e-graph-001-reached-from-source); all three as recommended):
+1. **E-GRAPH-001 reached from source is fixed in this sprint** (a scope change): a rule that reads a derived stream gets E-GRAPH-004 whatever else poisons it; lane V's one fix commit after its splits, red first.
+2. **The 12 statements no test watched get their tests now** (a scope change): one test-only commit after lane V's splits.
+3. **A cycle through an undeclared stream is silenced in the same fix:** the cycle check stays quiet when a rule in the cycle has a name finding; E-GRAPH-001's report line is listed unreachable in v0.1.
+
+**During the build — the owner, 2026-11-17** ([decisions](decisions.md#owner-decisions-2026-11-17--during-s11c-6s-lane-r); both as recommended):
+1. **`Activate`'s and `Drain`'s removed-app checks** (`internal/runtime/lifecycle.go:99`, `:190`) take G1 decision 3's reason, "defensive: guaranteed by the router's refusal of a removed app", with the router tests as their guard tests; the code is unchanged.
+2. **The comparer leaves out only bytes per operation that are not stable:** allocations per operation always exact; bytes exact when each side's own runs agree, else each side's range printed and bytes left out of that benchmark's verdict.
+
 ## How it runs
 
 At most two agents at once; the plan check §1 holds the order: G0 → the design note, its blind reviews and the owner (G1) → W0 (the benchmark comparer; `astequal`'s rename map if a move is approved) → the coordinator's cross-package moves → the lanes, a queue of two (R and V; E and P; Q) → the coordinator's measurements after each lane → combine, T3, the review and break-it, one fix round, the nightly job, the path comparison, T4, the owner's check.
@@ -58,7 +67,7 @@ The nets are each lane's first item (the plan check §7): the coverage bar's cha
 
 ## Scope changes
 
-The re-cut after the spike (2026-11-15, before G0): S1.1c-5-3's packages moved to S1.1c-7. After G0: the fix of `internal/parser/parse.go:363`'s panic on a whitespace-only notation added to lane Q (owner, 2026-11-16, G1 decision 7; one commit, red first; nothing moves out — the budget absorbs it).
+The re-cut after the spike (2026-11-15, before G0): S1.1c-5-3's packages moved to S1.1c-7. After G0: the fix of `internal/parser/parse.go:363`'s panic on a whitespace-only notation added to lane Q (owner, 2026-11-16, G1 decision 7; one commit, red first; nothing moves out — the budget absorbs it). During lane V: the E-GRAPH-001 fix (one commit, red first) and the tests of the 12 statements no test watched (one test-only commit) added to lane V (owner, 2026-11-16, decisions 1 and 2 of that day's lane V section; the commit projection is recounted at combine).
 
 ## Findings
 
@@ -70,7 +79,7 @@ The re-cut after the spike (2026-11-15, before G0): S1.1c-5-3's packages moved t
 ```
 Sprint S1.1c-6 — the strict lint set: the size limits in runtime, validate, event, parser, plan and playback · routine: full · SP 13 · cap 2 weeks
 Entry (G0)   ☑ card complete and approved (owner, 2026-11-15)
-             ☑ dependencies merged, main green (S1.1c-5, PR #47; close-out #48; main 4d2b9eb — main CI: the owner reports) ☑ fits the cap, lanes ≤ 8 days (the spike and the re-cut)
+             ☑ dependencies merged, main green (S1.1c-5, PR #47; close-out #48; main 4d2b9eb — main CI green on both merges, the owner reported 2026-11-16) ☑ fits the cap, lanes ≤ 8 days (the spike and the re-cut)
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-15)
              ☑ test material: the nets are each lane's first item ☑ `gate/current-sprint` set, the first commit after the plan check's
 Design (G1)  ☑ architecture + the-fool findings resolved (design §12) ☑ QA testability findings resolved (design §12)
