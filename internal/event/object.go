@@ -6,40 +6,20 @@ import "unicode/utf8"
 // — every whitespace byte outside a string removed, member order and every token's text kept, a string's escapes as
 // written — with malformed UTF-8 inside a string replaced by U+FFFD, as for a string attribute (P8). Every reader then
 // sees one form, and a log line holding it never breaks.
-func cleanObject(raw []byte) string { //nolint:gocyclo,lll // PERMANENT reason="kept whole: its isSpace split costs +13.2 % median (BenchmarkCleanObject, Mann-Whitney p=1.1e-05, 10 pairs; re-run +9.9 %, p=1.1e-05), allocations 7 = 7; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6
-	if compactAndValid(raw) {
-		return string(raw)
+func cleanObject(raw []byte) string {
+	end, inStr := cleanRun(raw, 0, false)
+	if end >= len(raw) {
+		return string(raw) // compact and valid: stored as it is
 	}
-	out := make([]byte, 0, len(raw))
-	inStr := false
-	for i := 0; i < len(raw); {
-		c := raw[i]
-		switch {
-		case !inStr:
-			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
-				out = append(out, c)
-				inStr = c == '"'
-			}
-			i++
-		case c == '\\':
-			out = append(out, c, raw[i+1]) // an escape, kept as written; a \u's hex digits follow as plain bytes
-			i += 2
-		case c == '"':
-			out = append(out, c)
-			inStr = false
-			i++
-		case c < utf8.RuneSelf:
-			out = append(out, c)
-			i++
-		default:
-			r, size := utf8.DecodeRune(raw[i:])
-			if r == utf8.RuneError && size == 1 {
-				out = append(out, "\uFFFD"...)
-			} else {
-				out = append(out, raw[i:i+size]...)
-			}
-			i += size
+	out := append(make([]byte, 0, len(raw)), raw[:end]...)
+	for end < len(raw) {
+		i := skipSpace(raw, end) // whitespace outside a string is dropped
+		if inStr {
+			out = append(out, "\uFFFD"...) // a malformed byte in a string
+			i = end + 1
 		}
+		end, inStr = cleanRun(raw, i, inStr)
+		out = append(out, raw[i:end:len(raw)]...) // :len(raw) - an escape cut off at the end panics, as it did
 	}
 	return string(out)
 }
@@ -50,39 +30,20 @@ func cleanObject(raw []byte) string { //nolint:gocyclo,lll // PERMANENT reason="
 func CleanObject(raw []byte) string { return cleanObject(raw) }
 
 // CleanLen is len(CleanObject(raw)) without building it: what a recording line holds of a payload (review C1).
-func CleanLen(raw []byte) int { //nolint:gocyclo,lll // PERMANENT reason="kept whole: its isSpace split costs +23.9 % median (BenchmarkCleanLen, Mann-Whitney p=1.1e-05, 10 pairs; re-run +21.4 %, p=1.1e-05), allocations 0 = 0; samples in s1-1c-6-record.md" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-6
-	if compactAndValid(raw) {
-		return len(raw)
+func CleanLen(raw []byte) int {
+	end, inStr := cleanRun(raw, 0, false)
+	if end >= len(raw) {
+		return len(raw) // compact and valid: stored as it is
 	}
-	n, inStr := 0, false
-	for i := 0; i < len(raw); {
-		c := raw[i]
-		switch {
-		case !inStr:
-			if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
-				n++
-				inStr = c == '"'
-			}
-			i++
-		case c == '\\':
-			n += 2
-			i += 2
-		case c == '"':
-			n++
-			inStr = false
-			i++
-		case c < utf8.RuneSelf:
-			n++
-			i++
-		default:
-			r, size := utf8.DecodeRune(raw[i:])
-			if r == utf8.RuneError && size == 1 {
-				n += len("\uFFFD")
-			} else {
-				n += size
-			}
-			i += size
+	n := end
+	for end < len(raw) {
+		i := skipSpace(raw, end) // whitespace outside a string is dropped
+		if inStr {
+			n += len("\uFFFD") // a malformed byte in a string
+			i = end + 1
 		}
+		end, inStr = cleanRun(raw, i, inStr)
+		n += end - i
 	}
 	return n
 }
@@ -100,29 +61,63 @@ func ExactObject(text string) bool {
 
 // compactAndValid says raw has no whitespace outside its strings and no malformed UTF-8: it is stored as it is.
 func compactAndValid(raw []byte) bool {
-	inStr := false
-	for i := 0; i < len(raw); i++ {
+	end, _ := cleanRun(raw, 0, false)
+	return end >= len(raw)
+}
+
+// cleanRun reads raw from i (inside a string when inStr) over the bytes the stored form keeps as they are, and
+// stops at the first it does not keep: whitespace outside a string, or a malformed UTF-8 byte inside one. It
+// returns where it stopped - len(raw), or one past it after an escape cut off at the end, when it found none - and
+// whether that is inside a string.
+func cleanRun(raw []byte, i int, inStr bool) (int, bool) {
+	for i < len(raw) {
 		c := raw[i]
 		switch {
 		case !inStr:
-			if isSpace(c) {
-				return false
+			if jsonSpace[c] {
+				return i, false
 			}
 			inStr = c == '"'
-		case c == '\\':
 			i++
+		case strPlain[c]:
+			i++
+		case c == '\\':
+			i += 2 // an escape, kept as written; a \u's hex digits follow as plain bytes
 		case c == '"':
 			inStr = false
-		case c >= utf8.RuneSelf:
+			i++
+		default:
 			r, size := utf8.DecodeRune(raw[i:])
 			if r == utf8.RuneError && size == 1 {
-				return false
+				return i, true
 			}
-			i += size - 1
+			i += size
 		}
 	}
-	return true
+	return i, inStr
 }
 
-// isSpace says c is JSON whitespace: a space, tab, line feed or carriage return.
-func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+// strPlain says which bytes a string keeps as one byte with nothing to check: ASCII other than '"' and '\\'.
+// Written out, as the globals check takes a lookup table (ADR-0015 §2.2): row k holds bytes 16k to 16k+15; false
+// at 0x22 and 0x5c and from 0x80 on.
+var strPlain = [256]bool{
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x00-0x0f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x10-0x1f
+	true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x20-0x2f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x30-0x3f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x40-0x4f
+	true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, // 0x50-0x5f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x60-0x6f
+	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x70-0x7f
+}
+
+// skipSpace is the offset of the first byte from i on that is not JSON whitespace, or len(raw).
+func skipSpace(raw []byte, i int) int {
+	for i < len(raw) && jsonSpace[raw[i]] {
+		i++
+	}
+	return i
+}
+
+// jsonSpace says which bytes are JSON whitespace: a space, tab, line feed or carriage return.
+var jsonSpace = [256]bool{' ': true, '\t': true, '\n': true, '\r': true}
