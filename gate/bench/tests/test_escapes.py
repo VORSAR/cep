@@ -106,6 +106,94 @@ func Hold(n int) int {
 
 MOVED_DOWN = ESCAPING.replace("func Hold", "func other() int { return 1 }\n\n// Hold, moved down.\nfunc Hold")
 
+# broadcast's case (S1.1c-6, owner 2026-11-18 decision 2): two pointer parameters leak into a call through a
+# func-typed field; after, one struct parameter holds both and is passed to the same call.
+BROADCAST_BEFORE = """\
+package m
+
+type adv struct{ n int }
+
+type tables struct{ n int }
+
+type router struct {
+\tdeliver func(a *adv, t *tables)
+}
+
+func (rt *router) broadcast(a *adv,
+\tt *tables) {
+\trt.deliver(a, t)
+}
+"""
+
+BROADCAST_AFTER = """\
+package m
+
+type adv struct{ n int }
+
+type tables struct{ n int }
+
+type message struct {
+\ta *adv
+\tt *tables
+}
+
+type router struct {
+\tdeliver func(a *adv, t *tables)
+}
+
+func (rt *router) broadcast(m message) {
+\trt.deliver(m.a, m.t)
+}
+"""
+
+KEEP_BEFORE = """\
+package m
+
+var sink *int
+
+func Keep(p, q *int) int {
+\tsink = p
+\treturn *q
+}
+"""
+
+KEEP_AFTER = """\
+package m
+
+var sink, other *int
+
+func Keep(p, q *int) int {
+\tsink = p
+\tother = q
+\treturn *q
+}
+"""
+
+HELPER_BEFORE = """\
+package m
+
+var sink *int
+
+//go:noinline
+func store(p *int) { sink = p }
+
+func Outer(p *int) { store(p) }
+"""
+
+HELPER_AFTER = """\
+package m
+
+var sink *int
+
+//go:noinline
+func store(p *int) { sink = p }
+
+//go:noinline
+func fresh(p *int) { store(p) }
+
+func Outer(p *int) { fresh(p) }
+"""
+
 
 class Escapes(unittest.TestCase):
     def setUp(self) -> None:
@@ -197,6 +285,108 @@ class Escapes(unittest.TestCase):
         code, out = self.escapes(before, "no-such-rev", "AppendValue")
         self.assertEqual(code, 2, out)
         self.assertIn("no-such-rev", out.splitlines()[-1])
+
+    def test_a_new_parameter_carrying_the_old_leaks_is_no_cost(self):
+        before = self.commit({"m.go": BROADCAST_BEFORE})
+        after = self.commit({"m.go": BROADCAST_AFTER})
+        code, out = self.escapes(before, after, "(*router).broadcast")
+        self.assertEqual(code, 0, out)
+        lines = out.splitlines()
+        # Positive witness: the new parameter's leak was read on the after side and seen as new.
+        self.assertIn("leaking param (diagnostic) after: (*router).broadcast: leaking param: m", lines)
+        self.assertIn(
+            "leak of a parameter (*router).broadcast did not have before (diagnostic): leaking param: m", lines
+        )
+        self.assertFalse([line for line in lines if line.startswith("new leak of")], out)
+        self.assertEqual(lines[-1], "verdict: no new heap line in (*router).broadcast's group")
+
+    def test_a_parameter_the_original_had_that_newly_leaks_still_costs(self):
+        before = self.commit({"m.go": KEEP_BEFORE})
+        after = self.commit({"m.go": KEEP_AFTER})
+        code, out = self.escapes(before, after, "Keep")
+        self.assertEqual(code, 1, out)
+        self.assertIn("new leak of Keep's own parameter: leaking param: q", out.splitlines())
+        self.assertTrue(out.splitlines()[-1].startswith("verdict: new heap lines in Keep's group"), out)
+
+    def test_the_before_side_lists_the_helpers_that_existed_before(self):
+        before = self.commit({"m.go": HELPER_BEFORE})
+        after = self.commit({"m.go": HELPER_AFTER})
+        code, out = self.escapes(before, after, "Outer", "store", "fresh")
+        self.assertEqual(code, 0, out)
+        lines = out.splitlines()
+        self.assertIn("leaking param (diagnostic) before: store: leaking param: p", lines)
+        # fresh exists only after: listed there (the witness), absent before, and no error.
+        self.assertIn("leaking param (diagnostic) after: fresh: leaking param: p", lines)
+        self.assertFalse([line for line in lines if line.startswith("leaking param (diagnostic) before: fresh")], out)
+
+
+ROUTER_GO = """\
+package runtime
+
+/* A comment, never a declaration:
+func (rt *router) broadcast(x int) {
+*/
+var s = `
+func (rt *router) broadcast(y int) {`
+
+func (rt *router) broadcast(a *appState, kind msgKind, adv []clock.WMAdvance, tables *table.Snapshot, token uint64,
+\tstamp int64) {
+}
+
+func (s Schema) Stream() string { return s.name }
+
+func (l *List[T]) Push(v T) {}
+
+func (*router) quiet(int, string) {}
+"""
+
+
+class Declarations(unittest.TestCase):
+    def test_a_grouped_list(self):
+        src = {"f.go": "package m\n\nfunc F(a, b int, c string) error {\n\treturn nil\n}\n"}
+        self.assertEqual(escapes.declared(src, "F", "r1"), ["a", "b", "c"])
+
+    def test_a_receiver_comes_first(self):
+        self.assertEqual(escapes.declared({"s.go": ROUTER_GO}, "Schema.Stream", "r1"), ["s"])
+        self.assertEqual(escapes.declared({"s.go": ROUTER_GO}, "(Schema).Stream", "r1"), ["s"])
+        self.assertEqual(escapes.declared({"s.go": ROUTER_GO}, "(*router).quiet", "r1"), [])
+
+    def test_a_function_typed_parameter_and_a_variadic_one(self):
+        src = {"f.go": "package m\n\nfunc Each(f func(int, string) error, _ bool, xs ...int) (n int, err error) {}\n"}
+        self.assertEqual(escapes.declared(src, "Each", "r1"), ["f", "_", "xs"])
+
+    def test_a_generic_function_and_a_generic_method(self):
+        src = {"g.go": "package m\n\nfunc Map[T any, U comparable](xs []T, f func(T) U) []U { return nil }\n"}
+        self.assertEqual(escapes.declared(src, "Map", "r1"), ["xs", "f"])
+        self.assertEqual(escapes.declared({"l.go": ROUTER_GO}, "(*List[go.shape.int]).Push", "r1"), ["l", "v"])
+
+    def test_a_declaration_over_several_lines(self):
+        self.assertEqual(
+            escapes.declared({"router.go": ROUTER_GO}, "(*router).broadcast", "r1"),
+            ["rt", "a", "kind", "adv", "tables", "token", "stamp"],
+        )
+
+    def test_an_absent_function_is_an_error(self):
+        # A comment and a string that read like a declaration are not one.
+        src = {"f.go": "package m\n\n// func Missing(x int) {}\nvar s = `\nfunc Missing(y int) {`\n"}
+        with self.assertRaises(escapes.Error) as caught:
+            escapes.declared(src, "Missing", "r1")
+        self.assertIn("Missing", str(caught.exception))
+        self.assertIn("r1", str(caught.exception))
+        with self.assertRaises(escapes.Error):
+            escapes.declared({"router.go": ROUTER_GO}, "(*Other).broadcast", "r1")
+
+    def test_two_different_declarations_are_an_error(self):
+        one = {"a_linux.go": "package m\n\nfunc F(a int) {}\n", "a_darwin.go": "package m\n\nfunc F(b int) {}\n"}
+        with self.assertRaises(escapes.Error):
+            escapes.declared(one, "F", "r1")
+        same = {"a_linux.go": "package m\n\nfunc F(a int) {}\n", "a_darwin.go": "package m\n\nfunc F(a int) {}\n"}
+        self.assertEqual(escapes.declared(same, "F", "r1"), ["a"])
+
+    def test_a_leak_names_its_parameter(self):
+        self.assertEqual(escapes.leaked("leaking param: dst to result ~r0 level=0"), "dst")
+        self.assertEqual(escapes.leaked("leaking param content: rt"), "rt")
+        self.assertEqual(escapes.leaked("leaking param: m"), "m")
 
 
 class Grouping(unittest.TestCase):
