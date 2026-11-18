@@ -184,42 +184,6 @@
       "cap": 15
     },
     {
-      "target": "internal/runtime argument-limit",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1",
-      "cap": 1
-    },
-    {
-      "target": "internal/runtime file-length-limit",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1",
-      "cap": 2
-    },
-    {
-      "target": "internal/runtime funlen",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1",
-      "cap": 3
-    },
-    {
-      "target": "internal/runtime gocyclo",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-1",
-      "cap": 16
-    },
-    {
       "target": "tools/apipartition funlen",
       "kind": "TEMP",
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2; S1.1c-6's re-cut after its spike)",
