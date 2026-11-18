@@ -30,6 +30,32 @@ func (r *Runtime) Stats(ctx context.Context) (Stats, error) {
 	return rep.stats, err
 }
 
+// statsCut begins a Stats cut: the router's counters now, then one mStats to every shard; take completes it.
+func (rt *router) statsCut(rep chan reply) {
+	r := rt.r
+	rt.token++
+	st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
+	for _, a := range r.appList() {
+		if a == nil { // never installed here
+			st.Streams, st.Recording, st.Rules = append(st.Streams, nil), append(st.Recording, RecordingStats{}), append(
+				st.Rules, nil)
+			continue
+		}
+		st.Streams = append(st.Streams, streamStats(a)) // a removed app: zero rows of its length (MUST 2)
+		st.Recording = append(st.Recording, a.rec.stats())
+		rules := make([]RuleStats, len(a.app.Rules))
+		for i := range rules {
+			rules[i].KeyErrors = a.keyErr[i]
+		}
+		st.Rules = append(st.Rules, rules)
+	}
+	st.SaturatedParks = make([]int64, len(r.shards))
+	rt.stats[rt.token] = &statsWait{stats: st, reply: rep}
+	for sid := range r.shards {
+		rt.push(send{shard: sid, msg: message{kind: mStats, token: rt.token}})
+	}
+}
+
 // stats is the shard's counters for a Stats cut.
 func (sh *shard) stats() *shardStats {
 	st := &shardStats{parks: sh.parks}

@@ -8,6 +8,24 @@ import (
 
 // ---- the router's side ----
 
+// ingestLifecycle takes an app's lifecycle item: add, remove, activate, quiet or drain.
+func (rt *router) ingestLifecycle(it item) {
+	switch it.kind {
+	case iAdd:
+		rt.add(it)
+	case iRemove:
+		rt.remove(it)
+	case iActivate:
+		rt.activate(it)
+	case iQuiet:
+		if a := rt.app(it.app); a != nil {
+			a.quiet = true // the ticks stop before the sources (S3.1-1's D3; design s3-3-1 §2.6)
+		}
+	case iDrain:
+		rt.beginDrain(it)
+	}
+}
+
 // add installs an app (design s3-3-1 §2.4): the state built with the router's stamp, published without routes, then
 // mAdd to every shard under a token; take completes it.
 func (rt *router) add(it item) {
@@ -52,6 +70,23 @@ func (rt *router) remove(it item) {
 	rt.installs[rt.token] = &installWait{app: a, reply: it.reply, remove: true}
 	for sid := range r.shards {
 		rt.push(send{shard: sid, msg: message{kind: mRemove, app: a.id, token: rt.token}})
+	}
+}
+
+// activate starts an app's clock and delivery, or answers why it cannot.
+func (rt *router) activate(it item) {
+	a := rt.app(it.app)
+	switch {
+	case a == nil || a.ing == nil || a.removing:
+		it.reply <- reply{err: ErrRemoved}
+	case a.drained:
+		it.reply <- reply{err: ErrDrained}
+	case a.activated:
+		it.reply <- reply{err: ErrStarted}
+	default:
+		a.activated = true
+		a.started.Store(true)
+		it.reply <- reply{}
 	}
 }
 
@@ -102,6 +137,39 @@ func (rt *router) installAck(w *installWait, it outItem) {
 		a.installRoutes() // the app is reachable from here
 		w.reply <- reply{id: a.id}
 	}
+}
+
+// beginDrain starts an app's drain: the barrier to every shard, or the answer of a drain already begun or not needed.
+func (rt *router) beginDrain(it item) {
+	a := rt.app(it.app)
+	if a == nil || a.ing == nil {
+		it.reply <- reply{err: ErrRemoved}
+		return
+	}
+	if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
+		if a.drainRes != nil {
+			it.reply <- *a.drainRes
+		} else {
+			d := rt.drains[a.drainTok]
+			d.replies = append(d.replies, it.reply)
+		}
+		return
+	}
+	if !a.activated { // never activated: nothing was delivered, nothing recorded (design s3-3-1 §2.4, MUST 8)
+		a.drained = true // the queued header is never written: no recorder goroutine runs (a.rec is a caller's to read)
+		res := reply{}
+		a.drainRes = &res
+		it.reply <- res
+		return
+	}
+	a.drained = true
+	rt.token++
+	a.drainTok = rt.token
+	// The drain waits until the stop is written (design s3-2b-2 §7), or, for a recording that ended, until the
+	// records queued before its end are (owner D2 of S3.2b-2's design; review C3).
+	dw := &drainWait{app: a, replies: []chan reply{it.reply}, recMarker: a.rec.drainStop()}
+	rt.drains[rt.token] = dw
+	rt.drainApp(a, rt.token)
 }
 
 // drainApp ends the app's input and sends every shard the drain barrier's message, shared by the router and Sync.

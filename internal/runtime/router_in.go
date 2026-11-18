@@ -7,151 +7,111 @@ import (
 )
 
 func (rt *router) ingest(it item) {
-	r := rt.r
 	switch it.kind {
-	case iAdd:
-		rt.add(it)
-	case iRemove:
-		rt.remove(it)
-	case iActivate:
-		a := rt.app(it.app)
-		switch {
-		case a == nil || a.ing == nil || a.removing:
-			it.reply <- reply{err: ErrRemoved}
-		case a.drained:
-			it.reply <- reply{err: ErrDrained}
-		case a.activated:
-			it.reply <- reply{err: ErrStarted}
-		default:
-			a.activated = true
-			a.started.Store(true)
-			it.reply <- reply{}
-		}
-	case iQuiet:
-		if a := rt.app(it.app); a != nil {
-			a.quiet = true // the ticks stop before the sources (S3.1-1's D3; design s3-3-1 §2.6)
-		}
+	case iAdd, iRemove, iActivate, iQuiet, iDrain:
+		rt.ingestLifecycle(it)
 	case iBatchEnd:
-		a := rt.app(it.app)
-		if a == nil || a.ing == nil {
-			return
-		}
-		if a.drained {
-			a.after[it.stream]++
-			return
-		}
-		a.batches[it.stream]++
-		a.rec.put(recItem{kind: rBatchEnd, stream: it.stream, batch: it.batch})
+		rt.ingestBatchEnd(it)
 	case iEvent:
-		a := rt.app(it.app)
-		if a == nil || a.ing == nil {
-			return
-		}
-		if a.drained {
-			a.after[it.ev.StreamID]++
-			return
-		}
-		stamp := rt.now(r.cfg.Now())
-		if a.app.Schemas[it.ev.StreamID].TimeAttr() == event.ArrivalTime {
-			it.ev.Ts = stamp // live stamping at ingest (item 3; design s3-2b-2 §4, MUST 6)
-		}
-		rt.event(a, &it.ev, stamp, it.info)
-		// queued after the ingest step, still in intake order: the step writes the flag into a declared text_invisibles
-		// slot, and the channel hand-off orders that write before the recorder goroutine reads the event (a race the
-		// race row caught at T4)
-		a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
+		rt.ingestEvent(it)
 	case iReject:
-		a := rt.app(it.app)
-		if a == nil || a.ing == nil {
-			return
-		}
-		if a.drained {
-			a.after[it.stream]++
-			return
-		}
-		stamp := rt.now(r.cfg.Now())
-		a.rec.put(recItem{kind: rRejected, stream: it.stream, arrival: stamp, fault: it.fault})
-		a.ing.Reject(it.stream, stamp)
+		rt.ingestReject(it)
 	case iTick:
-		stamp := rt.now(it.now)
-		for _, a := range r.appList() {
-			// the clock starts at Start (owner, 2026-11-08)
-			if a == nil || a.ing == nil || !a.activated || a.drained || a.quiet {
-				continue
-			}
-			a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
-			rt.tickApp(a, stamp)
-		}
+		rt.tickApps(it.now)
 	case iWrite:
-		a := rt.app(it.app)
-		if a == nil || a.ing == nil {
-			it.reply <- reply{err: ErrRemoved}
-			return
-		}
-		if a.drained {
-			it.reply <- reply{err: ErrDrained}
-			return
-		}
-		err := a.write(it.table, it.op, it.rows)
-		if err == nil {
-			for _, row := range copyRows(it.rows) { // one record per row: Records counts lines (break-it S1)
-				a.rec.put(recItem{kind: rTable, table: it.table, op: it.op, rows: [][]event.Value{row}})
-			}
-		}
-		it.reply <- reply{err: err}
-	case iDrain:
-		a := rt.app(it.app)
-		if a == nil || a.ing == nil {
-			it.reply <- reply{err: ErrRemoved}
-			return
-		}
-		if a.drained { // a retried Drain waits for the same flush (owner, 2026-11-05)
-			if a.drainRes != nil {
-				it.reply <- *a.drainRes
-			} else {
-				d := rt.drains[a.drainTok]
-				d.replies = append(d.replies, it.reply)
-			}
-			return
-		}
-		if !a.activated { // never activated: nothing was delivered, nothing recorded (design s3-3-1 §2.4, MUST 8)
-			a.drained = true // the queued header is never written: no recorder goroutine runs (a.rec is a caller's to read)
-			res := reply{}
-			a.drainRes = &res
-			it.reply <- res
-			return
-		}
-		a.drained = true
-		rt.token++
-		a.drainTok = rt.token
-		// The drain waits until the stop is written (design s3-2b-2 §7), or, for a recording that ended, until the
-		// records queued before its end are (owner D2 of S3.2b-2's design; review C3).
-		dw := &drainWait{app: a, replies: []chan reply{it.reply}, recMarker: a.rec.drainStop()}
-		rt.drains[rt.token] = dw
-		rt.drainApp(a, rt.token)
+		rt.writeTable(it)
 	case iStats:
-		rt.token++
-		st := Stats{PendingHigh: rt.pendingHigh, MailboxHigh: append([]int(nil), rt.mailboxHigh...)}
-		for _, a := range r.appList() {
-			if a == nil { // never installed here
-				st.Streams, st.Recording, st.Rules = append(st.Streams, nil), append(st.Recording, RecordingStats{}), append(
-					st.Rules, nil)
-				continue
-			}
-			st.Streams = append(st.Streams, streamStats(a)) // a removed app: zero rows of its length (MUST 2)
-			st.Recording = append(st.Recording, a.rec.stats())
-			rules := make([]RuleStats, len(a.app.Rules))
-			for i := range rules {
-				rules[i].KeyErrors = a.keyErr[i]
-			}
-			st.Rules = append(st.Rules, rules)
+		rt.statsCut(it.reply)
+	}
+}
+
+// inputApp is the app a stream input reaches: nil if the app is gone, and nil, the input counted as after the drain,
+// if the router has drained it. It reads the router's own a.drained, never the caller's phase, so a batch end queued
+// between Stop and the drain item is still counted and recorded (known issue S3.3-1-3).
+func (rt *router) inputApp(id AppID, stream int) *appState {
+	a := rt.app(id)
+	if a == nil || a.ing == nil {
+		return nil
+	}
+	if a.drained {
+		a.after[stream]++
+		return nil
+	}
+	return a
+}
+
+// ingestBatchEnd counts a batch end of a live app and queues its record.
+func (rt *router) ingestBatchEnd(it item) {
+	a := rt.inputApp(it.app, it.stream)
+	if a == nil {
+		return
+	}
+	a.batches[it.stream]++
+	a.rec.put(recItem{kind: rBatchEnd, stream: it.stream, batch: it.batch})
+}
+
+// ingestEvent stamps an event of a live app, runs the ingest step, and queues its record.
+func (rt *router) ingestEvent(it item) {
+	r := rt.r
+	a := rt.inputApp(it.app, it.ev.StreamID)
+	if a == nil {
+		return
+	}
+	stamp := rt.now(r.cfg.Now())
+	if a.app.Schemas[it.ev.StreamID].TimeAttr() == event.ArrivalTime {
+		it.ev.Ts = stamp // live stamping at ingest (item 3; design s3-2b-2 §4, MUST 6)
+	}
+	rt.event(a, &it.ev, stamp, it.info)
+	// queued after the ingest step, still in intake order: the step writes the flag into a declared text_invisibles
+	// slot, and the channel hand-off orders that write before the recorder goroutine reads the event (a race the
+	// race row caught at T4)
+	a.rec.put(recItem{kind: rEvent, ev: it.ev, arrival: stamp, payload: it.payload})
+}
+
+// ingestReject records a rejected input of a live app and counts it in the ingest step.
+func (rt *router) ingestReject(it item) {
+	r := rt.r
+	a := rt.inputApp(it.app, it.stream)
+	if a == nil {
+		return
+	}
+	stamp := rt.now(r.cfg.Now())
+	a.rec.put(recItem{kind: rRejected, stream: it.stream, arrival: stamp, fault: it.fault})
+	a.ing.Reject(it.stream, stamp)
+}
+
+// tickApps ticks every activated app the router still drives, in app order.
+func (rt *router) tickApps(now int64) {
+	r := rt.r
+	stamp := rt.now(now)
+	for _, a := range r.appList() {
+		// the clock starts at Start (owner, 2026-11-08)
+		if a == nil || a.ing == nil || !a.activated || a.drained || a.quiet {
+			continue
 		}
-		st.SaturatedParks = make([]int64, len(r.shards))
-		rt.stats[rt.token] = &statsWait{stats: st, reply: it.reply}
-		for sid := range r.shards {
-			rt.push(send{shard: sid, msg: message{kind: mStats, token: rt.token}})
+		a.rec.put(recItem{kind: rTick, arrival: stamp}) // the raised stamp: what the ingest step uses (QA G6)
+		rt.tickApp(a, stamp)
+	}
+}
+
+// writeTable applies a table write to a live app and records each row written.
+func (rt *router) writeTable(it item) {
+	a := rt.app(it.app)
+	if a == nil || a.ing == nil {
+		it.reply <- reply{err: ErrRemoved}
+		return
+	}
+	if a.drained {
+		it.reply <- reply{err: ErrDrained}
+		return
+	}
+	err := a.write(it.table, it.op, it.rows)
+	if err == nil {
+		for _, row := range copyRows(it.rows) { // one record per row: Records counts lines (break-it S1)
+			a.rec.put(recItem{kind: rTable, table: it.table, op: it.op, rows: [][]event.Value{row}})
 		}
 	}
+	it.reply <- reply{err: err}
 }
 
 // event is design §4: the ingest step (stamping e in place), the offers by key, and one message per shard, each a
