@@ -11,65 +11,22 @@ func TimestampInRange(ms int64) bool { return ms >= minRFC3339 && ms <= maxRFC33
 //
 // 2DIGIT ":" 2DIGIT)
 func parseRFC3339(t []byte) (int64, bool) {
-	if len(t) < len("2006-01-02T15:04:05Z") || t[4] != '-' || t[7] != '-' || (t[10] != 'T' && t[10] != 't') ||
-		t[13] != ':' || t[16] != ':' {
+	h, ok := rfc3339Head(t)
+	if !ok || !dateDigits(h) || !clockDigits(h) {
 		return 0, false
 	}
-	year, ok1 := digitsAt(t, 0, 4)
-	month, ok2 := digitsAt(t, 5, 2)
-	day, ok3 := digitsAt(t, 8, 2)
-	hour, ok4 := digitsAt(t, 11, 2)
-	minute, ok5 := digitsAt(t, 14, 2)
-	sec, ok6 := digitsAt(t, 17, 2)
-	if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 ||
-		month < 1 || month > 12 || day < 1 || day > daysIn(year, month) || hour > 23 || minute > 59 || sec > 60 {
+	year, month, day := rfc3339Date(h)
+	hour, minute, sec := rfc3339Clock(h)
+	if !dateExists(year, month, day) || !clockValid(hour, minute, sec) {
 		return 0, false
 	}
-	i := 19
-	var ms int64
-	if i < len(t) && t[i] == '.' {
-		i++
-		start := i
-		for i < len(t) && isDigit(t[i]) {
-			if i-start < 3 {
-				ms = ms*10 + int64(t[i]-'0')
-			}
-			i++
-		}
-		switch i - start {
-		case 0:
-			return 0, false
-		case 1:
-			ms *= 100
-		case 2:
-			ms *= 10
-		}
-	}
-	if i >= len(t) {
+	ms, i, ok := rfc3339Fraction(t)
+	if !ok {
 		return 0, false
 	}
-	var offset int64 // minutes east of UTC
-	switch t[i] {
-	case 'Z', 'z':
-		i++
-	case '+', '-':
-		if len(t)-i != 6 || t[i+3] != ':' {
-			return 0, false
-		}
-		oh, okh := digitsAt(t, i+1, 2)
-		om, okm := digitsAt(t, i+4, 2)
-		if !okh || !okm || oh > 23 || om > 59 {
-			return 0, false
-		}
-		offset = oh*60 + om
-		if t[i] == '-' {
-			offset = -offset
-		}
-		i += 6
-	default:
-		return 0, false
-	}
-	if i != len(t) {
+	ms *= fractionScale(i - len("2006-01-02T15:04:05.")) // no fraction: i = 19, scale 1, ms 0
+	offset, ok := rfc3339Offset(t[i:])
+	if !ok {
 		return 0, false
 	}
 	if sec == 60 { // a leap second: the last millisecond of its minute
@@ -77,10 +34,105 @@ func parseRFC3339(t []byte) (int64, bool) {
 	}
 	secs := ((daysFromCivil(year, month, day)*24+hour)*60+minute-offset)*60 + sec
 	v := secs*1000 + ms
-	if v < minRFC3339 || v > maxRFC3339 { // an offset carried the instant out of RFC 3339's years (break-it K2, owner)
+	if !TimestampInRange(v) { // an offset carried the instant out of RFC 3339's years (break-it K2, owner)
 		return 0, false
 	}
 	return v, true
+}
+
+// rfc3339Head checks the fixed punctuation of a date-time's first 19 bytes, "2006-01-02T15:04:05", in a t at least
+// 20 bytes long (the shortest offset is one byte), and returns those bytes as an array view: constant indices into
+// it need no bounds check.
+func rfc3339Head(t []byte) (*[19]byte, bool) {
+	if len(t) < len("2006-01-02T15:04:05Z") {
+		return nil, false
+	}
+	h := (*[19]byte)(t)
+	return h, h[4] == '-' && h[7] == '-' && (h[10] == 'T' || h[10] == 't') && h[13] == ':' && h[16] == ':'
+}
+
+// dateDigits says the head's 8 date positions are digits: a byte below '0' wraps above 9.
+func dateDigits(h *[19]byte) bool {
+	return max(h[0]-'0', h[1]-'0', h[2]-'0', h[3]-'0', h[5]-'0', h[6]-'0', h[8]-'0', h[9]-'0') <= 9
+}
+
+// clockDigits says the head's 6 clock positions are digits.
+func clockDigits(h *[19]byte) bool {
+	return max(h[11]-'0', h[12]-'0', h[14]-'0', h[15]-'0', h[17]-'0', h[18]-'0') <= 9
+}
+
+// num2 is the value of the two digits hi and lo.
+func num2(hi, lo byte) int64 { return int64(hi)*10 + int64(lo) - '0'*11 }
+
+// rfc3339Date reads the head's year, month and day; its digits are checked by dateDigits.
+func rfc3339Date(h *[19]byte) (year, month, day int64) {
+	return int64(h[0])*1000 + int64(h[1])*100 + int64(h[2])*10 + int64(h[3]) - '0'*1111, num2(h[5], h[6]), num2(h[8], h[9])
+}
+
+// rfc3339Clock reads the head's hour, minute and second; its digits are checked by clockDigits.
+func rfc3339Clock(h *[19]byte) (hour, minute, sec int64) {
+	return num2(h[11], h[12]), num2(h[14], h[15]), num2(h[17], h[18])
+}
+
+// dateExists says the month is 1 to 12 and the day is in that month of that year.
+func dateExists(year, month, day int64) bool {
+	return month >= 1 && month <= 12 && day >= 1 && day <= daysIn(year, month)
+}
+
+// clockValid says the hour is at most 23, the minute at most 59 and the second at most 60 (a leap second).
+func clockValid(hour, minute, sec int64) bool { return hour <= 23 && minute <= 59 && sec <= 60 }
+
+// rfc3339Fraction reads the optional "." 1*DIGIT at t[19:], keeping the first three digits, and returns them, the
+// index just after the fraction (19 when there is none) and false for a "." with no digit.
+func rfc3339Fraction(t []byte) (ms int64, next int, ok bool) {
+	if len(t) <= 19 || t[19] != '.' {
+		return 0, 19, true
+	}
+	i := 20
+	for i < len(t) && isDigit(t[i]) {
+		if i < 23 {
+			ms = ms*10 + int64(t[i]-'0')
+		}
+		i++
+	}
+	return ms, i, i > 20
+}
+
+// fractionScale is what n kept fraction digits are multiplied by to make milliseconds.
+func fractionScale(n int) int64 {
+	switch n {
+	case 1:
+		return 100
+	case 2:
+		return 10
+	}
+	return 1
+}
+
+// rfc3339Offset reads the time offset z, the rest of the timestamp, in minutes east of UTC: "Z" or "z", or a
+// numeric offset.
+func rfc3339Offset(z []byte) (int64, bool) {
+	if len(z) == 1 {
+		return 0, z[0] == 'Z' || z[0] == 'z'
+	}
+	return rfc3339NumOffset(z)
+}
+
+// rfc3339NumOffset reads z as exactly ("+"/"-") 2DIGIT ":" 2DIGIT, the hour at most 23 and the minute at most 59.
+func rfc3339NumOffset(z []byte) (int64, bool) {
+	if len(z) != 6 || z[3] != ':' || max(z[1]-'0', z[2]-'0', z[4]-'0', z[5]-'0') > 9 {
+		return 0, false
+	}
+	oh, om := num2(z[1], z[2]), num2(z[4], z[5])
+	return signedOffset(z[0], oh*60+om), (z[0] == '+' || z[0] == '-') && oh <= 23 && om <= 59
+}
+
+// signedOffset is minutes east of UTC for the sign byte: '-' is west.
+func signedOffset(sign byte, minutes int64) int64 {
+	if sign == '-' {
+		return -minutes
+	}
+	return minutes
 }
 
 // The UTC instants RFC 3339 can write, in Unix milliseconds: 0000-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z.
@@ -90,17 +142,6 @@ const (
 	minRFC3339 int64 = -62167219200000
 	maxRFC3339 int64 = 253402300799999
 )
-
-func digitsAt(t []byte, at, n int) (int64, bool) {
-	var v int64
-	for k := at; k < at+n; k++ {
-		if !isDigit(t[k]) {
-			return 0, false
-		}
-		v = v*10 + int64(t[k]-'0')
-	}
-	return v, true
-}
 
 func daysIn(year, month int64) int64 {
 	switch month {
