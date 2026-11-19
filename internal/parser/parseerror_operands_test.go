@@ -1,7 +1,7 @@
 package parser
 
 // parseError's operand nets (S1.1c-6 design Q.3): one whole-program row per operand of each compound condition
-// (parse.go:129, :135, :148, :172, :177, :179, :182, :184, :188, :191, :193, :197, :199, :201, :203, :205, :207,
+// (parse.go:129, :135, :148, :160, :172, :177, :179, :182, :184, :188, :191, :193, :197, :199, :201, :203, :205, :207,
 // :219), the row on which that operand alone decides the answer; and the first-match order across the groups lane Q
 // cuts the switch into (start, arrow, name, operator, missing part, bound, then the clause loop and F3), one input
 // with two faults per boundary the groups do not keep apart by the refused token alone. The programs edit
@@ -26,6 +26,13 @@ var peoOperandRows = []pecRow{
 		"E-SYN-001", 7, 26, `unexpected token "]"; expected a name`},
 	{":148/:191 a filter refused inside", pecEdit(pecPattern, "a == 'x'", "a has 'x'"),
 		"E-TXT-001", 7, 23, "has has no case mode"},
+	// :160 later's scan for the clause's word, from the refused token to the statement's ; or the end of input.
+	{":160 the clause written later in the statement", pecEdit(pecPattern, "  intent 'x'\n  partition by a of S ttl 1 hour\n", "  partition by a of S ttl 1 hour\n  intent 'x'\n"),
+		"E-ORD-001", 5, 3, "clauses are out of order: intent comes before partition"},
+	{":160 the clause's word only after the statement's ;", pecEdit(pecPattern, "  intent 'x'\n", "", "  insert into T;\n", "  insert into T;\nintent\n"),
+		"E-INT-001", 5, 3, "the intent clause is missing"},
+	{":160 no ; before the end of input", pecEdit(pecPattern, "  intent 'x'\n", "", "  insert into T;\n", "  insert into T\n"),
+		"E-INT-001", 5, 3, "the intent clause is missing"},
 	// :172 a reserved word.
 	{":172 reserved", pecEdit(pecPattern, "  select e1.a\n", "  group by a\n  select e1.a\n"),
 		"E-RES-001", 11, 3, "group is reserved for a later version"},
@@ -99,6 +106,8 @@ var peoOperandRows = []pecRow{
 		"E-SYN-001", 7, 44, `unexpected token "'UTC'"; expected ,`},
 	{":203 ) after a string, no (", pecEdit(pecPattern, "  select e1.a\n", "  select 'x')\n"),
 		"E-SYN-001", 11, 13, `unexpected token ")"; expected insert`},
+	{":203 ) after ( <name>", pecEdit(pecPattern, "stream T (a string, ts timestamp)", "stream T (a)"),
+		"E-SYN-001", 3, 12, `unexpected token ")"; expected string`},
 	// :205 a number where a duration goes.
 	{":205 for 5", pecEdit(pecPattern, "-> e2 = S[a == 'y']", "and not S[a == 'y'] for 5"),
 		"E-DUR-001", 7, 55, "5 has no unit"},
