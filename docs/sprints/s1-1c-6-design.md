@@ -904,6 +904,7 @@ func (l *lowerer) escape(b *strings.Builder, quoted, body string, i int, at Posi
 **Operand tables:** `TestParseErrorEachOperand` (`parseerror_operands_test.go`; input → code, line, column for `:129, :148, :172, :177, :179, :182, :184, :188, :191, :193, :197, :199, :201, :203, :205, :207, :219`) plus `TestParseErrorFirstMatchAcrossGroups`; `TestJoinPragmaEachOperand` (`lexer.go:134` 4 operands, `:139-141` 7, `:154-155` 4); `TestStrEachOperand` (`literal_str_test.go`, white-box `l.str(…)`: `lower.go:542` — `'''` of length 3 decides `len >= 6`, which the lexer never yields, so the direct call is needed; `:553` — a trailing lone backslash, direct call only; `:563` — `\u12`, `\uzzzz`). Not an operand: `parse.go:340`'s `strconv.Unquote` cannot fail after `QuotedPrefix` succeeds (inferred).
 
 **Latent defect found in passing (not fixed; ground rule 7):** `parse.go:363` `strings.Fields(s)[0]` panics when `s` is all whitespace other than `' '` (e.g. `"\t"`); participle's notation never yields that (inferred). The table leaves `"\t"` out.
+*(Annotated 2026-11-19: fixed in this sprint after all, by G1 decision 7 (≠ R): lane Q's commit before the parser's moves, red first.)*
 
 **Fuzz:** `FuzzParse` (`internal/parser/fuzz_test.go:16`, nightly `fuzz-parser`) reaches all five through `Parse`. Other nets: `fragments`, `docsync-d` and the goldens pin the texts. No benchmarks (no hot path).
 
@@ -972,6 +973,7 @@ func appendTimestamp(dst []byte, ms int64) ([]byte, error) // the 0000–9999 ra
 func appendObject(dst []byte, obj any) ([]byte, error)     // obj.(string) or "an object value is not its JSON text (%T)"; cc 2, ~7 lines
 ```
 `AppendValue` keeps the null guard (`v.Null && v.Kind != event.TInvalid`) and the seven cases; TFloat, TTimestamp, TObject become `return appendFloat(dst, v.F)`, `return appendTimestamp(dst, v.T)`, `return appendObject(dst, v.Obj)`; the `"a value of type %v is not encodable"` return stays last; cc 10, ~22 lines. Order unchanged. Transfers: the three error returns (errNonFinite, errTimeRange, the object error), one mutation each (the error dropped). `%T` of `obj` is the same dynamic type as `%T` of `v.Obj`.
+*(Annotated 2026-11-19: the lane passed `v event.Value` to each helper to keep `v.F`, `v.T`, `v.Obj` word for word, which cost `BenchmarkAppendValue/object` +45 % (an 88-byte value stored across a non-inlined call); under ground rule 13a the owner chose these field-typed signatures, with `appendObject`'s refusal built out of line in `objectError` so that `appendObject` inlines, and an exception to decision 1 for the residual ~3 % on objects and floats — [owner](decisions.md#owner-decisions-2026-11-19--the-review-of-lane-ps-encoder-recorder-and-replay-path), decision 1; [the review](../reviews/s1-1c-6-playback-review.md).)*
 
 **`appendString`** (`encode.go:76`; cc 16; hot; risk CRITICAL — 7 direct, 9 processes). `func appendEscape(dst []byte, c byte) []byte` (the ASCII escape switch, lines 87-102 moved whole; cc 7, ~18 lines). `appendString` keeps the loop, the fast ASCII `continue`, `i++; start = i; continue`, the non-ASCII switch; only lines 87-102 become `dst = appendEscape(dst, c)`; cc 10, ~30 lines. No `continue`, `break` or `return` crosses; the no-escape fast path is byte-identical. Mutation: swap two escape letters inside `appendEscape` (e.g. `'\t'` written as `'n'`).
 
@@ -990,6 +992,7 @@ func appendEventTail(dst []byte, s event.Schema, batch string, ts int64) ([]byte
 func (r *Recorder) tableLine(name, opName string, cols []event.Attr, row []event.Value) error // lines 167-190; cc 5, ~22 lines
 ```
 `Table` keeps the range check, builds `cols` (E4), loops `if err := r.tableLine(t.Name, opName, cols, row); err != nil { return err }`; cc 9, ~22 lines. `b := r.buf[:0]` and `r.line` stay per row. Transfers: the row-width, AppendValue and write-error returns, all through `Table`. Mutation: ignore `tableLine`'s error in the loop (`TestRecorderTableStopsAtTheFirstBadRow` red: a later row gets written).
+*(Annotated 2026-11-19: the per-row `tableLine` (the lane passed `t Table`, 64 bytes) cost `BenchmarkRecorderTable/delete` +7 %; under ground rule 13a the owner chose one `(*Recorder).tableRows(name, opName, cols, rows)` called once per `Table` call, the op written directly since it is only put or delete, faster than the whole function — [owner](decisions.md#owner-decisions-2026-11-19--the-review-of-lane-ps-encoder-recorder-and-replay-path), decisions 2 and 4.)*
 
 **`(*Trace).Step`** (`trace.go:74`; cc 11; tracing only; risk LOW). `func (t *Trace) tableEntry(s *Step)` (the StepTable case body, lines 87-98 moved whole; cc 4, ~14 lines). `Step` keeps 7 cases, `default: return`, `t.close()`; cc 8. E5 kept (the name string stays local to `tableEntry`). No transfer crosses.
 
