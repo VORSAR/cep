@@ -60,7 +60,10 @@ func expects(app *model.App, p *App, streams map[string]int) ([]Expect, error) {
 		r := &app.Rules[ri]
 		for bi := range r.Expects {
 			b := &r.Expects[bi]
-			x, err := expect(app, p, streams, tables, r, b)
+			x, err := givens(app, streams, tables, b)
+			if err == nil {
+				x.Then, err = thens(p, streams, r, b)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("plan: rule %s, expect block %d: %w (Build is given only a checked model)", r.Name, bi+1,
 					err)
@@ -72,76 +75,114 @@ func expects(app *model.App, p *App, streams map[string]int) ([]Expect, error) {
 	return out, nil
 }
 
-func expect(app *model.App, p *App, streams, tables map[string]int, r *model.Rule, b *model.Expect) (Expect, error) {
+// givens is block b's positions and its givens as values, in written order; the first given that does not resolve
+// is the error.
+func givens(app *model.App, streams, tables map[string]int, b *model.Expect) (Expect, error) {
 	x := Expect{Line: b.Pos.Line, Col: b.Pos.Col, ThenLine: b.Then.Pos.Line, ThenCol: b.Then.Pos.Col}
 	for gi := range b.Givens {
 		g := &b.Givens[gi]
 		if g.Table {
-			tid, ok := tables[g.Name]
-			if !ok {
-				return Expect{}, fmt.Errorf("unknown table %s", g.Name)
-			}
-			gt := GivenTable{Table: tid}
-			for _, rec := range g.Records {
-				row, err := values(app.Tables[tid].Attrs, rec, -1)
-				if err != nil {
-					return Expect{}, err
-				}
-				gt.Rows = append(gt.Rows, row)
+			gt, err := givenTable(app, tables, g)
+			if err != nil {
+				return Expect{}, err
 			}
 			x.Tables = append(x.Tables, gt)
 			continue
 		}
-		sid, ok := streams[g.Name]
-		if !ok {
-			return Expect{}, fmt.Errorf("unknown stream %s", g.Name)
-		}
-		st := app.Streams[sid]
-		timeIdx := -1
-		for i, a := range st.Attrs {
-			if a.Name == st.Time.Attr {
-				timeIdx = i
-			}
-		}
-		if timeIdx < 0 {
-			return Expect{}, fmt.Errorf("stream %s has no time attribute a block can give", g.Name)
-		}
-		gl := GivenList{Stream: sid}
-		for _, rec := range g.Records {
-			vals, err := values(st.Attrs, rec, timeIdx)
-			if err != nil {
-				return Expect{}, err
-			}
-			gl.Events = append(gl.Events, GivenEvent{Ts: vals[timeIdx].T, Values: vals})
+		gl, err := givenList(app, streams, g)
+		if err != nil {
+			return Expect{}, err
 		}
 		x.Lists = append(x.Lists, gl)
 	}
+	return x, nil
+}
+
+// givenTable is `given table T [rows]` as values: each row in the table's attribute order.
+func givenTable(app *model.App, tables map[string]int, g *model.Given) (GivenTable, error) {
+	tid, ok := tables[g.Name]
+	if !ok {
+		return GivenTable{}, fmt.Errorf("unknown table %s", g.Name)
+	}
+	gt := GivenTable{Table: tid}
+	for _, rec := range g.Records {
+		row, err := values(app.Tables[tid].Attrs, rec, -1)
+		if err != nil {
+			return GivenTable{}, err
+		}
+		gt.Rows = append(gt.Rows, row)
+	}
+	return gt, nil
+}
+
+// givenList is `given S [records]` as values: each event's values in the stream's attribute order, its Ts the time
+// attribute's value.
+func givenList(app *model.App, streams map[string]int, g *model.Given) (GivenList, error) {
+	sid, ok := streams[g.Name]
+	if !ok {
+		return GivenList{}, fmt.Errorf("unknown stream %s", g.Name)
+	}
+	st := app.Streams[sid]
+	timeIdx := fieldIndex(st.Attrs, st.Time.Attr)
+	if timeIdx < 0 {
+		return GivenList{}, fmt.Errorf("stream %s has no time attribute a block can give", g.Name)
+	}
+	gl := GivenList{Stream: sid}
+	for _, rec := range g.Records {
+		vals, err := values(st.Attrs, rec, timeIdx)
+		if err != nil {
+			return GivenList{}, err
+		}
+		gl.Events = append(gl.Events, GivenEvent{Ts: vals[timeIdx].T, Values: vals})
+	}
+	return gl, nil
+}
+
+// thens is block b's then-records as values, in written order (nil when it has none); its stream must be rule r's
+// target.
+func thens(p *App, streams map[string]int, r *model.Rule, b *model.Expect) ([]ThenRecord, error) {
 	tid, ok := streams[b.Then.Name]
 	if !ok || b.Then.Name != r.InsertInto {
-		return Expect{}, fmt.Errorf("then names %s, not the rule's target %s", b.Then.Name, r.InsertInto)
+		return nil, fmt.Errorf("then names %s, not the rule's target %s", b.Then.Name, r.InsertInto)
 	}
 	target := p.Streams[tid].Schema
+	var out []ThenRecord
 	for _, rec := range b.Then.Records {
-		tr := ThenRecord{Line: rec.Pos.Line, Col: rec.Pos.Col}
-		for _, f := range rec.Fields {
-			idx := -1
-			for i := range target.NumAttrs() {
-				if target.Attr(i).Name == f.Name {
-					idx = i
-				}
-			}
-			if idx < 0 {
-				return Expect{}, fmt.Errorf("%s has no attribute %s", b.Then.Name, f.Name)
-			}
-			v, err := value(f.Value, target.Attr(idx).Type)
-			if err != nil {
-				return Expect{}, fmt.Errorf("%s.%s: %w", b.Then.Name, f.Name, err)
-			}
-			tr.Attrs, tr.Values = append(tr.Attrs, idx), append(tr.Values, v)
+		tr, err := thenRecord(target, b.Then.Name, rec)
+		if err != nil {
+			return nil, err
 		}
-		x.Then = append(x.Then, tr)
+		out = append(out, tr)
 	}
-	return x, nil
+	return out, nil
+}
+
+// thenRecord is one then-record of stream as values: the attributes of target it names, in written order.
+func thenRecord(target event.Schema, stream string, rec model.Record) (ThenRecord, error) {
+	tr := ThenRecord{Line: rec.Pos.Line, Col: rec.Pos.Col}
+	for _, f := range rec.Fields {
+		idx := schemaIndex(target, f.Name)
+		if idx < 0 {
+			return ThenRecord{}, fmt.Errorf("%s has no attribute %s", stream, f.Name)
+		}
+		v, err := value(f.Value, target.Attr(idx).Type)
+		if err != nil {
+			return ThenRecord{}, fmt.Errorf("%s.%s: %w", stream, f.Name, err)
+		}
+		tr.Attrs, tr.Values = append(tr.Attrs, idx), append(tr.Values, v)
+	}
+	return tr, nil
+}
+
+// schemaIndex is the last attribute of s named name, -1 if none.
+func schemaIndex(s event.Schema, name string) int {
+	idx := -1
+	for i := range s.NumAttrs() {
+		if s.Attr(i).Name == name {
+			idx = i
+		}
+	}
+	return idx
 }
 
 // values is one given record in its stream's or table's attribute order: an omitted attribute null, the
@@ -155,12 +196,7 @@ func values(attrs []model.Attr, rec model.Record, timeIdx int) ([]event.Value, e
 		}
 	}
 	for _, f := range rec.Fields {
-		idx := -1
-		for i, a := range attrs {
-			if a.Name == f.Name {
-				idx = i
-			}
-		}
+		idx := fieldIndex(attrs, f.Name)
 		if idx < 0 {
 			return nil, fmt.Errorf("no attribute %s", f.Name)
 		}
@@ -174,6 +210,17 @@ func values(attrs []model.Attr, rec model.Record, timeIdx int) ([]event.Value, e
 		return nil, fmt.Errorf("the time attribute %s is null", attrs[timeIdx].Name)
 	}
 	return out, nil
+}
+
+// fieldIndex is the last attribute of attrs named name, -1 if none.
+func fieldIndex(attrs []model.Attr, name string) int {
+	idx := -1
+	for i, a := range attrs {
+		if a.Name == name {
+			idx = i
+		}
+	}
+	return idx
 }
 
 // value is a block's literal as a value of type t: an int literal for a float widens (as validate.as); null is t's
