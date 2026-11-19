@@ -100,10 +100,11 @@ class SecondInterruptInTheGrace(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             pids = os.path.join(tmp, "pids")
             driver = (
-                "import sys\n"
+                "import signal, sys\n"
                 f"sys.path.insert(0, {REPO!r})\n"
                 "from gate import term\n"
                 "from gate.bench import gorun\n"
+                "signal.signal(signal.SIGINT, signal.default_int_handler)  # even when started with SIGINT ignored\n"
                 "term.install()\n"
                 f"argv = [sys.executable, '-I', '-c', {DEAF!r}, {pids!r}]\n"
                 f"gorun.run(argv, cwd={tmp!r}, timeout_s=600, grace_s=2.0)\n"
