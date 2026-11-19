@@ -144,28 +144,45 @@ func (r *Reader) rejectedRecord(vals []event.Value, present func(int) bool) (Rec
 	if err != nil {
 		return Record{}, err
 	}
+	reason, attr, err := r.rejectedFault(vals)
+	if err != nil {
+		return Record{}, err
+	}
+	arrival := vals[eArrival].T
+	if err := r.advance(arrival); err != nil {
+		return Record{}, err
+	}
+	return Record{Line: r.line, Kind: RecRejected, Stream: sid, Arrival: arrival, Reason: reason, Attr: attr}, nil
+}
+
+// rejectedFault is the rejected record's fault: its reason and attribute, refused when the pair is inconsistent.
+func (r *Reader) rejectedFault(vals []event.Value) (event.DecodeReason, string, error) {
 	f, info, err := r.rejected.Decode([]byte(vals[eRejected].Obj.(string)), nil)
 	if err != nil {
-		return Record{}, r.fault("the rejected record: %s", decodeMsg(err))
+		return 0, "", r.fault("the rejected record: %s", decodeMsg(err))
 	}
 	if info.Unknown > 0 {
-		return Record{}, r.fault("the rejected record has a key other than reason and attr")
+		return 0, "", r.fault("the rejected record has a key other than reason and attr")
 	}
 	reason, ok := reasonOf[f[1].Str]
 	switch {
 	case !ok:
-		return Record{}, r.fault("the rejected record's reason %q is none of syntax, type, missing, null", f[1].Str)
+		return 0, "", r.fault("the rejected record's reason %q is none of syntax, type, missing, null", f[1].Str)
 	case reason == event.DecodeSyntax && !f[0].Null:
-		return Record{}, r.fault("a syntax fault names no attribute")
+		return 0, "", r.fault("a syntax fault names no attribute")
 	case reason != event.DecodeSyntax && f[0].Null:
-		return Record{}, r.fault("a %s fault names its attribute", f[1].Str)
+		return 0, "", r.fault("a %s fault names its attribute", f[1].Str)
 	}
-	arrival := vals[eArrival].T
+	return reason, f[0].Str, nil
+}
+
+// advance moves the recording's clock to arrival; refused when arrival is earlier than the previous arrival or tick.
+func (r *Reader) advance(arrival int64) error {
 	if arrival < r.last {
-		return Record{}, r.fault("an arrival before the previous arrival or tick")
+		return r.fault("an arrival before the previous arrival or tick")
 	}
 	r.last = arrival
-	return Record{Line: r.line, Kind: RecRejected, Stream: sid, Arrival: arrival, Reason: reason, Attr: f[0].Str}, nil
+	return nil
 }
 
 // reasonOf maps a rejected record's reason to its decode reason.
@@ -199,6 +216,19 @@ func (r *Reader) tableRecord(vals []event.Value, present func(int) bool) (Record
 	case !present(eRow):
 		return Record{}, r.fault("a table record needs row")
 	}
+	op, err := r.tableOp(name, vals)
+	if err != nil {
+		return Record{}, err
+	}
+	row, err := r.tableRow(name, tid, op, vals)
+	if err != nil {
+		return Record{}, err
+	}
+	return Record{Line: r.line, Kind: RecTable, Table: tid, Op: op, Row: row}, nil
+}
+
+// tableOp is the table record's op: put or delete, refused otherwise.
+func (r *Reader) tableOp(name string, vals []event.Value) (TableOp, error) {
 	var op TableOp
 	switch vals[eOp].Str {
 	case "put":
@@ -206,30 +236,36 @@ func (r *Reader) tableRecord(vals []event.Value, present func(int) bool) (Record
 	case "delete":
 		op = OpDelete
 	default:
-		return Record{}, r.fault("table %q: op %q is neither put nor delete", name, vals[eOp].Str)
+		return 0, r.fault("table %q: op %q is neither put nor delete", name, vals[eOp].Str)
 	}
+	return op, nil
+}
+
+// tableRow is the table record's row decoded for op: refused for a decode fault, a column the op does not take, or a
+// put's null key column.
+func (r *Reader) tableRow(name string, tid int, op TableOp, vals []event.Value) ([]event.Value, error) {
 	dec := r.tput[tid]
 	if op == OpDelete {
 		dec = r.tdel[tid]
 	}
 	row, info, err := dec.Decode([]byte(vals[eRow].Obj.(string)), nil)
 	if err != nil {
-		return Record{}, r.fault("table %q: the row: %s", name, decodeMsg(err))
+		return nil, r.fault("table %q: the row: %s", name, decodeMsg(err))
 	}
 	if info.Unknown > 0 {
 		if op == OpDelete {
-			return Record{}, r.fault("table %q: a delete row holds only the key columns", name)
+			return nil, r.fault("table %q: a delete row holds only the key columns", name)
 		}
-		return Record{}, r.fault("table %q: the row has a column the table does not declare", name)
+		return nil, r.fault("table %q: the row has a column the table does not declare", name)
 	}
 	if op == OpPut {
 		for _, k := range r.tkey[tid] {
 			if row[k].Null {
-				return Record{}, r.fault("table %q: key column %q is null", name, r.app.Tables[tid].Attrs[k].Name)
+				return nil, r.fault("table %q: key column %q is null", name, r.app.Tables[tid].Attrs[k].Name)
 			}
 		}
 	}
-	return Record{Line: r.line, Kind: RecTable, Table: tid, Op: op, Row: row}, nil
+	return row, nil
 }
 
 func (r *Reader) stream(vals []event.Value) (int, error) {
@@ -289,44 +325,20 @@ func (r *Reader) eventRecord(vals []event.Value, present func(int) bool) (Record
 	st := &r.app.Streams[sid]
 	name := st.Schema.Stream()
 	arrivalTime := st.Schema.TimeAttr() == event.ArrivalTime
-	switch {
-	case !present(eAttrs):
-		return Record{}, r.fault("an event needs attrs")
-	case arrivalTime && !present(eTs):
-		return Record{}, r.fault("stream %q is `time arrival`: its events carry ts", name)
-	case !arrivalTime && present(eTs):
-		return Record{}, r.fault("ts on stream %q, whose time is its attribute %q", name, st.Schema.Attr(
-			st.Schema.TimeAttr()).Name)
-	case !r.recording && present(eArrival):
-		return Record{}, r.fault("arrival in a log without a recording header")
-	case r.recording && arrivalTime && present(eArrival):
-		return Record{}, r.fault("arrival on `time arrival` stream %q: its ts is the arrival", name)
-	case r.recording && !arrivalTime && !present(eArrival):
-		return Record{}, r.fault("an event in a recording carries arrival")
-	case present(eBatch) && vals[eBatch].Str == "":
-		return Record{}, r.fault("an empty batch id")
+	if err := r.eventKeys(st, name, arrivalTime, vals, present); err != nil {
+		return Record{}, err
 	}
-	values, info, err := r.sdec[sid].Decode([]byte(vals[eAttrs].Obj.(string)), nil)
+	values, info, err := r.eventPayload(sid, name, vals)
 	if err != nil {
-		var de *event.DecodeError
-		errors.As(err, &de)
-		return Record{}, &LoadError{Line: r.line, Msg: fmt.Sprintf("the payload fails stream %q's schema: %s", name,
-			decodeMsg(err)), Decode: de}
+		return Record{}, err
 	}
 	ts := info.Ts
 	if arrivalTime {
 		ts = vals[eTs].T
 	}
-	var arrival int64
-	if r.recording {
-		arrival = ts
-		if !arrivalTime {
-			arrival = vals[eArrival].T
-		}
-		if arrival < r.last {
-			return Record{}, r.fault("an arrival before the previous arrival or tick")
-		}
-		r.last = arrival
+	arrival, err := r.eventArrival(ts, arrivalTime, vals)
+	if err != nil {
+		return Record{}, err
 	}
 	var batch string
 	if present(eBatch) {
@@ -334,4 +346,66 @@ func (r *Reader) eventRecord(vals []event.Value, present func(int) bool) (Record
 	}
 	return Record{Line: r.line, Kind: RecEvent, Arrival: arrival, Info: info,
 		Event: event.Event{StreamID: sid, Ts: ts, Values: values, BatchID: batch}}, nil
+}
+
+// eventKeys checks an event's keys against its stream and the log: attrs, ts by the stream's time, arrival, a
+// non-empty batch.
+func (r *Reader) eventKeys(st *Stream, name string, arrivalTime bool, vals []event.Value,
+	present func(int) bool) error {
+	switch {
+	case !present(eAttrs):
+		return r.fault("an event needs attrs")
+	case arrivalTime && !present(eTs):
+		return r.fault("stream %q is `time arrival`: its events carry ts", name)
+	case !arrivalTime && present(eTs):
+		return r.fault("ts on stream %q, whose time is its attribute %q", name, st.Schema.Attr(
+			st.Schema.TimeAttr()).Name)
+	}
+	if err := r.arrivalKeys(name, arrivalTime, present); err != nil {
+		return err
+	}
+	if present(eBatch) && vals[eBatch].Str == "" {
+		return r.fault("an empty batch id")
+	}
+	return nil
+}
+
+// arrivalKeys checks arrival against the recording header and the stream's time.
+func (r *Reader) arrivalKeys(name string, arrivalTime bool, present func(int) bool) error {
+	switch {
+	case !r.recording && present(eArrival):
+		return r.fault("arrival in a log without a recording header")
+	case r.recording && arrivalTime && present(eArrival):
+		return r.fault("arrival on `time arrival` stream %q: its ts is the arrival", name)
+	case r.recording && !arrivalTime && !present(eArrival):
+		return r.fault("an event in a recording carries arrival")
+	}
+	return nil
+}
+
+// eventPayload decodes the attrs against stream sid's schema; a fault is a *LoadError with its Decode cause.
+func (r *Reader) eventPayload(sid int, name string, vals []event.Value) ([]event.Value, event.Decoded, error) {
+	values, info, err := r.sdec[sid].Decode([]byte(vals[eAttrs].Obj.(string)), nil)
+	if err != nil {
+		var de *event.DecodeError
+		errors.As(err, &de)
+		return values, info, &LoadError{Line: r.line, Msg: fmt.Sprintf("the payload fails stream %q's schema: %s", name,
+			decodeMsg(err)), Decode: de}
+	}
+	return values, info, nil
+}
+
+// eventArrival is the event's arrival in a recording, the clock advanced to it; 0 outside a recording.
+func (r *Reader) eventArrival(ts int64, arrivalTime bool, vals []event.Value) (int64, error) {
+	var arrival int64
+	if r.recording {
+		arrival = ts
+		if !arrivalTime {
+			arrival = vals[eArrival].T
+		}
+		if err := r.advance(arrival); err != nil {
+			return 0, err
+		}
+	}
+	return arrival, nil
 }
