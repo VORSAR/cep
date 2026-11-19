@@ -235,11 +235,11 @@ func (s *scanner) str() error {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 				i++
 			case 'u':
-				s.i = i
-				if err := s.unicodeEscape(); err != nil {
-					return err
+				if !isHex4(b, i+2) {
+					s.i = i
+					return s.unicodeFault()
 				}
-				i = s.i - 1
+				i += 5
 			default:
 				s.i = i
 				return s.syntax(i+1, "invalid escape")
@@ -253,23 +253,25 @@ func (s *scanner) str() error {
 	return s.syntax(len(b), "unterminated string")
 }
 
-// unicodeEscape checks the \u escape at s.i - a backslash, 'u' and four hex digits - and leaves s.i just after it.
-func (s *scanner) unicodeEscape() error {
-	for k := 2; k < 6; k++ {
-		if s.i+k >= len(s.b) {
-			return s.syntax(len(s.b), "unterminated string")
-		}
-		if !isHex(s.b[s.i+k]) {
-			return s.syntax(s.i+k, "want four hex digits after \\u")
-		}
-	}
-	s.i += 6
-	return nil
+// isHex4 says whether b holds four hex digits from offset j on: the digits of a \u escape whose backslash is at j-2.
+func isHex4(b []byte, j int) bool {
+	return j+3 < len(b) && isHex(b[j]) && isHex(b[j+1]) && isHex(b[j+2]) && isHex(b[j+3])
 }
 
-func isHex(c byte) bool {
-	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+// unicodeFault reports the fault in the \u escape at s.i, whose four hex digits isHex4 refused: the first of them that
+// is missing (the string is unterminated) or is not a hex digit. str calls it only on a fault.
+func (s *scanner) unicodeFault() error {
+	k := s.i + 2
+	for k < s.i+5 && k < len(s.b) && isHex(s.b[k]) {
+		k++
+	}
+	if k >= len(s.b) {
+		return s.syntax(len(s.b), "unterminated string")
+	}
+	return s.syntax(k, "want four hex digits after \\u")
 }
+
+func isHex(c byte) bool { return hexDigit[c] }
 
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 
@@ -355,4 +357,12 @@ var strByte = [256]bool{
 	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xd0-0xdf
 	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xe0-0xef
 	true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0xf0-0xff
+}
+
+// hexDigit says which bytes are hex digits: '0' to '9', 'A' to 'F' and 'a' to 'f'. Written out, as the globals check
+// takes a lookup table (ADR-0015 §2.2).
+var hexDigit = [256]bool{
+	'0': true, true, true, true, true, true, true, true, true, true, // '0'-'9'
+	'A': true, true, true, true, true, true, // 'A'-'F'
+	'a': true, true, true, true, true, true, // 'a'-'f'
 }
