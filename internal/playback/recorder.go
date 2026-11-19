@@ -163,15 +163,21 @@ func (r *Recorder) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 			}
 		}
 	}
+	return r.tableRows(t.Name, opName, cols, rows)
+}
+
+// tableRows writes rows as table records, one line each: {"op":…,"row":{…},"table":…}, each row's values under cols'
+// names; it stops at the first row it cannot write.
+func (r *Recorder) tableRows(name, opName string, cols []event.Attr, rows [][]event.Value) error {
 	for _, row := range rows {
 		if len(row) != len(cols) {
-			return fmt.Errorf("playback: recorder: table %q: a %s row of %d values for %d columns", t.Name, opName, len(row),
+			return fmt.Errorf("playback: recorder: table %q: a %s row of %d values for %d columns", name, opName, len(row),
 				len(cols))
 		}
 		b := r.buf[:0]
-		b = append(b, `{"op":`...)
-		b = appendString(b, opName)
-		b = append(b, `,"row":{`...)
+		b = append(b, `{"op":"`...)
+		b = append(b, opName...) // "put" or "delete": nothing to escape, so appendString's quotes are written here
+		b = append(b, `","row":{`...)
 		for i, a := range cols {
 			if i > 0 {
 				b = append(b, ',')
@@ -180,11 +186,11 @@ func (r *Recorder) Table(table int, op runtime.TableOp, rows [][]event.Value) er
 			b = append(b, ':')
 			var err error
 			if b, err = AppendValue(b, row[i]); err != nil {
-				return fmt.Errorf("playback: recorder: table %q column %q: %w", t.Name, a.Name, err)
+				return fmt.Errorf("playback: recorder: table %q column %q: %w", name, a.Name, err)
 			}
 		}
 		b = append(b, `},"table":`...)
-		b = appendString(b, t.Name)
+		b = appendString(b, name)
 		if err := r.line(append(b, '}')); err != nil {
 			return err
 		}
