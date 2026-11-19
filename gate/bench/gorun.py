@@ -3,7 +3,9 @@
 The child starts in a new session under term.critical(), so a first TERM never lands between its start and our
 hold on it. Its output goes to files, never pipes; stdin is /dev/null. On the wall-clock limit the whole group gets
 TERM, a grace, then KILL, and is reaped; a group left behind by a leader that exited is killed too. A TERM or an
-interrupt of the caller kills the child's group before the stop goes on.
+interrupt of the caller kills the child's group before the stop goes on. The group's KILL is sent from a `finally`
+with SIGINT and SIGTERM held, so neither a stop after the leader exits nor a second interrupt in the grace leaves
+the group running; a stop held meanwhile is raised once the KILL is sent (owner, 2026-11-19, BK-L1, BK-L2).
 """
 
 import contextlib
@@ -47,13 +49,26 @@ def _killpg(pgid: int, sig: int) -> None:
         os.killpg(pgid, sig)
 
 
+def _kill_group(pgid: int) -> None:
+    """KILL to the group with SIGINT and SIGTERM held, so neither cuts it short; the caller's mask is restored after,
+    and a stop held meanwhile is raised then."""
+    held = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+    try:
+        _killpg(pgid, signal.SIGKILL)
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, held)
+
+
 def _stop(proc: subprocess.Popen[bytes], grace_s: float) -> None:
-    """TERM to the group, the grace for the leader, then KILL to the group; the leader is reaped."""
-    _killpg(proc.pid, signal.SIGTERM)
-    with contextlib.suppress(subprocess.TimeoutExpired):
-        proc.wait(timeout=grace_s)
-    _killpg(proc.pid, signal.SIGKILL)
-    proc.wait()
+    """TERM to the group, the grace for the leader, then KILL to the group, from a finally, so a second interrupt in
+    the grace cannot skip it; the leader is reaped."""
+    try:
+        _killpg(proc.pid, signal.SIGTERM)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=grace_s)
+    finally:
+        _kill_group(proc.pid)
+        proc.wait()
 
 
 def _read(path: str) -> str:
@@ -89,8 +104,9 @@ def run(
                 if proc is not None:
                     _stop(proc, grace_s)
                 raise
-            # A grandchild left in the group by a leader that exited goes too.
-            _killpg(proc.pid, signal.SIGKILL)
+            finally:  # a grandchild left in the group by a leader that exited goes too, whatever ended the try
+                if proc is not None:
+                    _kill_group(proc.pid)
         return Result(exit=proc.returncode, stdout=_read(out_path), stderr=_read(err_path), timed_out=timed_out)
 
 
