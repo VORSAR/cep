@@ -5,8 +5,12 @@
 Starts the hogs (default gate/runner/stress.py's hog_count()), runs `go test -json [-coverprofile=<file>] <args>`
 through gorun with a wall-clock limit (default 3600 s), and stops the hogs whatever happened, a SIGTERM included.
 For each top-level test it prints `<Test>: k/N under load (hogs <n>)`, k its pass actions and N its pass and fail
-actions. Exit 0 when every test is N/N with N >= 1 and go test exited 0; 1 when a test failed or go test exited
-non-zero; 2 when no test ran, the wall clock killed the run, or an internal error. The last line says which.
+actions and its runs that never ended (a run action with no result: the test binary died under the test, a -timeout
+panic or a crash), each of those a failed run. Before the verdict of a red run, or of one where no test ran, come
+the `panic:` and FAIL lines of go test's output events (under -json the binary's output, a panic's included, is on
+stdout), then the tail of go test's stderr. Exit 0 when every test is N/N with N >= 1 and go test exited 0; 1 when
+a test failed or go test exited non-zero; 2 when no test ran, the wall clock killed the run, or an internal error.
+The last line says which.
 """
 
 import argparse
@@ -15,7 +19,7 @@ import json
 import os
 import signal
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import NoReturn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -37,25 +41,54 @@ class _Parser(argparse.ArgumentParser):
         raise Error(f"usage: {message}")
 
 
-def tally(text: str) -> dict[str, tuple[int, int]]:
-    """Per top-level test (a Test with no `/`): its pass and fail actions. Lines that are not events are skipped."""
-    passes: collections.Counter[str] = collections.Counter()
-    fails: collections.Counter[str] = collections.Counter()
-    seen: set[str] = set()
+def _events(text: str) -> Iterator[dict[str, object]]:
+    """The JSON objects of go test -json output, in order; lines that are not events are skipped."""
     for line in text.splitlines():
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if not isinstance(record, dict):
-            continue
+        if isinstance(record, dict):
+            yield record
+
+
+def tally(text: str) -> dict[str, tuple[int, int]]:
+    """Per top-level test (a Test with no `/`): its pass actions, and its fail actions plus its runs that never ended.
+
+    A run that never ended is a run action with no pass, fail or skip for it: the binary died while the test ran
+    (go test's -timeout panic, a crash), and test2json then fails the package only (owner, 2026-11-19, BK-S1).
+    """
+    runs: collections.Counter[str] = collections.Counter()
+    ends: collections.Counter[str] = collections.Counter()
+    passes: collections.Counter[str] = collections.Counter()
+    fails: collections.Counter[str] = collections.Counter()
+    seen: set[str] = set()
+    for record in _events(text):
         test, action = record.get("Test"), record.get("Action")
-        if not isinstance(test, str) or "/" in test or action not in ("pass", "fail", "skip"):
+        if not isinstance(test, str) or "/" in test or action not in ("run", "pass", "fail", "skip"):
             continue
         seen.add(test)
+        runs[test] += action == "run"
+        ends[test] += action != "run"
         passes[test] += action == "pass"
         fails[test] += action == "fail"
-    return {test: (passes[test], fails[test]) for test in sorted(seen)}
+    return {test: (passes[test], fails[test] + max(runs[test] - ends[test], 0)) for test in sorted(seen)}
+
+
+def causes(text: str) -> list[str]:
+    """The `panic:` and FAIL lines (`FAIL`, `--- FAIL`) of go test -json's output events, in order: where a red run
+    says why, since under -json the binary's own output, a panic's included, is on stdout (owner, 2026-11-19, BK-S1).
+    """
+    lines = []
+    for record in _events(text):
+        output = record.get("Output")
+        if record.get("Action") == "output" and isinstance(output, str):
+            lines += output.splitlines()
+    return [line for line in lines if line.startswith(("panic:", "FAIL")) or line.lstrip().startswith("--- FAIL")]
+
+
+def _tail(result: gorun.Result) -> list[str]:
+    return [f"  {line}" for line in [*causes(result.stdout)[-TAIL:], *result.stderr.splitlines()[-TAIL:]]]
 
 
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -98,12 +131,11 @@ def load(args: argparse.Namespace) -> tuple[int, list[str]]:
     if result.timed_out:
         return 2, [*lines, f"error: go test killed by the wall clock after {args.wall:g}s"]
     if not any(k + f for k, f in counts.values()):
-        tail = [f"  {line}" for line in result.stderr.splitlines()[-TAIL:]]
-        return 2, [*lines, *tail, f"error: no test ran (go test exit {result.exit})"]
+        return 2, [*lines, *_tail(result), f"error: no test ran (go test exit {result.exit})"]
     below = sorted(test for test, (k, f) in counts.items() if f or not k)
     if below or result.exit != 0:
-        tail = [f"  {line}" for line in result.stderr.splitlines()[-TAIL:]]
-        return 1, [*lines, *tail, f"verdict: below N/N: {', '.join(below) or 'none'}; go test exit {result.exit}"]
+        verdict = f"verdict: below N/N: {', '.join(below) or 'none'}; go test exit {result.exit}"
+        return 1, [*lines, *_tail(result), verdict]
     return 0, [*lines, f"verdict: every test N/N under load ({len(counts)} tests)"]
 
 

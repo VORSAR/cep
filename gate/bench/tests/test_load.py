@@ -29,11 +29,27 @@ func TestOK(t *testing.T) {
 """
 
 
-def event(action: str, test: str | None = None) -> str:
+def event(action: str, test: str | None = None, output: str | None = None) -> str:
     record = {"Action": action, "Package": "example.com/l"}
     if test is not None:
         record["Test"] = test
+    if output is not None:
+        record["Output"] = output
     return json.dumps(record) + "\n"
+
+
+def died_in_a_test() -> str:
+    """TestOK passes; the binary dies under TestSlow (go test's -timeout panic): test2json gives TestSlow a run action
+    and no result, a fail for the package only, and the panic as output events, followed by more goroutine lines
+    than the tail holds."""
+    lines = [event("run", "TestOK"), event("output", "TestOK", "=== RUN   TestOK\n")]
+    lines += [event("output", "TestOK", "--- PASS: TestOK (0.00s)\n"), event("pass", "TestOK")]
+    lines += [event("run", "TestSlow"), event("output", "TestSlow", "=== RUN   TestSlow\n")]
+    lines += [event("output", None, "panic: test timed out after 3s\n"), event("output", None, "\trunning tests:\n")]
+    lines += [event("output", None, "\t\tTestSlow (3s)\n")]
+    lines += [event("output", None, f"goroutine {i} [sleep]:\n") for i in range(30)]
+    lines += [event("output", None, "FAIL\texample.com/l\t3.012s\n"), event("fail")]
+    return "".join(lines)
 
 
 def count3_flaky() -> str:
@@ -131,6 +147,19 @@ class Fake(Base):
         self.assertEqual(self.running_fakes(), [], out)
         self.assertFalse(os.path.exists(self.log), out)  # the witness: stopped before its first line
 
+    def test_a_test_the_binary_died_under_counts_as_failed_and_the_panic_is_shown(self):
+        # Owner 2026-11-19 (BK-S1): a run action with no result is a failed run of that test, and a red run's tail
+        # comes from the output events, where -json puts the binary's panic: the panic: and FAIL lines, the panic
+        # line kept although 30 goroutine lines follow it. Go test's stderr is empty here, as under -json.
+        code, out = self.load(["--hogs", "2", "--", "-count=1", "./..."], self.fake(died_in_a_test(), 1))
+        self.assertEqual(code, 1, out)
+        self.assertIn("TestOK: 1/1 under load (hogs 2)\n", out)
+        self.assertIn("TestSlow: 0/1 under load (hogs 2)\n", out)
+        self.assertIn("\n  panic: test timed out after 3s\n  FAIL\texample.com/l\t3.012s\nverdict: ", out)
+        self.assertTrue(out.endswith("verdict: below N/N: TestSlow; go test exit 1\n"), out)
+        self.assertNotIn("goroutine", out)
+        self.assertHogsGone(out)
+
     def test_no_test_ran_is_exit_2(self):
         code, out = self.load(["--hogs", "2", "--", "./..."], self.fake(event("pass")))
         self.assertEqual(code, 2, out)
@@ -188,6 +217,46 @@ class Real(Base):
         with open(profile, encoding="utf-8") as f:
             self.assertTrue(f.read().startswith("mode: "))
         self.assertIn(f"coverprofile: {profile}", out)
+
+
+# TestOK passes; TestSlow outlives go test's -timeout, so the binary panics ("panic: test timed out after …") while
+# TestSlow runs: the package fails, and the panic text reaches go test -json's stdout as output events.
+TIMEOUT_TESTS = """\
+package l
+
+import (
+\t"testing"
+\t"time"
+)
+
+func TestOK(t *testing.T) {
+\tif One() != 1 {
+\t\tt.Fatal("One() != 1")
+\t}
+}
+
+func TestSlow(t *testing.T) {
+\ttime.Sleep(time.Minute)
+}
+"""
+
+
+class DiedOutsideATest(Base):
+    """Break-it (S1.1c-6 combined build, BK-S1): load.py's verdict on a test binary that dies outside a test's own
+    result."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.module = os.path.join(self.tmp, "mod")
+        support.write(self.module, {"go.mod": MODULE, "l.go": SOURCE, "l_test.go": TIMEOUT_TESTS})
+
+    def test_a_binary_that_times_out_names_the_test_or_the_cause(self):
+        # The verdict must say why the run is red: the test that was running (below N/N) or the panic's line. Today
+        # the tail printed is stderr's, which is empty under -json, so the verdict reads "below N/N: none; go test
+        # exit 1" with no cause, as it did for internal/event under -race -count=4 -cpu 1,4 and 28 hogs.
+        code, out = self.load(["--hogs", "1", "--", "-count=1", "-timeout=3s", "."], os.environ, self.module)
+        self.assertEqual(code, 1, out)
+        self.assertTrue("TestSlow" in out.split("verdict:")[-1] or "timed out" in out, out)
 
 
 if __name__ == "__main__":
