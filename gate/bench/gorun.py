@@ -68,24 +68,26 @@ def run(
     with tempfile.TemporaryDirectory(prefix="gorun-") as tmp:
         out_path, err_path = os.path.join(tmp, "stdout"), os.path.join(tmp, "stderr")
         with open(out_path, "wb") as out, open(err_path, "wb") as err:
-            with term.critical():
-                proc = term.popen(
-                    list(argv),
-                    cwd=cwd,
-                    env=None if env is None else dict(env),
-                    stdin=subprocess.DEVNULL,
-                    stdout=out,
-                    stderr=err,
-                )
+            proc = None
             timed_out = False
             try:
                 try:
+                    with term.critical():  # a stop waits until proc is held, then lands in this try
+                        proc = term.popen(
+                            list(argv),
+                            cwd=cwd,
+                            env=None if env is None else dict(env),
+                            stdin=subprocess.DEVNULL,
+                            stdout=out,
+                            stderr=err,
+                        )
                     proc.wait(timeout=timeout_s)
                 except subprocess.TimeoutExpired:
                     timed_out = True
                     _stop(proc, grace_s)
             except BaseException:
-                _stop(proc, grace_s)
+                if proc is not None:
+                    _stop(proc, grace_s)
                 raise
             # A grandchild left in the group by a leader that exited goes too.
             _killpg(proc.pid, signal.SIGKILL)
