@@ -522,7 +522,8 @@ class PrintedParts(unittest.TestCase):
     S1.1c-6's G0 (owner 2026-11-15: S1.1c-7 holds the sprint-named test files and, after the spike, S1.1c-5-3): with
     S1.1c-5, S1.1c-6 and S1.1c-7 printed after S1.1c and all three closed — three closed rows after S1.1c, the point
     S1.1c-7's close was before the first re-cut — rule 1 names none of the entries first seen at or before row S1.1c
-    (each is decided) and none of S1.1c-5-1 to -4 (their decision names them). The order and the known issues
+    (each is decided) and none of S1.1c-5-3 and -4 (their decision names them; -1 and -2 closed at S1.1c-6's
+    combine). The order and the known issues
     are the committed files', the closed marks the fixture's; the decisions reader is the tracked Markdown, as RealTree
     reads it."""
 
@@ -542,7 +543,8 @@ class PrintedParts(unittest.TestCase):
         closing = {"S1.1c-5", "S1.1c-6", "S1.1c-7"}
         order = sprintid.Order(tuple(sprintid.Row(r.id, r.closed or r.id in closing) for r in printed.rows))
         entries = json.loads(read_repo(knownissues.JSON))["entries"]
-        self.assertLessEqual({"S1.1c-5-1", "S1.1c-5-2", "S1.1c-5-3", "S1.1c-5-4"}, {e["id"] for e in entries})
+        # S1.1c-5-1 and -2 closed at S1.1c-6's combine.
+        self.assertLessEqual({"S1.1c-5-3", "S1.1c-5-4"}, {e["id"] for e in entries})
         lines = aging.aged(
             entries,
             order,
