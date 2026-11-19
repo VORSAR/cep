@@ -51,7 +51,34 @@ func TestBreakitExprFenceSecondImportName(t *testing.T) {
 	wantFindingAll(t, check(t, "internal/expr/x.go", src), "fence:", "New")
 }
 
-// B7 (should-fix; pre-dates S3.1-2, the same root as B1 and B2; ADR-0015 §2.2's clock rule): a package that may
+// CA-S1 (S1.1c-6's combined architecture review; owner, 2026-11-19; rules.json "fences"): internal/expr reads the
+// model's expression node only (owner, 2026-11-04). The fence's prefix "Lit" also admitted model.LitValue and
+// model.LitType, the literal helpers internal/model gained in S1.1c-6, so expr could convert literals through the
+// model with no finding. model.Literal, the eight LitX constants and the ExprX constants stay allowed.
+func TestBreakitExprFenceLitPrefix(t *testing.T) {
+	t.Parallel()
+	imp := "import \"" + mod + "internal/model\"\n"
+	for _, c := range []struct{ path, ident string }{
+		{"internal/expr/x.go", "LitValue"},
+		{"internal/expr/x.go", "LitType"},
+		{"internal/expr/x_test.go", "LitValue"},
+		{"internal/expr/x_test.go", "LitType"},
+	} {
+		t.Run(c.path+"/"+c.ident, func(t *testing.T) {
+			t.Parallel()
+			src := "package expr\n" + imp + "var _ = model." + c.ident + "\n"
+			wantFindingAll(t, check(t, c.path, src), "fence:", "not model."+c.ident)
+		})
+	}
+	t.Run("Literal, the eight LitX constants and ExprAnd", func(t *testing.T) {
+		t.Parallel()
+		src := "package expr\n" + imp + "var _ = []any{model.Literal{}, model.ExprAnd, model.LitBool, model.LitDuration, " +
+			"model.LitFloat, model.LitInt, model.LitNull, model.LitParam, model.LitString, model.LitTimestamp}\n"
+		wantNone(t, check(t, "internal/expr/x.go", src))
+	})
+}
+
+// B7(should-fix; pre-dates S3.1-2, the same root as B1 and B2; ADR-0015 §2.2's clock rule): a package that may
 // import time but not read the wall clock (here internal/plan) reads it through a second import name: clock() looks
 // up only the first local name of "time".
 func TestBreakitClockSecondImportName(t *testing.T) {
