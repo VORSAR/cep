@@ -38,27 +38,46 @@ func AppendValue(dst []byte, v event.Value) ([]byte, error) {
 	case event.TInt:
 		return strconv.AppendInt(dst, v.I, 10), nil
 	case event.TFloat:
-		if math.IsNaN(v.F) || math.IsInf(v.F, 0) {
-			return dst, errNonFinite
-		}
-		return strconv.AppendFloat(dst, v.F, 'g', -1, 64), nil
+		return appendFloat(dst, v.F)
 	case event.TBool:
 		return strconv.AppendBool(dst, v.B), nil
 	case event.TTimestamp:
-		if v.T < minTimestamp || v.T > maxTimestamp {
-			return dst, errTimeRange
-		}
-		return appendTime(dst, v.T), nil
+		return appendTimestamp(dst, v.T)
 	case event.TDuration:
 		return strconv.AppendInt(dst, v.D, 10), nil
 	case event.TObject:
-		text, ok := v.Obj.(string)
-		if !ok {
-			return dst, fmt.Errorf("an object value is not its JSON text (%T)", v.Obj)
-		}
-		return append(dst, text...), nil
+		return appendObject(dst, v.Obj)
 	}
 	return dst, fmt.Errorf("a value of type %v is not encodable", v.Kind)
+}
+
+// appendFloat writes f in strconv's shortest 'g' form; a NaN or ±Inf is refused.
+func appendFloat(dst []byte, f float64) ([]byte, error) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return dst, errNonFinite
+	}
+	return strconv.AppendFloat(dst, f, 'g', -1, 64), nil
+}
+
+// appendTimestamp writes ms as appendTime does; a timestamp outside the years 0000-9999 is refused.
+func appendTimestamp(dst []byte, ms int64) ([]byte, error) {
+	if ms < minTimestamp || ms > maxTimestamp {
+		return dst, errTimeRange
+	}
+	return appendTime(dst, ms), nil
+}
+
+// appendObject writes obj's JSON text; an object value that is not its text is refused.
+func appendObject(dst []byte, obj any) ([]byte, error) {
+	if text, ok := obj.(string); ok {
+		return append(dst, text...), nil
+	}
+	return dst, objectError(obj)
+}
+
+// objectError is the refusal of an object value that is not its JSON text; out of line, so appendObject inlines.
+func objectError(obj any) error {
+	return fmt.Errorf("an object value is not its JSON text (%T)", obj)
 }
 
 // appendTime writes ms as a quoted RFC 3339 UTC timestamp with exactly three fraction digits.
@@ -84,22 +103,7 @@ func appendString(dst []byte, s string) []byte {
 				continue
 			}
 			dst = append(dst, s[start:i]...)
-			switch c {
-			case '"', '\\':
-				dst = append(dst, '\\', c)
-			case '\b':
-				dst = append(dst, '\\', 'b')
-			case '\f':
-				dst = append(dst, '\\', 'f')
-			case '\n':
-				dst = append(dst, '\\', 'n')
-			case '\r':
-				dst = append(dst, '\\', 'r')
-			case '\t':
-				dst = append(dst, '\\', 't')
-			default:
-				dst = append(dst, '\\', 'u', '0', '0', hexDigits[c>>4], hexDigits[c&0xf])
-			}
+			dst = appendEscape(dst, c)
 			i++
 			start = i
 			continue
@@ -121,6 +125,28 @@ func appendString(dst []byte, s string) []byte {
 	}
 	dst = append(dst, s[start:]...)
 	return append(dst, '"')
+}
+
+// appendEscape writes the JSON escape of c, an ASCII byte appendString escapes: `"` and `\`; \b \f \n \r \t short;
+// every other byte below 0x20 as \u00XX.
+func appendEscape(dst []byte, c byte) []byte {
+	switch c {
+	case '"', '\\':
+		dst = append(dst, '\\', c)
+	case '\b':
+		dst = append(dst, '\\', 'b')
+	case '\f':
+		dst = append(dst, '\\', 'f')
+	case '\n':
+		dst = append(dst, '\\', 'n')
+	case '\r':
+		dst = append(dst, '\\', 'r')
+	case '\t':
+		dst = append(dst, '\\', 't')
+	default:
+		dst = append(dst, '\\', 'u', '0', '0', hexDigits[c>>4], hexDigits[c&0xf])
+	}
+	return dst
 }
 
 // AppendEvent appends e as one log line without a newline: {"attrs":{…},"batch":"…","stream":"…","ts":"…"}; batch
@@ -149,6 +175,17 @@ func appendEvent(dst []byte, s event.Schema, e event.Event, skip string) ([]byte
 		}
 	}
 	dst = append(dst, `{"attrs":{`...)
+	dst, err := appendAttrs(dst, s, e, order, skip)
+	if err != nil {
+		return dst, err
+	}
+	dst = append(dst, '}')
+	return appendEventTail(dst, s, e)
+}
+
+// appendAttrs writes order's attributes as "name":value members, leaving out skip; dst is returned as far as written
+// on an error.
+func appendAttrs(dst []byte, s event.Schema, e event.Event, order []int, skip string) ([]byte, error) {
 	k := 0
 	for _, i := range order {
 		a := s.Attr(i)
@@ -171,7 +208,12 @@ func appendEvent(dst []byte, s event.Schema, e event.Event, skip string) ([]byte
 			return dst, fmt.Errorf("playback: stream %q: attribute %q: %w", s.Stream(), a.Name, err)
 		}
 	}
-	dst = append(dst, '}')
+	return dst, nil
+}
+
+// appendEventTail writes ,"batch" (when set), ,"stream" and, on a `time arrival` stream, ,"ts", then the closing
+// brace.
+func appendEventTail(dst []byte, s event.Schema, e event.Event) ([]byte, error) {
 	if e.BatchID != "" {
 		dst = append(dst, `,"batch":`...)
 		dst = appendString(dst, e.BatchID)
