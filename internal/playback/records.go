@@ -61,39 +61,16 @@ var recordKinds = [...]struct {
 
 // record decodes one non-blank line (design note §5.2).
 func (r *Reader) record(line []byte) (Record, error) {
-	vals, info, err := r.env.Decode(line, r.envBuf[:0])
+	vals, err := r.envelope(line)
 	if err != nil {
-		var de *event.DecodeError
-		if errors.As(err, &de) {
-			return Record{}, r.fault("not a log record: %s", de.Msg)
-		}
-		return Record{}, r.fault("not a log record: %v", err)
-	}
-	r.envBuf = vals
-	if info.Unknown > 0 {
-		return Record{}, r.fault("a key the log format does not define")
-	}
-	if r.stopped {
-		return Record{}, r.fault("a record after the stop record")
+		return Record{}, err
 	}
 	present := func(i int) bool { return !vals[i].Null }
-	kind := -1
-	for k := range recordKinds {
-		if present(recordKinds[k].key) {
-			kind = k
-			break
-		}
+	kind, err := r.recordKind(vals)
+	if err != nil {
+		return Record{}, err
 	}
-	if kind < 0 {
-		return Record{}, r.fault("a record names none of recording, table, batch_end, tick, stop, rejected or stream")
-	}
-	rk := &recordKinds[kind]
-	for i := range eCount {
-		if present(i) && !rk.allowed[i] {
-			return Record{}, r.fault("a %s record has no %q key", rk.name, envelopeAttrs[i].Name)
-		}
-	}
-	switch rk.kind {
+	switch kind {
 	case RecHeader:
 		return r.headerRecord(vals)
 	case RecTable:
@@ -108,6 +85,49 @@ func (r *Reader) record(line []byte) (Record, error) {
 		return r.rejectedRecord(vals, present)
 	}
 	return r.eventRecord(vals, present)
+}
+
+// envelope is line decoded against the envelope schema; refused for a decode fault, an unknown key, or a record after
+// the stop.
+func (r *Reader) envelope(line []byte) ([]event.Value, error) {
+	vals, info, err := r.env.Decode(line, r.envBuf[:0])
+	if err != nil {
+		var de *event.DecodeError
+		if errors.As(err, &de) {
+			return nil, r.fault("not a log record: %s", de.Msg)
+		}
+		return nil, r.fault("not a log record: %v", err)
+	}
+	r.envBuf = vals
+	if info.Unknown > 0 {
+		return nil, r.fault("a key the log format does not define")
+	}
+	if r.stopped {
+		return nil, r.fault("a record after the stop record")
+	}
+	return vals, nil
+}
+
+// recordKind is the line's kind: the first choosing key present; refused when none is, or a key the kind does not
+// allow is present.
+func (r *Reader) recordKind(vals []event.Value) (RecordKind, error) {
+	kind := -1
+	for k := range recordKinds {
+		if !vals[recordKinds[k].key].Null {
+			kind = k
+			break
+		}
+	}
+	if kind < 0 {
+		return 0, r.fault("a record names none of recording, table, batch_end, tick, stop, rejected or stream")
+	}
+	rk := &recordKinds[kind]
+	for i := range eCount {
+		if !vals[i].Null && !rk.allowed[i] {
+			return 0, r.fault("a %s record has no %q key", rk.name, envelopeAttrs[i].Name)
+		}
+	}
+	return rk.kind, nil
 }
 
 // rejectedRecord is a recording's rejected live event (owner Q1 of S3.2b-2; design s3-2b-2 §7): its stream, its
