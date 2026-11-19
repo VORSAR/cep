@@ -14,13 +14,16 @@ from gate.bench import gorun
 
 CAP_S = 20.0  # a killed process is gone within milliseconds
 
-# A child that starts a grandchild in its own process group, writes both pids, then waits forever.
+# A child that starts a grandchild in its own process group, writes both pids, then waits forever. It unblocks
+# SIGTERM only after the write: started with SIGTERM blocked (the limit case), it holds a TERM that comes during its
+# start-up until both processes exist, and the grandchild, started before the unblock, keeps TERM blocked.
 PARENT = """\
 import os, signal, subprocess, sys
 g = subprocess.Popen([sys.executable, "-I", "-c", "import signal\\nwhile True:\\n    signal.pause()"])
 with open(sys.argv[1] + ".tmp", "w") as f:
     f.write(f"{os.getpid()} {g.pid}")
 os.rename(sys.argv[1] + ".tmp", sys.argv[1])
+signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
 while True:
     signal.pause()
 """
@@ -54,12 +57,29 @@ class Run(unittest.TestCase):
                     os.kill(pid, signal.SIGKILL)
 
     def test_a_child_past_the_limit_is_killed_with_its_grandchild(self):
-        pids = os.path.join(self.dir, "pids")
+        # The limit never races the child's start-up: the child starts with SIGTERM blocked (a signal mask passes
+        # through fork and exec), so the limit's TERM, early or late, kills it only once both pids are written. The
+        # grace is the cap on that, ended by the child's death. A 0 s limit comes during start-up, a 2 s one usually
+        # while the child waits; both end the same way.
+        for timeout_s in (0.0, 2.0):
+            with self.subTest(timeout_s=timeout_s):
+                self.check_the_limit_kills_the_child_and_its_grandchild(timeout_s)
+
+    def check_the_limit_kills_the_child_and_its_grandchild(self, timeout_s: float) -> None:
+        pids = os.path.join(self.dir, f"pids-{timeout_s}")
         self.addCleanup(self.kill_all, pids)
-        result = gorun.run([sys.executable, "-I", "-c", PARENT, pids], cwd=self.dir, timeout_s=2.0)
+        blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            argv = [sys.executable, "-I", "-c", PARENT, pids]
+            result = gorun.run(argv, cwd=self.dir, timeout_s=timeout_s, grace_s=CAP_S)
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
         self.assertTrue(result.timed_out)
-        # The positive witness: both processes existed (their pids were written before the limit).
+        # The positive witness: the child died of the limit's TERM, which it takes only after it started the grandchild
+        # and wrote both pids; a KILL at the grace's end, before that, would be -SIGKILL.
+        self.assertEqual(result.exit, -signal.SIGTERM, result)
         child, grandchild = read_pids(pids)
+        # The grandchild blocks TERM: only the KILL to the group ends it.
         wait.until("the timed-out child and its grandchild gone", lambda: gone(child) and gone(grandchild), cap_s=CAP_S)
 
     def test_exit_code_and_output_come_through(self):
