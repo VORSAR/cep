@@ -716,6 +716,7 @@ Splits: **`top`** — `if s.at('}')`, the loop `key, vstart, err := s.member()`,
 Order and offsets: each `syntax(…)` moves with its check, same `at`, same text; `!s.at('"')` is exactly De Morgan of `:556`. Transfers: `member`'s three error returns (mutation: return `nil` on a `str` fault, red by an unterminated key); `unicodeEscape`'s two faults plus the advance (mutations: no `s.i += 6`, red by `"A"`; drop the bound check, red by `"\u12`); `exponent`'s `nil` for "no exponent" (mutation: `return s.digits()` always, red by `1`). Decision 1 decides `member` and `exponent` per function.
 
 *(Annotated 2026-11-18: `object` through `member` and `str` through `unicodeEscape` cost the scanner's path +8.5 % then +8.1 %; under ground rule 13a the owner chose one `name` reader for `object` and `top` and a register-loop `str` instead (`member` and `colon` removed) — [owner](decisions.md#owner-decisions-2026-11-18--the-architecture-review-of-lane-es-walkers-and-scanner), decision 2.)*
+*(Annotated 2026-11-19: that `str` called `unicodeEscape` per `\u` escape, +22 % on `\u`-dense strings; the owner chose a variant that checks the four hex digits inline (`isHex4`) with its faults in `unicodeFault`, slower nowhere than the code before the sprint — [owner](decisions.md#owner-decisions-2026-11-19--the-scanners-string-reader-the-variant).)*
 
 #### E.2.6 `NewSchema` — cc 12, deploy-time
 ```go
