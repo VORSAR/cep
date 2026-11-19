@@ -48,35 +48,57 @@ func firstExpected(expect string) string {
 	case s == "":
 		return expect
 	case s[0] == '"':
-		if lit, err := strconv.QuotedPrefix(s); err == nil {
-			if text, err := strconv.Unquote(lit); err == nil {
-				return text
-			}
+		if text, ok := quotedFirst(s); ok {
+			return text
 		}
 	case s[0] == '(':
 		return firstExpected(s[1:])
 	case s[0] == '<':
-		if name, _, ok := strings.Cut(s, ">"); ok {
-			if words, ok := tokenWords[name+">"]; ok {
-				return words
-			}
-			return name[1:]
-		}
-	case isNameChar(s[0]):
-		j := 0
-		for j < len(s) && isNameChar(s[j]) {
-			j++
-		}
-		if words, ok := productionWords[s[:j]]; ok {
+		if words, ok := tokenTypeFirst(s); ok {
 			return words
 		}
-		return s[:j]
+	case isNameChar(s[0]):
+		return productionFirst(s)
 	}
 	fields := strings.Fields(s)
 	if len(fields) == 0 {
 		return ""
 	}
 	return strings.TrimRight(fields[0], "?*+!)|")
+}
+
+// quotedFirst is the literal s begins with, without its quotes; false when s does not begin with a whole one.
+func quotedFirst(s string) (string, bool) {
+	if lit, err := strconv.QuotedPrefix(s); err == nil {
+		if text, err := strconv.Unquote(lit); err == nil {
+			return text, true
+		}
+	}
+	return "", false
+}
+
+// tokenTypeFirst is the token type s begins with (`<name>`) in its tokenWords words, else its bare name; false when
+// the `>` is missing.
+func tokenTypeFirst(s string) (string, bool) {
+	if name, _, ok := strings.Cut(s, ">"); ok {
+		if words, ok := tokenWords[name+">"]; ok {
+			return words, true
+		}
+		return name[1:], true
+	}
+	return "", false
+}
+
+// productionFirst is the production name s begins with, in its productionWords words, else the name itself.
+func productionFirst(s string) string {
+	j := 0
+	for j < len(s) && isNameChar(s[j]) {
+		j++
+	}
+	if words, ok := productionWords[s[:j]]; ok {
+		return words
+	}
+	return s[:j]
 }
 
 // wordsFor replaces each whole unquoted production name in s by its rule words; a double-quoted run is copied as
