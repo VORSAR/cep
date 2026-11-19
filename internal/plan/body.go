@@ -171,36 +171,55 @@ func (b *body) OnEvent(in *partition.Instance, e event.Event) {
 	b.row.ev = e
 	b.row.tables, _ = e.Tables.(*table.Snapshot)
 	defer func() { b.row = row{} }() // hold nothing of the event between calls
-	if b.filter != nil {
-		v, err := b.filter.Eval(&b.row)
-		if err != nil {
-			b.stats.Errored++
-			return
-		}
-		if v.Null || !v.B {
-			return
-		}
+	if !b.passes() {
+		return
 	}
 	if len(b.buf) != b.nattrs {
 		b.buf = make([]event.Value, b.nattrs)
 	}
 	vals := b.buf
 	defer clear(vals) // hold nothing of the event between calls
+	if !b.project(vals) {
+		return
+	}
+	if b.tsIdx >= 0 {
+		vals[b.tsIdx] = event.Value{Kind: event.TTimestamp, T: e.Ts}
+	}
+	b.out(&in.Op.(*state).anchor, event.Event{StreamID: b.target, Ts: e.Ts, Values: vals})
+}
+
+// passes is OnEvent's filter over b.row: every event passes a rule with no filter; an expression error fails it,
+// counted (the event is dropped for this rule only), and so does a null or false result.
+func (b *body) passes() bool {
+	if b.filter != nil {
+		v, err := b.filter.Eval(&b.row)
+		if err != nil {
+			b.stats.Errored++
+			return false
+		}
+		if v.Null || !v.B {
+			return false
+		}
+	}
+	return true
+}
+
+// project is OnEvent's select loop over b.row: each select item's value goes to its slot of vals, an int widened to
+// a float where the item says so; an expression error stops it and fails it, counted (the event is dropped for this
+// rule only).
+func (b *body) project(vals []event.Value) bool {
 	for _, p := range b.sel {
 		v, err := p.e.Eval(&b.row)
 		if err != nil {
 			b.stats.Errored++
-			return
+			return false
 		}
 		if p.widen && v.Kind == event.TInt {
 			v = event.Value{Kind: event.TFloat, F: float64(v.I), Null: v.Null}
 		}
 		vals[p.idx] = v
 	}
-	if b.tsIdx >= 0 {
-		vals[b.tsIdx] = event.Value{Kind: event.TTimestamp, T: e.Ts}
-	}
-	b.out(&in.Op.(*state).anchor, event.Event{StreamID: b.target, Ts: e.Ts, Values: vals})
+	return true
 }
 
 // out is the emission stage (SEMANTICS §8): with D > 0, an output with Ts <= At + D (saturating; ties included) is
