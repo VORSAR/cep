@@ -360,7 +360,11 @@ func firstExpected(expect string) string {
 		}
 		return s[:j]
 	}
-	return strings.TrimRight(strings.Fields(s)[0], "?*+!)|")
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.TrimRight(fields[0], "?*+!)|")
 }
 
 // wordsFor replaces each whole unquoted production name in s by its rule words; a double-quoted run is copied as
