@@ -207,49 +207,61 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 	if r.Body.Source.Filter.Kind != "" {
 		spec.filter = r.Body.Source.Filter
 	}
-	out := p.Streams[target].Schema
-	spec.nattrs = out.NumAttrs()
-	for i := range out.NumAttrs() {
-		a := out.Attr(i)
-		if a.Name == "ts" {
-			spec.tsIdx = i
-			continue
-		}
-		item := selected(r.Select, a.Name)
-		if item == nil {
-			return Rule{}, fmt.Errorf("%s.%s is bound by no select item (Build is given only a checked model)", out.Stream(),
-				a.Name)
-		}
-		spec.sel = append(spec.sel, projSpec{idx: i, node: *item, widen: a.Type == event.TFloat})
+	if err := spec.project(p.Streams[target].Schema, r.Select); err != nil {
+		return Rule{}, err
 	}
 	if _, err := spec.compile(); err != nil { // fail at deploy, not per event (review F1)
 		return Rule{}, err
 	}
 	pr := Rule{Name: r.Name, Target: target, Inputs: []int{src}, KeyTypes: []event.Type{event.TString}, OnArrival: true}
+	if err := pr.key(r, sc); err != nil {
+		return Rule{}, err
+	}
+	pr.NewBody = newBody(spec, r)
+	return pr, nil
+}
+
+// key sets pr's partition key from rule r's key of its source stream, read in sc's schema: the key attributes, their
+// types and the TTL; a rule with no key of that stream stays key-less.
+func (pr *Rule) key(r *model.Rule, sc *scope) error {
 	for _, k := range r.Partition.Keys {
 		if k.Stream != r.Body.Source.Stream {
 			continue
 		}
 		if pr.KeyAttrs != nil { // a second key of one stream is E-PART-004: never drop a declared key (break-it B1)
-			return Rule{}, fmt.Errorf("stream %s is keyed twice (E-PART-004; Build is given only a checked model)", k.Stream)
+			return fmt.Errorf("stream %s is keyed twice (E-PART-004; Build is given only a checked model)", k.Stream)
 		}
-		attrs, types := make([]int, len(k.Attrs)), make([]event.Type, len(k.Attrs))
-		for p, ka := range k.Attrs {
-			attrs[p] = -1
-			for i := range sc.schema.NumAttrs() {
-				if a := sc.schema.Attr(i); a.Name == ka.Name {
-					attrs[p], types[p] = i, a.Type
-				}
-			}
-			// E-NAME-001, E-PART-006: Build is given only a checked model
-			if attrs[p] < 0 || slices.Index(attrs[:p], attrs[p]) >= 0 {
-				return Rule{}, fmt.Errorf("stream %s: key attribute %s is unknown or named twice (a checked model has neither)",
-					k.Stream, ka.Name)
-			}
+		attrs, types, err := keyAttrs(k, sc)
+		if err != nil {
+			return err
 		}
 		pr.KeyAttrs, pr.KeyTypes, pr.TTL = [][]int{attrs}, types, r.Partition.TTL.Ms
 	}
-	pr.NewBody = func(emit func(event.Event)) partition.Body {
+	return nil
+}
+
+// keyAttrs is key k's attributes as indexes into sc's schema, in part order, and their types.
+func keyAttrs(k model.PartitionKey, sc *scope) ([]int, []event.Type, error) {
+	attrs, types := make([]int, len(k.Attrs)), make([]event.Type, len(k.Attrs))
+	for p, ka := range k.Attrs {
+		attrs[p] = -1
+		for i := range sc.schema.NumAttrs() {
+			if a := sc.schema.Attr(i); a.Name == ka.Name {
+				attrs[p], types[p] = i, a.Type
+			}
+		}
+		// E-NAME-001, E-PART-006: Build is given only a checked model
+		if attrs[p] < 0 || slices.Index(attrs[:p], attrs[p]) >= 0 {
+			return nil, nil, fmt.Errorf("stream %s: key attribute %s is unknown or named twice (a checked model has neither)",
+				k.Stream, ka.Name)
+		}
+	}
+	return attrs, types, nil
+}
+
+// newBody is rule r's NewBody: each call compiles spec again (spec is not changed after Build makes it).
+func newBody(spec bodySpec, r *model.Rule) func(emit func(event.Event)) partition.Body {
+	return func(emit func(event.Event)) partition.Body {
 		b, err := spec.compile() // each body owns its trees: nothing is shared across shards
 		if err != nil {
 			panic(fmt.Sprintf("plan: rule %s: an expression Build accepted failed to compile again: %v", r.Name, err)) //nolint:forbidigo,lll // PERMANENT reason="an expression Build accepted compiles again the same way; a failure is a programming fault" ref=docs/sprints/decisions.md#owner-decisions-2026-11-14--s11c-5s-plan-check sprint=S1.1c-5
@@ -257,7 +269,6 @@ func rule(app *model.App, p *App, ids map[string]int, r *model.Rule) (Rule, erro
 		b.emit = emit
 		return b
 	}
-	return pr, nil
 }
 
 // selected is the select item bound to attribute name: by `as`, or by its own attribute name (validate's binding).
