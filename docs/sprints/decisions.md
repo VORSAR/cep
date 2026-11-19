@@ -120,6 +120,7 @@
 | 2026-11-19 | [during S1.1c-6's lane Q](#owner-decisions-2026-11-19--during-s11c-6s-lane-q) |
 | 2026-11-19 | [the review of lane P's encoder, recorder and replay path](#owner-decisions-2026-11-19--the-review-of-lane-ps-encoder-recorder-and-replay-path) |
 | 2026-11-19 | [the gate's process runner](#owner-decisions-2026-11-19--the-gates-process-runner) |
+| 2026-11-19 | [S1.1c-6's review and break-it](#owner-decisions-2026-11-19--s11c-6s-review-and-break-it) |
 
 ## The decisions
 
@@ -1213,3 +1214,12 @@ Ground rule 13a fired on two of lane P's splits, measured alone and confirmed by
 Found while fixing `test_gorun`'s limit case (a test that raced the child's start-up under load; fixed in the test, red first under 140 CPU hogs): in `gate/bench/gorun.py` `run()`, the child is started inside `term.critical()` before the `try` whose handler stops the child's group, so a stop that lands while the child starts is raised after the block, outside that `try`, and the child's group keeps running, against the module's contract.
 
 1. **Fixed in this sprint** (as recommended; a scope change): one commit on the sprint branch, its test shown failing first, in the shape `gate/proofs/drivers/support.py`'s `run_process` already uses. Rejected: a known issue forwarded to a later sprint.
+
+### Owner decisions, 2026-11-19 — S1.1c-6's review and break-it
+
+The blind architecture review (the repo's `architect-reviewer` with `the-fool`) and the QA break-it (`qa-expert` with `the-fool`) of the combined build at 0f533a0 found no blocker and no engine behaviour change: the break-it ran `main` and the branch side by side on 1,141,815 mutated programs, 788,300 decoder inputs, 15,000 recordings and 1,800 live deployments, and every output agreed but the decided changes. Their findings, checked by the coordinator, are in [the architecture review](../reviews/s1-1c-6-combined-architecture.md) and [the break-it](../reviews/s1-1c-6-breakit-qa.md).
+
+1. **The expr fence is tightened in this sprint** (as recommended; CA-S1): `tools/importcheck/rules.json` allows `internal/expr` the `Literal` prefix and the exact `LitX` constants instead of the `Lit` prefix, which admitted lane M's `model.LitValue` and `model.LitType` against the decision of 2026-11-04 ("expr reads `model.Expr` only"); a planted archcheck test shows `model.LitValue` in expr red. Rejected: a known issue for S1.1c-7.
+2. **Both gate-tool defects are fixed in this sprint** (as recommended; BK-S1, BK-L1, BK-L2, CA-L4): `gate/bench/load.py` counts a test that started and never finished as a failure and shows the binary's panic lines, and `gate/bench/gorun.py` sends its final group kill from a `finally`, so neither a stop after the leader exits nor a second interrupt in the grace leaves the group running; each made green against the break-it's red test. Rejected: fixing `load.py` only; the backlog.
+3. **The 100-commit cap is met without rewriting the pushed branch** (as recommended; CA-S3): the combine rows (the two issue closures, the ADR and known-issue updates) and the close-out documents are folded into as few commits as possible. Rejected: squashing earlier commits by a force-push, which would break the commit ids the record cites.
+4. **The cited baselines are kept by archive tags; the other two later items go to the known issues** (as recommended): lightweight tags `archive/s1-1c-6/<id>` are pushed for the baseline commits the decisions, the record and the test comments cite that are not on the merged branch (CA-L1); no check yet pins the inlining the redesigns rely on (CA-L2) and the permanent differential tests double the event package's race time (CA-L3), both recorded as known issues for a later sprint (S1.1c-6-1 and S1.1c-6-2), the race time watched at T4. Rejected: leaving the baselines on local branches only.
