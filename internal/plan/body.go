@@ -64,6 +64,26 @@ type projSpec struct {
 	widen bool // the target attribute is a float: an int widens
 }
 
+// project binds each attribute of the target schema out, in its order, to its select item among items; the ts
+// attribute takes the event's time instead.
+func (s *bodySpec) project(out event.Schema, items []model.SelectItem) error {
+	s.nattrs = out.NumAttrs()
+	for i := range out.NumAttrs() {
+		a := out.Attr(i)
+		if a.Name == "ts" {
+			s.tsIdx = i
+			continue
+		}
+		item := selected(items, a.Name)
+		if item == nil {
+			return fmt.Errorf("%s.%s is bound by no select item (Build is given only a checked model)", out.Stream(),
+				a.Name)
+		}
+		s.sel = append(s.sel, projSpec{idx: i, node: *item, widen: a.Type == event.TFloat})
+	}
+	return nil
+}
+
 // compile builds a body with its own expression trees; a construct this release cannot run is ErrNotBuilt.
 func (s *bodySpec) compile() (*body, error) {
 	b := &body{target: s.target, nattrs: s.nattrs, tsIdx: s.tsIdx, every: s.every}
