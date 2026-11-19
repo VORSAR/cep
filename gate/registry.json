@@ -1047,7 +1047,7 @@
       ],
       "min_wants": 39,
       "lands_in": "S1.1a-1",
-      "exclusive": false,
+      "exclusive": true,
       "command": [
         "python3.15",
         "-I",
