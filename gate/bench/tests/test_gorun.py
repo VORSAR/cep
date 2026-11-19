@@ -110,6 +110,52 @@ class Run(unittest.TestCase):
         self.assertNotEqual(proc.wait(timeout=CAP_S), 0)
         wait.until("the stopped run's child and grandchild gone", lambda: gone(child) and gone(grandchild), cap_s=CAP_S)
 
+    def test_a_stop_while_the_child_starts_kills_the_child_group_first(self):
+        # The stop lands inside run's critical() block, deterministically: the driver's term.popen stand-in starts the
+        # real child, waits for its pid file (the child and its grandchild exist), sends the driver its own TERM and
+        # returns. critical() holds that TERM and raises it as the block ends. The stand-in exits 4 unless the TERM is
+        # held, so the window is a witness, not a hope; the driver exits 3 when the stop comes out of run as Terminated.
+        pids = os.path.join(self.dir, "pids")
+        self.addCleanup(self.kill_all, pids)
+        driver = (
+            "import os, signal, sys\n"
+            f"sys.path.insert(0, {REPO!r})\n"
+            "from gate import term, wait\n"
+            "from gate.bench import gorun\n"
+            "real_popen = term.popen\n"
+            "def popen_then_stop(argv, **kwargs):\n"
+            "    proc = real_popen(argv, **kwargs)\n"
+            f"    wait.until('the child pid file', lambda: os.path.exists({pids!r}), cap_s={CAP_S!r})\n"
+            "    os.kill(os.getpid(), signal.SIGTERM)\n"
+            "    if not term._held['pending']:\n"
+            "        os._exit(4)\n"
+            "    return proc\n"
+            "signal.signal(signal.SIGCHLD, signal.SIG_DFL)\n"
+            "term.install()\n"
+            "term.popen = popen_then_stop\n"
+            "try:\n"
+            f"    gorun.run([sys.executable, '-I', '-c', {PARENT!r}, {pids!r}], cwd={self.dir!r}, timeout_s=600)\n"
+            "except term.Terminated:\n"
+            "    sys.exit(3)\n"
+        )
+        err_path = os.path.join(self.dir, "driver.stderr")
+        with open(err_path, "wb") as err:
+            proc = subprocess.Popen(
+                [sys.executable, "-I", "-B", "-c", driver], stdin=subprocess.DEVNULL, stdout=err, stderr=err
+            )
+        self.addCleanup(proc.wait)
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        code = proc.wait(timeout=CAP_S)
+        with open(err_path, "rb") as f:
+            self.assertEqual(code, 3, f.read().decode("utf-8", errors="replace"))
+        # The positive witness: the child ran and started its grandchild before the stop (both pids written).
+        child, grandchild = read_pids(pids)
+        wait.until(
+            "the child and grandchild of a run stopped while starting gone",
+            lambda: gone(child) and gone(grandchild),
+            cap_s=CAP_S,
+        )
+
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
