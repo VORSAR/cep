@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/vorsar/cep/internal/event"
+	"github.com/vorsar/cep/internal/parser"
 	"github.com/vorsar/cep/internal/plan"
 )
 
@@ -104,4 +105,107 @@ rule R
 			Then: []plan.ThenRecord{{Line: 12, Col: 21, Attrs: []int{1, 0}, Values: []event.Value{pqFloat(2), pqStr("a")}}},
 		})
 	})
+}
+
+// peDecls: S stamped by ts, A on arrival, table T with the text_invisibles column, Out (the target) and Other.
+const peDecls = `language cep/0.1;
+
+stream S (k string, text_invisibles bool, ts timestamp)
+  time ts watermark bounded 1 min;
+
+stream A (k string)
+  time arrival;
+
+table T (k string, text_invisibles bool) primary key (k);
+
+stream Out (k string, ts timestamp);
+stream Other (k string, ts timestamp);
+`
+
+const peAt = "timestamp '2026-01-01T10:00:00Z'"
+
+// peBuildBlock parses rule R (from S, select k, into Out) with its one block, never validating it, and builds it.
+func peBuildBlock(t *testing.T, block string) (*plan.App, error) {
+	t.Helper()
+	res, err := parser.Parse("pe.cep", peDecls+`
+rule R
+  intent 'Forward every event.'
+  from S
+  expect `+block+`
+  select k
+  insert into Out;
+`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	return plan.Build(res.App)
+}
+
+// peWant is Build's error for rule R's block 1 failing with msg.
+func peWant(msg string) string {
+	return "plan: rule R, expect block 1: " + msg + " (Build is given only a checked model)"
+}
+
+// TestBuildNamesABlocksFirstFault: a block with two faults (a model the validator never saw) is refused for the one
+// met first in the block's order (design s3-3-2 §4, S1.1c-6 Q.2): every given in written order (a table's name, then
+// its rows; a stream's name, its time attribute, then its records), then the then's target, then its records, each
+// record's fields in written order. One row per adjacent pair of that order, each wanting the earlier fault.
+func TestBuildNamesABlocksFirstFault(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, block, want string }{
+		{"an unknown table before a later table's row", "given table U [ ] given table T [ {k: 1} ] then Out [ ]", "unknown table U"},
+		{"a table's row before a later unknown stream", "given table T [ {k: 1} ] given Q [ ] then Out [ ]",
+			"k: a int literal is not a string"},
+		{"an unknown stream before a later timeless stream", "given Q [ ] given A [ ] then Out [ ]", "unknown stream Q"},
+		{"a timeless stream before a later stream's record", "given A [ ] given S [ {k: 1, ts: " + peAt + "} ] then Out [ ]",
+			"stream A has no time attribute a block can give"},
+		{"a stream's record before the then's target", "given S [ {k: 1, ts: " + peAt + "} ] then Other [ ]",
+			"k: a int literal is not a string"},
+		{"the then's target before its records", "given S [ ] then Other [ {q: 1} ]", "then names Other, not the rule's target Out"},
+		{"an unknown table before a wrong then", "given table U [ ] then Other [ ]", "unknown table U"},
+		{"a stream given before a table given", "given S [ {k: 1, ts: " + peAt + "} ] given table U [ ] then Out [ ]",
+			"k: a int literal is not a string"},
+		{"a record before a later record", "given S [ {k: 1, ts: " + peAt + "}, {q: 1, ts: " + peAt + "} ] then Out [ ]",
+			"k: a int literal is not a string"},
+		{"a then-record before a later one", "given S [ ] then Out [ {q: 1}, {k: 1} ]", "Out has no attribute q"},
+		{"a then field before a later one", "given S [ ] then Out [ {k: 1, q: 1} ]", "Out.k: a int literal is not a string"},
+	} {
+		p, err := peBuildBlock(t, c.block)
+		if want := peWant(c.want); err == nil || err.Error() != want || p != nil {
+			t.Errorf("%s: Build = %v, %v; want nil and %q", c.name, p, err, want)
+		}
+	}
+}
+
+// TestBuildRefusesAThenOffTheRuleTarget: a then naming a stream that is not the rule's target is refused, whether no
+// stream has that name or another stream does (SPEC §6.8: the then-records are the rule's outputs).
+func TestBuildRefusesAThenOffTheRuleTarget(t *testing.T) {
+	t.Parallel()
+	for _, then := range []string{"Nope", "Other"} {
+		p, err := peBuildBlock(t, "given S [ ] then "+then+" [ ]")
+		if want := peWant("then names " + then + ", not the rule's target Out"); err == nil || err.Error() != want || p != nil {
+			t.Errorf("then %s: Build = %v, %v; want nil and %q", then, p, err, want)
+		}
+	}
+}
+
+// TestBuildFillsInvisiblesAndChecksTimeOnlyForAStream: values (design s3-3-2 §4) — the text_invisibles slot is false
+// in a given stream's event (the ingest step computes it) but a table's text_invisibles column omitted from a row
+// is null like any other; a row of a table, which has no time attribute, is never refused for one, while a
+// stream's event with its time attribute omitted is.
+func TestBuildFillsInvisiblesAndChecksTimeOnlyForAStream(t *testing.T) {
+	t.Parallel()
+	p, err := peBuildBlock(t, "given table T [ {k: 'a'} ] given S [ {k: 'b', ts: "+peAt+"} ] then Out [ ]")
+	if err != nil {
+		t.Fatalf("Build: %v; want none", err)
+	}
+	peEqual(t, "the block", p.Expects[0], plan.Expect{
+		Rule: 0, Block: 1, Line: 17, Col: 3, ThenLine: 17, ThenCol: 96, // `expect` at 17:3 (the decls, a blank line, R), `then` 86 columns into the block
+		Tables: []plan.GivenTable{{Table: 0, Rows: [][]event.Value{{pqStr("a"), {Kind: event.TBool, Null: true}}}}},
+		Lists:  []plan.GivenList{{Stream: 0, Events: []plan.GivenEvent{{Ts: pqT0, Values: []event.Value{pqStr("b"), peBool(false), pqTs(pqT0)}}}}},
+	})
+	p, err = peBuildBlock(t, "given S [ {k: 'b'} ] then Out [ ]")
+	if want := peWant("the time attribute ts is null"); err == nil || err.Error() != want || p != nil {
+		t.Errorf("a stream's event without its time: Build = %v, %v; want nil and %q", p, err, want)
+	}
 }
