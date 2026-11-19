@@ -76,5 +76,66 @@ class StopAfterTheLeaderExits(unittest.TestCase):
             self.assertTrue(gone(leader))
 
 
+# A child that notes a TERM in <pids>.term and lives on, with a grandchild that ignores TERM: only the group's KILL at
+# the grace's end stops them.
+DEAF = """\
+import os, signal, subprocess, sys
+signal.signal(signal.SIGTERM, lambda *_: open(sys.argv[1] + ".term", "w").close())
+code = "import signal\\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\\nwhile True:\\n    signal.pause()"
+g = subprocess.Popen([sys.executable, "-I", "-c", code])
+with open(sys.argv[1] + ".tmp", "w") as f:
+    f.write(f"{os.getpid()} {g.pid}")
+os.rename(sys.argv[1] + ".tmp", sys.argv[1])
+while True:
+    signal.pause()
+"""
+
+
+class SecondInterruptInTheGrace(unittest.TestCase):
+    def test_a_second_interrupt_during_the_grace_still_kills_the_group(self):
+        # The module docstring: "A TERM or an interrupt of the caller kills the child's group before the stop goes
+        # on." The first SIGINT reaches run's handler, which TERMs the group and waits the grace (2 s) for the
+        # leader; a second SIGINT once the child has seen that TERM (a second Ctrl-C) raises out of that wait, so the
+        # group's KILL is never sent. Control: one SIGINT alone ends both processes once the grace is over.
+        with tempfile.TemporaryDirectory() as tmp:
+            pids = os.path.join(tmp, "pids")
+            driver = (
+                "import sys\n"
+                f"sys.path.insert(0, {REPO!r})\n"
+                "from gate import term\n"
+                "from gate.bench import gorun\n"
+                "term.install()\n"
+                f"argv = [sys.executable, '-I', '-c', {DEAF!r}, {pids!r}]\n"
+                f"gorun.run(argv, cwd={tmp!r}, timeout_s=600, grace_s=2.0)\n"
+            )
+            proc = subprocess.Popen(
+                [sys.executable, "-I", "-B", "-c", driver], stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            try:
+                wait.until("the child's pid file", lambda: os.path.exists(pids), cap_s=CAP_S)
+                with open(pids, encoding="ascii") as f:
+                    child, grandchild = (int(p) for p in f.read().split())
+                proc.send_signal(signal.SIGINT)
+                wait.until(
+                    "the group's TERM (the grace has begun)", lambda: os.path.exists(pids + ".term"), cap_s=CAP_S
+                )
+                proc.send_signal(signal.SIGINT)
+                proc.wait(timeout=CAP_S)
+                try:
+                    wait.until(
+                        "the child and grandchild gone after the grace",
+                        lambda: gone(child) and gone(grandchild),
+                        cap_s=5.0,
+                    )
+                finally:
+                    for pid in (child, grandchild):
+                        if not gone(pid):
+                            os.kill(pid, signal.SIGKILL)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+
+
 if __name__ == "__main__":
     unittest.main()
