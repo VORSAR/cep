@@ -22,33 +22,6 @@
       "cap": 5
     },
     {
-      "target": "internal/event file-length-limit",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 1
-    },
-    {
-      "target": "internal/event funlen",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 2
-    },
-    {
-      "target": "internal/event gocyclo",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 12
-    },
-    {
       "target": "internal/expr file-length-limit",
       "kind": "TEMP",
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2; S1.1c-6's re-cut after its spike)",
@@ -85,33 +58,6 @@
       "cap": 2
     },
     {
-      "target": "internal/parser file-length-limit",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 1
-    },
-    {
-      "target": "internal/parser funlen",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 1
-    },
-    {
-      "target": "internal/parser gocyclo",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 5
-    },
-    {
       "target": "internal/partition file-length-limit",
       "kind": "TEMP",
       "reason": "size family not yet cleaned; S1.1c-7 cleans it (S1.1c-5's plan check, decisions 1 and 2; S1.1c-6's re-cut after its spike)",
@@ -128,60 +74,6 @@
       "expiry": "2027-02-11",
       "issue": "S1.1c-5-3",
       "cap": 2
-    },
-    {
-      "target": "internal/plan argument-limit",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 1
-    },
-    {
-      "target": "internal/plan funlen",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 2
-    },
-    {
-      "target": "internal/plan gocyclo",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 5
-    },
-    {
-      "target": "internal/playback file-length-limit",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 1
-    },
-    {
-      "target": "internal/playback funlen",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 1
-    },
-    {
-      "target": "internal/playback gocyclo",
-      "kind": "TEMP",
-      "reason": "size family not yet cleaned; S1.1c-6 cleans it (S1.1c-5's plan check, decisions 1 and 2)",
-      "sprint": "S1.1c-5",
-      "expiry": "2027-02-11",
-      "issue": "S1.1c-5-2",
-      "cap": 15
     },
     {
       "target": "tools/apipartition funlen",
