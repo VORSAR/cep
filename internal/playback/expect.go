@@ -60,22 +60,36 @@ func runBlock(p *plan.App, x *plan.Expect) (res BlockResult, err error) {
 	if err != nil {
 		return BlockResult{}, fault("%w", err)
 	}
+	if tid, err := seedGivenTables(d, x); err != nil {
+		return BlockResult{}, fault("given table %s: %w", p.Tables[tid].Name, err)
+	}
+	feedGivenLists(d, x)
+	d.End() // the playback end: every contribution to +∞ (SEMANTICS §2)
+	res = BlockResult{Rule: rule.Name, Block: x.Block, Outputs: outs}
+	res.Counts = blockCounts(d.Stats(), x)
+	res.Divergence, res.Line, res.Col = diverge(p.Streams[rule.Target].Schema, x, outs, res.Counts)
+	return res, nil
+}
+
+// seedGivenTables writes every given table's rows into the sandbox, in written order; the table that refuses a row and
+// TableWrite's own error, 0 and nil when every row is written.
+func seedGivenTables(d *Driver, x *plan.Expect) (table int, err error) {
 	for _, gt := range x.Tables { // before any event, wherever the section is written (SPEC §6.8)
 		for _, row := range gt.Rows {
 			if err := d.sync.TableWrite(gt.Table, runtime.TablePut, [][]event.Value{slices.Clone(row)}); err != nil {
-				return BlockResult{}, fault("given table %s: %w", p.Tables[gt.Table].Name, err)
+				return gt.Table, err
 			}
 		}
 	}
+	return 0, nil
+}
+
+// feedGivenLists steps every given list's events into the sandbox, merged by time.
+func feedGivenLists(d *Driver, x *plan.Expect) {
 	// The lists merged by time, each in its written order, ties to the list written first (owner, 2026-11-07, 4).
 	next := make([]int, len(x.Lists))
 	for {
-		best := -1
-		for li, l := range x.Lists {
-			if next[li] < len(l.Events) && (best < 0 || l.Events[next[li]].Ts < x.Lists[best].Events[next[best]].Ts) {
-				best = li
-			}
-		}
+		best := nextGiven(x, next)
 		if best < 0 {
 			break
 		}
@@ -84,18 +98,31 @@ func runBlock(p *plan.App, x *plan.Expect) (res BlockResult, err error) {
 		next[best]++
 		d.Step(Record{Kind: RecEvent, Event: event.Event{StreamID: l.Stream, Ts: ev.Ts, Values: slices.Clone(ev.Values)}})
 	}
-	d.End() // the playback end: every contribution to +∞ (SEMANTICS §2)
-	st := d.Stats()
-	res = BlockResult{Rule: rule.Name, Block: x.Block, Outputs: outs}
+}
+
+// nextGiven is the list whose next event is the earliest, ties to the list written first; -1 when every list is
+// stepped to its end.
+func nextGiven(x *plan.Expect, next []int) int {
+	best := -1
+	for li, l := range x.Lists {
+		if next[li] < len(l.Events) && (best < 0 || l.Events[next[li]].Ts < x.Lists[best].Events[next[best]].Ts) {
+			best = li
+		}
+	}
+	return best
+}
+
+// blockCounts is the block's drops: each given stream's stream-late count once, and the rule's errored, key-error
+// and panic counts.
+func blockCounts(st runtime.Stats, x *plan.Expect) (c Counts) {
 	given := map[int]bool{}
 	for _, l := range x.Lists {
 		if !given[l.Stream] {
 			given[l.Stream] = true
-			res.Counts.Late += st.Streams[0][l.Stream].Late
+			c.Late += st.Streams[0][l.Stream].Late
 		}
 	}
 	rs := st.Rules[0][0]
-	res.Counts.Errored, res.Counts.KeyErrors, res.Counts.Panics = rs.Errored, rs.KeyErrors, rs.Panics
-	res.Divergence, res.Line, res.Col = diverge(p.Streams[rule.Target].Schema, x, outs, res.Counts)
-	return res, nil
+	c.Errored, c.KeyErrors, c.Panics = rs.Errored, rs.KeyErrors, rs.Panics
+	return c
 }
