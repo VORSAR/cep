@@ -176,7 +176,7 @@ func (l *lowerer) timestamp(quoted string, pos Position) int64 {
 // any other escape is E-STR-002 at the string token (S2.2b: the model keeps decoded text, where an unknown escape
 // could no longer be told from a raw backslash).
 func (l *lowerer) str(quoted string, at Position) string {
-	if len(quoted) >= 6 && (strings.HasPrefix(quoted, "'''") || strings.HasPrefix(quoted, `"""`)) {
+	if isTripleQuoted(quoted) {
 		return quoted[3 : len(quoted)-3]
 	}
 	body := quoted[1 : len(quoted)-1]
@@ -191,30 +191,43 @@ func (l *lowerer) str(quoted string, at Position) string {
 			continue
 		}
 		i++
-		switch body[i] {
-		case '\\', '\'', '"':
-			b.WriteByte(body[i])
-		case 'n':
-			b.WriteByte('\n')
-		case 't':
-			b.WriteByte('\t')
-		case 'r':
-			b.WriteByte('\r')
-		case 'u':
-			if i+4 < len(body) {
-				if v, err := strconv.ParseUint(body[i+1:i+5], 16, 32); err == nil {
-					b.WriteRune(rune(v))
-					i += 4
-					continue
-				}
-			}
-			l.fail("E-STR-002", at, "%s: \\u needs four hex digits", quoted)
-			b.WriteString(`\u`)
-		default:
-			l.fail("E-STR-002", at, "%s: \\%c is not an escape", quoted, body[i])
-			b.WriteByte('\\')
-			b.WriteByte(body[i])
-		}
+		i += l.escape(&b, quoted, body, i, at)
 	}
 	return b.String()
+}
+
+// isTripleQuoted reports whether the string token quoted is a raw one: six characters at least, opened by three
+// single or three double quotes.
+func isTripleQuoted(quoted string) bool {
+	return len(quoted) >= 6 && (strings.HasPrefix(quoted, "'''") || strings.HasPrefix(quoted, `"""`))
+}
+
+// escape writes to b the escape whose letter is body[i], the character after a backslash in the string token quoted
+// (SPEC §2.4); any other letter, and a \u without four hex digits, is E-STR-002 at the token, written as it stands.
+// It returns how many more characters of body the escape took: 4 after a valid \u, else 0.
+func (l *lowerer) escape(b *strings.Builder, quoted, body string, i int, at Position) int {
+	switch body[i] {
+	case '\\', '\'', '"':
+		b.WriteByte(body[i])
+	case 'n':
+		b.WriteByte('\n')
+	case 't':
+		b.WriteByte('\t')
+	case 'r':
+		b.WriteByte('\r')
+	case 'u':
+		if i+4 < len(body) {
+			if v, err := strconv.ParseUint(body[i+1:i+5], 16, 32); err == nil {
+				b.WriteRune(rune(v))
+				return 4
+			}
+		}
+		l.fail("E-STR-002", at, "%s: \\u needs four hex digits", quoted)
+		b.WriteString(`\u`)
+	default:
+		l.fail("E-STR-002", at, "%s: \\%c is not an escape", quoted, body[i])
+		b.WriteByte('\\')
+		b.WriteByte(body[i])
+	}
+	return 0
 }

@@ -125,47 +125,77 @@ func lexAll(name, src string) (code, trivia []Token, err error) {
 // `cep/0.1e5`, is cut after the version and its rest lexed again, together with a name written straight after it
 // (`cep/0.1e5x`), so the parser refuses at the token a pragma rule would have left (`e5`, `e5x`), as lark does.
 func joinPragma(name string, code []Token) ([]Token, error) {
-	symbols := rules.Symbols()
-	ident, punct, number := symbols["Ident"], symbols["Punct"], symbols["Number"]
 	out := make([]Token, 0, len(code))
 	for i := 0; i < len(code); i++ {
 		out = append(out, code[i])
-		lead := code[i]
-		if (lead.Type != tokKeyword && lead.Type != tokMixedKeyword) || strings.ToLower(lead.Value) != "language" ||
-			i+3 >= len(code) {
+		if !pragmaLead(code, i) {
 			continue
 		}
-		id, slash, num := code[i+1], code[i+2], code[i+3]
-		if (id.Type != ident && id.Type != tokKeyword) || slash.Type != punct || slash.Value != "/" ||
-			num.Type != number || slash.Pos.Offset != id.Pos.Offset+len(id.Value) ||
-			num.Pos.Offset != slash.Pos.Offset+len(slash.Value) {
+		text, joined, ok := pragmaID(code, i)
+		if !ok {
 			continue
 		}
-		text := id.Value + slash.Value + num.Value
-		joined := pragmaPrefix.FindString(text)
-		if joined == "" {
-			continue
+		out = append(out, Token{Type: tokPragma, Value: joined, Pos: code[i+1].Pos})
+		rest, used, err := pragmaRest(name, code, i, text, joined)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, Token{Type: tokPragma, Value: joined, Pos: id.Pos})
-		used := 3
-		if rest := text[len(joined):]; rest != "" {
-			skip := len(num.Value) - len(rest)
-			if i+4 < len(code) {
-				if next := code[i+4]; (next.Type == ident || next.Type == tokKeyword || next.Type == tokMixedKeyword) &&
-					next.Pos.Offset == num.Pos.Offset+len(num.Value) {
-					rest += next.Value
-					used = 4
-				}
-			}
-			toks, err := relex(name, rest, num.Pos, skip)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, toks...)
-		}
+		out = append(out, rest...)
 		i += used
 	}
 	return out, nil
+}
+
+// pragmaLead reports whether code[i] is `language`, in any letter case, as a keyword with the three tokens of a
+// pragma id after it.
+func pragmaLead(code []Token, i int) bool {
+	lead := code[i]
+	return (lead.Type == tokKeyword || lead.Type == tokMixedKeyword) && strings.ToLower(lead.Value) == "language" &&
+		i+3 < len(code)
+}
+
+// pragmaID reads the three tokens after the lead at code[i]: a name or a keyword, a "/" and a number, each written
+// straight after the last. It returns their text and the pragma id that text begins with; false when the tokens
+// are not that shape or their text does not begin with a pragma id.
+func pragmaID(code []Token, i int) (string, string, bool) {
+	symbols := rules.Symbols()
+	ident, punct, number := symbols["Ident"], symbols["Punct"], symbols["Number"]
+	id, slash, num := code[i+1], code[i+2], code[i+3]
+	if (id.Type != ident && id.Type != tokKeyword) || slash.Type != punct || slash.Value != "/" ||
+		num.Type != number || slash.Pos.Offset != id.Pos.Offset+len(id.Value) ||
+		num.Pos.Offset != slash.Pos.Offset+len(slash.Value) {
+		return "", "", false
+	}
+	text := id.Value + slash.Value + num.Value
+	joined := pragmaPrefix.FindString(text)
+	if joined == "" {
+		return "", "", false
+	}
+	return text, joined, true
+}
+
+// pragmaRest lexes again what the number at code[i+3] holds past the pragma id joined, the prefix of text, together
+// with a name written straight after the number, and returns those tokens and how many tokens after code[i] the
+// pragma used: 3, or 4 with that name.
+func pragmaRest(name string, code []Token, i int, text, joined string) ([]Token, int, error) {
+	ident, num := rules.Symbols()["Ident"], code[i+3]
+	used := 3
+	if rest := text[len(joined):]; rest != "" {
+		skip := len(num.Value) - len(rest)
+		if i+4 < len(code) {
+			if next := code[i+4]; (next.Type == ident || next.Type == tokKeyword || next.Type == tokMixedKeyword) &&
+				next.Pos.Offset == num.Pos.Offset+len(num.Value) {
+				rest += next.Value
+				used = 4
+			}
+		}
+		toks, err := relex(name, rest, num.Pos, skip)
+		if err != nil {
+			return nil, 0, err
+		}
+		return toks, used, nil
+	}
+	return nil, used, nil
 }
 
 // relex lexes text that starts skip bytes into the one-line token at pos, and places its tokens there. Used only on
