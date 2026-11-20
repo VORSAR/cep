@@ -62,9 +62,33 @@ At most two agents at once; the plan check §1 holds the order:
 
 *(Each proof is written here as it is made, with the commit it measured.)*
 
+**G0** (the coordinator, 2026-11-20):
+- **The docs commit** (e417f51): the doclinks row over every tracked doc, 212 files, exit 0.
+- **The marker and the re-cut** (d521725):
+  - **Red first:** before the move, `test_parts`' three re-pinned bound tests failed against the old value (`'S1.1c-7' != 'S1.1c-9'`; `forward S1.1c-10 is past S1.1c-7`; a forward at S1.1c-9 red as past S1.1c-7), and the decoupled `PrintedParts` and `TheOrder` tests passed on the old tree.
+  - **After the move:** `test_parts`, `test_aging.PrintedParts`, `test_sprintid`, `test_sprints_pin`, `test_known_issues_pin` and `test_sprintid_parts` are green.
+  - **G2-17 and G2-29 (K2e):** the old versions, in a scratch worktree at e417f51 with the re-cut data copied in, are red (`['S1.1c-5' … 'S1.1c-10'] != ['S1.1c-5', 'S1.1c-6', 'S1.1c-7']`; `32 != 29`); the new are green.
+  - **The gate runner's whole suite outside the gate** (`python3.15 -B -X utf8 -m unittest discover -s gate/runner/tests -t .`): 1,301 tests. The 30 failures are all `test_summarize`'s 30, which fail the same way at e417f51 when run this way. The gate's own T2 run below is the check that counts.
+- **The coordinator's fixes** (a2aeb02):
+  - **G2-16 (K2e):** `python3.15 -m gate.runner.tests.test_aging` ran 43 tests against the module's 47; after the fix, 47 = 47.
+  - **G2-25 (K2e):** an AST check over `test_instruments_pin.py` (every `subprocess.run` passes `timeout=`, every `go` call passes `env=`) named three faults at `:257` and `:261`; after the fix, none. `test_aging` and `test_instruments_pin` are green, 70 tests, the teeth test on the pinned go.
+- **The evidence commit** (docs/sprints/s1-1c-7-plants/):
+  - `survey-index.json`: the 1,442 findings' id, group and path; its ids equal the committed list's.
+  - `lanes.py`: 186 ledger ids, 44 lane commits by package × kind.
+  - `nameproto.py` and `naming-prototype.json`: on a2aeb02's tree, the decided scope finds **426 names in 105 files**. That is 429 at 5b4ddac less the three sprint-named tests the re-cut replaced (G3-26, G3-61, G3-62). It is the naming tool's acceptance list (plan check §3).
+  - `check_ledger.py`: version 1.
+
 ## The finding ledger
 
-*(186 ids: G10's 23, G7a's 6, G2's 156 and G3-72; built through the sprint and checked by the coordinator's ledger checker, plan check §7.5. G10-6: fixed elsewhere, G1-1, PR #51, 5b4ddac.)*
+186 ids: G10's 23, G7a's 6, G2's 156 and G3-72. The ledger is built through the sprint and checked by `docs/sprints/s1-1c-7-plants/check_ledger.py` (plan check §7.5).
+
+| Id | Outcome | Commit | Proof | Reason or target |
+|---|---|---|---|---|
+| G10-6 | fixed elsewhere | 5b4ddac (PR #51) | the fix PR's red-first tests: `test_git` GitFailures, `test_lawdelta`'s two | the same defect as G1-1 |
+| G2-16 | fixed | a2aeb02 | K2e: a direct run 43 → 47, equal to the module's 47 | |
+| G2-17 | fixed | d521725 | K2e: old red on the re-cut data, new green | |
+| G2-25 | fixed | a2aeb02 | K2e: the AST check, 3 faults → none | |
+| G2-29 | fixed | d521725 | K2e: old red on the re-cut data (32 != 29), new green | |
 
 ## Test material
 
