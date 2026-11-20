@@ -77,6 +77,11 @@ At most two agents at once; the plan check §1 holds the order:
   - `lanes.py`: 186 ledger ids, 44 lane commits by package × kind.
   - `nameproto.py` and `naming-prototype.json`: on a2aeb02's tree, the decided scope finds **426 names in 105 files**. That is 429 at 5b4ddac less the three sprint-named tests the re-cut replaced (G3-26, G3-61, G3-62). It is the naming tool's acceptance list (plan check §3).
   - `check_ledger.py`: version 1.
+- **G0's gate runs** (at 37df879, mains power, one at a time):
+  - **T2:** exit 0, run 20261120T092347Z-50708e, 138.6 s wall. The `pytests` row passed, covering 130 modules, `test_summarize` included.
+  - **T3, lint job:** exit 0, run 20261120T092606Z-bc6f8b. `aging` PASS on the real tree.
+  - **T4, lint job:** exit 0, run 20261120T092617Z-a5e554. `aging` PASS: the marker S1.1c-7 does not reach S1.1c-9.
+  - **T4, proofs job alone:** exit 0, run 20261120T092632Z-7ccf84, 232.3 s, covered 39 (the 2026-11-12 rule after the marker's move).
 
 ## The finding ledger
 
@@ -110,7 +115,7 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-20)
              ☑ dependencies merged, main green (S1.1c-6, PR #49; close-out #50; the gate-hole fix, PR #51, main 5b4ddac)
              ☑ fits the cap, lanes ≤ 8 days, commits projected ≈ 80 ≤ 95 (plan check §1)
              ☑ plan check reviewed (architect, QA; three rounds) and answered by the owner (2026-11-20)
-             ☑ test material: each lane's design note, before G1 ☐ `gate/current-sprint` set, the first commit after the plan check's
+             ☑ test material: each lane's design note, before G1 ☑ `gate/current-sprint` set, the first commit after the plan check's (d521725, with the re-cut)
 Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
              ☐ owner decisions recorded ☐ ADRs written for lasting decisions
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0 ☐ tests on the real code ☐ every breaker's red test committed
