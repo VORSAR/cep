@@ -217,7 +217,10 @@ def main(argv: list[str]) -> int:
     except OSError as e:
         return rows.finish([f"lawdelta: gate/law.json: {e}"])
     faults: list[str] = []
-    every = git.ls_files([e.path for e in manifest.paths])  # one process for every law path (FX-4)
+    try:
+        every = git.ls_files([e.path for e in manifest.paths])  # one process for every law path (FX-4)
+    except git.GitError as e:
+        return rows.finish([f"lawdelta: {e}"])
     for e in manifest.paths:
         tracked = [f for f in every if f == e.path or f.startswith(e.path if e.path.endswith("/") else f"{e.path}/")]
         if not tracked:
@@ -233,7 +236,10 @@ def main(argv: list[str]) -> int:
     base = git.merge_base()
     if not base:
         return rows.finish([NO_BASE])
-    head = git.head()
+    try:
+        head = git.head()
+    except git.GitError as e:
+        return rows.finish([f"lawdelta: {e}"])
     if base == head:
         lines = [HEAD_IS_MAIN]
     else:
@@ -247,7 +253,10 @@ def main(argv: list[str]) -> int:
         lines += exemptions(base, head)
     except git.GitError as e:
         return rows.finish([f"lawdelta: {e}"])
-    dirty = git.dirty([e.path for e in manifest.paths])
+    try:
+        dirty = git.dirty([e.path for e in manifest.paths])
+    except git.GitError as e:
+        return rows.finish([f"lawdelta: {e}"])
     if dirty:
         lines.append(f"LAW Δ: {dirty} law files have uncommitted edits (not shown)")
     records.write_atomic(os.path.join(row_dir, "law.txt"), ("\n".join(lines) + "\n").encode("utf-8"))

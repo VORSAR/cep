@@ -2,7 +2,9 @@
 
 `merge_base` has one contract: it returns "" when HEAD has no merge base with `origin/main` or `main`, and the
 caller decides. `lawdelta` fails on "" (owner, 2026-11-10, decision 9); `apidiff` passes and says nothing was
-compared (owner, 2026-11-07). Every function takes `cwd` so a test runs it in its own repository.
+compared (owner, 2026-11-07). Every other function raises GitError when git exits outside its contract, so a
+failing git never reads as "no files", "no changes" or a clean tree. Every function takes `cwd` so a test runs it
+in its own repository.
 """
 
 import subprocess
@@ -30,7 +32,10 @@ def merge_base(cwd: str | None = None) -> str:
 
 
 def head(cwd: str | None = None) -> str:
-    return git("rev-parse", "HEAD", cwd=cwd)[1]
+    code, out = git("rev-parse", "HEAD", cwd=cwd)
+    if code != 0:
+        raise GitError(f"git rev-parse failed (exit {code})")
+    return out
 
 
 def _nul_split(data: bytes) -> list[str]:
@@ -39,7 +44,9 @@ def _nul_split(data: bytes) -> list[str]:
 
 def ls_files(paths: Sequence[str], cwd: str | None = None) -> list[str]:
     """The tracked files under each path; a path ending "/" is a prefix."""
-    _, out = _raw("ls-files", "-z", "--", *paths, cwd=cwd)
+    code, out = _raw("ls-files", "-z", "--", *paths, cwd=cwd)
+    if code != 0:
+        raise GitError(f"git ls-files failed (exit {code})")
     return _nul_split(out)
 
 
@@ -54,7 +61,9 @@ def numstat(base: str, head: str, paths: Sequence[str], cwd: str | None = None) 
     `--no-renames` makes a renamed file a removal of the old path and an addition of the new, so every record is
     `added\\tremoved\\tpath\\0` (review: architect S3, QA-B1).
     """
-    _, out = _raw("diff", "--numstat", "-z", "--no-renames", base, head, "--", *paths, cwd=cwd)
+    code, out = _raw("diff", "--numstat", "-z", "--no-renames", base, head, "--", *paths, cwd=cwd)
+    if code != 0:
+        raise GitError(f"git diff failed (exit {code})")
     changes = []
     for record in _nul_split(out):
         added, removed, path = record.split("\t", 2)
@@ -100,7 +109,9 @@ def dirty(paths: Sequence[str], cwd: str | None = None) -> int:
     """How many uncommitted edits — staged, unstaged or untracked — `git status --porcelain -z` reports under the
     paths; a rename or copy is one edit (its second record, the source path, is skipped — the break-it's finding 4;
     owner, 2026-11-11)."""
-    _, out = _raw("status", "--porcelain", "-z", "--", *paths, cwd=cwd)
+    code, out = _raw("status", "--porcelain", "-z", "--", *paths, cwd=cwd)
+    if code != 0:
+        raise GitError(f"git status failed (exit {code})")
     count, skip = 0, False
     for record in _nul_split(out):
         if skip:

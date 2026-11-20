@@ -7,6 +7,7 @@ Expected values are worked out by hand from git's documented output: `--numstat 
 
 import os
 import subprocess
+import tempfile
 import unittest
 from unittest import mock
 
@@ -219,6 +220,32 @@ class GrepAndTree(GitTest):
         with self.assertRaises(git.GitError) as caught:
             git.ls_tree("no-such-rev", "tools/allowlists/", cwd=self.repo)
         self.assertIn("git ls-tree", str(caught.exception))
+
+
+class GitFailures(GitTest):
+    """A git command that exits outside its contract is a GitError naming the command and its exit code, never an
+    empty answer that reads as "no files", "no changes" or a clean tree (DA-S3)."""
+
+    def outside(self) -> str:
+        """A directory in no repository."""
+        return tempfile.mkdtemp(dir=self.root)
+
+    def test_numstat_against_an_unknown_revision_is_a_git_error(self):
+        self.main_then_change()
+        with self.assertRaisesRegex(git.GitError, r"^git diff failed \(exit \d+\)$"):
+            git.numstat("0" * 40, git.head(cwd=self.repo), ["a.txt"], cwd=self.repo)
+
+    def test_ls_files_outside_a_repository_is_a_git_error(self):
+        with self.assertRaisesRegex(git.GitError, r"^git ls-files failed \(exit \d+\)$"):
+            git.ls_files(["a.txt"], cwd=self.outside())
+
+    def test_dirty_outside_a_repository_is_a_git_error(self):
+        with self.assertRaisesRegex(git.GitError, r"^git status failed \(exit \d+\)$"):
+            git.dirty(["a.txt"], cwd=self.outside())
+
+    def test_head_of_a_repository_without_a_commit_is_a_git_error(self):
+        with self.assertRaisesRegex(git.GitError, r"^git rev-parse failed \(exit \d+\)$"):
+            git.head(cwd=self.repo)
 
 
 if __name__ == "__main__":
