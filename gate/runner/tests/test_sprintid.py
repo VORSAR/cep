@@ -85,10 +85,11 @@ class TheOrder(unittest.TestCase):
         self.assertEqual(rows[12], sprintid.Row("S1.1c", False))
         # The parts printed after the open S1.1c row (S1.1c-5's design §3.4; owner 2026-11-14), re-cut at S1.1c-5's
         # close (owner 2026-11-15: S1.1c-7 and S1.1c-8 dropped), then S1.1c-7 printed again with another scope at
-        # S1.1c-6's G0 (owner 2026-11-15: the sprint-named test files; S1.1c-5-3's packages after the spike).
+        # S1.1c-6's G0 (owner 2026-11-15: the sprint-named test files; S1.1c-5-3's packages after the spike); S1.1c-6
+        # closed at its close-out (owner 2026-11-20).
         self.assertEqual(
             rows[13:16],
-            (sprintid.Row("S1.1c-5", True), sprintid.Row("S1.1c-6", False), sprintid.Row("S1.1c-7", False)),
+            (sprintid.Row("S1.1c-5", True), sprintid.Row("S1.1c-6", True), sprintid.Row("S1.1c-7", False)),
         )
         self.assertEqual(rows[16], sprintid.Row("S4.1", False))
         self.assertEqual(rows[-1], sprintid.Row("S12", False))

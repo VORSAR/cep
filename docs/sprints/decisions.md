@@ -122,6 +122,7 @@
 | 2026-11-19 | [the gate's process runner](#owner-decisions-2026-11-19--the-gates-process-runner) |
 | 2026-11-19 | [S1.1c-6's review and break-it](#owner-decisions-2026-11-19--s11c-6s-review-and-break-it) |
 | 2026-11-19 | [S1.1c-6's T4 and the owner's check](#owner-decisions-2026-11-19--s11c-6s-t4-and-the-owners-check) |
+| 2026-11-20 | [S1.1c-6's close-out](#owner-decisions-2026-11-20--s11c-6s-close-out) |
 
 ## The decisions
 
@@ -1232,3 +1233,12 @@ The first full T4 of the fixed branch, at c6660f3 (run 20261119T112928Z-774605),
 1. **`proofs` runs alone at T4** (as recommended): the row is `exclusive` in `gate/registry.json` (544bf94), so the local scheduler starts nothing beside it, as CI's own job runs it; the 600 s cap is unchanged. Rejected: running T4 job by job with no gate change (the full local T4 stays red under that load); raising the cap (a wider margin that still depends on what runs beside it).
 2. **The four test names S1.1c-6 added or renamed go to S1.1c-7 with the rest** (as recommended; OC-1): one review renames every test by one rule, and the sprint's last commit under the cap stays free for a CI fix. Rejected: renaming them in S1.1c-6 (commit 99, leaving none under the cap).
 3. **S1.1c-7 is widened, the test names first** (as recommended): an architecture and QA review of every test file and test function by what it tests, each moved or renamed into the package and file that own the code it tests, and a gate check refusing sprint ids, review steps (`breakit`, `fixround`) and lane names in test file and test function names; all before S1.1c-7's size limits, and S1.1c-7 resized at its plan check. Rejected: sprint ids in file names only (the plan's line as written); a sprint of its own before S1.1c-7.
+
+### Owner decisions, 2026-11-20 — S1.1c-6's close-out
+
+After PR #49's merge (rebase, `main` 54c45dc, 99 commits; `main`'s CI green on the merge commit, the owner reported). Four answers.
+
+1. **Each proof goes into the record as it is made** (as recommended; from the retro): a split's decision-1 verdict, a coverage re-derivation, an `astequal` result or any other proof an acceptance line names is written into the sprint record, with the commit it measured and its numbers, in the session that makes it; the combined review (G3) starts only when every proof made so far has its row (sprint model §10). The owner's check's verifier found four such proofs missing at G4, rebuilt from scratch logs.
+2. **Timing runs on mains power only** (offered beside the first and chosen; from the retro): a benchmark comparison checks the power source before and after its session, and a session on battery is discarded, never used for a verdict; a gate run's pass or fail on battery stands (sprint model §10).
+3. **The sprint's branches and worktrees are deleted** (as recommended, after the coordinator's check): `s1-1c-6/integration` local and remote, the 32 other local `s1-1c-6/*` branches (the lanes', the fixes', W0's, the combined branch and the pre-squash and pre-rebuild copies), `breakit/s1-1c-6`, and the 18 worktrees. Every commit the record, the decisions and the reviews cite stays reachable: the sprint branch's through GitHub's `refs/pull/49/head` (`main` holds their rebased copies), the rest through the 31 `archive/s1-1c-6/*` tags, which stay. Rejected: deleting only the branches whose every commit is on `main`; keeping every branch.
+4. **The close-out goes up as its own docs PR** (`docs/s1-1c-6-close-out`), as for the last six sprints (as recommended). Rejected: folding it into S1.1c-7's PR.
