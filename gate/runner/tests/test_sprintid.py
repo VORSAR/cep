@@ -78,21 +78,24 @@ class Grammar(unittest.TestCase):
 
 
 class TheOrder(unittest.TestCase):
-    def test_load_order_reads_todays_table(self):
-        rows = order().rows
-        self.assertEqual(len(rows), 29)
-        self.assertEqual(rows[0], sprintid.Row("S1.1a-1", True))
-        self.assertEqual(rows[12], sprintid.Row("S1.1c", False))
-        # The parts printed after the open S1.1c row (S1.1c-5's design §3.4; owner 2026-11-14), re-cut at S1.1c-5's
-        # close (owner 2026-11-15: S1.1c-7 and S1.1c-8 dropped), then S1.1c-7 printed again with another scope at
-        # S1.1c-6's G0 (owner 2026-11-15: the sprint-named test files; S1.1c-5-3's packages after the spike); S1.1c-6
-        # closed at its close-out (owner 2026-11-20).
-        self.assertEqual(
-            rows[13:16],
-            (sprintid.Row("S1.1c-5", True), sprintid.Row("S1.1c-6", True), sprintid.Row("S1.1c-7", False)),
+    def test_load_order_reads_each_row_in_file_order_with_its_closed_mark(self):
+        text = (
+            '{"schema": 1, "note": "x", "rows": [{"id": "S1.1a-1", "closed": true}, {"id": "S1.1c", "closed": false}, '
+            '{"id": "S1.1c-5", "closed": true}, {"id": "S1.1c-6", "closed": false}, {"id": "S4.1", "closed": false}]}'
         )
-        self.assertEqual(rows[16], sprintid.Row("S4.1", False))
-        self.assertEqual(rows[-1], sprintid.Row("S12", False))
+        self.assertEqual(
+            sprintid.load_order(text).rows,
+            (
+                sprintid.Row("S1.1a-1", True),
+                sprintid.Row("S1.1c", False),
+                sprintid.Row("S1.1c-5", True),
+                sprintid.Row("S1.1c-6", False),
+                sprintid.Row("S4.1", False),
+            ),
+        )
+
+    def test_the_committed_order_loads(self):
+        self.assertTrue(order().rows)
 
     def test_load_order_refuses_a_bad_table(self):
         bad = {

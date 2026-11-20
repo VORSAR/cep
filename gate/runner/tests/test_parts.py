@@ -26,6 +26,7 @@ ORDER = sprintid.Order(
             ("S1.1c-7", False),
             ("S1.1c-8", False),
             ("S1.1c-9", False),
+            ("S1.1c-10", False),
             ("S4.1", False),
         )
     )
@@ -79,7 +80,7 @@ class FixtureBound(unittest.TestCase):
 
 
 class Rules(unittest.TestCase):
-    """Rules 1-4: the entry's issue, its forward part, the S1.1c-7 bound and the marker reaching the part."""
+    """Rules 1-4: the entry's issue, its forward part, the bound on forwards and the marker reaching the part."""
 
     def run_rules(self, known, marker="S1.1c-5", tier="T4", entries=None):
         entries = (entry(),) if entries is None else entries
@@ -100,17 +101,19 @@ class Rules(unittest.TestCase):
             faults, [f"aging: smells.json: {TARGET}: forward S1.1c-4 is not a printed part of gate/sprints.json"]
         )
 
-    def test_the_bound_is_s1_1c_7(self):
-        # S1.1c-5's close re-cut the parts to one (owner 2026-11-15); S1.1c-6's spike re-cut it by known issue, and
-        # S1.1c-7 cleans S1.1c-5-3 (owner 2026-11-15, the re-cut after the spike).
-        self.assertEqual(parts.LAST_PART, "S1.1c-7")
+    def test_the_bound_is_the_part_that_cleans_the_last_size_issue(self):
+        # S1.1c-9 cleans known issue S1.1c-5-3, the last size issue (owner 2026-11-20, S1.1c-7's plan check,
+        # decision 1, after the re-cuts of 2026-11-15).
+        self.assertEqual(parts.LAST_PART, "S1.1c-9")
 
-    def test_a_forward_past_s1_1c_7_is_red(self):
-        for forward in ("S1.1c-8", "S1.1c-9"):  # printed in ORDER's world, past the bound
-            with self.subTest(forward=forward):
-                faults, _ = self.run_rules(issues(issue("S1.1c-5-1", forward)))
-                want = f"aging: smells.json: {TARGET}: forward {forward} is past S1.1c-7 (decision 1)"
-                self.assertEqual(faults, [want])
+    def test_a_forward_past_the_bound_is_red(self):
+        faults, _ = self.run_rules(issues(issue("S1.1c-5-1", "S1.1c-10")))  # printed in ORDER's world
+        want = f"aging: smells.json: {TARGET}: forward S1.1c-10 is past S1.1c-9 (decision 1)"
+        self.assertEqual(faults, [want])
+
+    def test_a_forward_at_the_bound_is_silent_until_the_marker_reaches_it(self):
+        faults, lines = self.run_rules(issues(issue("S1.1c-5-1", "S1.1c-9")))
+        self.assertEqual((faults, lines), ([], []))
 
     def reached(self) -> str:
         return (

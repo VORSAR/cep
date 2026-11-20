@@ -518,16 +518,14 @@ class Parts(support.GateTest):
 
 
 class PrintedParts(unittest.TestCase):
-    """§3.4 (owner, S1.1c-5's design after the reviews, decision 2), re-cut at S1.1c-5's close and printed again at
-    S1.1c-6's G0 (owner 2026-11-15: S1.1c-7 holds the sprint-named test files and, after the spike, S1.1c-5-3): with
-    S1.1c-5, S1.1c-6 and S1.1c-7 printed after S1.1c and all three closed — three closed rows after S1.1c, the point
-    S1.1c-7's close was before the first re-cut — rule 1 names none of the entries first seen at or before row S1.1c
-    (each is decided) and none of S1.1c-5-3 and -4 (their decision names them; -1 and -2 closed at S1.1c-6's
-    combine). The order and the known issues
-    are the committed files', the closed marks the fixture's; the decisions reader is the tracked Markdown, as RealTree
-    reads it."""
+    """§3.4 (owner, S1.1c-5's design after the reviews, decision 2): at the close of row S1.1c's last printed part,
+    with every part printed after the row closed, rule 1 names none of the known issues, because each one old enough
+    to age is placed by a decision that names it; an undecided issue that would age then is red here first. The parts,
+    the known issues and the decisions are the committed files', read live; the parts are derived from the printed
+    order, not pinned, so printing or closing a part needs no edit here. The closed marks are the fixture's; the
+    decisions reader is the tracked Markdown, as RealTree reads it."""
 
-    def test_at_s1_1c_7s_close_aging_names_exactly_the_undecided(self):
+    def test_at_the_last_parts_close_aging_names_no_undecided_issue(self):
         def read_repo(rel: str) -> str:
             with open(os.path.join(REPO, rel), encoding="utf-8") as f:
                 return f.read()
@@ -539,33 +537,28 @@ class PrintedParts(unittest.TestCase):
         self.assertIn(DECISIONS, tracked)
         printed = sprintid.load_order(read_repo(sprintid.SPRINTS))
         ids = [row.id for row in printed.rows]
-        self.assertEqual([i for i in ids if i.startswith("S1.1c-")], ["S1.1c-5", "S1.1c-6", "S1.1c-7"])  # the parts
-        closing = {"S1.1c-5", "S1.1c-6", "S1.1c-7"}
-        order = sprintid.Order(tuple(sprintid.Row(r.id, r.closed or r.id in closing) for r in printed.rows))
+        printed_parts = [i for i in ids if i.startswith("S1.1c-")]
+        self.assertTrue(printed_parts, "row S1.1c has no printed part")
+        order = sprintid.Order(tuple(sprintid.Row(r.id, r.closed or r.id in printed_parts) for r in printed.rows))
+        marker = ids[ids.index(printed_parts[-1]) + 1]  # the first row after the last part
         entries = json.loads(read_repo(knownissues.JSON))["entries"]
-        # S1.1c-5-1 and -2 closed at S1.1c-6's combine.
-        self.assertLessEqual({"S1.1c-5-3", "S1.1c-5-4"}, {e["id"] for e in entries})
         lines = aging.aged(
             entries,
             order,
-            "S4.1",
+            marker,
             today=date(2026, 12, 1),
             read=lambda p: read_repo(p) if p in tracked else None,
         )
         named = sorted({line.split()[1] for line in lines if AGE in line})
-        # The four undecided at S1.1c-5's G1 were placed by the owner the same day ("four known issues placed"), so
-        # none ages red at S1.1c-7's close; any undecided issue that would is red here first.
         self.assertEqual(named, [])
-        # Witness: the same order without the decisions file names the three still open (the rule still bites;
-        # S3.3-2-2 was fixed by #46 and left the file).
+        # Witness: the same order without the decisions file names some issue, so the rule still bites here.
         undecided = aging.aged(
             entries,
             order,
-            "S4.1",
+            marker,
             today=date(2026, 12, 1),
             read=lambda p: None if p.endswith("decisions.md") else (read_repo(p) if p in tracked else None),
         )
-        self.assertLessEqual(
-            {"S1.1c-3-4", "S3.3-2-1", "S3.3-2-3"},
-            {line.split()[1] for line in undecided if AGE in line},
-        )
+        witnessed = {line.split()[1] for line in undecided if AGE in line}
+        self.assertTrue(witnessed, "without the decisions file rule 1 names nothing: the witness proves nothing")
+        self.assertLessEqual(witnessed, {e["id"] for e in entries})
