@@ -158,7 +158,7 @@ Each proof goes into the record as it is made; G3 waits until every proof made s
 - production code only where a G10, G7a or G3-72 finding is fixed;
 - `gate/law.json`'s `code` lists (G2-24).
 
-**Waves (≤ 2 agents at once), all after G1** (sprint model §6: no code for the parts a design covers before G1):
+**Waves (≤ 2 agents at once), all after G1** (sprint model §6: no code for the parts a design covers before G1): *(annotated 2026-11-20: run with up to six agents — W0 with four at once, then lanes A1, B, E1 and A2 together, then E2 and CD, a spot-check after each — [owner, G1](decisions.md#owner-decisions-2026-11-20--s11c-7s-design-g1), decisions 1 and 5)*
 - **W0, the proof tools:**
   - **W0-py** (`python-engineer`):
     - `mutate.py`'s contract (§2);
@@ -468,6 +468,7 @@ One kind per commit (§1). Every proof is quoted in the record with its exact co
   - fixed;
   - fixed in part (the rest carried to S1.1c-8 or the later part, naming which);
   - carried in full to S1.1c-8 (a finding whose only fix is a rename: no commit, no proof row; the notes count these, PQ3-S3);
+  - carried in full to S1.1c-10 (a finding whose only fix is a later non-simple change: a split, a merge, a helper refactor) *(annotated 2026-11-20, from the design notes; check_ledger accepts it)*;
   - rejected (with its reason);
   - merged (into a named id);
   - fixed elsewhere.

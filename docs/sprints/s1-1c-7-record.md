@@ -49,6 +49,15 @@ The full plan is [s1-1c-7-plan-check.md](s1-1c-7-plan-check.md) (v3), drafted re
 
 **The card — the owner, 2026-11-20:** approved, so the sprint passes G0.
 
+**The design (G1) — the owner, 2026-11-20** ([decisions](decisions.md#owner-decisions-2026-11-20--s11c-7s-design-g1); five answers):
+1. **Up to six agents** for every S1.1 job until S1.1 closes.
+2. **G10-20's leftover window** becomes known issue S1.1c-7-1, forwarded to S1.1c-10.
+3. **S3.3-1-3 stays at S8,** with E1's recommendation recorded in its row.
+4. **G10-1 is fixed with option B:** starting rows are applied in the activation step, with `table.Check` in its own commit before wave 2.
+5. **The build:** W0 with four agents, then A1, B, E1 and A2, then E2 and CD.
+
+The nine design notes are `docs/sprints/s1-1c-7-design-*.md`; the coordination record holds the cross-note rulings, the review dispositions and the pre-check results.
+
 ## How it runs
 
 At most two agents at once; the plan check §1 holds the order:
@@ -116,8 +125,8 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-20)
              ☑ fits the cap, lanes ≤ 8 days, commits projected ≈ 80 ≤ 95 (plan check §1)
              ☑ plan check reviewed (architect, QA; three rounds) and answered by the owner (2026-11-20)
              ☑ test material: each lane's design note, before G1 ☑ `gate/current-sprint` set, the first commit after the plan check's (d521725, with the re-cut)
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
+Design (G1)  ☑ architecture + the-fool findings resolved (two parts, no blocker; dispositions in the coordination record) ☑ QA testability findings resolved (two passes; DQ-B1 fixed by CD1's byte-exact re-emission)
+             ☑ owner decisions recorded (2026-11-20, five) ☐ ADRs written for lasting decisions (reviewed at G5)
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0 ☐ tests on the real code ☐ every breaker's red test committed
 Review (G3)  ☐ architecture review of the combined diff ☐ QA break-it run ☐ every finding fixed, forwarded or rejected with reason
 Verify (G4)  ☐ T4 strict-gate exit 0, run complete ☐ owner's check passed ☐ every acceptance line met by its named proof

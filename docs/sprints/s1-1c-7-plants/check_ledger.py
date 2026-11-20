@@ -7,7 +7,7 @@ Run from the repository's top level. Checks:
 - the sprint's ledger ids are exactly the 186 of G10, G7a, G2 and G3-72;
 - the record's ledger table (docs/sprints/s1-1c-7-record.md, rows "| <id> | <outcome> | ...") holds each id at most
   once, only ledger ids, and only the plan's outcome words, with a reason for "rejected" and a target for "merged",
-  "fixed in part" and "carried in full".
+  "fixed in part" and "carried in full to S1.1c-8" or "... to S1.1c-10" (the design notes' carry outcomes).
 It prints how many ids have a row so far. Later versions add §7.5's commit, proof-row and plant-path checks.
 Exit 0: consistent. Exit 1: a fault, each named. Exit 2: a file is missing or unreadable.
 """
@@ -20,8 +20,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SURVEY = "docs/reviews/s1-1c-7-survey-findings.md"
 RECORD = "docs/sprints/s1-1c-7-record.md"
-OUTCOMES = ("fixed", "fixed in part", "carried in full to S1.1c-8", "rejected", "merged", "fixed elsewhere")
-NEEDS_DETAIL = ("rejected", "merged", "fixed in part", "carried in full to S1.1c-8")
+CARRIED = ("carried in full to S1.1c-8", "carried in full to S1.1c-10")  # a rename only; a later non-simple change only
+OUTCOMES = ("fixed", "fixed in part", *CARRIED, "rejected", "merged", "fixed elsewhere")
+NEEDS_DETAIL = ("rejected", "merged", "fixed in part", *CARRIED)
 ID = r"G\w+-\d+"  # any survey id, so a row naming a non-ledger id is caught
 
 
