@@ -409,10 +409,6 @@ class RealTree(unittest.TestCase):
         self.assertEqual(aging.aged(entries, order, marker, today=today, read=read), [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # S1.1c-5 design §3.4, §3.5, §8 3.10-3.11: the aging row runs the part-level check over tools/allowlists/smells.json
 # (gate/runner/parts.py), and printing the parts as rows moves rule 1's clock (S1.1c-5 and S1.1c-6 since S1.1c-5's
 # close re-cut them, owner 2026-11-15; the world below keeps the four of its own).
@@ -562,3 +558,7 @@ class PrintedParts(unittest.TestCase):
         witnessed = {line.split()[1] for line in undecided if AGE in line}
         self.assertTrue(witnessed, "without the decisions file rule 1 names nothing: the witness proves nothing")
         self.assertLessEqual(witnessed, {e["id"] for e in entries})
+
+
+if __name__ == "__main__":
+    unittest.main()

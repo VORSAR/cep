@@ -23,6 +23,7 @@ import subprocess
 import unittest
 
 from gate.runner import allowlists, law, registry, teeth
+from gate.runner.tests import support
 
 TESTDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "testdata", "teeth")
 
@@ -254,12 +255,17 @@ class RealTree(unittest.TestCase):
         with open(os.path.join(repo, "gate", "law.json"), encoding="utf-8") as f:
             manifest = law.load_manifest(f.read())
         rows = registry.load(os.path.join(repo, "gate", "registry.json"))
-        listed = subprocess.run(["git", "ls-files", "-z"], cwd=repo, capture_output=True, check=True).stdout
+        listed = subprocess.run(["git", "ls-files", "-z"], cwd=repo, capture_output=True, check=True, timeout=60).stdout
         tracked = {p.decode() for p in listed.split(b"\0") if p}
         go_files = sorted({p.path for i in manifest.instruments for p in i.proofs if p.path.endswith("_test.go")})
         self.assertTrue(go_files, "no Go proof file is pinned")
         cases = subprocess.run(
-            ["go", "run", "./tools/archcheck", "-cases", *go_files], cwd=repo, capture_output=True, text=True
+            ["go", "run", "./tools/archcheck", "-cases", *go_files],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            env=support.go_env(),  # the pinned go, not whatever is first on the caller's PATH
+            timeout=300,
         )
         self.assertEqual(cases.returncode, 0, cases.stderr)
         counted = dict(teeth.go_cases(cases.stdout))
