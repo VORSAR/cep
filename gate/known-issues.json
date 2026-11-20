@@ -81,6 +81,14 @@
       "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-19--s11c-6s-review-and-break-it",
       "correctness": false,
       "opened": "2026-11-19"
+    },
+    {
+      "id": "S1.1c-7-1",
+      "first_seen": "S1.1c-7",
+      "forward": "S1.1c-10",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-20--s11c-7s-design-g1",
+      "correctness": false,
+      "opened": "2026-11-20"
     }
   ]
 }
