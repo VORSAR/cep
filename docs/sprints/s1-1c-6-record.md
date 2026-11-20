@@ -93,7 +93,7 @@ At most two agents at once; the plan check §1 holds the order: G0 → the desig
 - **The escape check on `broadcast(m message)`** (74bc366): `escapes.py` exit 1 only for "leaking param: m", the new parameter carrying the two pointers (`adv`, `tables`) that leaked before into the same `rt.deliver` call; the callers' leak lines unchanged (`tickApp`, `drainApp`: content of `a`; `(*Sync).End`: content of `s`), 781 package heap lines before and after, the allocation pin 0. No cost under design §2.4 step 2; the tool is fixed to match the rule ([owner, 2026-11-18](decisions.md#owner-decisions-2026-11-18--during-s11c-6s-lane-r-sub-lane-r2b), decision 2).
 
 - **Lane E's redesigns, alone** (ground rule 13a; commit ids as landed on the sprint branch): P7 (5cee50b against its nets 145a96e): `BenchmarkCleanLen` −29.2 %, `BenchmarkCleanObject` −19.3 %, `BenchmarkCompactAndValid` −25.1 %, the indented object −45.1 % / −41.7 % / −27.4 %, all p = 1.1e-05. S11 (6a2c5f6 against 5cee50b): documents −10.7 %, escape-dense strings −36.4 % then −39.3 %, many members −10.0 %, `ScannerValue` −4.2 % then −2.8 %, `\u`-dense strings +21.2 % then +21.9 % (13a fired on `str`). The variant (476270d, byte-identical to the prototype measured on mains power with an A/A clean before and after): against the reader before the sprint slower nowhere (`\u`-dense −37.5 % and −40.4 %); against S11 `\u`-dense −49.6 % and −49.8 %, `ScannerValue` +1.5 % (p 0.043) then +3.1 % (p 1.1e-05). O1 (1316b84): `BenchmarkDecoderValue` +5.85 % then +4.68 % at the review, +4.52 % at the lane's final commit, inside the owner's exception; `BenchmarkDecoderValueFaults` level.
-- **Lane E's path,** nets to the lane's end (event code as on the sprint branch, ccc067a to 476270d; A/A clean): `CleanLen` −17.5 %, `CleanObject` −12.4 %, `CompactAndValid` −10.0 %, `ParseRFC3339` −22.2 %, `ScannerDocument` −5.6 %, `AppendUnescaped` −5.4 %, `DecoderValue` +3.3 % (O1's exception), the shape benchmarks level; the runtime's paths: `SendPayloadPath` −3.1 % to −4.1 %, `SendPath` level.
+- **Lane E's path,** nets to the lane's end (event code as on the sprint branch, ccc067a to 476270d; A/A clean): `CleanLen` −17.5 %, `CleanObject` −12.4 %, `CompactAndValid` −10.0 %, `ParseRFC3339` −22.2 %, `ScannerDocument` −5.6 %, `AppendUnescaped` −5.4 %, `DecoderValue` +3.3 % (O1's exception), `ScannerValue` −0.3 % (p 0.48), `ScannerFaults` and `DecoderValueFaults` level; the four shape benchmarks, from their own commit 145a96e to the lane's end: the indented object −45.8 % (`CleanLen`), −42.0 % (`cleanObject`), −27.3 % (`compactAndValid`), escape-dense strings −33.8 %, `\u`-dense −39.2 %, many members −9.3 %, all p = 1.1e-05; the runtime's paths: `SendPayloadPath` −3.1 % to −4.1 %, `SendPath` level.
 - **Lane E's hand-back** (internal/event at 0 size findings, no waiver): T2 exit 0 (run 20261119T045933Z-23620d); the nightly job alone exit 0 (`fuzz-parser` 604 s, `fuzz-decoder` 604 s, `race-stress` 264 s; run 20261119T050139Z-005333); `--job proofs` red as expected (run 20261119T051144Z-d50dd4: only `test_aging_planted.py`'s five cases, the expired lines exactly parser ×3, plan ×3, playback ×3). For the hand-back lane E was rebuilt on the sprint branch: the old copy of a docs commit already squashed into 6ba5e6c dropped, and the `value` split with its restore folded away (the two cancel: `decode.go` identical across them).
 - **Lane P, decision 1 per hot split** (alone, A/A clean before and after, each confirmed by a re-run): the first encoder split `BenchmarkAppendValue/object` +44.9 % then +45.5 % (`/float` +6.2 % then +5.0 %) and the first `Table` split `BenchmarkRecorderTable/delete` +6.9 % then +7.2 % (`/put` +5.5 % then +4.6 %), so ground rule 13a fired on both; `readLine`'s split `BenchmarkReplayLine` +3.4 % to +6.5 % in both runs with `BenchmarkReadLine` level; `record` and the three record decoders no cost; `AppendEvent` +3.2 %, then level. The chosen designs, alone: V1 (af326dd) `/object` +3.1 %, `/float` +2.6 % against the whole function, inside the owner's exception, every other kind level; T1 (396d958) `/delete` −12.4 %, `/put` −8.5 %; the review's placement control (the unchanged code at `readLine`'s split's addresses) `BenchmarkReplayLine` +2.5 % to +7.2 %, so that cost is placement.
 - **Lane P's path,** nets to the lane's end (playback code as on the sprint branch, c05de33 to 7565764): `AppendValue/float` +3.5 %, `/object` +3.4 %, `ReplayLine/fixture_event` +2.3 %, `TraceStepTable` +2.6 %, `RecorderTable/delete` −11.2 %, `/put` −6.2 %, the rest level: accepted (≤ 5 %).
@@ -102,6 +102,59 @@ At most two agents at once; the plan check §1 holds the order: G0 → the desig
 - **The combined branch** (91ff0d2: the gate fixes, lanes E, Q and P, one removal of their twelve exclusions): T3 exit 0 (run 20261119T083330Z-a01f11); `--job proofs` exit 0, the first green `proofs` run (run 20261119T083531Z-02ee41); the nightly job exit 0 (`fuzz-parser` 604 s, `fuzz-decoder` 603 s, `race-stress` 259 s; run 20261119T083922Z-7f02ab).
 - **The paths, `main` against the combined branch** (design §2.4 step 6; [G1 decision 5](decisions.md#owner-decisions-2026-11-16--s11c-6s-design-g1)): `main` has none of the sprint's benchmark files, so each baseline is the nets commit whose hot code equals `main`'s (4a4b228: production code identical to `main` 4d2b9eb but plan's deploy-time `expect.go`; d119e9b and 35d316f: event, playback and plan code equal to `main`'s). Runtime: `SendPath/emitting` +4.2 %, +2.6 %, +3.0 % in three runs; `/shards=1` +2.2 % (not significant), +3.4 %, +1.9 %; `/shards=1/recorded` +3.5 % (not significant), +5.2 % (p 0.0007), +2.4 % (not significant), so the one reading above 5 % was not confirmed by its re-run; `/shards=4` ≤ 2 %; `SendPayloadPath` −1.4 % to −4.2 %. Playback: `ReplayLine` −2.5 % to −7.1 %, `RecordOneEvent` level. Plan: `BodyOnEvent` +1.9 % and +1.7 %. All accepted.
 - **Nets found short during the splits, each an equivalent with a caught sibling or fixed:** parser — `parseError`'s missing-part and bound groups can be swapped unseen: for `and` participle's one "expected" clause cannot start with both `PosElem` and a bound; for the cron `)` case reasoned from the grammar, not proven; plan — `keyAttrs`' start index read as 0 survived at the nets commit and the split, fixed by the owner's test-only commit (ef65502).
+
+## The exit criteria's proofs (re-derived by the coordinator, 2026-11-20)
+
+The owner's check's verifier found the record short of four of the proofs the card names (OCV-1 to OCV-4); each is re-derived here from the coordinator's own measurement logs, the five stored coverage runs per lane and fresh runs of the tools.
+
+**Decision 1 per hot-path function** (exit 3): the 31 functions of the plan check's §3 list that live in the six packages. Each split was timed at its split by the coordinator alone (10 interleaved pairs; a cost needs p < 0.05 and more than +2 % on the median, confirmed by a re-run), on the split's first copy on its lane branch, which is the same change as the commit named (`git patch-id` equal; the lanes were rebuilt for hand-back). Allocations were equal in every comparison. The runtime's splits are timed on the seven `BenchmarkSendPath` and `BenchmarkSendPayloadPath` cases.
+
+| Function | Split on the branch | At its split | Outcome |
+|---|---|---|---|
+| runtime `(*router).ingest` | 6f7a85a | every case level, worst +2.0 % (p 0.22) | no cost |
+| runtime `(*router).take` | f4ce433 | every case level, worst +1.0 % (p 0.93) | no cost |
+| runtime `(*shard).process` | 696da7f | every case level, worst +3.2 % (p 0.42) | no cost |
+| runtime `(*Runtime).route` | 1c6fb06 | every case level, worst +1.0 % (p 0.67) | no cost |
+| runtime `routeKey` | its `keyPart` split | `RouteKey/float-zero` +2.0 % (p 1.1e-05), then +2.6 % (p 0.015) | costs: kept whole with its PERMANENT waiver (74bc366); the restore level (+0.3 %, p 0.81) |
+| runtime `broadcast` | 74bc366 | every case level, worst +0.8 % (p 0.06); one new `leaking param: m` line | no cost (the escape rule, R2b decision 2) |
+| runtime `(*Runtime).Send`, `SendPayload` | 6ab818d | every case level, worst +1.6 % (p 0.063) | no cost |
+| runtime `(*recQ).run` | 9420a28 | worst +1.3 % (p 0.022), under 2 % | no cost |
+| event `compactAndValid` | a3760f9 | −0.4 %, then −0.9 % | no cost; then the run walker (5cee50b) −25.1 % |
+| event `cleanObject` | its `isSpace` split (53fb5f0) | +13.2 %, then +9.9 % (p 1.1e-05) | costs: kept whole (c54fe6c), then ground rule 13a's review: the run walker (5cee50b) −19.3 % (owner, 2026-11-18) |
+| event `CleanLen` | its `isSpace` split (53fb5f0) | +23.9 %, then +21.4 % (p 1.1e-05) | costs: kept whole (c54fe6c), then the run walker (5cee50b) −29.2 % (owner, 2026-11-18) |
+| event `appendUnescaped` | 4c8b86c | −8.3 % (p 1.1e-05) | no cost |
+| event `(*scanner).top` | 5ea5641 | `ScannerValue` −0.7 % (p 0.17), `ScannerDocument` level | no cost; S11 (6a2c5f6) changed it again: documents −10.7 % |
+| event `(*scanner).value` | 4074ca6 | `ScannerValue` +2.8 % (p 0.019), then +1.2 % (p 0.043) | no cost: the re-run did not confirm |
+| event `(*scanner).object` | its `member` split (bedad36) | `ScannerValue` +4.4 % (p 0.001), then +6.0 % (p 1.1e-05) | costs; the scanner's path from the nets +8.5 %, then +8.1 %, so 13a: kept whole (94c5972), then S11 (6a2c5f6; owner, 2026-11-18, decision 2) |
+| event `(*scanner).str` | its `unicodeEscape` split (1f09fe4) | `ScannerValue` +3.1 % (p 0.0002), then +2.1 % (p 0.009) | costs: kept whole (94c5972), then S11 (6a2c5f6), whose `\u`-dense +21.2 % and +21.9 % fired 13a again, then the variant (476270d; owner, 2026-11-19) |
+| event `(*scanner).number` | 72ab62c | `ScannerValue` +1.1 % (p 0.072), `ScannerDocument` +1.4 % (p 0.022) | no cost |
+| event `parseRFC3339` | 96b6eb8 | −23.6 % (p 1.1e-05) | no cost |
+| event `(*Decoder).value` | its first split (1e48b3b) | `DecoderValue` +37.0 %, then +37.2 % (p 1.1e-05) | 13a: O1 (1316b84), +5.85 % then +4.68 %, the owner's exception (2026-11-18) |
+| playback `AppendValue` | its first split (880541c) | `/object` +44.9 %, then +45.5 %; `/float` +6.2 %, then +5.0 % | 13a: V1 (af326dd), `/object` +3.1 %, `/float` +2.6 % against the whole function, the owner's exception (2026-11-19) |
+| playback `appendString` | af326dd | `AppendStringPlain` −0.8 % and `Escapes` +0.1 % (880541c); at V1 +5.3 % (p 0.22) and +0.5 % | no cost |
+| playback `appendEvent` | af326dd | +3.2 % (p 1.1e-05), then +0.8 % (p 0.25); at V1 +0.8 % (p 0.14) | no cost: the re-run did not confirm |
+| playback `(*Recorder).Table` | its first split (dd6bb8d) | `/delete` +6.9 %, then +7.2 %; `/put` +5.5 %, then +4.6 % | 13a: T1 (396d958), `/delete` −12.4 %, `/put` −8.5 % (owner, 2026-11-19) |
+| playback `(*Trace).Step` | 396d958 | `TraceStepTable` +0.2 % (p 0.48), then +1.3 % (p 0.49) at the first split; +1.0 % (p 0.19) at T1 | no cost |
+| playback `(*Reader).readLine` | a4ab926 | `ReplayLine` +3.4 % to +6.5 % on every kind (p ≤ 0.002), then +3.1 % to +6.2 %; `ReadLine` level | 13a: the placement control +2.5 % to +7.2 % with the code unchanged, so the split stands (owner, 2026-11-19, decision 3) |
+| playback `(*Reader).record` | de90bdf | `ReplayLine` −2.2 % to −5.4 % | no cost |
+| playback `eventRecord`, `tableRecord`, `rejectedRecord` | f22f2da | `ReplayLine` −0.5 % to +1.2 %, worst p 0.011 under 2 % | no cost |
+| plan `(*body).OnEvent` | 096c5e6 | `BodyOnEvent` +0.4 % to +1.0 % | no cost |
+
+**Coverage at each lane's nets commit** (exit 2): the functions to be split are those with a size finding at `main` (golangci-lint v2.15.0 at 4d2b9eb: 91 findings, 86 of them in 73 functions, the other five file lengths). `go tool cover -func` over the five coverage runs stored per lane, read at the lane's nets commit:
+
+| Lane | Nets | Functions | At 100 % in all five runs | The blocks short in all five, each named in its nets commit |
+|---|---|---|---|---|
+| validate | 812b7d0 | 19 | 19 | — |
+| runtime, hot path and build | 1cfe37d | 10 | 9 | `SendPayload` boundary.go:115-116, defensive: every decoder error is a `*event.DecodeError` (`TestEveryDecoderErrorIsADecodeError`) |
+| runtime, lifecycle | f98c8fc | 7 | 4 | `Activate` lifecycle.go:99 and `Drain` lifecycle.go:190-191, scheduling-only (not reached in 6,400 stress rounds); `Close` lifecycle.go:411, reached by the stored stress profile |
+| event | ccc067a | 12 | 12 | — |
+| parser | 1e1208c | 5 | 5 | — |
+| plan | 576ec12 | 5 | 4 | `rule` plan.go:258, its invariant panic |
+| playback | c05de33 | 15 | 13 | `NewReader` reader.go:99-110, the three constant schemas' refusals; `record` reader.go:269, the decoder's non-`*DecodeError` branch; both guarded (G1 decision 3) |
+
+**`astequal` on every move commit** (exit 2), re-run with the tool as built at 544bf94 (`astequal <commit>~1 <commit>`), each exit 0: a916d05 validate, 4 files, 24 declarations; d93862b runtime, 17 files, 156; 6bd608a event, 5 files, 59; 22bb13c parser, 5 files, 76; d7c986b plan, 2 files, 46; f788edd playback, 4 files, 58. No cross-package move was made: the literal merge is not a move (G1 decision 2), so `astequal`'s rename map was not built.
+
+**The file maps** (exit 4): each package's production `.go` files at 544bf94 (`git ls-tree`) equal its design file map (§4.1, §5.1, §6 E.1, §7 Q.1, §8 P.1, §9 Q.1): runtime 21, validate 13, event 6, parser 9, playback 9, plan 3; no file outside its map and none missing. The largest is parser's `grammar.go`, unchanged at 469 lines.
 
 ## Test material
 
@@ -125,6 +178,11 @@ The re-cut after the spike (2026-11-15, before G0): S1.1c-5-3's packages moved t
 | BK-S1 | [break-it](../reviews/s1-1c-6-breakit-qa.md) | should-fix | `load.py`'s red verdict hides the test the binary died under and the cause | Fixed, red first (4b2d856) |
 | BK-L1 | break-it | later | A stop after the leader exits skips `gorun`'s group kill | Fixed, red first (9624c50) |
 | BK-L2 | break-it | later | A second interrupt in `gorun`'s grace skips the group kill | Fixed, red first (9624c50) |
+| OCV-1 | the owner's check's verifier | should-fix | `(*Trace).Step`'s split has no decision-1 verdict in the record | Fixed: §The exit criteria's proofs (no cost: +0.2 %, +1.3 %, +1.0 % at T1) |
+| OCV-2 | verifier | should-fix | The scanner's `top`, `value` and `number` splits, and the `object` and `str` splits restored under 13a, have no verdict in the record | Fixed: §The exit criteria's proofs, from the coordinator's logs |
+| OCV-3 | verifier | should-fix | "The shape benchmarks level" in lane E's path contradicts their measured gains, and the shapes did not exist at the nets commit | Fixed: the line gives their numbers from 145a96e to the lane's end |
+| OCV-4 | verifier | later | No per-function coverage claim in the record; lane V has no measured-results entry | Fixed: the coverage table, re-derived from the five stored runs per lane |
+| OC-1 | the owner's check | should-fix | 84 test files and 107 test functions are named after a sprint, a review step or a lane, not what they test; S1.1c-6 added `TestBreakitExprFenceLitPrefix` and renamed three gate tests to `s1_1c_7` | Forwarded: S1.1c-7, widened to test function and step names, the names first ([owner, 2026-11-19](decisions.md#owner-decisions-2026-11-19--s11c-6s-t4-and-the-owners-check), 2 and 3) |
 
 ## Done-done
 
@@ -141,8 +199,9 @@ Build (G2)   ☑ every lane at T2 (lane Q's only red was the gate's `test_gorun`
              ☑ tests on the real code ☑ every breaker's red test committed (with its fix: 4b2d856, 9624c50)
 Review (G3)  ☑ architecture review of the combined diff: no drift (no blocker; [the review](../reviews/s1-1c-6-combined-architecture.md))
              ☑ QA break-it run ([the break-it](../reviews/s1-1c-6-breakit-qa.md)) ☑ every finding fixed, forwarded (owner consent for blockers) or rejected with reason (§Findings)
-Verify (G4)  ☐ T4 strict-gate / CI exit 0, run complete ☐ owner's check passed
-             ☐ every acceptance line met by its named proof
+Verify (G4)  ☑ T4 strict-gate exit 0, run complete (544bf94: run 20261119T115838Z-b81d16, 691.5 s wall, 33 rows, `proofs` 421.6 s alone and covered 39, `race` 223.5 s; LAW Δ 25 files vs 4d2b9eb; on battery throughout; the first full T4 at c6660f3, run 20261119T112928Z-774605, timed `proofs` out at 600 s beside `race`, so `proofs` runs alone: [owner, 2026-11-19](decisions.md#owner-decisions-2026-11-19--s11c-6s-t4-and-the-owners-check), 1)
+             ☑ owner's check passed (2026-11-20, on the owner's word: the owner read LAW Δ, every line intended, and runtime's file names; an independent verifier saw three plants refused at the commit hook — `funlen` in event, `gocyclo` in runtime, expr's `funlen` over its cap 3 — recounted the 13 caps (each equal to its count) and the one size waiver, and checked the files against the maps; OC-1 forwarded to S1.1c-7, OCV-1 to OCV-4 fixed in this record)
+             ☑ every acceptance line met by its named proof (exit 1: T4 `smells` PASS, "48 issues dropped by 13 exclusions", all S1.1c-5-3's, `aging` PASS, `test_smells_planted` 30 tests and `test_aging_planted` 5 tests OK in `proofs`; exits 2 to 4: §Measured results and §The exit criteria's proofs; exit 5: T4 `aging`, `test_parts.py` and `test_aging.py` in `pytests`)
 Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
              ☐ main CI green on the merge commit
              ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
