@@ -19,9 +19,10 @@
 //   - purity (non-test files): go statements and channels stay in internal/runtime, io/* and cmd;
 //     sync only there, plus the named exceptions purity.json lists, each limited to its identifiers (no other
 //     identifier, no dot-import); os, net and io only at the boundary; unsafe and //go:linkname nowhere;
-//   - globals (non-test files): a package-level var is an error sentinel, a value built at its
-//     declaration by a Must-constructor (regexp.MustCompile, participle.MustBuild: built from
-//     constants, never written), a lookup table never written, or event's sync.Pool. A generated file is skipped
+//   - globals (non-test files): a package-level var is an error sentinel or a value built at its
+//     declaration by a Must-constructor (regexp.MustCompile, participle.MustBuild: built from constants), or a
+//     lookup table, each never written outside its declaration (an assignment, ++/--, delete or clear anywhere
+//     in the package is a write), or event's sync.Pool. A generated file is skipped
 //     only when generated.json lists it and its `// Code generated … DO NOT EDIT.` line precedes its package
 //     clause (go/ast.IsGenerated); a file with that line that is not listed gets every check and a finding.
 //
@@ -709,7 +710,7 @@ func (c *checker) written(files map[string]string) (map[string]bool, error) {
 			case *ast.IncDecStmt:
 				out[root(n.X)] = true
 			case *ast.CallExpr:
-				if f, ok := n.Fun.(*ast.Ident); ok && f.Name == "delete" && len(n.Args) > 0 {
+				if f, ok := n.Fun.(*ast.Ident); ok && (f.Name == "delete" || f.Name == "clear") && len(n.Args) > 0 {
 					out[root(n.Args[0])] = true
 				}
 			}
@@ -784,13 +785,13 @@ func (c *checker) globals(files map[string]string) error {
 					value = vs.Values[i]
 				}
 				switch {
-				case value != nil && (call(value, "errors", "New") || call(value, "fmt", "Errorf")):
-				case value != nil && mustConstructor(value):
+				case value != nil && (call(value, "errors", "New") || call(value, "fmt", "Errorf")) && !written[id.Name]:
+				case value != nil && mustConstructor(value) && !written[id.Name]:
 				case value != nil && table(value) && !written[id.Name]:
 				default:
 					c.report(id.Pos(),
-						"globals: %s is a mutable package-level var: only error sentinels, Must-constructed values and never-written "+
-							"lookup tables are allowed (ADR-0015 §2.2)", id.Name)
+						"globals: %s is a mutable package-level var: only error sentinels, Must-constructed values and lookup "+
+							"tables never written outside their declaration are allowed (ADR-0015 §2.2)", id.Name)
 				}
 			}
 		}

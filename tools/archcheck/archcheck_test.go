@@ -223,6 +223,19 @@ func TestGlobals(t *testing.T) {
 		got := check(t, "internal/model/x.go", table, "internal/model/y.go", "package model\nfunc f() { names[2] = \"b\" }\n")
 		wantOne(t, got, "globals: names")
 	})
+	t.Run("a lookup table cleared anywhere in the package is red", func(t *testing.T) {
+		table := "package model\nvar names = map[int]string{1: \"a\"}\n"
+		got := check(t, "internal/model/x.go", table, "internal/model/y.go", "package model\nfunc f() { clear(names) }\n")
+		wantOne(t, got, "globals: names")
+	})
+	t.Run("an error sentinel or a Must-constructed value assigned again anywhere in the package is red", func(t *testing.T) {
+		sentinel := check(t, "internal/model/x.go", "package model\nimport \"errors\"\nvar errX = errors.New(\"x\")\n",
+			"internal/model/y.go", "package model\nimport \"errors\"\nfunc f() { errX = errors.New(\"y\") }\n")
+		wantOne(t, sentinel, "globals: errX")
+		must := check(t, "internal/model/x.go", "package model\nimport \"regexp\"\nvar re = regexp.MustCompile(\"a\")\n",
+			"internal/model/y.go", "package model\nimport \"regexp\"\nfunc f() { re = regexp.MustCompile(\"b\") }\n")
+		wantOne(t, must, "globals: re")
+	})
 	t.Run("a compiled regexp and a blank assertion are fine", func(t *testing.T) {
 		wantNone(t, check(t, "internal/model/x.go", "package model\nimport \"regexp\"\nvar re = regexp.MustCompile(\"a\")\nvar _ error = nil\n"))
 	})
