@@ -12,7 +12,7 @@ import os
 import sys
 from unittest import mock
 
-from gate.runner import law
+from gate.runner import git, law
 from gate.runner.rows import lawdelta
 from gate.runner.tests import support
 
@@ -163,6 +163,23 @@ class LawDelta(support.GateTest):
             code, out = self.in_process()
         want = "failed: lawdelta: the marker parser crashed on gate/current-sprint: RuntimeError: planted"
         self.assertEqual((code, out.splitlines()), (1, ["GATE_COVERED 1", want]), out)
+
+    def test_a_git_command_that_fails_before_covered_is_named(self):
+        self.law_world()
+        self.on_change()
+        with mock.patch("gate.runner.git.ls_files", side_effect=git.GitError("git ls-files failed (exit 128)")):
+            code, out = self.in_process()
+        self.assertEqual((code, out.splitlines()), (1, ["failed: lawdelta: git ls-files failed (exit 128)"]), out)
+
+    def test_a_git_command_that_fails_after_covered_is_named(self):
+        self.law_world()
+        self.on_change()
+        self.track("notes.txt", "not a law path\n")
+        self.commit("change")
+        for name, text in (("head", "git rev-parse failed (exit 128)"), ("dirty", "git status failed (exit 128)")):
+            with self.subTest(name), mock.patch(f"gate.runner.git.{name}", side_effect=git.GitError(text)):
+                code, out = self.in_process()
+                self.assertEqual((code, out.splitlines()), (1, ["GATE_COVERED 1", f"failed: lawdelta: {text}"]), out)
 
     def test_a_file_matching_no_entry_is_named(self):
         self.law_world()
