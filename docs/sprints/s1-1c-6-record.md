@@ -1,7 +1,9 @@
 # S1.1c-6 — sprint record
 
+> **Historical — S1.1c-6, the strict lint set: the size limits in runtime, validate, event, parser, plan and playback; merged in PR #49.** Not current: what is built is the code; the decisions it carried out start at [decisions.md](decisions.md#owner-decisions-2026-11-15--s11c-6s-plan-check); what is next is [sprint-plan.md](sprint-plan.md#status). **This sprint:** [plan check](s1-1c-6-plan-check.md) · [design](s1-1c-6-design.md) · [record](s1-1c-6-record.md) · reviews: [spike](../reviews/s1-1c-6-spike.md), [plan check architecture](../reviews/s1-1c-6-plan-check-architecture.md), [plan check qa](../reviews/s1-1c-6-plan-check-qa.md), [design architecture](../reviews/s1-1c-6-design-architecture.md), [design qa](../reviews/s1-1c-6-design-qa.md), [event walkers](../reviews/s1-1c-6-event-walkers-review.md), [decoder value](../reviews/s1-1c-6-decoder-value-review.md), [playback](../reviews/s1-1c-6-playback-review.md), [combined architecture](../reviews/s1-1c-6-combined-architecture.md), [breakit qa](../reviews/s1-1c-6-breakit-qa.md). **← [S1.1c-5](s1-1c-5-record.md) · [S1.1c-7 (next)](sprint-plan.md#status) →**
+
 **Sprint:** S1.1c-6 — the strict lint set: the size limits in runtime, validate, event, parser, plan and playback · **Routine:** the full loop without the semantics panel · **Size:** 13 SP (the spike and the re-cut) against the 2-week cap · **Branch:** `s1-1c-6/integration`
-**What to build and how each item is proven:** [the S1.1c-6 card](sprint-plan.md#s11c-6--the-strict-lint-set-the-size-limits-in-runtime-validate-event-parser-plan-and-playback) · **How it runs:** [the plan check §1](s1-1c-6-plan-check.md#1-routine-shape-waves) · **Process:** [00-sprint-model.md](00-sprint-model.md)
+**What to build and how each item is proven:** [the S1.1c-6 card](history.md#s11c-6--the-strict-lint-set-the-size-limits-in-runtime-validate-event-parser-plan-and-playback) · **How it runs:** [the plan check §1](s1-1c-6-plan-check.md#1-routine-shape-waves) · **Process:** [00-sprint-model.md](00-sprint-model.md)
 
 *This record holds the plan check, the owner's decisions at the gates, measured results, the done-done checklist and the retro. Status stays in code and git.*
 
@@ -152,9 +154,11 @@ The owner's check's verifier found the record short of four of the proofs the ca
 | plan | 576ec12 | 5 | 4 | `rule` plan.go:258, its invariant panic |
 | playback | c05de33 | 15 | 13 | `NewReader` reader.go:99-110, the three constant schemas' refusals; `record` reader.go:269, the decoder's non-`*DecodeError` branch; both guarded (G1 decision 3) |
 
-**`astequal` on every move commit** (exit 2), re-run with the tool as built at 544bf94 (`astequal <commit>~1 <commit>`), each exit 0: a916d05 validate, 4 files, 24 declarations; d93862b runtime, 17 files, 156; 6bd608a event, 5 files, 59; 22bb13c parser, 5 files, 76; d7c986b plan, 2 files, 46; f788edd playback, 4 files, 58. No cross-package move was made: the literal merge is not a move (G1 decision 2), so `astequal`'s rename map was not built.
+**`astequal` on every move commit** (exit 2), re-run with the tool as built at 544bf94 (`astequal <commit>~1 <commit>`), each exit 0: a916d05 validate, 4 files, 24 declarations; d93862b runtime, 17 files, 156; 6bd608a event, 5 files, 59; 22bb13c parser, 5 files, 76; d7c986b plan, 2 files, 46; f788edd playback, 4 files, 58. No cross-package move was made: the literal merge is not a move (G1 decision 2), so `astequal`'s rename map was not built. Re-run at G5 on `main`'s rebased copies (8b329ed, 4e67f6d, 42acf9d, b534fe2, f923180, 681004b): each exit 0, the same counts.
 
 **The file maps** (exit 4): each package's production `.go` files at 544bf94 (`git ls-tree`) equal its design file map (§4.1, §5.1, §6 E.1, §7 Q.1, §8 P.1, §9 Q.1): runtime 21, validate 13, event 6, parser 9, playback 9, plan 3; no file outside its map and none missing. The largest is parser's `grammar.go`, unchanged at 469 lines.
+
+**Points and duration.** Card 13 (the spike and the re-cut). As built: about 19, the coordinator's estimate — the card's six items, plus ground rule 13a's three architecture reviews and their six redesigns with the string reader's variant, four fixes inside the build (the parser's whitespace panic, E-GRAPH-001, `test_gorun`'s race, gorun's stop window), the fix round's three (the expr fence, `load.py`, gorun's `finally`), `proofs` run alone at T4, and the record's proofs rebuilt at G4. From the plan check's answers (2026-11-15) to the merge (2026-11-20): six calendar days.
 
 ## Test material
 
@@ -193,7 +197,7 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-15)
              ☑ plan check reviewed (architect, QA) and answered by the owner (2026-11-15)
              ☑ test material: the nets are each lane's first item ☑ `gate/current-sprint` set, the first commit after the plan check's
 Design (G1)  ☑ architecture + the-fool findings resolved (design §12) ☑ QA testability findings resolved (design §12)
-             ☑ owner decisions recorded (2026-11-16) ☐ ADRs written for lasting decisions (none lasting beyond decisions.md so far; reviewed at G5)
+             ☑ owner decisions recorded (2026-11-16) ☑ ADRs written for lasting decisions (reviewed at G5: ADR-0010 §3 annotated for decode.go's split; ground rule 13a written into the ground rules; nothing else lasting beyond decisions.md)
 Build (G2)   ☑ every lane at T2 (lane Q's only red was the gate's `test_gorun` race, fixed in 374133a) ☑ T3 combine-check exit 0 (run 20261119T083330Z-a01f11)
              ☑ conformance cases for every construct shipped or changed (none changed: a refactor; conformance green at T3)
              ☑ tests on the real code ☑ every breaker's red test committed (with its fix: 4b2d856, 9624c50)
@@ -202,14 +206,18 @@ Review (G3)  ☑ architecture review of the combined diff: no drift (no blocker;
 Verify (G4)  ☑ T4 strict-gate exit 0, run complete (544bf94: run 20261119T115838Z-b81d16, 691.5 s wall, 33 rows, `proofs` 421.6 s alone and covered 39, `race` 223.5 s; LAW Δ 25 files vs 4d2b9eb; on battery throughout; the first full T4 at c6660f3, run 20261119T112928Z-774605, timed `proofs` out at 600 s beside `race`, so `proofs` runs alone: [owner, 2026-11-19](decisions.md#owner-decisions-2026-11-19--s11c-6s-t4-and-the-owners-check), 1)
              ☑ owner's check passed (2026-11-20, on the owner's word: the owner read LAW Δ, every line intended, and runtime's file names; an independent verifier saw three plants refused at the commit hook — `funlen` in event, `gocyclo` in runtime, expr's `funlen` over its cap 3 — recounted the 13 caps (each equal to its count) and the one size waiver, and checked the files against the maps; OC-1 forwarded to S1.1c-7, OCV-1 to OCV-4 fixed in this record)
              ☑ every acceptance line met by its named proof (exit 1: T4 `smells` PASS, "48 issues dropped by 13 exclusions", all S1.1c-5-3's, `aging` PASS, `test_smells_planted` 30 tests and `test_aging_planted` 5 tests OK in `proofs`; exits 2 to 4: §Measured results and §The exit criteria's proofs; exit 5: T4 `aging`, `test_parts.py` and `test_aging.py` in `pytests`)
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner
-             ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line
-             ☐ documents reconciled (plan + reasons only) ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded
-             ☐ the row closed in gate/sprints.json as in the plan table (S1.1c-6 only; row S1.1c closes with S1.1c-7)
+Exit (G5)    ☑ one PR, ≤ 100 commits, merged by the owner (PR #49, 99 commits, rebase-merged as main 54c45dc, 2026-11-20; the commit ids this record cites are the PR's, kept by GitHub's `refs/pull/49/head`, and main holds their rebased copies)
+             ☑ main CI green on the merge commit (the owner reported, 2026-11-20)
+             ☑ sprint record + five-line retro ☑ known issues (S1.1c-5-1 and -2 closed; S1.1c-5-3 at S1.1c-7; S1.1c-6-1 and -2 open; OC-1 in S1.1c-7's line) ☑ sprint-plan §Status line
+             ☑ documents reconciled (plan + reasons only: the card to history, banners, the records row) ☑ memory updated
+             ☑ worktrees removed (18 worktrees and 34 branches — `s1-1c-6/integration` local and remote — deleted; the 31 archive tags kept; [owner](decisions.md#owner-decisions-2026-11-20--s11c-6s-close-out)) ☑ points and duration recorded
+             ☑ the row closed in gate/sprints.json as in the plan table (S1.1c-6 only; row S1.1c closes with S1.1c-7)
 ```
 
 ## Retro
 
-*(written at close-out)*
+1. **Worked — nets before every split.** Each split function stood at 100 % of its blocks from its own package's tests before it was touched, every move passed `astequal`, and the redesigns ran against verbatim copies of the old code; 91 findings went to 0, and the break-it found no behaviour change across 1,141,815 mutated programs and 1,800 live deployments.
+2. **Worked — ground rule 13a.** Six slowdowns of 5 % or more went to an architecture review instead of a waiver and came back as faster designs (the run walker −19 % to −29 %, the scanner's documents −11 %, T1 −12 %) or as owner exceptions of 3 % to 4.5 % (O1, V1); only `routeKey` kept a waiver.
+3. **Missed — the record behind the work.** The owner's check's verifier found four proofs missing from the record (per-split verdicts, the coverage and `astequal` tables, one wrong line), rebuilt at G4 from scratch logs a reboot could have wiped; and the owner found 84 test files named after a sprint, a review step or a lane (OC-1), four touched by this sprint against its own brief.
+4. **Friction — timing on one laptop.** Code placement alone moves a short benchmark 2–4 %; a session on battery voided lane E's first timing and slowed both T4 runs about 2×; `proofs` timed out beside `race` at T4 (now run alone); `test_gorun` raced under load (fixed at its root); the lanes' rebuilds for hand-back left one commit under the cap.
+5. **Change next sprint.** Each proof goes into the record as it is made, and the combined review waits until every proof made so far has its row; timing runs on mains power only (both sprint model §10, [owner, 2026-11-20](decisions.md#owner-decisions-2026-11-20--s11c-6s-close-out)); S1.1c-7 starts with the test names (OC-1).
