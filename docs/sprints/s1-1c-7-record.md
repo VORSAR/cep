@@ -92,6 +92,10 @@ At most two agents at once; the plan check §1 holds the order:
   - **T4, lint job:** exit 0, run 20261120T092617Z-a5e554. `aging` PASS: the marker S1.1c-7 does not reach S1.1c-9.
   - **T4, proofs job alone:** exit 0, run 20261120T092632Z-7ccf84, 232.3 s, covered 39 (the 2026-11-12 rule after the marker's move).
 
+**G1** (the coordinator, 2026-11-20, after c3b6aab and 13887e0; on battery, which voids no pass or fail):
+- **T2:** exit 0, run 20261120T115822Z-7a9497, 204.4 s wall; `pytests` covered 130.
+- **T4, proofs job alone:** exit 0, run 20261120T122600Z-b78e9f, **491.7 s** (232.3 s on mains at G0), covered 39. The 2026-11-12 rule applies, since gate/known-issues.json is copied into every proof world. The margin to the 600 s cap is narrow on battery: watch it at T4.
+
 ## The finding ledger
 
 186 ids: G10's 23, G7a's 6, G2's 156 and G3-72. The ledger is built through the sprint and checked by `docs/sprints/s1-1c-7-plants/check_ledger.py` (plan check §7.5).
