@@ -237,6 +237,17 @@ Its new later items:
   - G2-149: `load.py -- -race -count=50 -run '^TestCLIWriteFailureIsExit2$' ./tools/archcheck` gives `TestCLIWriteFailureIsExit2: 50/50 under load (hogs 28)`.
   - G2-154: `load.py -- -race -count=50 -run '^TestRunExitCodes$' ./tools/astequal` gives `TestRunExitCodes: 50/50 under load (hogs 28)`.
 
+**PR 1's CI and F6:**
+- PR #52's first CI run (44907887725) failed one test on Linux. `Compiled.test_a_plant_in_a_race_only_file_is_compiled_under_race` read `go list ./m at …: exit 2: go: -race requires cgo`.
+- **Cause:** the gate and the workflows pin `CGO_ENABLED=0`, and only the race row turns cgo on, for its own go (`gate/runner/rows/race.py:32`). On darwin the race detector needs no cgo, which is why every local run passed.
+- **The fix,** F6 (dc8ba2c): under `--race`, mutate.py's `go list` and `go test` run with `CGO_ENABLED=1`; without `--race`, the environment passes through.
+- **Proofs:**
+  - red first under `GOOS=linux GOARCH=amd64 CGO_ENABLED=0`, at 9c17b21;
+  - green at dc8ba2c;
+  - `docs/sprints/s1-1c-7-plants/PR1-F6.json`: `counts: red 2, green 0, timeout 0, invalid 0`;
+  - `test_mutate` passes 83 tests under `CGO_ENABLED=0`;
+  - PR1-F1 to -F5 re-run at F6's tree, all red (the agent's runs).
+
 **Process changes:**
 - heavy, load and timing runs are serialised on a quiet machine (E1 held after C5);
 - every lane proof is re-run on the integration branch;

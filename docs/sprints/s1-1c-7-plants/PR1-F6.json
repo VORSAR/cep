@@ -1,0 +1,18 @@
+[
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return {**os.environ, \"PWD\": wt, **({\"CGO_ENABLED\": \"1\"} if race else {})}",
+    "id": "F6-race-cgo",
+    "note": "PR #52 CI: --race's go commands keep the environment's CGO_ENABLED",
+    "py": "gate.bench.tests.test_mutate.Compiled.test_under_race_go_list_and_go_test_run_with_cgo_on",
+    "replace": "    return {**os.environ, \"PWD\": wt}"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return {**os.environ, \"PWD\": wt, **({\"CGO_ENABLED\": \"1\"} if race else {})}",
+    "id": "F6-pass-through",
+    "note": "cgo forced on without --race too",
+    "py": "gate.bench.tests.test_mutate.Compiled.test_without_race_cgo_enabled_passes_through",
+    "replace": "    return {**os.environ, \"PWD\": wt, \"CGO_ENABLED\": \"1\"}"
+  }
+]
