@@ -3,8 +3,8 @@
 import contextlib
 import faulthandler
 import itertools
-import math
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -239,7 +239,9 @@ class RealGo(unittest.TestCase):
         self.assertEqual(len(version), 1, out)
         self.assertIn("go1.27", version[0])
         self.assertEqual(len([line for line in lines if line.startswith("go buildid after: ")]), 1, out)
-        self.assertEqual(math.comb(4, 2), 6)  # at pairs 2 the smallest two-sided p is 2/6 = 1/3
+        m = re.search(r", p ([0-9.e+-]+), ", lines[0])
+        self.assertIsNotNone(m, out)
+        self.assertGreaterEqual(float(m[1]), 0.3333)  # at pairs 2 the smallest two-sided p is 2/6 = 1/3
 
 
 if __name__ == "__main__":
