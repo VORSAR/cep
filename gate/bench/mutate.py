@@ -2,7 +2,7 @@
 design note W0, Part A as revised).
 
     python3.15 -I -B gate/bench/mutate.py (--file <path> --find <text> --replace <text> | --patch <diff file>) \\
-        (--test <TopLevelTestName> [--pkg <dir>] [--race] [--cpu <list>] | --py <unittest id>) \\
+        (--test <TopLevelTestName> [--subtest <path>] [--pkg <dir>] [--race] [--cpu <list>] | --py <unittest id>) \\
         [--timeout 120s] [--repeat N --load]
     python3.15 -I -B gate/bench/mutate.py --batch <mutations.json> [--timeout 120s] [--race] [--cpu <list>]
 
@@ -13,25 +13,32 @@ checked; a new, deleted or renamed file, a quoted path and the no-newline marker
 must be tracked and equal to HEAD.
 
 The designated test is --test, a top-level Go Test run in the first file's package or in --pkg's (a guard test of a
-package's contract may live in a package that imports it), or --py, a dotted unittest id. A Go mutant is written
-outside the tree and built through `go test -overlay`. A --py mutant is committed, hooks off, under a throwaway
-identity, in a detached worktree of HEAD outside the repo (one per run, reset between entries), so a test calling
-git there sees a clean tree; the id runs as `python3.15 -I -B -X dev -W error <worktree>/gate/runner/pyshim.py
-<worktree> <id> <report>` from the worktree, with --timeout as its wall clock. The worktree is removed when the run
-ends, a stop included; one of this run's worktrees still listed or on disk after that is exit 2.
+package's contract may live in a package that imports it), or --py, a dotted unittest id. --subtest (batch key
+"subtest") names one subtest of --test: split at "/", each level rewritten as go test names it (each Go space to
+"_"), QuoteMeta'd and anchored, so F3 never runs F30; a probe run first, each level also allowing go test's #NN
+suffix for a repeated name, must count exactly one run, and each run at the subtest's depth is printed as `ran:`. A
+Go mutant is written outside the tree and built through `go test -overlay`. A --py mutant is committed, hooks off,
+under a throwaway identity, in a detached worktree of HEAD outside the repo (one per run, reset between entries), so
+a test calling git there sees a clean tree; the id runs as `python3.15 -I -B -X dev -W error
+<worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock. The
+worktree is removed when the run ends, a stop included; one of this run's worktrees still listed or on disk after
+that is exit 2.
 
 Refused (exit 2) before any go or Python test command: a file not tracked or differing from HEAD, a find text or a
 hunk occurring other than exactly once, a malformed diff, a --pkg that is not a tracked directory, a test name that
-is not a top-level Test identifier, a --py id that is not dotted identifiers, a mutation or a test given both ways
-or neither, --pkg, --race or --cpu with --py, a malformed batch (every entry is checked before the first build).
+is not a top-level Test identifier, a --subtest without --test, with an empty level or with a rune go test would
+escape, a --py id that is not dotted identifiers, a mutation or a test given both ways or neither, --subtest,
+--pkg, --race or --cpu with --py, a malformed batch (every entry is checked before the first build).
 
 Go outcomes, judged in order: timeout (go test's own -timeout backstop), red (the line `--- FAIL: <Test> (`), green
-(exit 0 and `--- PASS: <Test> (`), invalid (anything else). Python outcomes: timeout (the wall clock), red (exit 1,
-the shim's only problem `failed: 1 failures, 0 errors`, and `Ran 1 test in`), green (exit 0 and `passed 1 tests`),
-invalid (anything else: an import error, a skip, zero tests, a failure beside a leak). Only red counts (owner,
-2026-11-16, G1 decision 4). Single mode exits 0 on red, 1 otherwise; batch mode 0 when every entry is red; --repeat
-N --load runs N times under CPU hogs and exits 0 when k >= 1 of N. Exit 2 on a refusal or an internal error; the
-last line says which.
+(exit 0 and `--- PASS: <Test> (`), invalid (anything else). A subtest is judged by its own lines: invalid with no
+`=== RUN` line for it, or a `--- SKIP:` one; red on its own `--- FAIL:` line (a parent's FAIL alone is invalid);
+green on exit 0, its own `--- PASS:` line and no FAIL line at all; invalid otherwise, as when the probe counts other
+than one run. Python outcomes: timeout (the wall clock), red (exit 1, the shim's only problem `failed: 1 failures, 0
+errors`, and `Ran 1 test in`), green (exit 0 and `passed 1 tests`), invalid (anything else: an import error, a skip,
+zero tests, a failure beside a leak). Only red counts (owner, 2026-11-16, G1 decision 4). Single mode exits 0 on
+red, 1 otherwise; batch mode 0 when every entry is red; --repeat N --load runs N times under CPU hogs and exits 0
+when k >= 1 of N. Exit 2 on a refusal or an internal error; the last line says which.
 """
 
 import argparse
@@ -60,7 +67,7 @@ OUTCOMES = ("red", "green", "timeout", "invalid")
 PYTHON = "python3.15"  # the pytests row's interpreter (gate/runner/rows/pytests.py PYTHON)
 TRIPLE = frozenset({"file", "find", "replace"})
 MUTATION_KEYS = TRIPLE | {"patch"}
-TARGET_KEYS = frozenset({"test", "py"})
+TARGET_KEYS = frozenset({"test", "subtest", "py"})
 PLAIN_KEYS = MUTATION_KEYS | TARGET_KEYS | {"note", "pkg"}
 THROWAWAY = {
     "GIT_AUTHOR_NAME": "mutate.py",
@@ -69,6 +76,30 @@ THROWAWAY = {
     "GIT_COMMITTER_EMAIL": "mutate@invalid",
 }
 NO_HOOKS = ("-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false")
+GO_META = frozenset("\\.+*?()|[]{}^$")  # regexp.QuoteMeta's set
+# unicode.IsSpace, which go test's name rewriting uses (testing/match.go isSpace): each becomes "_".
+GO_SPACES = frozenset(
+    map(
+        chr,
+        (
+            0x09,
+            0x0A,
+            0x0B,
+            0x0C,
+            0x0D,
+            0x20,
+            0x85,
+            0xA0,
+            0x1680,
+            *range(0x2000, 0x200B),
+            0x2028,
+            0x2029,
+            0x202F,
+            0x205F,
+            0x3000,
+        ),
+    )
+)
 _DURATION = re.compile(r"(?:[0-9]+(?:\.[0-9]*)?(?:ns|us|µs|ms|s|m|h))+")
 _UNIT_S = {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "ms": 1e-3, "s": 1.0, "m": 60.0, "h": 3600.0}
 _HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
@@ -103,7 +134,12 @@ class _Parser(argparse.ArgumentParser):
 @dataclasses.dataclass(frozen=True)
 class Target:
     test: str = ""  # a Go top-level Test ("" in the Python mode)
+    levels: tuple[str, ...] = ()  # the Go subtest path, each level rewritten as go test names it
     py: str = ""  # a unittest id ("" in the Go mode)
+
+    @property
+    def full(self) -> str:
+        return "/".join((self.test, *self.levels))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -153,11 +189,25 @@ def _occurrences(text: str, find: str) -> int:
     return count
 
 
-def target(test: str | None, py: str | None) -> Target:
-    """The designated test: exactly one of a top-level Go Test and a dotted unittest id."""
+def go_rewrite(level: str) -> str:
+    """One subtest level as go test names it: each Go space becomes "_"."""
+    return "".join("_" if c in GO_SPACES else c for c in level)
+
+
+def quote_meta(text: str) -> str:
+    """regexp.QuoteMeta."""
+    return "".join("\\" + c if c in GO_META else c for c in text)
+
+
+def target(test: str | None, subtest: str | None, py: str | None) -> Target:
+    """The designated test: exactly one of a top-level Go Test (with a subtest path, split at "/") and a dotted
+    unittest id. A level holding a rune that is neither a Go space nor printable is refused: go test would escape it
+    with strconv.QuoteRune, which is not emulated."""
     if test is not None and py is not None:
         raise Refused("the designated test is test or py: not both")
     if py is not None:
+        if subtest is not None:
+            raise Refused("subtest names a Go subtest: not with py")
         parts = py.split(".")
         if len(parts) < 2 or not all(part.isidentifier() for part in parts):
             raise Refused(f"py {py!r} is not a dotted unittest id")
@@ -166,7 +216,38 @@ def target(test: str | None, py: str | None) -> Target:
         raise Refused("the designated test is test or py: neither is given")
     if not test.isidentifier() or not test.startswith("Test"):
         raise Refused(f"--test {test!r} is not a top-level Test identifier")
-    return Target(test=test)
+    if subtest is None:
+        return Target(test=test)
+    levels = subtest.split("/")
+    if "" in levels:
+        raise Refused(f"--subtest {subtest!r} has an empty level")
+    for level in levels:
+        if any(c not in GO_SPACES and not c.isprintable() for c in level):
+            raise Refused(f"--subtest {subtest!r} holds a rune go test would escape")
+    return Target(test, tuple(go_rewrite(level) for level in levels))
+
+
+def pattern(t: Target, probe: bool) -> str:
+    """go test's -run for the target: each level QuoteMeta'd and anchored; the probe also lets each level carry the
+    #NN suffix go test gives a repeated name."""
+    parts = [f"^{t.test}$"]
+    for level in t.levels:
+        parts.append(f"^{quote_meta(level)}{'(#[0-9]+)?' if probe else ''}$")
+    return "/".join(parts)
+
+
+def runs(text: str, t: Target) -> list[str]:
+    """The probe's count: `=== RUN` names equal to the designated path, each level allowing a `#NN` suffix."""
+    rx = r"^=== RUN\s+(" + re.escape(t.test)
+    rx += "".join("/" + re.escape(level) + r"(?:#[0-9]+)?" for level in t.levels) + r")$"
+    return re.findall(rx, text, re.MULTILINE)
+
+
+def ran(text: str, t: Target) -> list[str]:
+    """Every `=== RUN` name under the designated parent at the designated depth, whatever its last level: a run that
+    selected a sibling (F30 beside F3) shows it here."""
+    parent = re.escape(t.test) + "".join("/" + re.escape(level) + r"(?:#[0-9]+)?" for level in t.levels[:-1])
+    return re.findall(r"^=== RUN\s+(" + parent + r"/[^/\n]+)$", text, re.MULTILINE)
 
 
 def parse_patch(text: str) -> list[tuple[str, list[tuple[str, str]]]]:
@@ -293,7 +374,7 @@ def entry(spec: Mapping[str, str]) -> Entry:
         raise Refused("the mutation is file, find and replace, or patch: not both")
     if "patch" not in keys and TRIPLE - keys:
         raise Refused(f"the mutation is file, find and replace, or patch: missing {', '.join(sorted(TRIPLE - keys))}")
-    t = target(spec.get("test"), spec.get("py"))
+    t = target(spec.get("test"), spec.get("subtest"), spec.get("py"))
     pkg = spec.get("pkg")
     if t.py and pkg is not None:
         raise Refused("pkg names a Go package: not with py")
@@ -344,7 +425,7 @@ def read_patch(path: str) -> str:
 
 def single_spec(args: argparse.Namespace) -> dict[str, str]:
     """Single mode's flags as a batch entry's keys."""
-    keys = ("file", "find", "replace", "test", "py", "pkg")
+    keys = ("file", "find", "replace", "test", "subtest", "py", "pkg")
     spec = {key: getattr(args, key) for key in keys if getattr(args, key) is not None}
     if args.patch is not None:
         spec["patch"] = read_patch(args.patch)
@@ -358,13 +439,34 @@ def diff(c: Change) -> list[str]:
     return [line.rstrip("\n") for line in lines]
 
 
-def judge_go(result: gorun.Result, test: str) -> str:
+def judge_go(result: gorun.Result, t: Target) -> str:
+    """A subtest is judged by its own lines only: a parent FAIL without the subtest's own FAIL line is invalid."""
     text = f"{result.stdout}\n{result.stderr}"
     if "panic: test timed out after" in text:
         return "timeout"
-    if re.search(rf"^--- FAIL: {re.escape(test)} \(", text, re.MULTILINE):
+    if not t.levels:
+        if re.search(rf"^--- FAIL: {re.escape(t.test)} \(", text, re.MULTILINE):
+            return "red"
+        if (
+            result.exit == 0
+            and not result.timed_out
+            and re.search(rf"^--- PASS: {re.escape(t.test)} \(", text, re.MULTILINE)
+        ):
+            return "green"
+        return "invalid"
+    name = re.escape(t.full)
+    if not re.search(rf"^=== RUN\s+{name}$", text, re.MULTILINE):
+        return "invalid"
+    if re.search(rf"^\s*--- SKIP: {name} \(", text, re.MULTILINE):
+        return "invalid"
+    if re.search(rf"^\s*--- FAIL: {name} \(", text, re.MULTILINE):
         return "red"
-    if result.exit == 0 and not result.timed_out and re.search(rf"^--- PASS: {re.escape(test)} \(", text, re.MULTILINE):
+    if (
+        result.exit == 0
+        and not result.timed_out
+        and re.search(rf"^\s*--- PASS: {name} \(", text, re.MULTILINE)
+        and not re.search(r"^\s*--- FAIL: ", text, re.MULTILINE)
+    ):
         return "green"
     return "invalid"
 
@@ -464,20 +566,34 @@ def _overlay(e: Entry, scratch: str, top: str) -> str:
     return overlay
 
 
-def run_go(e: Entry, args: argparse.Namespace, scratch: str) -> tuple[str, gorun.Result]:
-    """The mutants built through -overlay; the tracked files are only ever read."""
+def run_go(e: Entry, args: argparse.Namespace, scratch: str) -> tuple[str, gorun.Result, list[str]]:
+    """One Go run of the entry's target through the overlay, after a probe that must count exactly one run of a
+    designated subtest; the `ran:` lines name every run at the subtest's depth."""
+    side = e.target
+    if side.levels:
+        probe = _go(e, args, scratch, pattern(side, probe=True))
+        n = len(runs(f"{probe.stdout}\n{probe.stderr}", side))
+        if n != 1:
+            return "invalid", probe, [f"probe: {n} subtests run as {side.full}"]
+    result = _go(e, args, scratch, pattern(side, probe=False))
+    names = ran(f"{result.stdout}\n{result.stderr}", side) if side.levels else []
+    return judge_go(result, side), result, [f"ran: {name}" for name in names]
+
+
+def _go(e: Entry, args: argparse.Namespace, scratch: str, run: str) -> gorun.Result:
+    """go test -run `run` with the mutants built through -overlay; the tracked files are only ever read."""
     top = os.getcwd()
-    argv = ["go", "test", f"-overlay={_overlay(e, scratch, top)}", "-count=1", "-v", "-run", f"^{e.target.test}$"]
+    argv = ["go", "test", f"-overlay={_overlay(e, scratch, top)}", "-count=1", "-v", "-run", run]
     argv += ["-timeout", args.timeout]
     if args.race:
         argv.append("-race")
     if args.cpu:
         argv += ["-cpu", args.cpu]
     argv.append("./" + e.pkg)
-    # PWD names the real directory, so go's working directory matches the overlay's key.
+    # PWD names the real directory, so go's working directory matches the overlay's key. Never -trimpath: frame
+    # tables and line-anchored tests match file paths in stack frames.
     env = {**os.environ, "PWD": top}
-    result = gorun.run(argv, cwd=top, env=env, timeout_s=seconds(args.timeout) + WALL_EXTRA_S)
-    return judge_go(result, e.target.test), result
+    return gorun.run(argv, cwd=top, env=env, timeout_s=seconds(args.timeout) + WALL_EXTRA_S)
 
 
 def _said(report: str, py: str) -> str:
@@ -506,19 +622,18 @@ def run_py(
 
 def run_one(
     e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, head: str
-) -> tuple[str, gorun.Result, str]:
-    """One run of the entry's designated test against its mutation: the outcome, the run, the shim's line."""
+) -> tuple[str, gorun.Result, list[str]]:
+    """One run of the entry's designated test against its mutation: the outcome, the run, and its notes (a Go
+    subtest's probe or `ran:` lines; an invalid Python run's shim line)."""
     if e.target.py:
-        return run_py(e, args, scratch, trees, head)
-    return (*run_go(e, args, scratch), "")
+        outcome, result, said = run_py(e, args, scratch, trees, head)
+        return outcome, result, [f"report: {said or '(no pyshim line)'}"] if outcome == "invalid" else []
+    return run_go(e, args, scratch)
 
 
-def details(e: Entry, outcome: str, result: gorun.Result, said: str) -> list[str]:
-    """What an invalid outcome shows: the tails and, for Python, the shim's report line."""
-    if outcome != "invalid":
-        return []
-    report = [f"report: {said or '(no pyshim line)'}"] if e.target.py else []
-    return [*tail(result), *report]
+def details(outcome: str, result: gorun.Result, notes: list[str]) -> list[str]:
+    """What a run shows before its outcome: the tails of an invalid one, then its notes."""
+    return [*(tail(result) if outcome == "invalid" else []), *notes]
 
 
 def record(python: bool) -> list[str]:
@@ -537,6 +652,8 @@ def header(e: Entry, head: str = "") -> list[str]:
         named = [f"py: {e.target.py}", *([f"copy: detached worktree at {head}"] if head else [])]
     else:
         named = [f"test: {e.target.test}", f"package: ./{e.pkg}"]
+        if e.target.levels:
+            named.append(f"subtest: {e.target.full}")
     return [*named, *(line for change in e.changes for line in diff(change))]
 
 
@@ -547,6 +664,7 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--replace")
     parser.add_argument("--patch")
     parser.add_argument("--test")
+    parser.add_argument("--subtest")
     parser.add_argument("--py")
     parser.add_argument("--pkg")
     parser.add_argument("--batch")
@@ -556,9 +674,11 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--repeat", type=int)
     parser.add_argument("--load", action="store_true")
     args = parser.parse_args(argv)
-    singles = (args.file, args.find, args.replace, args.patch, args.test, args.py, args.pkg, args.repeat)
+    singles = (args.file, args.find, args.replace, args.patch, args.test, args.subtest, args.py, args.pkg, args.repeat)
     if args.batch is not None and (any(value is not None for value in singles) or args.load):
-        raise Refused("--batch takes no --file, --find, --replace, --patch, --test, --py, --pkg, --repeat or --load")
+        raise Refused(
+            "--batch takes no --file, --find, --replace, --patch, --test, --subtest, --py, --pkg, --repeat or --load"
+        )
     if (args.repeat is None) != (not args.load):
         raise Refused("--repeat N and --load go together")
     if args.repeat is not None and args.repeat < 1:
@@ -575,8 +695,8 @@ def _print(lines: Sequence[str]) -> None:
 
 def single(e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, head: str) -> tuple[int, list[str]]:
     _print([*header(e, head), *record(bool(e.target.py))])
-    outcome, result, said = run_one(e, args, scratch, trees, head)
-    return (0 if outcome == "red" else 1), [*details(e, outcome, result, said), f"outcome: {outcome}"]
+    outcome, result, notes = run_one(e, args, scratch, trees, head)
+    return (0 if outcome == "red" else 1), [*details(outcome, result, notes), f"outcome: {outcome}"]
 
 
 def repeat(e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, head: str) -> tuple[int, list[str]]:
@@ -599,9 +719,9 @@ def batch(
     for index, e in enumerate(entries, 1):
         _print([f"entry {index}", f"note: {e.note}", *header(e)])
         with tempfile.TemporaryDirectory(dir=scratch) as own:
-            outcome, result, said = run_one(e, args, own, trees, head)
+            outcome, result, notes = run_one(e, args, own, trees, head)
         counts[outcome] += 1
-        _print([*details(e, outcome, result, said), f"entry {index}: {outcome}"])
+        _print([*details(outcome, result, notes), f"entry {index}: {outcome}"])
     summary = ", ".join(f"{name} {counts[name]}" for name in OUTCOMES)
     return (0 if counts["red"] == len(entries) else 1), [f"counts: {summary}"]
 
