@@ -27,7 +27,9 @@ package's contract may live in a package that imports it), or --py, a dotted uni
 "_"), QuoteMeta'd and anchored, so F3 never runs F30; a probe run first, each level also allowing go test's #NN
 suffix for a repeated name (two digits or more, so a sibling named `case#1` is another test), must count exactly one
 run, and each run at the subtest's depth is printed as `ran:`. Go
-runs `go test -json` in the worktree, never with -trimpath; a --py id runs as `python3.15 -I -B -X dev -W error
+runs `go test -json` in the worktree, never with -trimpath, and under --race every go command of the run (the
+compiled check's go list and go test) has CGO_ENABLED=1, as the gate's race row does, while without --race the
+environment's CGO_ENABLED passes through; a --py id runs as `python3.15 -I -B -X dev -W error
 <worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock.
 
 A batch entry holds the single-mode flags as keys (file, find, replace, patch, test, subtest, py, pkg; a leading
@@ -822,7 +824,7 @@ def compiled(trees: Worktrees, rev: str, pkg: str, race: bool) -> frozenset[str]
     compiles them."""
     wt = trees.at(rev, ())
     argv = ["go", "list", "-deps", "-test", "-json", *(["-race"] if race else []), "./" + pkg]
-    result = gorun.run(argv, cwd=wt, env={**os.environ, "PWD": wt}, timeout_s=LIST_TIMEOUT_S)
+    result = gorun.run(argv, cwd=wt, env=_go_env(wt, race), timeout_s=LIST_TIMEOUT_S)
     if result.exit != 0 or result.timed_out:
         first = "killed by the wall clock" if result.timed_out else (result.stderr.strip().splitlines() or [""])[0]
         raise Refused(f"go list ./{pkg} at {rev[:12]}: exit {result.exit}: {first}")
@@ -889,10 +891,15 @@ def _go(e: Entry, args: argparse.Namespace, wt: str, run: str) -> gorun.Result:
     if args.cpu:
         argv += ["-cpu", args.cpu]
     argv.append("./" + e.pkg)
-    # PWD names the worktree, so go reports its paths under it. Never -trimpath: frame tables and line-anchored
-    # tests match file paths in stack frames.
-    env = {**os.environ, "PWD": wt}
-    return gorun.run(argv, cwd=wt, env=env, timeout_s=seconds(e.timeout) + WALL_EXTRA_S)
+    # Never -trimpath: frame tables and line-anchored tests match file paths in stack frames.
+    return gorun.run(argv, cwd=wt, env=_go_env(wt, args.race), timeout_s=seconds(e.timeout) + WALL_EXTRA_S)
+
+
+def _go_env(wt: str, race: bool) -> dict[str, str]:
+    """A go command's environment in `wt`: PWD names the worktree, so go reports its paths under it. Under --race,
+    cgo is on (the race detector needs it), as the gate's race row turns it on for its own go only; without --race
+    the environment's CGO_ENABLED passes through untouched (the gate pins 0)."""
+    return {**os.environ, "PWD": wt, **({"CGO_ENABLED": "1"} if race else {})}
 
 
 def _said(report: str, py: str) -> str:

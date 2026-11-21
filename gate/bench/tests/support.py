@@ -105,14 +105,16 @@ def fake_go(directory: str, body: str) -> str:
 
 
 def logging_go(directory: str, env: dict[str, str]) -> tuple[str, dict[str, str]]:
-    """A fake go that appends its argv to a log and runs nothing, except `go list`, which it hands to the real go on
-    `env`'s PATH (mutate.py lists the files a test build compiles): the log's path, and `env` with the fake first on
-    PATH."""
+    """A fake go that appends its argv to a log, and its subcommand with its CGO_ENABLED to `<log>.env`, and runs
+    nothing, except `go list`, which it hands to the real go on `env`'s PATH (mutate.py lists the files a test build
+    compiles): the log's path, and `env` with the fake first on PATH."""
     log = os.path.join(directory, "go.log")
     real = shutil.which("go", path=env["PATH"])
     body = (
         "import os, sys\n"
         f"with open({log!r}, 'a', encoding='utf-8') as f:\n    f.write(' '.join(sys.argv) + '\\n')\n"
+        f"with open({log + '.env'!r}, 'a', encoding='utf-8') as f:\n"
+        "    f.write(sys.argv[1] + ' CGO_ENABLED=' + os.environ.get('CGO_ENABLED', '') + '\\n')\n"
         f"if sys.argv[1:2] == ['list']:\n    os.execv({real!r}, [{real!r}, *sys.argv[1:]])\n"
     )
     return log, {**env, "PATH": fake_go(directory, body) + os.pathsep + env["PATH"]}
