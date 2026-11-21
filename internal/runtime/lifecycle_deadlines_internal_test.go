@@ -565,8 +565,9 @@ func TestCloseReportsTheRemoveErrorItGotAtItsDeadline(t *testing.T) {
 	}
 }
 
-// Close drains an app, and its deadline passes as the drain ends with the recording written: the drain is complete,
-// so Close goes on to remove the app, and that Remove's error is Close's (removeFault, past the deadline).
+// Close drains an app, and its deadline passes as the drain ends with the recording written: the drain is complete
+// (the recording is kept, not Failed), so Close goes on to remove the app, and that Remove's error is Close's
+// (removeFault, past the deadline).
 func TestCloseRemovesAnAppWhoseDeadlinePassedAsItsDrainEnded(t *testing.T) {
 	t.Parallel()
 	ctx := cgCtx(t)
@@ -578,17 +579,22 @@ func TestCloseRemovesAnAppWhoseDeadlinePassedAsItsDrainEnded(t *testing.T) {
 	app := cgApp(t, func(event.Event) error { return nil })
 	app.Sinks = nil
 	app.Recorder = h
-	ldStarted(t, ctx, r, app)
+	id := ldStarted(t, ctx, r, app)
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	r.recordingWait = func() {
 		cancel()
-		cgUntil(ctx, func() bool { _, s, _ := h.counts(); return s == 1 && ldRecorderIdle(self) })
+		if !cgUntil(ctx, func() bool { _, s, _ := h.counts(); return s == 1 && ldRecorderIdle(self) }) {
+			t.Error("the recorder never wrote the stop and parked: the ceiling")
+		}
 	}
 	errFault := errors.New("the planted Remove fault")
 	r.removeFault = func(AppID) error { return errFault }
 	if err := r.Close(cctx); !errors.Is(err, errFault) || err.Error() != errFault.Error() {
 		t.Errorf("Close: %v; want the Remove's error (the drain ended complete, so Close removes the app)", err)
+	}
+	if rs := r.appList()[id].rec.stats(); rs.Failed {
+		t.Errorf("recording %+v; want it kept (the stop was written as the deadline passed)", rs)
 	}
 }
 
@@ -671,7 +677,8 @@ func TestActivateIsErrClosedOnceCloseHasBegun(t *testing.T) {
 	let := sync.OnceFunc(func() { close(hold) })
 	r.addHold = func() { <-hold }
 	added := make(chan error, 1)
-	go func() { _, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil })); added <- err }()
+	app := cgApp(t, func(event.Event) error { return nil })
+	go func() { _, err := r.Add(ctx, app); added <- err }()
 	if !cgUntil(ctx, func() bool { _, n := r.inflight.cgRead(); return n == 1 }) {
 		t.Fatal("the Add never entered the in-flight gate: the ceiling")
 	}

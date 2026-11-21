@@ -5,6 +5,8 @@ package runtime
 // goroutine is observed through its queue's channels and its Recorder. Prefix: ld (lifecycle_deadlines' helpers).
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -40,8 +42,8 @@ func TestCloseStopsAnIdleRecorderItGaveUpOn(t *testing.T) {
 		t.Fatal("the recorder never wrote its header and went idle: the ceiling")
 	}
 	q := r.appList()[id].rec
-	if err := r.Close(ldExpired()); err == nil {
-		t.Fatal("Close with an expired ctx: nil; want ctx.Err()")
+	if err := r.Close(ldExpired()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Close with an expired ctx: %v; want context.Canceled", err)
 	}
 	ldClose(t, r)
 	ldWait(t, ctx, q.returned, "the recorder goroutine never returned")
@@ -54,6 +56,7 @@ func TestCloseStopsAnIdleRecorderItGaveUpOn(t *testing.T) {
 // flushes, then settles, and stays live (it returns only at its stop); a drain after it is not cut.
 func TestAnOverflowedRecordingWritesItsQueuedRecordsThenSettles(t *testing.T) {
 	t.Parallel()
+	self := rsSelfID()
 	ctx := cgCtx(t)
 	w, r, id := rdOverflowed(t, ctx)
 	t.Cleanup(func() { w.let(); ldClose(t, r) })
@@ -75,6 +78,9 @@ func TestAnOverflowedRecordingWritesItsQueuedRecordsThenSettles(t *testing.T) {
 	st, err := r.Stats(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !cgUntil(ctx, func() bool { return ldRecorderIdle(self) }) {
+		t.Error("the recorder goroutine is not parked in its select after the drain; want it live until its stop")
 	}
 	if rs := st.Recording[id]; rs.Records != 65 || strings.Contains(rs.Err, "incomplete") {
 		t.Errorf("Recording %+v after the drain; want 65 records and no cut", rs)
