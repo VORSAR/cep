@@ -64,6 +64,13 @@ class TreeChild(support.ToolchainTest):
                 self.assertEqual(got.code, UNREADABLE, got.stderr)
                 self.assertIn("Permission denied", got.stderr)
 
+    def test_no_argument_prints_the_usage_line_and_exits_2(self):
+        got = self.child()
+        self.assertEqual((got.code, got.lines), (2, []), got.stderr)
+        self.assertEqual(
+            got.stderr, "treehash: usage: treehash.py <root> | treehash.py --details <root> [<root> ...]\n"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

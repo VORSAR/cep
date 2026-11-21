@@ -8,9 +8,9 @@ The first form resolves `real = os.path.realpath(root)` once and prints three li
 and over the same resolved path, so a hand-off lists the tree that was hashed, never what a link named afterwards
 (proof-world speed-up design note §3.2, QB-S9, CA-L1). The second form prints, for each root in order, its realpath
 and its details: the reader's one capped child for every tree it would take (CA-L2). An OSError prints its text on
-stderr and exits 3 in either form. Parity starts it in the run's parity group with a cap of its own
-(`parity.tree_digest`, `parity.tree_details_of`), so a walk stuck on a slow or broken disk can be stopped and
-killed, which a walk in the runner's own process could not (BA10).
+stderr and exits 3 in either form. No argument prints the usage line on stderr and exits 2. Parity starts it in the
+run's parity group with a cap of its own (`parity.tree_digest`, `parity.tree_details_of`), so a walk stuck on a slow
+or broken disk can be stopped and killed, which a walk in the runner's own process could not (BA10).
 """
 
 import os
@@ -22,6 +22,8 @@ from gate.toolchain import manifest
 
 UNREADABLE = 3  # parity.TREE_UNREADABLE: the one failed exit parity reads as a damaged tree
 DETAILS = "--details"
+USAGE = 2  # no argument: the usage line on stderr, never a traceback
+USAGE_LINE = "treehash: usage: treehash.py <root> | treehash.py --details <root> [<root> ...]"
 
 
 def _lines(argv: list[str]) -> list[bytes]:
@@ -37,6 +39,9 @@ def _lines(argv: list[str]) -> list[bytes]:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) < 2:
+        print(USAGE_LINE, file=sys.stderr, flush=True)
+        return USAGE
     try:
         lines = _lines(argv)
     except OSError as e:
