@@ -257,6 +257,14 @@ class Base(unittest.TestCase):
         self.assertFalse(os.path.exists(self.log), "a go command ran before the refusal")
         return out
 
+    def write_batch(self, *entries: dict[str, object]) -> str:
+        """The entries in a batch file of their own (a name no other call of this test reuses)."""
+        fd, path = tempfile.mkstemp(suffix=".json", dir=self.tmp)
+        os.close(fd)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(list(entries), f)
+        return path
+
     def write_patch(self, text: str) -> str:
         """The diff in a file of its own (a name no other call of this test reuses)."""
         fd, path = tempfile.mkstemp(suffix=".diff", dir=self.tmp)
@@ -387,6 +395,39 @@ class Refusals(Base):
             json.dump([good, {**good, "extra": 1}], f)
         out = self.refused("--batch", path)
         self.assertIn("entry 2", out)
+
+    def test_an_unknown_key_or_an_expect_key_in_a_plain_batch_is_refused(self):
+        head = self.git("rev-parse", "HEAD")
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        sides = {"id": "A", "old_rev": head, "new_rev": head, "expect": {"old": "red", "new": "red"}}
+        cases = (
+            ("bogus", "--expect", {**plant, **sides, "bogus": "x"}, "unknown keys ['bogus']"),
+            ("old_rev in a plain batch", "--batch", {**plant, "old_rev": head}, "an --expect key in a plain batch"),
+            ("find with patch", "--batch", {**plant, "patch": NEG_PATCH}, "patch: not both"),
+            ("test with py", "--batch", {**plant, "py": "pkg.tests.Calc"}, "test or py: not both"),
+            ("control with find", "--expect", {**plant, **sides, "control": True}, "a control entry has no mutation"),
+        )
+        for name, mode, spec, fragment in cases:
+            with self.subTest(name):
+                out = self.refused(mode, self.write_batch(spec))
+                self.assertIn(fragment, out.splitlines()[-1])
+        with self.subTest("a timeout key in an --expect batch is accepted"):
+            code, out = self.mutate(
+                "--expect", self.write_batch({**plant, **sides, "timeout": "30s"}), env=self.fake_env
+            )
+            self.assertEqual(code, 1, out)  # the fake go prints nothing: invalid, off its expectation
+            self.assertNotIn("error: refused", out)
+
+    def test_a_bad_entry_timeout_is_refused_before_any_build(self):
+        # No subTest: each failing subTest is a failure of its own, and --py's red is exactly one.
+        for value in ("0s", "soon", -1, True):
+            out = self.refused(
+                "--batch",
+                self.write_batch(
+                    {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd", "timeout": value}
+                ),
+            )
+            self.assertIn(f"timeout {value!r} ", out.splitlines()[-1], value)
 
 
 def ran(out: str) -> list[str]:
@@ -811,6 +852,18 @@ class Forms(Base):
 
 
 class Batch(Base):
+    def test_an_entry_timeout_replaces_the_runs_timeout_for_that_entry(self):
+        hang = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestHang"}
+        code, out = self.mutate(
+            "--batch", self.write_batch({**hang, "timeout": "2s"}, {**hang, "timeout": 3}), "--timeout", "5s"
+        )
+        self.assertIn("timeout: 2s", out)
+        self.assertIn("timeout: 3s", out)
+        self.assertNotIn("timeout: 5s", out)
+        self.assertIn("entry 1: timeout", out)
+        self.assertIn("entry 2: timeout", out)
+        self.assertEqual(code, 1, out)
+
     def test_red_green_invalid_counts_and_exit_1(self):
         path = os.path.join(self.tmp, "batch.json")
         entries = [
@@ -827,6 +880,93 @@ class Batch(Base):
         self.assertIn("entry 3: invalid", out)
         self.assertIn("note: zero misses it", out)
         self.assertEqual(out.splitlines()[-1], "counts: red 1, green 1, timeout 0, invalid 1", out)
+
+
+class Expect(Base):
+    """--expect: each entry at its old and its new revision, in one worktree per revision reset between entries."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        support.write(
+            self.repo,
+            {
+                "pkg/__init__.py": "",
+                "pkg/calc.py": PY_CALC,
+                "pkg/tests/__init__.py": "",
+                "pkg/tests/test_calc.py": PY_TESTS,
+            },
+        )
+        os.makedirs(os.path.join(self.repo, "gate", "runner"))
+        shutil.copyfile(
+            os.path.join(support.REPO, "gate", "runner", "pyshim.py"),
+            os.path.join(self.repo, "gate", "runner", "pyshim.py"),
+        )
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "python")
+        self.rev1 = self.git("rev-parse", "HEAD")
+        tests = os.path.join(self.repo, "m", "m_test.go")
+        with open(tests, encoding="utf-8") as f:
+            text = f.read()
+        weak = '\t\tt.Fatal("Add(0, 0) != 0")\n\t}\n'
+        self.assertEqual(text.count(weak), 1)
+        with open(tests, "w", encoding="utf-8") as f:
+            f.write(text.replace(weak, weak + '\tif Add(2, 3) != 5 {\n\t\tt.Fatal("Add(2, 3) != 5")\n\t}\n'))
+        self.git("commit", "-q", "-am", "TestWeak strengthened")
+        self.rev2 = self.git("rev-parse", "HEAD")
+
+    def revs(self) -> dict[str, str]:
+        return {"old_rev": self.rev1, "new_rev": self.rev2}
+
+    def test_an_entry_off_its_expectation_exits_1_naming_it_and_the_control_reads_the_real_code(self):
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestWeak"}
+        weak = {"test": "TestWeak", "pkg": "m"}
+        path = self.write_batch(
+            {"id": "A", **plant, **self.revs(), "expect": {"old": "green", "new": "red"}},
+            {"id": "B", **plant, **self.revs(), "expect": {"old": "red", "new": "red"}},
+            {"id": "C", "control": True, **weak, **self.revs(), "expect": {"old": "green", "new": "green"}},
+            {"id": "D", "control": True, **weak, **self.revs(), "expect": {"old": "red", "new": "green"}},
+            {
+                "id": "E",
+                "file": "pkg/calc.py",
+                "find": PY_FIND,
+                "replace": "return a - b",
+                "old_py": CALC + "test_weak",
+                "new_py": CALC + "test_add",
+                **self.revs(),
+                "expect": {"old": "green", "new": "red"},
+            },
+        )
+        code, out = self.mutate("--expect", path)
+        self.assertEqual(code, 1, out)
+        old, new = self.rev1[:12], self.rev2[:12]
+        self.assertIn(f"entry A new {new}: red (expected red)", out)
+        self.assertIn(f"entry C old {old}: green (expected green)", out)  # after A's and B's plants at both revisions
+        self.assertIn(f"entry C new {new}: green (expected green)", out)
+        self.assertIn(f"entry E old {old}: green (expected green)", out)
+        self.assertIn(f"entry E new {new}: red (expected red)", out)
+        self.assertEqual(out.splitlines()[-1], "expect: 5 entries, 3 as expected; differing: B, D", out)
+
+    def test_an_entry_without_a_revision_or_naming_an_absent_one_is_refused(self):
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestWeak"}
+        expect = {"expect": {"old": "green", "new": "red"}}
+        cases = (
+            ("missing old_rev", {"id": "A", **plant, "new_rev": self.rev2, **expect}, "missing old_rev"),
+            (
+                "40 zeros",
+                {"id": "Z", "control": True, "test": "TestWeak", "pkg": "m", "old_rev": "0" * 40, "new_rev": self.rev2}
+                | expect,
+                "names no commit",
+            ),
+            (
+                "a 12-hex prefix",
+                {"id": "P", **plant, "old_rev": self.rev1[:12], "new_rev": self.rev2, **expect},
+                "not a full commit id",
+            ),
+        )
+        for name, spec, fragment in cases:
+            with self.subTest(name):
+                out = self.refused("--expect", self.write_batch(spec))
+                self.assertIn(fragment, out.splitlines()[-1])
 
 
 class Repeat(Base):
