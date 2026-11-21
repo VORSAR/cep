@@ -90,6 +90,52 @@ func TestHold(t *testing.T) {
 \t}
 \t<-make(chan struct{})
 }
+
+func TestTable(t *testing.T) {
+\tcases := []struct {
+\t\tname       string
+\t\ta, b, want int
+\t}{
+\t\t{"F3", 2, 3, 5},
+\t\t{"F30", 0, 0, 0},
+\t\t{"E-SYN-001/not a participle error", 1, 2, 3},
+\t\t{"x+y (meta)", 0, 0, 0},
+\t\t{"dup", 0, 0, 0},
+\t\t{"dup", 0, 0, 0},
+\t}
+\tfor _, c := range cases {
+\t\tt.Run(c.name, func(t *testing.T) {
+\t\t\tif Add(c.a, c.b) != c.want {
+\t\t\t\tt.Fatalf("Add(%d, %d) != %d", c.a, c.b, c.want)
+\t\t\t}
+\t\t})
+\t}
+}
+
+func TestSetup(t *testing.T) {
+\tif Add(1, 1) != 2 {
+\t\tt.Fatal("setup: Add(1, 1) != 2")
+\t}
+\tt.Run("after setup", func(t *testing.T) {})
+}
+
+func TestSkips(t *testing.T) {
+\tt.Run("skipped", func(t *testing.T) {
+\t\tif Add(2, 3) == 5 {
+\t\t\tt.Skip("skipped while Add(2, 3) == 5")
+\t\t}
+\t})
+}
+
+func TestSpaces(t *testing.T) {
+\tfor _, name := range []string{"nb\\u00a0sp", "em\\u2003sp"} {
+\t\tt.Run(name, func(t *testing.T) {
+\t\t\tif Add(2, 3) != 5 {
+\t\t\t\tt.Fatal("Add(2, 3) != 5")
+\t\t\t}
+\t\t})
+\t}
+}
 """
 
 NEG = """\
@@ -341,6 +387,87 @@ class Refusals(Base):
             json.dump([good, {**good, "extra": 1}], f)
         out = self.refused("--batch", path)
         self.assertIn("entry 2", out)
+
+
+def ran(out: str) -> list[str]:
+    """The `ran:` lines a run printed, in order."""
+    return [line for line in out.splitlines() if line.startswith("ran: ")]
+
+
+class Subtests(Base):
+    """--subtest: the level path rewritten as go test names it, QuoteMeta'd and anchored per level, a probe counting
+    the runs first, and the subtest's own FAIL, PASS or SKIP line judged."""
+
+    def subtest(self, test: str, name: str, replace: str = CAUGHT) -> tuple[int, str]:
+        return self.single(test, replace, "--subtest", name)
+
+    def test_a_subtest_failing_against_the_plant_is_red_while_its_sibling_passes(self):
+        code, out = self.subtest("TestTable", "F3")
+        self.assertEqual(code, 0, out)
+        self.assertIn("subtest: TestTable/F3", out)
+        self.assertEqual(ran(out), ["ran: TestTable/F3"], out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_a_subtest_passing_while_its_sibling_fails_is_green(self):
+        code, out = self.subtest("TestTable", "F30")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_subtest_that_does_not_exist_is_invalid(self):
+        code, out = self.subtest("TestTable", "NoSuch")
+        self.assertEqual(code, 1, out)
+        self.assertIn("probe: 0 subtests run as TestTable/NoSuch", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+
+    def test_a_name_with_a_slash_spaces_or_metacharacters_runs_exactly_itself(self):
+        cases = (
+            ("E-SYN-001/not a participle error", "red", "TestTable/E-SYN-001/not_a_participle_error"),
+            ("x+y (meta)", "green", "TestTable/x+y_(meta)"),
+        )
+        for name, word, full in cases:
+            with self.subTest(name):
+                code, out = self.subtest("TestTable", name)
+                self.assertEqual(ran(out), [f"ran: {full}"], out)
+                self.assertEqual(out.splitlines()[-1], f"outcome: {word}", out)
+
+    def test_f3_never_runs_its_sibling_f30(self):
+        code, out = self.subtest("TestTable", "F3")
+        self.assertEqual(ran(out), ["ran: TestTable/F3"], out)
+
+    def test_two_subtests_rewritten_to_one_name_are_invalid(self):
+        code, out = self.subtest("TestTable", "dup")
+        self.assertEqual(code, 1, out)
+        self.assertIn("probe: 2 subtests run as TestTable/dup", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+
+    def test_a_parent_failing_before_t_run_is_invalid_never_red(self):
+        code, out = self.subtest("TestSetup", "after setup")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+
+    def test_go_spaces_in_a_subtest_name_are_rewritten_as_go_test_names_them(self):
+        """U+00A0 and U+2003 (Go spaces, not ASCII): the names go test itself prints are the ones mutate.py runs."""
+        done = subprocess.run(
+            ["go", "test", "-count=1", "-v", "-run", "^TestSpaces$", "./m"],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            timeout=300,
+        )
+        names = re.findall(r"(?m)^=== RUN\s+(TestSpaces/\S+)$", done.stdout.decode("utf-8", errors="replace"))
+        self.assertEqual(names, ["TestSpaces/nb_sp", "TestSpaces/em_sp"], done.stdout)  # go test's own rewriting
+        for raw, go_name in zip(("nb\u00a0sp", "em\u2003sp"), names, strict=True):
+            with self.subTest(go_name):
+                code, out = self.subtest("TestSpaces", raw)
+                self.assertEqual(code, 0, out)
+                self.assertIn(f"subtest: {go_name}", out)
+                self.assertEqual(ran(out), [f"ran: {go_name}"], out)
+                self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_a_skipped_subtest_is_invalid(self):
+        code, out = self.subtest("TestSkips", "skipped", "return b + a")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
 
 
 TWO_HUNKS = """\
