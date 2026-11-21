@@ -141,9 +141,17 @@ class Internal(Exception):
     """Exit 2: a git step of the run failed, or one of the run's worktrees outlived it."""
 
 
+class Helped(Exception):
+    """--help printed the usage: exit 0."""
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise Refused(f"usage: {message}")
+
+    def exit(self, status: int = 0, message: str | None = None) -> NoReturn:
+        """Reached only from --help, after the usage is printed (error is overridden above)."""
+        raise Helped
 
 
 @dataclasses.dataclass(frozen=True)
@@ -922,6 +930,8 @@ def main(argv: Sequence[str]) -> int:
     term.install()
     try:
         code, lines = mutate(_parse_args(argv))
+    except Helped:
+        return 0
     except Refused as e:
         code, lines = 2, [f"error: refused: {e}"]
     except BaseException as e:  # every other failure, a stop included, is exit 2 with its reason

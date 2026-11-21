@@ -123,6 +123,16 @@ class Verdict(unittest.TestCase):
         self.assertEqual({tuple(a) for _, kind, a in log if kind == "time"}, {tuple(time_argv)})
         self.assertEqual({tuple(a) for _, kind, a in log if kind == "alloc"}, {tuple(alloc_argv)})
 
+    def test_a_benchmark_reported_twice_is_named_alone(self):
+        twice = {
+            "out": support.output({"BenchmarkA": (1000,), "BenchmarkB": (10,)})
+            + support.output({"BenchmarkA": (1000,)})
+        }
+        once = {"out": support.output({"BenchmarkA": (1000,), "BenchmarkB": (10,)})}
+        code, out = self.compare(*self.pair([twice], [once]))
+        self.assertEqual(code, 2, out)
+        self.assertTrue(out.splitlines()[-1].endswith("reported a benchmark twice: BenchmarkA"), out)
+
     def test_errors_are_exit_2(self):
         missing_b = {"out": support.output({"BenchmarkA": (1000,), "BenchmarkB": (10,)})}
         cases = {

@@ -160,6 +160,13 @@ class Fake(Base):
         self.assertNotIn("goroutine", out)
         self.assertHogsGone(out)
 
+    def test_help_prints_the_usage_and_exits_0_before_any_go_command(self):
+        code, out = self.load(["--help"], self.fake(""))
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("usage: gate/bench/load.py "), out)
+        self.assertNotIn("error:", out)
+        self.assertFalse(os.path.exists(self.log), "a go command ran")
+
     def test_no_test_ran_is_exit_2(self):
         code, out = self.load(["--hogs", "2", "--", "./..."], self.fake(event("pass")))
         self.assertEqual(code, 2, out)

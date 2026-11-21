@@ -9,9 +9,10 @@ saying `escapes to heap` or `moved to heap` is assigned to the function its "...
 carries no function takes the one named by the latest "in F:" (or "for F") line printed before it at the same
 position: a value method and its generated pointer wrapper share positions, and each function's summary lines
 follow its own detail lines. With none, it is exit 2.
-The group is the original function, its closures, and every --helper; a helper the compiler inlined is counted
-through its callers only, since each inlined copy is reported again in the caller. Lines are compared as texts,
-without the position prefix and the " in F:" suffix. Exit 1 if the after side has a text, or more of one, that the
+The group is the original function, its closures, and every --helper, on each side over the members that exist at
+that revision; a helper the compiler inlined is counted through its callers only, since each inlined copy is
+reported again in the caller. Lines are compared as texts, without the position prefix and the " in F:" suffix.
+Exit 1 if the after side has a text, or more of one, that the
 before side lacks. `leaking param` lines are a diagnostic, listed on each side for every group member that exists
 at that revision. A new one (a text, or more of one, the after side has and the before side lacks) costs only when
 it is the original function's own and the parameter it names, the first word after "leaking param:" or "leaking
@@ -333,11 +334,12 @@ def check(args: argparse.Namespace, repo: str) -> tuple[int, list[str]]:
     helpers = [resolve(h, after.functions, args.after) for h in args.helper]
     # An inlined helper's escapes are reported again at each call site, in its caller's "in F:" lines.
     counted = {original_after, *(h for h in helpers if h not in after.inlined)}
+    counted_before = {original_before, *(h for h in helpers if h in before.functions and h not in before.inlined)}
     lines = [f"group at {args.after}: {', '.join([original_after, *helpers])}"]
     for h in helpers:
         if h in after.inlined:
             lines.append(f"helper {h} is inlined: counted through its callers")
-    old, new = _texts(before, {original_before}), _texts(after, counted)
+    old, new = _texts(before, counted_before), _texts(after, counted)
     for side, counter in (("before", old), ("after", new)):
         for text in sorted(counter):
             lines.append(f"heap {side}: {text} x{counter[text]}")

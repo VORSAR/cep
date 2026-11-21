@@ -36,9 +36,17 @@ class Error(Exception):
     """Exit 2: the run cannot be judged."""
 
 
+class Helped(Exception):
+    """--help printed the usage: exit 0."""
+
+
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise Error(f"usage: {message}")
+
+    def exit(self, status: int = 0, message: str | None = None) -> NoReturn:
+        """Reached only from --help, after the usage is printed (error is overridden above)."""
+        raise Helped
 
 
 def _events(text: str) -> Iterator[dict[str, object]]:
@@ -144,6 +152,8 @@ def main(argv: Sequence[str]) -> int:
     term.install()
     try:
         code, lines = load(_parse_args(argv))
+    except Helped:
+        return 0
     except Error as e:
         code, lines = 2, [f"error: {e}"]
     except BaseException as e:  # every other failure, a stop included, is exit 2 with its reason

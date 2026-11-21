@@ -180,6 +180,16 @@ func store(p *int) { sink = p }
 func Outer(p *int) { store(p) }
 """
 
+HEAPHELPER_BEFORE = (
+    "package m\n\nvar sink *int\n\n//go:noinline\nfunc store(n int) {\n\tx := n\n\tsink = &x\n}\n\n"
+    "func Outer(n int) { store(n) }\n"
+)
+
+HEAPHELPER_AFTER = (
+    "package m\n\nvar sink *int\n\n//go:noinline\nfunc store(n int) {\n\tx := n\n\tsink = &x\n}\n\n"
+    "//go:noinline\nfunc fresh(n int) { store(n) }\n\nfunc Outer(n int) { fresh(n) }\n"
+)
+
 HELPER_AFTER = """\
 package m
 
@@ -307,6 +317,16 @@ class Escapes(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("new leak of Keep's own parameter: leaking param: q", out.splitlines())
         self.assertTrue(out.splitlines()[-1].startswith("verdict: new heap lines in Keep's group"), out)
+
+    def test_a_helper_that_existed_before_with_its_own_heap_line_is_no_cost(self):
+        before = self.commit({"m.go": HEAPHELPER_BEFORE})
+        after = self.commit({"m.go": HEAPHELPER_AFTER})
+        code, out = self.escapes(before, after, "Outer", "store", "fresh")
+        self.assertEqual(code, 0, out)
+        lines = out.splitlines()
+        self.assertIn("heap before: moved to heap: x x1", lines)
+        self.assertIn("heap after: moved to heap: x x1", lines)  # the witness: the helper has a heap line
+        self.assertEqual(lines[-1], "verdict: no new heap line in Outer's group")
 
     def test_the_before_side_lists_the_helpers_that_existed_before(self):
         before = self.commit({"m.go": HELPER_BEFORE})
