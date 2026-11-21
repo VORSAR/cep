@@ -182,8 +182,14 @@ class LeaveAlone(unittest.TestCase):
 
     def test_a_repository_gitnexus_does_not_index_is_left_alone(self):
         world = World(self, indexed=None)
+        other = os.path.join(world.root, "other")
+        os.mkdir(other)
+        with open(os.path.join(world.home, "registry.json"), "w") as f:  # another repository's row, its storage ours
+            json.dump([{"name": "other", "path": other, "storagePath": world.storage, "lastCommit": "0" * 40}], f)
+        # A defect that started a run here would leave a follow-up writing into the world: wait for it before removal.
+        self.addCleanup(lambda: os.path.exists(world.pidfile()) and world.started())
         self.assertEqual(world.run(world.prompt()), 0)
-        self.assertFalse(os.path.exists(world.out))
+        self.assert_nothing_started(world)
 
     def test_a_bash_call_without_git_never_starts_a_run(self):
         world = World(self, indexed="0" * 40)
@@ -208,10 +214,6 @@ class LeaveAlone(unittest.TestCase):
             f.write("{broken")
         self.assertEqual(world.run(world.prompt()), 0)
         self.assert_nothing_started(world)
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 # --------------------------------------------------------------------------------------------- the restart (2026-11-11)
@@ -318,3 +320,7 @@ def _alive(pid: int) -> bool:
 def _kill_quietly(pid: int) -> None:
     with contextlib.suppress(OSError):
         os.kill(pid, 9)
+
+
+if __name__ == "__main__":
+    unittest.main()
