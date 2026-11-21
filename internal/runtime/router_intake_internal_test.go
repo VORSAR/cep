@@ -518,7 +518,8 @@ func TestShardAppliesAnAdmissionOnlyToOnArrivalRules(t *testing.T) {
 // broadcast's messages carry no admission (admStream -1), so process applies none: a zero admStream would be stream
 // 0's admission at 0 (a message's adm is 0 unless set), which the on-arrival rule's clock would take. Reached only
 // through broadcast's callers, never called directly (so broadcast's signature is free to change): ingest's iTick
-// (tickApp) and iDrain (drainApp), at 4 shards, each message processed in place by its shard. Both the messages'
+// (tickApp) and iDrain (drainApp) here, and Sync.End in TestSyncEndBroadcastsAWalkWithNoAdmission, at 4 shards, each
+// message processed in place by its shard. Both the messages'
 // field and its effect on every shard's rule are checked, and the effect alone catches a zero admission in each
 // subtest: no event is admitted, so the rule's clock stays MinInt64 unless an admission lands. The tick's one
 // advance (stream 0 quiet 60 s past IdleAfter 1 s: its floor, start cgT0 plus the 60 000 ms elapsed, delay 0) is a
@@ -560,6 +561,27 @@ func TestBroadcastCarriesNoAdmission(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Sync.End, replay's final walk, is broadcast's third caller: its one shard's message carries no admission either
+// (admStream -1). The final walk itself reaches the on-arrival rule (owner D1 of S3.2b-1), so its clock is at the end
+// whatever the admission was, and only the message's field shows a missing admission.
+func TestSyncEndBroadcastsAWalkWithNoAdmission(t *testing.T) {
+	t.Parallel()
+	w := igBuild(t, 1, 1, nil)
+	s, err := NewSync(w.a.app, cgT0, false, func(event.Event) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var adm []int
+	deliver := s.rt.deliver
+	s.rt.deliver = func(sid int, m message) { adm = append(adm, m.admStream); deliver(sid, m) }
+	if adv := s.End(); len(adv) == 0 {
+		t.Fatal("End advanced nothing: no walk to check")
+	}
+	if !slices.Equal(adm, []int{-1}) {
+		t.Errorf("End's messages' admStream %v; want [-1]", adm)
 	}
 }
 

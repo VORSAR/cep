@@ -49,7 +49,7 @@ func TestTickRefusesATimeARecordingCannotWrite(t *testing.T) {
 			t.Errorf("Tick(%d) accepted; want an error", at)
 		}
 	}
-	if err := r.Tick(context.Background(), rtAt(5)); err != nil {
+	if err := r.Tick(ctx, rtAt(5)); err != nil {
 		t.Errorf("Tick at an ordinary time: %v", err)
 	}
 }

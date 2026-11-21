@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/vorsar/cep/internal/clock"
@@ -118,9 +119,9 @@ func TestSendRefusesNonFiniteFloat(t *testing.T) {
 	}
 	r := rtStart(t, runtime.Config{Shards: 1}, app)
 	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		e := event.Event{StreamID: 0, Ts: rtAt(1), Values: []event.Value{rtStr("a"), {Kind: event.TFloat, F: f}}}
-		if err := r.Send(ctx, 0, e); err == nil {
-			t.Errorf("Send accepted the float %v", f)
+		e := rtEv(0, rtAt(1), rtStr("a"), event.Value{Kind: event.TFloat, F: f})
+		if err := r.Send(ctx, 0, e); err == nil || !strings.Contains(err.Error(), "NaN and infinities are never values") {
+			t.Errorf("Send of the float %v: %v; want the non-finite refusal", f, err)
 		}
 	}
 }

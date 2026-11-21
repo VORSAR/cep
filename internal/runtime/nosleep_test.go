@@ -1,8 +1,5 @@
 package runtime_test
 
-// TestNoSleepOrPollingInRuntime (design s3-3-1 §2.5 MUST NOT; QA's T8): the package's non-test files use no
-// time.Sleep, time.After or time.Tick anywhere; tick() may use time.NewTicker. go/parser over the sources.
-
 import (
 	"go/ast"
 	"go/parser"
@@ -13,6 +10,9 @@ import (
 	"testing"
 )
 
+// TestNoSleepOrPollingInRuntime (design s3-3-1 §2.5 MUST NOT; QA's T8): the package's non-test files use no
+// time.Sleep, time.After, time.Tick or time.AfterFunc anywhere, under whatever name they import "time" (a dot import
+// is refused); tick() may use time.NewTicker. go/parser over the sources.
 func TestNoSleepOrPollingInRuntime(t *testing.T) {
 	t.Parallel()
 	entries, err := os.ReadDir(".")
@@ -32,12 +32,26 @@ func TestNoSleepOrPollingInRuntime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
+		names := map[string]bool{}
+		for _, im := range f.Imports {
+			if im.Path.Value != `"time"` {
+				continue
+			}
+			switch {
+			case im.Name == nil:
+				names["time"] = true
+			case im.Name.Name == ".":
+				t.Errorf("%s: a dot import of time hides its calls from this check", name)
+			case im.Name.Name != "_":
+				names[im.Name.Name] = true
+			}
+		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			sel, ok := n.(*ast.SelectorExpr)
 			if !ok {
 				return true
 			}
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name == "time" && banned[sel.Sel.Name] {
+			if x, ok := sel.X.(*ast.Ident); ok && names[x.Name] && banned[sel.Sel.Name] {
 				t.Errorf("%s: time.%s is a sleep or a poll (MUST NOT, design s3-3-1 §2.5)", fset.Position(sel.Pos()), sel.Sel.Name)
 			}
 			return true
