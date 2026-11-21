@@ -519,7 +519,10 @@ class PrintedParts(unittest.TestCase):
     to age is placed by a decision that names it; an undecided issue that would age then is red here first. The parts,
     the known issues and the decisions are the committed files', read live; the parts are derived from the printed
     order, not pinned, so printing or closing a part needs no edit here. The closed marks are the fixture's; the
-    decisions reader is the tracked Markdown, as RealTree reads it."""
+    decisions reader is the tracked Markdown, as RealTree reads it. It reads the live plan on purpose: RealTree judges
+    today's marker only, so this is the one check of decision 2 on the real files. Its witness is a made-up issue,
+    first seen at the order's first row and named by no decision, so closing every real known issue cannot turn it
+    red."""
 
     def test_at_the_last_parts_close_aging_names_no_undecided_issue(self):
         def read_repo(rel: str) -> str:
@@ -547,17 +550,32 @@ class PrintedParts(unittest.TestCase):
         )
         named = sorted({line.split()[1] for line in lines if AGE in line})
         self.assertEqual(named, [])
-        # Witness: the same order without the decisions file names some issue, so the rule still bites here.
+
+        # Witness: two made-up issues first seen at the order's first row age at this marker, so rule 1 still bites
+        # here whatever the live known issues hold. WITNESS-1 names no decision; WITNESS-2 names a real decisions.md
+        # section that does not name it, so a decisions reader that accepts too much is red here too.
+        def made_up(id: str, decision: str) -> dict[str, object]:
+            return {
+                "id": id,
+                "first_seen": ids[0],
+                "forward": "",
+                "decision": decision,
+                "correctness": False,
+                "opened": "2026-01-01",
+            }
+
         undecided = aging.aged(
-            entries,
+            [
+                made_up("WITNESS-1", ""),
+                made_up("WITNESS-2", f"{DECISIONS}#owner-decisions-2026-11-01--phase-1-architecture-ratification"),
+            ],
             order,
             marker,
             today=date(2026, 12, 1),
-            read=lambda p: None if p.endswith("decisions.md") else (read_repo(p) if p in tracked else None),
+            read=lambda p: read_repo(p) if p in tracked else None,
         )
-        witnessed = {line.split()[1] for line in undecided if AGE in line}
-        self.assertTrue(witnessed, "without the decisions file rule 1 names nothing: the witness proves nothing")
-        self.assertLessEqual(witnessed, {e["id"] for e in entries})
+        witnessed = sorted({line.split()[1] for line in undecided if AGE in line})
+        self.assertEqual(witnessed, ["WITNESS-1", "WITNESS-2"], undecided)
 
 
 if __name__ == "__main__":
