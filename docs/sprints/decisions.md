@@ -128,6 +128,7 @@
 | 2026-11-20 | [S1.1c-7's design (G1)](#owner-decisions-2026-11-20--s11c-7s-design-g1) |
 | 2026-11-21 | [S1.1's pull requests](#owner-decisions-2026-11-21--s11s-pull-requests) |
 | 2026-11-21 | [S1.1c-7's PR 1 review](#owner-decisions-2026-11-21--s11c-7s-pr-1-review) |
+| 2026-11-21 | [main's red nightly and PR 1's CI](#owner-decisions-2026-11-21--mains-red-nightly-and-pr-1s-ci) |
 
 ## The decisions
 
@@ -1331,3 +1332,15 @@ W0's seeded spot-check and PR 1's two blind reviews (architecture, QA) are recor
    - PR1A-4's depth-2 forge, by judging Go runs from `go test -json` actions;
    - the re-check's three later items.
 5. **Standing instruction (the owner, unasked): "accuracy of the software matters more than speed of delivery, always."** The coordinator serialises heavy, load and timing runs on a quiet machine, re-runs every proof on the integration branch, and re-checks fixes to CRITICAL-rated code before the owner sees them.
+
+### Owner decisions, 2026-11-21 — main's red nightly and PR 1's CI
+
+The owner reported two failed CI runs: main's scheduled nightly (44896088970, at 5b4ddac) and PR #52's first run (44907887725). Both were diagnosed in the [sprint record](s1-1c-7-record.md). Two answers, both as recommended.
+
+1. **Main's nightly gets a separate small fix PR (#53),** not a commit in PR #52.
+   - **Cause:** `race-stress` ran `go test -race -count=20 ./internal/runtime` with no `-timeout`, so Go's 10-minute default covered all 20 repeats: 519.8 s one night, 601 s the next. It was not a hang.
+   - **The fix:** `-timeout 25m` under `--repeat`, pinned inside the row's `timeout_s` by a test reading the registry.
+   - The fix PR passed T2, T4 and a blind architecture and QA review, under [S1.1's pull requests](#owner-decisions-2026-11-21--s11s-pull-requests).
+   - Rejected: folding it into PR #52, which would keep main red until PR #52 merges and widen PR 1's scope.
+2. **F6 is pushed to PR #52.** PR #52's Linux `test` job failed because `go list -race` needs cgo and the gate pins `CGO_ENABLED=0`. Under `--race`, mutate.py now runs go with cgo on, as the gate's race row does.
+   - Rejected: building F6 and asking again before the push.
