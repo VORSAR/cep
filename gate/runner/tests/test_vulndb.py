@@ -386,8 +386,9 @@ class Findings(unittest.TestCase):
         # design §2.2: go_version() raises InvalidVersion for a tag it cannot convert; findings() converts it once,
         # before the walk, and collects one fault (the tag as given), the walk going on (review CA-L9).
         e = entry("GO-2099-0029", ("stdlib", semver({"introduced": "0"}, {"fixed": "1.27.5"})))
-        found, faults = vulndb.findings({}, frozenset(), "devel go1.28-0123abcd", [e])
-        self.assertEqual(found, [])
+        m = entry("GO-2099-0030", ("example.com/a", semver({"introduced": "0"}, {"fixed": "2.0.0"})))
+        found, faults = vulndb.findings({"example.com/a": "v1.0.0"}, frozenset(), "devel go1.28-0123abcd", [e, m])
+        self.assertEqual(found, [vulndb.Finding("GO-2099-0030", "example.com/a", "v1.0.0", "2.0.0", True)])
         self.assertEqual(
             faults,
             [
@@ -530,6 +531,12 @@ class Agreement(unittest.TestCase):
                 got = scan({}, version, [e]) if module == "stdlib" else scan({module: version}, "go1.27.4", [e])
                 hit = any(f.id == entry_id and f.module == module for f in got)
                 self.assertEqual(AFFECTED if hit else NOT, verdict)
+
+    def test_two_entries_for_one_module_are_each_judged_by_their_own_ranges(self):
+        # The DIFFERS row "query over GO-2023-1758 + PLANTED GO-2099-0003": query mode returned both entries; the
+        # matcher, given both, reports only the planted one, which affects every version (the witness that it ran).
+        got = scan({"github.com/mutagen-io/mutagen": "v0.16.7"}, "go1.27.4", [PLANTED_MUT, real("GO-2023-1758")])
+        self.assertEqual([f.id for f in got], ["GO-2099-0003"])
 
     def test_a_withdrawn_real_entry_still_matches_by_range(self):
         # GO-2024-2730 is skipped only because it is withdrawn: its range holds every version.

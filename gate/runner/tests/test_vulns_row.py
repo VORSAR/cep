@@ -209,11 +209,12 @@ class BuildInfo(unittest.TestCase):
         self.assert_red(0, minimal(MOD, DEP, go="devel go1.28-0123abcd"), "devel go1.28-0123abcd")
 
     def test_an_experiment_suffix_is_parsed_or_red(self):
+        # vulndb.go_version refuses the suffix (test_vulndb's GoVersion pins it): never a silent strip.
         info, faults = vulns.build_info(TOOL, PIN, 0, minimal(MOD, DEP, go="go1.27.0 X:boringcrypto"))
-        if info is None:
-            self.assertTrue(any("X:boringcrypto" in f for f in faults), faults)
-        else:
-            self.assertEqual((info.go_version, faults), ("go1.27.0", []))
+        self.assertIsNone(info)
+        self.assertEqual(
+            faults, [f"vulns: {TOOL}: go version -m: the Go version 'go1.27.0 X:boringcrypto' cannot be ordered"]
+        )
 
     def test_no_mod_line_is_red(self):
         self.assert_red(0, minimal(DEP), "mod")

@@ -704,9 +704,10 @@ def placed(form: str, placement: str) -> tuple[str, int]:
 
 class Census(unittest.TestCase):
     def test_every_enabled_linter_has_a_row(self):
-        # Design §4.1 step 3: at least one row per enabled linter, "none in source" included; golangci.LINTERS is
-        # lane A's, so the list is the design's §2.2 literal here.
-        linters = {"errcheck", "forbidigo", "funlen", "gocritic", "gocyclo", "lll", "nolintlint", "revive"}
+        # Design §4.1 step 3: at least one row per enabled linter, "none in source" included.
+        from gate.runner import golangci  # as the two later tests in this file import it
+
+        linters = set(golangci.LINTERS)
         self.assertLessEqual(linters, {item["linter"] for item in census()})
         for item in census():
             with self.subTest(item=item):

@@ -69,9 +69,12 @@ class Guard(unittest.TestCase):
             self.assertRefused(*run([pinned("python"), *FLAGS, RUN, "--tier", "T2"], env=env))
 
     def test_each_interpreter_flag_is_required(self) -> None:
-        for flags in (("-B", "-X", "utf8"), ("-I", "-X", "utf8")):
+        # Python 3.15 runs in UTF-8 mode by default, so leaving out -X utf8 changes nothing; -X utf8=0 turns the mode
+        # off, and that is what the guard refuses. --no-such-flag: an interpreter let through stops at the runner's
+        # usage at once, never in a gate run (the guard runs before any argument is parsed, run.py:43-50).
+        for flags in (("-B", "-X", "utf8"), ("-I", "-X", "utf8"), ("-I", "-B", "-X", "utf8=0")):
             with self.subTest(flags):
-                self.assertRefused(*run([pinned("python"), *flags, RUN, "--tier", "T2"]))
+                self.assertRefused(*run([pinned("python"), *flags, RUN, "--no-such-flag"]))
 
 
 class Copy(unittest.TestCase):
@@ -140,7 +143,8 @@ class Copy(unittest.TestCase):
 
     def test_no_bytecode_lands_in_the_repository(self) -> None:
         self.stub("def main(argv):\n    return 0\n")
-        self.run_copy()
+        code, output = self.run_copy()
+        self.assertEqual(code, 0, output)  # the stub ran: main.py was imported, the only way bytecode could land
         names = [n for _, dirs, _ in os.walk(self.repo) for n in dirs]
         self.assertNotIn("__pycache__", names)
 
