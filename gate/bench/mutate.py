@@ -27,7 +27,7 @@ package's contract may live in a package that imports it), or --py, a dotted uni
 "_"), QuoteMeta'd and anchored, so F3 never runs F30; a probe run first, each level also allowing go test's #NN
 suffix for a repeated name (two digits or more, so a sibling named `case#1` is another test), must count exactly one
 run, and each run at the subtest's depth is printed as `ran:`. Go
-runs `go test` in the worktree, never with -trimpath; a --py id runs as `python3.15 -I -B -X dev -W error
+runs `go test -json` in the worktree, never with -trimpath; a --py id runs as `python3.15 -I -B -X dev -W error
 <worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock.
 
 A batch entry holds the single-mode flags as keys (file, find, replace, patch, test, subtest, py, pkg; a leading
@@ -56,14 +56,14 @@ build`): the files compiled are the GoFiles and CgoFiles of each package `go lis
 other file is applied in the worktree, where the test reads it: data, JSON, and a .go file the go tool never
 compiles because a component of its path is named testdata or starts with "_" or ".".
 
-Go outcomes, judged in order: timeout (go test's own -timeout backstop, its `panic: test timed out after` at a line's
-start), red (the line `--- FAIL: <Test> (`), green (exit 0 and `--- PASS: <Test> (`), invalid (anything else). A
-subtest is judged by its own lines, four spaces in per t.Run depth (each prefix of its path that ran as a test of its
-own: a t.Log continuation line is eight spaces in): invalid with no `=== RUN` line for it, or a `--- SKIP:` one; red
-on its own `--- FAIL:` line (a parent's FAIL alone is invalid); green on exit 0, its own `--- PASS:` line and no FAIL
-line at all; invalid otherwise, as when the probe counts other than one run. Python outcomes: timeout (the wall
-clock), red (exit 1, the shim's only problem `failed: 1 failures, 0 errors`, and unittest's last `Ran N tests in`
-line saying 1), green (exit 0 and `passed 1 tests`), invalid (anything else: an import error, a skip,
+Go outcomes, judged in order from go test -json's events (test2json's actions come from go test's framed result
+lines; output text never decides a verdict, since a t.Log continuation can look like a result line at any depth):
+timeout (go test's own -timeout: an output event starting `panic: test timed out after` from a test that ran and
+never ended, and the package's fail), invalid when the designated test or subtest has no run action or a skip, red
+on its fail action (a parent's fail alone is invalid), green on exit 0, its pass action and no test's fail, invalid
+otherwise, as when the probe's run events of the designated path number other than one. Python outcomes: timeout
+(the wall clock), red (exit 1, the shim's only problem `failed: 1 failures, 0 errors`, and unittest's last `Ran N
+tests in` line saying 1), green (exit 0 and `passed 1 tests`), invalid (anything else: an import error, a skip,
 zero tests, a failure beside a leak). Only red counts (owner, 2026-11-16, G1 decision 4). Single mode exits 0 on
 red, 1 otherwise; batch mode 0 when every entry is red; --repeat N --load runs N times under CPU hogs and exits 0
 when k >= 1 of N. Exit 2 on a refusal or an internal error; the last line says which.
@@ -299,18 +299,34 @@ def pattern(t: Target, probe: bool) -> str:
     return "/".join(parts)
 
 
-def runs(text: str, t: Target) -> list[str]:
-    """The probe's count: `=== RUN` names equal to the designated path, each level allowing a `#NN` suffix."""
-    rx = r"^=== RUN\s+(" + re.escape(t.test)
-    rx += "".join("/" + re.escape(level) + r"(?:#[0-9]{2,})?" for level in t.levels) + r")$"
-    return re.findall(rx, text, re.MULTILINE)
+def events(stdout: str) -> list[dict[str, object]]:
+    """go test -json's events, in order; a line that is not a JSON object with an Action is no event."""
+    found = []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and isinstance(event.get("Action"), str):
+            found.append(event)
+    return found
 
 
-def ran(text: str, t: Target) -> list[str]:
-    """Every `=== RUN` name under the designated parent at the designated depth, whatever its last level: a run that
+def _started(evs: Sequence[Mapping[str, object]]) -> list[str]:
+    return [str(e.get("Test")) for e in evs if e.get("Action") == "run" and e.get("Test")]
+
+
+def runs(evs: Sequence[Mapping[str, object]], t: Target) -> list[str]:
+    """The probe's count: the run events of the designated path, each level allowing a `#NN` suffix."""
+    rx = re.escape(t.test) + "".join("/" + re.escape(level) + r"(?:#[0-9]{2,})?" for level in t.levels)
+    return [name for name in _started(evs) if re.fullmatch(rx, name)]
+
+
+def ran(evs: Sequence[Mapping[str, object]], t: Target) -> list[str]:
+    """Every run event under the designated parent at the designated depth, whatever its last level: a run that
     selected a sibling (F30 beside F3) shows it here."""
     parent = re.escape(t.test) + "".join("/" + re.escape(level) + r"(?:#[0-9]{2,})?" for level in t.levels[:-1])
-    return re.findall(r"^=== RUN\s+(" + parent + r"/[^/\n]+)$", text, re.MULTILINE)
+    return [name for name in _started(evs) if re.fullmatch(parent + r"/[^/]+", name)]
 
 
 def parse_patch(text: str) -> list[tuple[str, list[tuple[str, str]]]]:
@@ -625,46 +641,53 @@ def diff(c: Change) -> list[str]:
     return [line.rstrip("\n") for line in lines]
 
 
-def depth(text: str, t: Target) -> int:
-    """The designated subtest's t.Run nesting depth: each prefix of its path that go test ran as a test of its own.
-    A level name may hold "/" (t.Run("a/b", ...) is one level, its result line four spaces in, not eight)."""
-    prefixes = ("/".join((t.test, *t.levels[:k])) for k in range(1, len(t.levels) + 1))
-    return sum(1 for prefix in prefixes if re.search(rf"^=== RUN\s+{re.escape(prefix)}$", text, re.MULTILINE))
+def _timed_out(evs: Sequence[Mapping[str, object]]) -> bool:
+    """go test's own -timeout, as go1.27.4's -json shows it (measured): an output event starting `panic: test timed
+    out after` from a test that ran and never ended (no pass, fail or skip), and the package's fail. A test that only
+    prints those words, and then ends, is no timeout."""
+    ended = {e.get("Test") for e in evs if e.get("Action") in ("pass", "fail", "skip") and e.get("Test")}
+    unended = set(_started(evs)) - ended
+    package_failed = any(e.get("Action") == "fail" and not e.get("Test") for e in evs)
+    return package_failed and any(
+        e.get("Action") == "output"
+        and str(e.get("Output", "")).startswith("panic: test timed out after ")
+        and e.get("Test") in unended
+        for e in evs
+    )
 
 
 def judge_go(result: gorun.Result, t: Target) -> str:
-    """A subtest is judged by its own lines only: a parent FAIL without the subtest's own FAIL line is invalid. Its
-    result lines are matched exactly four spaces per depth in, and go's timeout panic only at a line's start: go
-    test -v writes a t.Log continuation line eight spaces in, so a log cannot forge a depth-1 result or a timeout."""
-    text = f"{result.stdout}\n{result.stderr}"
-    if re.search(r"^panic: test timed out after", text, re.MULTILINE):
+    """The verdict comes from go test -json's actions (test2json's run, pass, fail and skip, from go test's framed
+    result lines) whose Test is the designated full name, never from output text, which a t.Log can make look like a
+    result line at any depth. A subtest's parent failing without the subtest's own fail is invalid."""
+    evs = events(result.stdout)
+    if _timed_out(evs):
         return "timeout"
-    if not t.levels:
-        if re.search(rf"^--- FAIL: {re.escape(t.test)} \(", text, re.MULTILINE):
-            return "red"
-        if (
-            result.exit == 0
-            and not result.timed_out
-            and re.search(rf"^--- PASS: {re.escape(t.test)} \(", text, re.MULTILINE)
-        ):
-            return "green"
+    mine = {e.get("Action") for e in evs if e.get("Test") == t.full}
+    if "run" not in mine or "skip" in mine:
         return "invalid"
-    name = re.escape(t.full)
-    if not re.search(rf"^=== RUN\s+{name}$", text, re.MULTILINE):
-        return "invalid"
-    indent = " " * 4 * depth(text, t)
-    if re.search(rf"^{indent}--- SKIP: {name} \(", text, re.MULTILINE):
-        return "invalid"
-    if re.search(rf"^{indent}--- FAIL: {name} \(", text, re.MULTILINE):
+    if "fail" in mine:
         return "red"
-    if (
-        result.exit == 0
-        and not result.timed_out
-        and re.search(rf"^{indent}--- PASS: {name} \(", text, re.MULTILINE)
-        and not re.search(r"^\s*--- FAIL: ", text, re.MULTILINE)
-    ):
+    failed = any(e.get("Action") == "fail" and e.get("Test") for e in evs)
+    if result.exit == 0 and not result.timed_out and "pass" in mine and not failed:
         return "green"
     return "invalid"
+
+
+def shown(result: gorun.Result) -> gorun.Result:
+    """The run as a reader sees it: each -json event's Output text in place of its line (other lines kept)."""
+    lines = []
+    for line in result.stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            lines.append(line)
+            continue
+        if isinstance(event, dict) and isinstance(event.get("Output"), str):
+            lines.append(event["Output"].removesuffix("\n"))
+        elif not isinstance(event, dict):
+            lines.append(line)
+    return dataclasses.replace(result, stdout="\n".join(lines))
 
 
 def judge_py(result: gorun.Result, said: str, t: Target) -> str:
@@ -804,17 +827,17 @@ def run_go(e: Entry, side: Target, args: argparse.Namespace, wt: str) -> tuple[s
     exactly one run first; the `ran:` lines name every run at its depth."""
     if side.levels:
         probe = _go(e, args, wt, pattern(side, probe=True))
-        n = len(runs(f"{probe.stdout}\n{probe.stderr}", side))
+        n = len(runs(events(probe.stdout), side))
         if n != 1:
-            return "invalid", probe, [f"probe: {n} subtests run as {side.full}"]
+            return "invalid", shown(probe), [f"probe: {n} subtests run as {side.full}"]
     result = _go(e, args, wt, pattern(side, probe=False))
-    names = ran(f"{result.stdout}\n{result.stderr}", side) if side.levels else []
-    return judge_go(result, side), result, [f"ran: {name}" for name in names]
+    names = ran(events(result.stdout), side) if side.levels else []
+    return judge_go(result, side), shown(result), [f"ran: {name}" for name in names]
 
 
 def _go(e: Entry, args: argparse.Namespace, wt: str, run: str) -> gorun.Result:
-    """go test -run `run` with the entry's -timeout, in `wt`, the worktree holding the committed plant."""
-    argv = ["go", "test", "-count=1", "-v", "-run", run, "-timeout", e.timeout]
+    """go test -json -run `run` with the entry's -timeout, in `wt`, the worktree holding the committed plant."""
+    argv = ["go", "test", "-json", "-count=1", "-v", "-run", run, "-timeout", e.timeout]
     if args.race:
         argv.append("-race")
     if args.cpu:
