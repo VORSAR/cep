@@ -361,8 +361,11 @@ func (w *ldWorld) step(s *playback.Step) error {
 	// 3. Advance every rule with this step's snapshot (owner D5), then the derivability invariant.
 	for _, r := range w.rules {
 		r.r.Advance(s.Tables)
+		if n := r.r.Stats().Panics; n != 0 {
+			return fmt.Errorf("line %d, rule %s: %d body panics, each a silent key reset: the double or a spec hook panicked", s.Line, r.spec.Name, n)
+		}
 		if err := r.r.CheckTimers(); err != nil {
-			w.t.Errorf("line %d, rule %s: %v", s.Line, r.spec.Name, err)
+			return fmt.Errorf("line %d, rule %s: %v", s.Line, r.spec.Name, err)
 		}
 	}
 	return nil

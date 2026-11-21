@@ -16,6 +16,7 @@ import (
 // 1.27.3; review F11): every single byte 0x00-0xFF (0x80-0xFF alone are malformed UTF-8), and 3000 fixed-seed
 // generated strings mixing every table row with malformed UTF-8.
 func TestAppendValueStringOracle(t *testing.T) {
+	t.Parallel()
 	var in []string
 	for c := range 256 {
 		in = append(in, string([]byte{byte(c)}), "x"+string([]byte{byte(c)})+"y")
@@ -34,6 +35,7 @@ func TestAppendValueStringOracle(t *testing.T) {
 
 // TestAppendValueStringTable is §5.4's escape table, written out literally.
 func TestAppendValueStringTable(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ in, want string }{
 		{"", `""`},
 		{"abc", `"abc"`},
@@ -63,6 +65,7 @@ func TestAppendValueStringTable(t *testing.T) {
 
 // TestAppendValueScalars: int and duration decimal (duration in integer ms, P2), bool true/false.
 func TestAppendValueScalars(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		v    event.Value
 		want string
@@ -84,6 +87,7 @@ func TestAppendValueScalars(t *testing.T) {
 // shortest 'g' form uses an exponent when the decimal exponent is below -4 or at least 6 (strconv's rule), so 1e20
 // is "1e+20" and 123456 is "123456"; every output below was checked on the pinned toolchain.
 func TestAppendValueFloats(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		f    float64
 		want string
@@ -112,6 +116,7 @@ func TestAppendValueFloats(t *testing.T) {
 
 // TestAppendValueFloatNonFinite: NaN and ±Inf are errors (§5.4).
 func TestAppendValueFloatNonFinite(t *testing.T) {
+	t.Parallel()
 	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
 		if _, err := playback.AppendValue(nil, enFloat(f)); err == nil {
 			t.Errorf("AppendValue(float %v): no error; want one", f)
@@ -121,6 +126,7 @@ func TestAppendValueFloatNonFinite(t *testing.T) {
 
 // TestAppendValueTimestamps: RFC 3339 UTC, exactly three fraction digits, the years 0000 and 9999 included.
 func TestAppendValueTimestamps(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		ms   int64
 		want string
@@ -143,6 +149,7 @@ func TestAppendValueTimestamps(t *testing.T) {
 // TestAppendValueTimestampOutOfRange: one millisecond before 0000-01-01 (year -1) or after 9999-12-31T23:59:59.999Z
 // (year 10000) is an error, as are the int64 extremes.
 func TestAppendValueTimestampOutOfRange(t *testing.T) {
+	t.Parallel()
 	for _, ms := range []int64{enMsYear0Start - 1, enMsYear9999End + 1, math.MinInt64, math.MaxInt64} {
 		if b, err := playback.AppendValue(nil, enTs(ms)); err == nil {
 			t.Errorf("AppendValue(timestamp %d) = %q, no error; want one", ms, b)
@@ -152,6 +159,7 @@ func TestAppendValueTimestampOutOfRange(t *testing.T) {
 
 // TestAppendValueObject: an object is its stored text (D4: already compact and valid UTF-8), escapes as written.
 func TestAppendValueObject(t *testing.T) {
+	t.Parallel()
 	for _, s := range enObjects {
 		if got := enValue(t, enObj(s)); got != s {
 			t.Errorf("AppendValue(object %q) = %q; want the stored text", s, got)
@@ -162,6 +170,7 @@ func TestAppendValueObject(t *testing.T) {
 // TestAppendValueNulls: every type's null is null, whatever its other fields hold (a null's payload fields are
 // never read: a stale NaN or out-of-range time under a null is not an error).
 func TestAppendValueNulls(t *testing.T) {
+	t.Parallel()
 	for _, ty := range []event.Type{event.TString, event.TInt, event.TFloat, event.TBool, event.TTimestamp,
 		event.TDuration, event.TObject} {
 		if got := enValue(t, enNull(ty)); got != "null" {
@@ -182,6 +191,7 @@ func TestAppendValueNulls(t *testing.T) {
 
 // TestAppendValueAppends: AppendValue appends to dst and keeps what dst holds.
 func TestAppendValueAppends(t *testing.T) {
+	t.Parallel()
 	got, err := playback.AppendValue([]byte("x="), enStr("a\nb"))
 	if err != nil || string(got) != `x="a\nb"` {
 		t.Fatalf(`AppendValue("x=", "a\nb") = %q, %v; want "x=\"a\\nb\"", nil`, got, err)
@@ -207,6 +217,7 @@ func enTradesEvent() event.Event {
 // the attribute names, by their bytes: "Qty" (0x51) < "_x" (0x5f) < "amount" (0x61) < "b2" (0x62) < "o" (0x6f) <
 // "ts" (0x74) < "user" (0x75) < "é" (0xc3 0xa9).
 func TestAppendEventSortedKeys(t *testing.T) {
+	t.Parallel()
 	want := `{"attrs":{"Qty":3,"_x":true,"amount":0.75,"b2":90000,"o":{"a":[1]},"ts":"2026-11-04T10:00:00.000Z",` +
 		`"user":"alice","é":null},"batch":"b7","stream":"Trades"}`
 	if got := enEvent(t, enTrades(t), enTradesEvent()); got != want {
@@ -216,6 +227,7 @@ func TestAppendEventSortedKeys(t *testing.T) {
 
 // TestAppendEventAllNull: every optional attribute null is still written, as null.
 func TestAppendEventAllNull(t *testing.T) {
+	t.Parallel()
 	s := enSchema(t, "N", event.ArrivalTime, enOpt("s", event.TString), enOpt("f", event.TFloat), enOpt("o", event.TObject))
 	e := event.Event{Ts: 0, Values: []event.Value{enNull(event.TString), enNull(event.TFloat), enNull(event.TObject)}}
 	want := `{"attrs":{"f":null,"o":null,"s":null},"stream":"N","ts":"1970-01-01T00:00:00.000Z"}`
@@ -227,6 +239,7 @@ func TestAppendEventAllNull(t *testing.T) {
 // TestAppendEventOptionalKeys: batch only when set; ts exactly when the schema has no time attribute (D2), the
 // event's Ts as a canonical timestamp; an event-time stream never carries ts, even when e.Ts were to differ.
 func TestAppendEventOptionalKeys(t *testing.T) {
+	t.Parallel()
 	arr := enSchema(t, "A", event.ArrivalTime, enReq("v", event.TInt))
 	tr := enTrades(t)
 	noBatch := enTradesEvent()
@@ -255,6 +268,7 @@ func TestAppendEventOptionalKeys(t *testing.T) {
 // TestAppendEventErrors: a NaN or ±Inf float and a value whose Kind is not its attribute's declared type (a null of
 // another type included) are errors naming the attribute; an unencodable time, in an attribute or in ts, is an error.
 func TestAppendEventErrors(t *testing.T) {
+	t.Parallel()
 	tr := enTrades(t)
 	set := func(i int, v event.Value) event.Event {
 		e := enTradesEvent()
@@ -294,6 +308,7 @@ func TestAppendEventErrors(t *testing.T) {
 // sort the same raw and escaped (q" 0x22 < q\ 0x5c < q U+2028 0xe2, escaped \" < \\ < \u), so this case does not
 // depend on which of the two is sorted (gap E2).
 func TestAppendEventEscapedNames(t *testing.T) {
+	t.Parallel()
 	s := enSchema(t, "S\"1", event.ArrivalTime,
 		enReq("q\u2028", event.TInt), enReq(`q\`, event.TInt), enReq(`q"`, event.TInt))
 	e := event.Event{Ts: 0, Values: []event.Value{enInt(3), enInt(2), enInt(1)}}
@@ -311,6 +326,7 @@ func TestAppendEventEscapedNames(t *testing.T) {
 
 // TestAppendEventAppends: AppendEvent appends to a non-empty dst, keeping its bytes, with no newline.
 func TestAppendEventAppends(t *testing.T) {
+	t.Parallel()
 	arr := enSchema(t, "A", event.ArrivalTime, enReq("v", event.TInt))
 	got, err := playback.AppendEvent([]byte("prefix\n"), arr, event.Event{Ts: 0, Values: []event.Value{enInt(1)}})
 	want := "prefix\n" + `{"attrs":{"v":1},"stream":"A","ts":"1970-01-01T00:00:00.000Z"}`
@@ -320,6 +336,7 @@ func TestAppendEventAppends(t *testing.T) {
 }
 
 // TestAppendEventZeroAllocs: a typical event encoded into a reused buffer allocates nothing (ADR-0010 §1).
+// Not parallel: testing.AllocsPerRun sets GOMAXPROCS to 1 while it measures and panics if a parallel test is running.
 func TestAppendEventZeroAllocs(t *testing.T) {
 	s := enTrades(t)
 	e := enTradesEvent()
@@ -340,6 +357,7 @@ func TestAppendEventZeroAllocs(t *testing.T) {
 // them (valid UTF-8 strings, finite floats, times in 0000-9999, compact objects, nulls on optional attributes),
 // AppendEvent's line, read back by playback.NewReader as a one-line fixture, gives equal Values, Ts and BatchID.
 func TestAppendEventRoundTrip(t *testing.T) {
+	t.Parallel()
 	trades := enSchema(t, "Trades", 0, enReq("ts", event.TTimestamp), enOpt("s", event.TString),
 		enOpt("i", event.TInt), enOpt("f", event.TFloat), enOpt("b", event.TBool), enOpt("t2", event.TTimestamp),
 		enOpt("d", event.TDuration), enOpt("o", event.TObject), enOpt("q\"k\u2028", event.TString))

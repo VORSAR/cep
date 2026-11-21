@@ -8,7 +8,6 @@ import (
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/parser"
-	"github.com/vorsar/cep/internal/plan"
 	"github.com/vorsar/cep/internal/validate"
 )
 
@@ -59,8 +58,8 @@ func TestBreakitNoMatchResidentKeyAdvancingAllocs(t *testing.T) {
 	}
 }
 
-// bkTwoKeysSrc keys stream S twice in one partition clause: by k and by j. The validator accepts it (no E-PART-*
-// finding); a partition runs each key value in isolation, with its own rate-limit anchor (SEMANTICS §9).
+// bkTwoKeysSrc keys stream S twice in one partition clause: by k and by j. validate.Check refuses it: E-PART-004 at
+// the second key.
 const bkTwoKeysSrc = `language cep/0.1;
 
 stream S (k string, j string, ts timestamp)
@@ -77,31 +76,18 @@ rule Pair
   insert into O;
 `
 
-// TestBreakitPartitionKeyNotDropped: a partition clause naming two keys of one stream passes validate.Check, and
-// plan.Build keeps only the last (KeyAttr = [j]): k is silently dropped, so k=a and k=b with the same j share one
-// rate-limit anchor and the second alert is lost. Either the program is refused at deploy (a finding, or a Build
-// error), or both alerts stand: (a, x)@10:00 and (b, x)@10:01 are different partition values.
+// TestBreakitPartitionKeyNotDropped: a partition clause naming two keys of one stream is refused at deploy (SPEC rev 4:
+// a stream named twice in a partition clause is refused, E-PART-004): validate.Check returns no app and that one
+// diagnostic, so no plan ever keeps one key of the two and drops the other.
 func TestBreakitPartitionKeyNotDropped(t *testing.T) {
 	t.Parallel()
 	res, err := parser.Parse("bk-twokeys.cep", bkTwoKeysSrc)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	app, _ := validate.Check(res.App, validate.Options{})
-	if app == nil {
-		return // refused at deploy: fixed in the validator
-	}
-	p, err := plan.Build(app)
-	if err != nil {
-		return // refused by Build: fixed in the planner
-	}
-	line := func(at int64, k, j string) string {
-		return fmt.Sprintf(`{"stream":"S","attrs":{"k":%q,"j":%q,"ts":%q}}`, k, j, ldRFC(ldT0+at))
-	}
-	outs, _ := pbReplay(t, p, ldLog(line(0, "a", "x"), line(ldMin, "b", "x")))
-	if len(outs) != 2 {
-		t.Errorf("rule keys %v of S (k dropped): %d alerts %v, want 2 — (a,x) and (b,x) are different partition values; or refuse the program at deploy",
-			p.Rules[0].KeyAttrs, len(outs), outs)
+	app, diags := validate.Check(res.App, validate.Options{})
+	if app != nil || len(diags) != 1 || diags[0].Code != "E-PART-004" {
+		t.Fatalf("validate.Check = app %v, %v; want no app and one E-PART-004 (SPEC: a stream keyed twice in one partition clause is refused)", app != nil, diags)
 	}
 }
 
