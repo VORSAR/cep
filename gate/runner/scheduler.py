@@ -305,8 +305,13 @@ class Runner:
             records.write_atomic(errors, f"go env: could not start: {e}\n".encode())
             return
         if proc is not None:
-            self._parity_group.reap(proc)
-            os.rename(partial, os.path.join(self._run_dir, "go-env.json"))
+            code, _ = self._parity_group.reap(proc)
+            if code == 0:
+                os.rename(partial, os.path.join(self._run_dir, "go-env.json"))
+            else:  # its partial stdout describes nothing: dropped, the exit code noted beside go's own stderr
+                os.remove(partial)
+                with open(errors, "ab") as f:
+                    f.write(f"go env: exit {code}\n".encode())
 
     def _parity_end(self, outcome: Outcome) -> None:
         """A failure's reason is its reasons joined and never names a reuse; a pass reads `covered <n>`, and when trees

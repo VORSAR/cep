@@ -376,3 +376,19 @@ class RunFiles(support.GateTest):
         self.assertEqual(result.exit_code, 0)
         with open(os.path.join(self.run_dir, "go-env.stderr"), encoding="utf-8") as f:
             self.assertIn("go env", f.read())
+
+    def test_a_go_env_that_fails_leaves_no_go_env_json(self):
+        bindir = os.path.join(self.root, "bin")
+        self.script(
+            "go",
+            bindir,
+            "import sys\nsys.stdout.write('{\"GOOS\": ')\nsys.stderr.write('go: planted failure\\n')\nsys.exit(3)\n",
+        )
+        os.symlink(shutil.which("git"), os.path.join(bindir, "git"))
+        self.toolchain.dirs = [bindir]
+        result = self.run_rows([self.row("a")], environ=dict(support.base_env(), PATH=""), record_go_env=True)
+        self.assertEqual(result.exit_code, 0)
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "go-env.json")), "a failed go env was recorded")
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "go-env.json.tmp")))
+        with open(os.path.join(self.run_dir, "go-env.stderr"), encoding="utf-8") as f:
+            self.assertEqual(f.read(), "go: planted failure\ngo env: exit 3\n")
