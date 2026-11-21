@@ -1345,6 +1345,32 @@ class Compiled(Base):
             self.assertEqual(code, 0, f"{path}: {out}")
             self.assertEqual(out.splitlines()[-1], "outcome: red", out)
 
+    def cgo(self, *argv: str) -> tuple[int, str, list[str]]:
+        """A run under the logging fake go with CGO_ENABLED=0, as the gate pins it, and a linux/amd64 target (on darwin
+        the race detector needs no cgo, so only a linux target's go list -race shows CI's requirement on any host; the
+        fake go builds nothing): its exit, its output, and each go call's subcommand with the CGO_ENABLED it saw."""
+        for path in (self.log, self.log + ".env"):
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(path)
+        env = {**self.fake_env, "CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": "amd64"}
+        code, out = self.mutate(*argv, env=env)
+        with open(self.log + ".env", encoding="utf-8") as f:
+            return code, out, [line.rstrip("\n") for line in f]
+
+    def test_under_race_go_list_and_go_test_run_with_cgo_on(self):
+        """The race detector needs cgo: the gate pins CGO_ENABLED=0, and its race row turns it on for its own go."""
+        argv = ("--file", "m/race.go", "--find", "return 1", "--replace", "return 2", "--test", "TestAdd", "--race")
+        code, out, calls = self.cgo(*argv)
+        self.assertEqual(code, 1, out)  # the fake go test prints nothing: invalid
+        seen = [call for call in calls if not call.startswith("version ")]  # the record's go version
+        self.assertEqual(seen, ["list CGO_ENABLED=1", "test CGO_ENABLED=1"], out)
+
+    def test_without_race_cgo_enabled_passes_through(self):
+        code, out, calls = self.cgo("--file", "m/m.go", "--find", FIND, "--replace", CAUGHT, "--test", "TestAdd")
+        self.assertEqual(code, 1, out)
+        seen = [call for call in calls if not call.startswith("version ")]
+        self.assertEqual(seen, ["list CGO_ENABLED=0", "test CGO_ENABLED=0"], out)
+
     def test_a_plant_in_a_race_only_file_is_compiled_under_race(self):
         argv = ("--file", "m/race.go", "--find", "return 1", "--replace", "return 2", "--test", "TestAdd", "--race")
         code, out, calls = self.go_calls(*argv)
