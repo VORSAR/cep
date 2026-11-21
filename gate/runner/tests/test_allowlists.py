@@ -6,10 +6,12 @@ gate/sprints.json, gate/known-issues.json or the clock (design §2.2, DQ-S9).
 """
 
 import json
+import os
 import unittest
 from datetime import date, timedelta
 
 from gate.runner import allowlists, sprintid
+from gate.runner.tests import support
 
 TODAY = date(2026, 11, 12)
 ORDER = sprintid.Order(
@@ -389,10 +391,6 @@ class Expiring(unittest.TestCase):
         self.assertEqual(allowlists.expiring([], TODAY), [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class LaneDPackages(unittest.TestCase):
     """S1.1c-5 design §1, §8 3.9: lane D's four packages are cleaned for the whole set in S1.1c-5, so
     tools/allowlists/smells.json never holds a size entry for them (G1 → T3). Green on an empty file; the mutation
@@ -406,10 +404,6 @@ class LaneDPackages(unittest.TestCase):
         return {e.target.split(" ")[0] for e in allowlists.load(text, "smells").entries}
 
     def test_lane_d_packages_have_no_size_entry(self):
-        import os
-
-        from gate.runner.tests import support
-
         with open(os.path.join(support.REPO, self.PATH), encoding="utf-8") as f:
             text = f.read()
         self.assertEqual(sorted(self.packages(text) & set(self.LANE_D)), [])
@@ -434,3 +428,7 @@ class LaneDPackages(unittest.TestCase):
             }
         )
         self.assertEqual(sorted(self.packages(planted) & set(self.LANE_D)), ["internal/table"])
+
+
+if __name__ == "__main__":
+    unittest.main()

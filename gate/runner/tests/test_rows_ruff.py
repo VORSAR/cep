@@ -137,13 +137,19 @@ class Wrapper(support.GateTest):
             waivers = tomllib.load(f)["lint"]["per-file-ignores"]
         self.assertTrue(all(codes and set(codes) <= set(plants) for codes in waivers.values()), waivers)
         for i, (path, codes) in enumerate(sorted(waivers.items())):
+            # Every code's plant in the waived file at once, TID251's import first (E402 is selected), so each waiver
+            # is exercised there.
+            self.write(path, "\n\n".join(plants[code] for code in sorted(codes, key=list(plants).index)))
             for j, code in enumerate(codes):
-                self.write(path, plants[code])
                 self.write(f"gate/x/elsewhere_{i:02}_{j}.py", plants[code])
         self.git("add", "--", "gate")
         self.ruff_row()
         failed = [line for line in self.out().splitlines() if line.startswith("failed: ")]
-        want = [f"failed: gate/x/elsewhere_{i:02}_0.py: ruff check (exit 1)" for i in range(len(waivers))]
+        want = [
+            f"failed: gate/x/elsewhere_{i:02}_{j}.py: ruff check (exit 1)"
+            for i, (_, codes) in enumerate(sorted(waivers.items()))
+            for j in range(len(codes))
+        ]
         self.assertEqual(failed, want)
 
     def test_a_badly_formatted_file_is_red_and_named(self):

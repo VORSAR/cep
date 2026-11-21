@@ -402,10 +402,6 @@ class Compare(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ReplaceApproval(unittest.TestCase):
     """A replace directive is red unless the allowlist entry approves exactly its target (owner, 2026-11-11, the fix
     round, after the break-it's finding 3)."""
@@ -457,3 +453,7 @@ class ReplaceApproval(unittest.TestCase):
                 " not approved in tools/deps-allowlist.json"
             ],
         )
+
+
+if __name__ == "__main__":
+    unittest.main()
