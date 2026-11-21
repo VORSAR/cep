@@ -1,5 +1,5 @@
-"""mutate.py: one mutation through -overlay or in a throwaway worktree, its one designated test, and a tracked file
-never written."""
+"""mutate.py: one mutation committed in a throwaway worktree of HEAD, its one designated test run there, and a tracked
+file never written."""
 
 import contextlib
 import faulthandler
@@ -136,6 +136,46 @@ func TestSpaces(t *testing.T) {
 \t\t})
 \t}
 }
+
+func TestData(t *testing.T) {
+\tdata, err := os.ReadFile("testdata/want.txt")
+\tif err != nil {
+\t\tt.Fatal(err)
+\t}
+\tif got := fmt.Sprintln(Add(2, 3)); got != string(data) {
+\t\tt.Fatalf("Add(2, 3) = %q, testdata/want.txt holds %q", got, data)
+\t}
+}
+"""
+
+ADD_HEAD = "func TestAdd(t *testing.T) {\n"
+
+IGNORED = """\
+//go:build ignore
+
+package m
+
+func Ignored() int {
+\treturn 1
+}
+"""
+
+RACE_ONLY = """\
+//go:build race
+
+package m
+
+func Raced() int {
+\treturn 1
+}
+"""
+
+UNUSED = """\
+package u
+
+func U() int {
+\treturn 1
+}
 """
 
 NEG = """\
@@ -211,6 +251,10 @@ class Base(unittest.TestCase):
                 "m/m_test.go": TESTS,
                 "m/n_test.go": NEG_TESTS,
                 "g/g_test.go": GUARD,
+                "m/testdata/want.txt": "5\n",
+                "m/ignored.go": IGNORED,
+                "m/race.go": RACE_ONLY,
+                "u/u.go": UNUSED,
             },
         )
         self.git("init", "-q")
@@ -226,7 +270,8 @@ class Base(unittest.TestCase):
 
     def snapshot(self) -> dict[str, tuple[bytes, int]]:
         """The bytes and mtime of each source file a mutation may name."""
-        return {name: support.stamp(os.path.join(self.repo, name)) for name in ("m/m.go", "m/n.go")}
+        names = ("m/m.go", "m/n.go", "m/testdata/want.txt")
+        return {name: support.stamp(os.path.join(self.repo, name)) for name in names}
 
     def assertUntouched(self, before: dict[str, tuple[bytes, int]]) -> None:
         self.assertEqual(self.snapshot(), before, "a tracked file was written")
@@ -272,6 +317,32 @@ class Base(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
         return path
+
+    def add_python(self) -> None:
+        """The Python fixture beside the Go one, committed: pkg/ and a copy of the shim."""
+        support.write(
+            self.repo,
+            {
+                "pkg/__init__.py": "",
+                "pkg/calc.py": PY_CALC,
+                "pkg/tests/__init__.py": "",
+                "pkg/tests/test_calc.py": PY_TESTS,
+            },
+        )
+        os.makedirs(os.path.join(self.repo, "gate", "runner"))
+        shutil.copyfile(
+            os.path.join(support.REPO, "gate", "runner", "pyshim.py"),
+            os.path.join(self.repo, "gate", "runner", "pyshim.py"),
+        )
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "python")
+
+    def dirty_go_tests(self) -> None:
+        """An uncommitted edit failing TestAdd outright in m/m_test.go, put back at cleanup."""
+        self.assertEqual(TESTS.count(ADD_HEAD), 1)
+        self.addCleanup(support.write, self.repo, {"m/m_test.go": TESTS})
+        dirty = TESTS.replace(ADD_HEAD, ADD_HEAD + '\tt.Fatal("an uncommitted edit")\n')
+        support.write(self.repo, {"m/m_test.go": dirty})
 
 
 class Outcomes(Base):
@@ -797,6 +868,107 @@ class PyMode(unittest.TestCase):
         self.assertEqual(out.splitlines()[-1], "counts: red 1, green 1, timeout 0, invalid 0", out)
 
 
+PY_ADD = "    def test_add(self):\n"
+
+
+class OneTree(Base):
+    """Every run, Go and Python, in the run's worktree of HEAD with the plant committed (the owner's "one way of
+    running", 2026-11-21): an uncommitted edit never reaches a run, a data file read at run time is planted, and the
+    `head:` line names the tree tested."""
+
+    def test_an_uncommitted_edit_never_reaches_a_go_run(self):
+        self.dirty_go_tests()
+        done = subprocess.run(
+            ["go", "test", "-count=1", "-v", "-run", "^TestAdd$", "./m"],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            timeout=300,
+        )
+        self.assertIn("--- FAIL: TestAdd (", done.stdout.decode("utf-8", errors="replace"))  # the edit, compiled
+        code, out = self.single("TestAdd", "return b + a")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"head: {self.git('rev-parse', 'HEAD')}", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_plant_in_a_data_file_the_test_reads_is_red(self):
+        code, out = self.mutate(
+            "--file", "m/testdata/want.txt", "--find", "5", "--replace", "6", "--test", "TestData", "--pkg", "m"
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("-5\n+6\n", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_a_plain_batch_of_go_and_py_entries_prints_one_head_and_runs_both_at_it(self):
+        self.add_python()
+        head = self.git("rev-parse", "HEAD")
+        self.dirty_go_tests()
+        self.assertEqual(PY_TESTS.count(PY_ADD), 1)
+        self.addCleanup(support.write, self.repo, {"pkg/tests/test_calc.py": PY_TESTS})
+        dirty = PY_TESTS.replace(PY_ADD, PY_ADD + '        self.fail("an uncommitted edit")\n')
+        support.write(self.repo, {"pkg/tests/test_calc.py": dirty})
+        path = self.write_batch(
+            {"file": "m/m.go", "find": FIND, "replace": "return b + a", "test": "TestAdd"},
+            {"file": "pkg/calc.py", "find": PY_FIND, "replace": "return b + a", "py": CALC + "test_add"},
+        )
+        code, out = self.mutate("--batch", path)
+        self.assertEqual(code, 1, out)
+        self.assertEqual([line for line in out.splitlines() if line.startswith("head: ")], [f"head: {head}"], out)
+        self.assertIn("entry 1: green", out)
+        self.assertIn("entry 2: green", out)
+        self.assertEqual(out.splitlines()[-1], "counts: red 0, green 2, timeout 0, invalid 0", out)
+
+
+class Compiled(Base):
+    """A .go plant in a file ./<pkg>'s test build never compiles is refused before any build: `go list -deps -test`
+    at the revision planted names the files compiled. A non-.go plant is applied in the worktree (OneTree)."""
+
+    def go_calls(self, *argv: str) -> tuple[int, str, list[list[str]]]:
+        """A run under the logging fake go (go list handed to the real go): its exit, its output, and each go call's
+        arguments."""
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(self.log)
+        code, out = self.mutate(*argv, env=self.fake_env)
+        with open(self.log, encoding="utf-8") as f:
+            return code, out, [line.split()[1:] for line in f]
+
+    def refused_after_listing(self, *argv: str) -> str:
+        """Exit 2 with a refusal as the last line, and one go call, the go list naming the files compiled: no
+        build ran."""
+        code, out, calls = self.go_calls(*argv)
+        self.assertEqual(code, 2, out)
+        self.assertTrue(out.splitlines()[-1].startswith("error: refused: "), out)
+        self.assertEqual([call[0] for call in calls], ["list"], out)
+        return out
+
+    def test_a_plant_in_a_go_build_ignore_file_is_refused_before_any_build(self):
+        out = self.refused_after_listing(
+            "--file", "m/ignored.go", "--find", "return 1", "--replace", "this is not Go", "--test", "TestAdd"
+        )
+        self.assertEqual(out.splitlines()[-1], "error: refused: m/ignored.go is not compiled by ./m's test build")
+
+    def test_a_plant_in_a_package_or_a_test_file_the_test_build_never_compiles_is_refused(self):
+        # No subTest: a plant reading every case wrong must stop this test at its first case (--py's one failure).
+        cases = (
+            (("u/u.go", "return 1", "return 2", "TestAdd", "m"), "u/u.go is not compiled by ./m's test build"),
+            (  # m is compiled into g's test, m's own tests are not
+                ("m/m_test.go", "func TestWeak(", "func TestWeak2(", "TestGuard", "g"),
+                "m/m_test.go is not compiled by ./g's test build",
+            ),
+        )
+        for (file, find, replace, test, pkg), reason in cases:
+            argv = ("--file", file, "--find", find, "--replace", replace, "--test", test, "--pkg", pkg)
+            out = self.refused_after_listing(*argv)
+            self.assertEqual(out.splitlines()[-1], f"error: refused: {reason}", out)
+
+    def test_a_plant_in_a_race_only_file_is_compiled_under_race(self):
+        argv = ("--file", "m/race.go", "--find", "return 1", "--replace", "return 2", "--test", "TestAdd", "--race")
+        code, out, calls = self.go_calls(*argv)
+        self.assertEqual(code, 1, out)  # the fake go test prints nothing: invalid
+        self.assertEqual([call[0] for call in calls], ["list", "version", "test"], out)  # version: the record
+        self.assertIn("-race", calls[0], out)
+
+
 class Forms(Base):
     """Each mode's required keys: one mutation form (file, find and replace, or patch) and one target (test or py)."""
 
@@ -894,22 +1066,7 @@ class Expect(Base):
 
     def setUp(self) -> None:
         super().setUp()
-        support.write(
-            self.repo,
-            {
-                "pkg/__init__.py": "",
-                "pkg/calc.py": PY_CALC,
-                "pkg/tests/__init__.py": "",
-                "pkg/tests/test_calc.py": PY_TESTS,
-            },
-        )
-        os.makedirs(os.path.join(self.repo, "gate", "runner"))
-        shutil.copyfile(
-            os.path.join(support.REPO, "gate", "runner", "pyshim.py"),
-            os.path.join(self.repo, "gate", "runner", "pyshim.py"),
-        )
-        self.git("add", "-A")
-        self.git("commit", "-q", "-m", "python")
+        self.add_python()
         self.rev1 = self.git("rev-parse", "HEAD")
         tests = os.path.join(self.repo, "m", "m_test.go")
         with open(tests, encoding="utf-8") as f:

@@ -13,33 +13,39 @@ its old lines occurring exactly once in the progressively patched file, its star
 checked; a new, deleted or renamed file, a quoted path and the no-newline marker are refused. Every file it names
 must be tracked and equal to HEAD.
 
+Every run, Go and --py alike, in every mode (single, --batch, --repeat N --load, --race, --cpu, --expect), is in the
+run's one detached worktree per revision, outside the repo, reset between entries: the plant is committed there,
+hooks off, under a throwaway identity (owner, 2026-11-21: one way of running). So an uncommitted or untracked file
+never reaches a run, `head:` names the tree tested, a test reading a data file at run time reads the plant, and a
+test calling git sees a clean tree. A worktree is removed when the run ends, a stop included; one of this run's
+worktrees still listed or on disk after that is exit 2.
+
 The designated test is --test, a top-level Go Test run in the first file's package or in --pkg's (a guard test of a
 package's contract may live in a package that imports it), or --py, a dotted unittest id. --subtest (batch key
 "subtest") names one subtest of --test: split at "/", each level rewritten as go test names it (each Go space to
 "_"), QuoteMeta'd and anchored, so F3 never runs F30; a probe run first, each level also allowing go test's #NN
-suffix for a repeated name, must count exactly one run, and each run at the subtest's depth is printed as `ran:`. A
-Go mutant is written outside the tree and built through `go test -overlay`. A --py mutant is committed, hooks off,
-under a throwaway identity, in a detached worktree of HEAD outside the repo (one per run, reset between entries), so
-a test calling git there sees a clean tree; the id runs as `python3.15 -I -B -X dev -W error
-<worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock. The
-worktree is removed when the run ends, a stop included; one of this run's worktrees still listed or on disk after
-that is exit 2.
+suffix for a repeated name, must count exactly one run, and each run at the subtest's depth is printed as `ran:`. Go
+runs `go test` in the worktree, never with -trimpath; a --py id runs as `python3.15 -I -B -X dev -W error
+<worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock.
 
 A batch entry holds the single-mode flags as keys (file, find, replace, patch, test, subtest, py, pkg), with note,
 an optional id, and timeout: a Go duration or positive seconds, replacing --timeout for that entry. An --expect
 entry also needs id (unique), old_rev and new_rev (full commit ids of this repository) and expect ({"old":
 <outcome>, "new": <outcome>}); old_test, new_test, old_subtest, new_subtest, old_py and new_py name a side's own
-test, and "control": true with no mutation reads the real code. Each entry runs at each revision in the run's one
-worktree per revision, reset between entries, the plant committed there (Go included, no overlay); the mutation must
-occur exactly once in each revision's blob. It prints `entry <id> <side> <rev>: <outcome> (expected <word>)` for
-each side, then `expect: <n> entries, <k> as expected; differing: <ids or none>`, and exits 0 only when nothing
-differs.
+test, and "control": true with no mutation reads the real code. Each entry runs at each revision, the plant built
+on that revision's blob; the mutation must occur exactly once in each. It prints `entry <id> <side> <rev>:
+<outcome> (expected <word>)` for each side, then `expect: <n> entries, <k> as expected; differing: <ids or none>`,
+and exits 0 only when nothing differs.
 
 Refused (exit 2) before any go or Python test command: a file not tracked or differing from HEAD, a find text or a
 hunk occurring other than exactly once, a malformed diff, a --pkg that is not a tracked directory, a test name that
 is not a top-level Test identifier, a --subtest without --test, with an empty level or with a rune go test would
 escape, a --py id that is not dotted identifiers, a mutation or a test given both ways or neither, --subtest,
---pkg, --race or --cpu with --py, a malformed batch (every entry is checked before the first build).
+--pkg, --race or --cpu with --py, a malformed batch (every entry is checked before the first build), and a .go plant
+in a file the Go test's build does not compile at the revision planted (`<file> is not compiled by ./<pkg>'s test
+build`): the files compiled are the GoFiles and CgoFiles of each package `go list -deps -test -json ./<pkg>` (with
+-race under --race) lists inside the tree, and the TestGoFiles and XTestGoFiles of the package named. A plant in any
+other file (data, JSON, testdata) is applied in the worktree, where the test reads it.
 
 Go outcomes, judged in order: timeout (go test's own -timeout backstop), red (the line `--- FAIL: <Test> (`), green
 (exit 0 and `--- PASS: <Test> (`), invalid (anything else). A subtest is judged by its own lines: invalid with no
@@ -69,10 +75,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from gate import term
 from gate.bench import gorun
-from gate.runner import rows, stress
+from gate.runner import jsonstream, rows, stress
 
 WALL_EXTRA_S = 120.0
 LOOKUP_TIMEOUT_S = 60.0
+LIST_TIMEOUT_S = 120.0
 TAIL = 20
 OUTCOMES = ("red", "green", "timeout", "invalid")
 PYTHON = "python3.15"  # the pytests row's interpreter (gate/runner/rows/pytests.py PYTHON)
@@ -669,54 +676,79 @@ class Worktrees:
             raise Internal(f"a worktree was left: {', '.join(left)}")
 
 
-def _overlay(e: Entry, scratch: str, top: str) -> str:
-    """The mutants outside the tree, one overlay entry per changed file."""
-    replace = {}
-    for change in e.changes:
-        mutant = os.path.join(scratch, "mutant", change.file)
-        os.makedirs(os.path.dirname(mutant), exist_ok=True)
-        with open(mutant, "wb") as f:
-            f.write(change.mutant.encode("utf-8", errors="surrogateescape"))
-        replace[os.path.join(top, change.file)] = mutant
-    overlay = os.path.join(scratch, "overlay.json")
-    with open(overlay, "w", encoding="utf-8") as f:
-        json.dump({"Replace": replace}, f, sort_keys=True, ensure_ascii=False)
-        f.write("\n")
-    return overlay
+def compiled(trees: Worktrees, rev: str, pkg: str, race: bool) -> frozenset[str]:
+    """The repo-relative Go files ./<pkg>'s test build compiles at `rev`, from `go list -deps -test -json` (-race, a
+    build tag, under --race) in the run's worktree at `rev`, unplanted: the GoFiles and CgoFiles of each listed package
+    inside the tree (the package under test's test variants hold its test files), and the TestGoFiles and XTestGoFiles
+    of the package named. A dependency's own test files are never counted: go list reports them, the build never
+    compiles them."""
+    wt = trees.at(rev, ())
+    argv = ["go", "list", "-deps", "-test", "-json", *(["-race"] if race else []), "./" + pkg]
+    result = gorun.run(argv, cwd=wt, env={**os.environ, "PWD": wt}, timeout_s=LIST_TIMEOUT_S)
+    if result.exit != 0 or result.timed_out:
+        first = "killed by the wall clock" if result.timed_out else (result.stderr.strip().splitlines() or [""])[0]
+        raise Refused(f"go list ./{pkg} at {rev[:12]}: exit {result.exit}: {first}")
+    try:
+        packages = jsonstream.parse(result.stdout.encode("utf-8"))
+    except ValueError as e:
+        raise Internal(f"go list ./{pkg} at {rev[:12]}: unreadable output: {e}") from None
+    root = os.path.realpath(wt)
+    files: set[str] = set()
+    for package in packages:
+        keys = ("GoFiles", "CgoFiles", *(() if package.get("DepOnly") else ("TestGoFiles", "XTestGoFiles")))
+        for key in keys:
+            for name in package.get(key) or ():
+                path = os.path.realpath(os.path.join(str(package.get("Dir", "")), name))
+                if path.startswith(root + os.sep):
+                    files.add(os.path.relpath(path, root).replace(os.sep, "/"))
+    return frozenset(files)
 
 
-def run_go(
-    e: Entry, side: Target, args: argparse.Namespace, scratch: str, cwd: str | None = None
-) -> tuple[str, gorun.Result, list[str]]:
-    """One Go run of `side`: through the overlay in the tracked tree (cwd None), or in a worktree holding the plant;
-    a designated subtest's probe must count exactly one run first; the `ran:` lines name every run at its depth."""
+def check_compiled(entries: Sequence[Entry], race: bool, trees: Worktrees, head: str, batched: bool) -> None:
+    """Refused: a .go plant in a file the Go test's build never compiles at the revision planted (a `//go:build
+    ignore` file, a package the test does not import), which go test would pass unseen. A plant in any other file
+    (data, JSON, testdata) is applied in the worktree, where the test reads it at run time."""
+    listed: dict[tuple[str, str], frozenset[str]] = {}
+    for index, e in enumerate(entries, 1):
+        if e.new.py:
+            continue
+        sides = ((e.old_rev, e.old_changes), (e.new_rev, e.changes)) if e.old_rev else ((head, e.changes),)
+        for rev, changes in sides:
+            for change in changes:
+                if not change.file.endswith(".go"):
+                    continue
+                if (rev, e.pkg) not in listed:
+                    listed[rev, e.pkg] = compiled(trees, rev, e.pkg, race)
+                if change.file not in listed[rev, e.pkg]:
+                    where = f"batch entry {index}: " if batched else ""
+                    raise Refused(f"{where}{change.file} is not compiled by ./{e.pkg}'s test build")
+
+
+def run_go(e: Entry, side: Target, args: argparse.Namespace, wt: str) -> tuple[str, gorun.Result, list[str]]:
+    """One Go run of `side` in `wt`, the worktree holding the committed plant; a designated subtest's probe must count
+    exactly one run first; the `ran:` lines name every run at its depth."""
     if side.levels:
-        probe = _go(e, args, scratch, cwd, pattern(side, probe=True))
+        probe = _go(e, args, wt, pattern(side, probe=True))
         n = len(runs(f"{probe.stdout}\n{probe.stderr}", side))
         if n != 1:
             return "invalid", probe, [f"probe: {n} subtests run as {side.full}"]
-    result = _go(e, args, scratch, cwd, pattern(side, probe=False))
+    result = _go(e, args, wt, pattern(side, probe=False))
     names = ran(f"{result.stdout}\n{result.stderr}", side) if side.levels else []
     return judge_go(result, side), result, [f"ran: {name}" for name in names]
 
 
-def _go(e: Entry, args: argparse.Namespace, scratch: str, cwd: str | None, run: str) -> gorun.Result:
-    """go test -run `run` with the entry's -timeout: in the tracked tree with the mutants through -overlay (the
-    tracked files only ever read), or in `cwd`, a worktree holding the committed plant."""
-    top = cwd or os.getcwd()
-    argv = ["go", "test"]
-    if cwd is None:
-        argv.append(f"-overlay={_overlay(e, scratch, top)}")
-    argv += ["-count=1", "-v", "-run", run, "-timeout", e.timeout]
+def _go(e: Entry, args: argparse.Namespace, wt: str, run: str) -> gorun.Result:
+    """go test -run `run` with the entry's -timeout, in `wt`, the worktree holding the committed plant."""
+    argv = ["go", "test", "-count=1", "-v", "-run", run, "-timeout", e.timeout]
     if args.race:
         argv.append("-race")
     if args.cpu:
         argv += ["-cpu", args.cpu]
     argv.append("./" + e.pkg)
-    # PWD names the real directory, so go's working directory matches the overlay's key. Never -trimpath: frame
-    # tables and line-anchored tests match file paths in stack frames.
-    env = {**os.environ, "PWD": top}
-    return gorun.run(argv, cwd=top, env=env, timeout_s=seconds(e.timeout) + WALL_EXTRA_S)
+    # PWD names the worktree, so go reports its paths under it. Never -trimpath: frame tables and line-anchored
+    # tests match file paths in stack frames.
+    env = {**os.environ, "PWD": wt}
+    return gorun.run(argv, cwd=wt, env=env, timeout_s=seconds(e.timeout) + WALL_EXTRA_S)
 
 
 def _said(report: str, py: str) -> str:
@@ -749,7 +781,7 @@ def run_one(
 ) -> tuple[str, gorun.Result, list[str]]:
     """One run of the entry's designated test against its mutation: the outcome, the run, and its notes (a Go
     subtest's probe or `ran:` lines; an invalid Python run's shim line)."""
-    return run_side(e, e.target, args, scratch, trees, head, e.changes, None)
+    return run_side(e, e.target, args, scratch, trees, head, e.changes)
 
 
 def run_side(
@@ -760,13 +792,13 @@ def run_side(
     trees: Worktrees,
     rev: str,
     changes: tuple[Change, ...],
-    cwd: str | None,
 ) -> tuple[str, gorun.Result, list[str]]:
-    """One side: Python in the worktree at `rev`; Go through the overlay (cwd None) or in the worktree `cwd`."""
+    """One side, in the run's worktree at `rev` holding `changes` committed: Python under the copy's shim, Go by go
+    test there."""
     if side.py:
         outcome, result, said = run_py(e, side, scratch, trees, rev, changes)
         return outcome, result, [f"report: {said or '(no pyshim line)'}"] if outcome == "invalid" else []
-    return run_go(e, side, args, scratch, cwd)
+    return run_go(e, side, args, trees.at(rev, changes))
 
 
 def details(outcome: str, result: gorun.Result, notes: list[str]) -> list[str]:
@@ -774,10 +806,10 @@ def details(outcome: str, result: gorun.Result, notes: list[str]) -> list[str]:
     return [*(tail(result) if outcome == "invalid" else []), *notes]
 
 
-def record(python: bool) -> list[str]:
-    head = _git("rev-parse", "HEAD")
+def record(head: str, python: bool) -> list[str]:
+    """The run's facts: the head every run of plain and single mode is at, and the tools' versions."""
     version = gorun.run(["go", "version"], cwd=os.getcwd(), timeout_s=LOOKUP_TIMEOUT_S)
-    lines = [f"head: {head.stdout.strip()}", f"go: {version.stdout.strip() or version.stderr.strip()}"]
+    lines = [f"head: {head}", f"go: {version.stdout.strip() or version.stderr.strip()}"]
     if python:
         interpreter = gorun.run([PYTHON, "--version"], cwd=os.getcwd(), timeout_s=LOOKUP_TIMEOUT_S)
         lines.append(f"python: {interpreter.stdout.strip() or interpreter.stderr.strip()}")
@@ -847,13 +879,13 @@ def _print(lines: Sequence[str]) -> None:
 
 
 def single(e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, head: str) -> tuple[int, list[str]]:
-    _print([*header(e, head), *record(bool(e.target.py))])
+    _print([*header(e, head), *record(head, bool(e.target.py))])
     outcome, result, notes = run_one(e, args, scratch, trees, head)
     return (0 if outcome == "red" else 1), [*details(outcome, result, notes), f"outcome: {outcome}"]
 
 
 def repeat(e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, head: str) -> tuple[int, list[str]]:
-    _print([*header(e, head), *record(bool(e.target.py))])
+    _print([*header(e, head), *record(head, bool(e.target.py))])
     caught = 0
     with stress.hogs(stress.hog_count(), sys.executable) as procs:
         _print([f"load: {len(procs)} hogs, pids {' '.join(str(p) for p in sorted(p.pid for p in procs))}"])
@@ -867,7 +899,7 @@ def repeat(e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, h
 def batch(
     entries: list[Entry], args: argparse.Namespace, scratch: str, trees: Worktrees, head: str
 ) -> tuple[int, list[str]]:
-    _print(record(any(e.target.py for e in entries)))
+    _print(record(head, any(e.target.py for e in entries)))
     counts = dict.fromkeys(OUTCOMES, 0)
     for index, e in enumerate(entries, 1):
         _print([f"entry {index}", f"note: {e.note}", *header(e)])
@@ -879,10 +911,12 @@ def batch(
     return (0 if counts["red"] == len(entries) else 1), [f"counts: {summary}"]
 
 
-def expect(entries: list[Entry], args: argparse.Namespace, scratch: str, trees: Worktrees) -> tuple[int, list[str]]:
+def expect(
+    entries: list[Entry], args: argparse.Namespace, scratch: str, trees: Worktrees, head: str
+) -> tuple[int, list[str]]:
     """Each entry at its old and its new revision, in the run's one worktree per revision (reset between entries);
     exit 0 only when every outcome is the one expected."""
-    _print(record(any(e.new.py for e in entries)))
+    _print(record(head, any(e.new.py for e in entries)))
     outcomes: dict[str, tuple[str, ...]] = {}
     for e in entries:
         _print(expect_header(e))
@@ -893,8 +927,7 @@ def expect(entries: list[Entry], args: argparse.Namespace, scratch: str, trees: 
         )
         for name, rev, side, want, changes in sides:
             with tempfile.TemporaryDirectory(dir=scratch) as own:
-                wt = None if side.py else trees.at(rev, changes)
-                outcome, result, notes = run_side(e, side, args, own, trees, rev, changes, wt)
+                outcome, result, notes = run_side(e, side, args, own, trees, rev, changes)
             got.append(outcome)
             _print([*details(outcome, result, notes), f"entry {e.id} {name} {rev[:12]}: {outcome} (expected {want})"])
         outcomes[e.id] = tuple(got)
@@ -914,10 +947,11 @@ def mutate(args: argparse.Namespace) -> tuple[int, list[str]]:
     python = any(e.old.py or e.new.py for e in entries)
     if python and (args.race or args.cpu):
         raise Refused("--race and --cpu apply to go test: not with py")
-    head = _git_ok("rev-parse", "--verify", "HEAD^{commit}").stdout.strip() if python else ""
+    head = _git_ok("rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
     with tempfile.TemporaryDirectory(prefix="mutate-") as scratch, Worktrees() as trees:
+        check_compiled(entries, args.race, trees, head, (args.batch, args.expect) != (None, None))
         if args.expect is not None:
-            return expect(entries, args, scratch, trees)
+            return expect(entries, args, scratch, trees, head)
         if args.batch is not None:
             return batch(entries, args, scratch, trees, head)
         if args.repeat is not None:
