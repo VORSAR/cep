@@ -226,6 +226,17 @@ Its new later items:
 | `gitnexus_reindex.main` (A2, G10-5) | LOW | hidden caller: `.claude/settings.json`, every session | stress 50/50; a live smoke test of the settings.json command, twice at once |
 | `runBlock` (B), `Runtime.Tick` (E1) | LOW, MEDIUM | error text on the Deploy and refusal paths | T2; a grep for old-text pins |
 
+**PR 1's gate and load runs** (the coordinator, at 06e79d9, on mains, with no agent running):
+- **T2:** exit 0, run 20261121T111105Z-e0af24, 197 s.
+- **T4, lint job:** exit 0, run 20261121T111856Z-43284c.
+  - The first run, 20261121T111423Z-cddc46, failed only on `vulns: the copy was fetched 8 days ago (2026-11-13), more than 7: run make vulndb`.
+  - The copy was refreshed with `fetch-vulndb` (`modified 2026-11-11T02:51:11Z`), and the row then reads `vulns | PASS | covered 7`.
+- **T4, proofs job alone:** exit 0, run 20261121T111439Z-4e22a2, 231 s.
+- **W0's load re-runs:**
+  - G2-7: `stress.py --runs 50 gate.bench.tests.test_load` gives `stress: 11 tests, 0 below 50/50`, 696 s.
+  - G2-149: `load.py -- -race -count=50 -run '^TestCLIWriteFailureIsExit2$' ./tools/archcheck` gives `TestCLIWriteFailureIsExit2: 50/50 under load (hogs 28)`.
+  - G2-154: `load.py -- -race -count=50 -run '^TestRunExitCodes$' ./tools/astequal` gives `TestRunExitCodes: 50/50 under load (hogs 28)`.
+
 **Process changes:**
 - heavy, load and timing runs are serialised on a quiet machine (E1 held after C5);
 - every lane proof is re-run on the integration branch;
