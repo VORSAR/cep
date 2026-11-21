@@ -1,0 +1,136 @@
+[
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        if not line.endswith(\"\\n\"):",
+    "id": "Q1-newline",
+    "note": "PR1Q-1: a hunk line without its newline accepted",
+    "py": "gate.bench.tests.test_mutate.Patch.test_a_hunk_line_without_its_newline_is_refused_before_any_build",
+    "replace": "        if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if \"\\r\\n\" in text:",
+    "id": "Q13-crlf",
+    "note": "PR1Q-13: a CRLF patch accepted",
+    "py": "gate.bench.tests.test_mutate.Patch.test_a_crlf_patch_is_refused_before_any_build",
+    "replace": "    if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    lines = _lines(text)",
+    "id": "Q13-split",
+    "note": "PR1Q-13: the patch split by str.splitlines",
+    "py": "gate.bench.tests.test_mutate.Patch.test_a_context_line_holding_a_form_feed_or_a_line_separator_applies",
+    "replace": "    lines = text.splitlines(keepends=True)"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        if at == 0 or text[at - 1] == \"\\n\":",
+    "id": "Q2-inside",
+    "note": "PR1Q-2: a hunk placed by substring",
+    "py": "gate.bench.tests.test_mutate.Patch.test_a_hunk_matching_only_inside_a_line_is_refused_before_any_build",
+    "replace": "        if True:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        if at == 0 or text[at - 1] == \"\\n\":",
+    "id": "Q2-tail",
+    "note": "PR1Q-2: a hunk placed by substring (the git diff -U0 case)",
+    "py": "gate.bench.tests.test_mutate.Patch.test_a_git_diff_hunk_whose_old_line_also_ends_another_line_applies",
+    "replace": "        if True:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if find == str(spec[\"replace\"]):",
+    "id": "A3a-find",
+    "note": "PR1A-3 (a): find equals replace accepted",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_plant_that_changes_nothing_is_refused_before_any_build",
+    "replace": "    if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "            if any(old == new for old, new in found):",
+    "id": "A3a-hunk",
+    "note": "PR1A-3 (a): a context-only hunk accepted",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_plant_that_changes_nothing_is_refused_before_any_build",
+    "replace": "            if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        seconds(value, \"timeout\")",
+    "id": "A3b-key",
+    "note": "PR1A-3 (b): the refusal names --timeout",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_an_entry_timeout_go_cannot_read_is_refused_naming_the_batch_key",
+    "replace": "        seconds(value)"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if ns is None or ns > GO_LONGEST_NS:",
+    "id": "Q3-longest",
+    "note": "PR1Q-3: no longest duration (at F5: the check reads Go's overflow too)",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_an_entry_timeout_go_cannot_read_is_refused_naming_the_batch_key",
+    "replace": "    if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if number and (isinstance(value, int) or math.isfinite(value)) and value > 0:",
+    "id": "Q3-finite",
+    "note": "PR1Q-3: a number not checked finite",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_an_entry_timeout_go_cannot_read_is_refused_naming_the_batch_key",
+    "replace": "    if number and value > 0:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        duration = format(decimal.Decimal(repr(value)), \"f\") + \"s\"",
+    "id": "Q3-exponent",
+    "note": "PR1Q-3: a number written with an exponent",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_numeric_entry_timeout_is_written_as_a_go_duration_without_an_exponent",
+    "replace": "        duration = f\"{value}s\""
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        elif key == \"id\" and (not value or not value.isprintable() or any(c.isspace() for c in value)):",
+    "id": "Q5-id",
+    "note": "PR1Q-5: any id accepted",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_an_id_that_is_not_one_token_or_a_note_holding_a_line_break_is_refused_before_any_build",
+    "replace": "        elif False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        elif key == \"note\" and any(unicodedata.category(c) in BREAKS for c in value):",
+    "id": "Q5-note",
+    "note": "PR1Q-5: any note accepted",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_an_id_that_is_not_one_token_or_a_note_holding_a_line_break_is_refused_before_any_build",
+    "replace": "        elif False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if args.cpu is not None and len(args.cpu.split(\",\")) > 1 and any(e.old.levels or e.new.levels for e in entries):",
+    "id": "Q6-cpu",
+    "note": "PR1Q-6: a subtest with a --cpu list accepted",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_subtest_with_a_cpu_list_is_refused_before_any_build",
+    "replace": "    if False:"
+  },
+  {
+    "id": "Q13-NN",
+    "note": "PR1Q-13: the probe allows #N, one digit (at F4: runs over run events)",
+    "patch": "--- a/gate/bench/mutate.py\n+++ b/gate/bench/mutate.py\n@@ -1 +1 @@\n-        parts.append(f\"^{quote_meta(level)}{'(#[0-9]{2,})?' if probe else ''}$\")\n+        parts.append(f\"^{quote_meta(level)}{'(#[0-9]+)?' if probe else ''}$\")\n@@ -1 +1 @@\n-    rx = re.escape(t.test) + \"\".join(\"/\" + re.escape(level) + r\"(?:#[0-9]{2,})?\" for level in t.levels)\n+    rx = re.escape(t.test) + \"\".join(\"/\" + re.escape(level) + r\"(?:#[0-9]+)?\" for level in t.levels)\n",
+    "py": "gate.bench.tests.test_mutate.Subtests.test_a_sibling_named_with_a_one_digit_suffix_is_not_counted_as_a_repeat"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "                if not change.file.endswith(\".go\") or _data(change.file):",
+    "id": "testdata",
+    "note": "coordinator ruling 2: a .go file under testdata or _ is checked as compiled",
+    "py": "gate.bench.tests.test_mutate.Compiled.test_a_go_file_under_testdata_or_an_underscore_directory_is_data_and_planted",
+    "replace": "                if not change.file.endswith(\".go\"):"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    while pkg is not None and pkg.startswith(\"./\") and len(pkg) > 2:  # printed as ./<pkg>: never ././",
+    "id": "pkg",
+    "note": "E1's report: a leading ./ in pkg kept",
+    "py": "gate.bench.tests.test_mutate.OtherPackage.test_a_pkg_with_a_leading_dot_slash_is_printed_once",
+    "replace": "    while False:"
+  }
+]

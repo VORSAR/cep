@@ -685,7 +685,7 @@ W0-py has 6 commits, 2 of them lane fixes (plan budget: tools 3 + 1, lane 2). W0
 2. **The duplicate-benchmark text (G10-4).** It lists only the repeated names. Dry run: `compare.py:116` only.
 3. **G2-6's assertion is `p ≥ 0.3333`, not an exact value.** The exact p is noise-dependent (reason above).
 4. **The probe suffix on every subtest level** (plan: the last level). A duplicated parent (`g`, `g#01`) would otherwise let `^g$` silently pick the first. This is a strict superset of the plan's probe; reviewers may narrow it.
-5. **`--expect` applies Go plants by committing them in the worktree, not through an overlay.** This makes a data-file plant possible (G2-151-live) and matches `--py`. Plain and single modes keep the overlay.
+5. **`--expect` applies Go plants by committing them in the worktree, not through an overlay.** This makes a data-file plant possible (G2-151-live) and matches `--py`. Plain and single modes keep the overlay. *(annotated 2026-11-21: superseded — every mode runs Go in a worktree at the commit with the plant committed; the overlay path is deleted — owner, [S1.1c-7's PR 1 review](decisions.md#owner-decisions-2026-11-21--s11c-7s-pr-1-review), decision 1)*
 6. **A subtest level holding a non-printable rune is refused, not emulated.**
 7. **`--patch` refuses new or deleted files, renames and the no-newline marker.** Revert plants keep new declarations and files, so these are not needed.
 8. **Python red also requires `Ran 1 test in`.** A class id with one failure among several is invalid.

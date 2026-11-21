@@ -1,0 +1,50 @@
+[
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return run_go(e, side, args, trees.at(rev, changes))",
+    "id": "a",
+    "note": "counter-example a: Go runs in the working tree (the feature off)",
+    "py": "gate.bench.tests.test_mutate.OneTree.test_an_uncommitted_edit_never_reaches_a_go_run",
+    "replace": "    return run_go(e, side, args, os.getcwd())"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return run_go(e, side, args, trees.at(rev, changes))",
+    "id": "b",
+    "note": "counter-example b: Go runs in the working tree, the data file unplanted",
+    "py": "gate.bench.tests.test_mutate.OneTree.test_a_plant_in_a_data_file_the_test_reads_is_red",
+    "replace": "    return run_go(e, side, args, os.getcwd())"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "                if change.file not in listed[rev, e.pkg]:",
+    "id": "c",
+    "note": "counter-example c: the compiled-file refusal off",
+    "py": "gate.bench.tests.test_mutate.Compiled.test_a_plant_in_a_go_build_ignore_file_is_refused_before_any_build",
+    "replace": "                if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "keys = (\"GoFiles\", \"CgoFiles\", *(() if package.get(\"DepOnly\") else (\"TestGoFiles\", \"XTestGoFiles\")))",
+    "id": "c2",
+    "note": "counter-example c, a dependency's test file: every listed package's TestGoFiles counted",
+    "py": "gate.bench.tests.test_mutate.Compiled.test_a_plant_in_a_package_or_a_test_file_the_test_build_never_compiles_is_refused",
+    "replace": "keys = (\"GoFiles\", \"CgoFiles\", \"TestGoFiles\", \"XTestGoFiles\")"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "*([\"-race\"] if race else [])",
+    "id": "c3",
+    "note": "counter-example c under --race: go list without -race",
+    "py": "gate.bench.tests.test_mutate.Compiled.test_a_plant_in_a_race_only_file_is_compiled_under_race",
+    "replace": "*([])"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return run_go(e, side, args, trees.at(rev, changes))",
+    "id": "d",
+    "note": "counter-example d: the batch's Go entry runs in the working tree",
+    "py": "gate.bench.tests.test_mutate.OneTree.test_a_plain_batch_of_go_and_py_entries_prints_one_head_and_runs_both_at_it",
+    "replace": "    return run_go(e, side, args, os.getcwd())"
+  }
+]

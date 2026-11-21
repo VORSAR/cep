@@ -127,6 +127,7 @@
 | 2026-11-20 | [S1.1c-7's plan check](#owner-decisions-2026-11-20--s11c-7s-plan-check) |
 | 2026-11-20 | [S1.1c-7's design (G1)](#owner-decisions-2026-11-20--s11c-7s-design-g1) |
 | 2026-11-21 | [S1.1's pull requests](#owner-decisions-2026-11-21--s11s-pull-requests) |
+| 2026-11-21 | [S1.1c-7's PR 1 review](#owner-decisions-2026-11-21--s11c-7s-pr-1-review) |
 
 ## The decisions
 
@@ -1313,3 +1314,20 @@ During S1.1c-7's W0, the owner said the sprint can use more than one pull reques
 3. **Each pull request passes T2 and T4** (the proofs and lint jobs) **and a blind architecture and QA review of its combined build**, whose findings are fixed before the pull request reaches the owner. The whole-engine break-it stays at G5.
 
    Rejected: the gate alone for each pull request, with one combined review at G5.
+
+### Owner decisions, 2026-11-21 — S1.1c-7's PR 1 review
+
+W0's seeded spot-check and PR 1's two blind reviews (architecture, QA) are recorded in the [sprint record](s1-1c-7-record.md). Four answers, all as recommended, and one standing instruction.
+
+1. **mutate.py has one way of running.** Every Go run, in every mode (single, plain batch, `--repeat`, `--race`, `--cpu`), runs in a throwaway worktree at the commit, with the plant committed, as `--py` and `--expect` already did. The overlay path is deleted, and a plant in a `.go` file the test's build never compiles is refused before any build.
+   - This closes PR1A-1, PR1A-2, PR1Q-7 and PR1Q-11.
+   - It supersedes design-W0's "plain and single modes keep the overlay" and the plan check §2's "Go applies it through the overlay".
+   - Rejected: keeping the overlay and adding refusals (three ways of running, and a dirty check whose scope is a judgement call).
+2. **G2-17's aging test keeps reading the live plan.** It is the one check of [S1.1c-5's design, after the reviews](#owner-decisions-2026-11-14--s11c-5s-design-after-the-reviews), decision 2, on the real files. Its witness becomes made-up issues, so closing known issues cannot turn it red. The plan check §12's "read fixtures" is annotated.
+   - Rejected: a fixture-only test, which would leave the real plan unchecked until the close itself.
+3. **W1+W2's lanes start alongside PR 1's review.** Every lane proof is re-run on the fixed tool when its commits are picked.
+   - Rejected: holding the lanes until the review is fixed.
+4. **The fix round's later items are fixed, not deferred:**
+   - PR1A-4's depth-2 forge, by judging Go runs from `go test -json` actions;
+   - the re-check's three later items.
+5. **Standing instruction (the owner, unasked): "accuracy of the software matters more than speed of delivery, always."** The coordinator serialises heavy, load and timing runs on a quiet machine, re-runs every proof on the integration branch, and re-checks fixes to CRITICAL-rated code before the owner sees them.
