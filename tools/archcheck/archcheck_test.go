@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testRules(t *testing.T) *Rules {
@@ -24,6 +27,9 @@ func testRules(t *testing.T) *Rules {
 // check runs every rule over one file, given as source; other maps more files of the same package.
 func check(t *testing.T, path, src string, other ...string) []string {
 	t.Helper()
+	if len(other)%2 != 0 {
+		t.Fatalf("check: other holds %d strings, want path, source pairs", len(other))
+	}
 	files := map[string]string{path: src}
 	for i := 0; i+1 < len(other); i += 2 {
 		files[other[i]] = other[i+1]
@@ -187,7 +193,10 @@ func TestPurity(t *testing.T) {
 	})
 	t.Run("channel operations are red outside them", func(t *testing.T) {
 		got := check(t, "internal/expr/x.go", "package expr\nfunc f(c chan int) { c <- 1 }\n")
-		if len(got) != 2 {
+		has := func(want string) bool {
+			return slices.ContainsFunc(got, func(f string) bool { return strings.Contains(f, want) })
+		}
+		if len(got) != 2 || !has("purity: channel type: ") || !has("purity: channel send: ") {
 			t.Fatalf("want the chan type and the send, got %q", got)
 		}
 	})
@@ -415,15 +424,8 @@ func TestListsPurity(t *testing.T) {
 			"internal/event": {"sync": {"Pool"}},
 			"internal/table": {"sync": {"Mutex"}, "sync/atomic": {"Pointer"}},
 		}
-		if len(l.Purity) != len(want) {
+		if !reflect.DeepEqual(l.Purity, want) {
 			t.Fatalf("purity %v, want %v", l.Purity, want)
-		}
-		for pkg, imports := range want {
-			for imp, idents := range imports {
-				if !slices.Equal(l.Purity[pkg][imp], idents) {
-					t.Fatalf("purity[%s][%s] = %v, want %v", pkg, imp, l.Purity[pkg][imp], idents)
-				}
-			}
 		}
 	})
 	t.Run("a list without internal/table: sync.Mutex makes table's mutex red", func(t *testing.T) {
@@ -451,10 +453,8 @@ func TestListsPurity(t *testing.T) {
 		}
 	})
 	t.Run("the repository's own lists load", func(t *testing.T) {
-		l := testLists(t)
-		if !slices.Equal(l.Purity["internal/table"]["sync"], []string{"Mutex"}) {
-			t.Fatalf("purity[internal/table][sync] = %v, want [Mutex]", l.Purity["internal/table"]["sync"])
-		}
+		// the real lists load; their content is the gate's, not this unit test's
+		testLists(t)
 	})
 }
 
@@ -546,17 +546,22 @@ func TestCheckTest(t *testing.T) {
 }
 
 func TestTestsModeRefusesANonTestFile(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
 	bin := filepath.Join(t.TempDir(), "archcheck")
-	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(ctx, "go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	list := filepath.Join(t.TempDir(), "files.nul")
 	if err := os.WriteFile(list, []byte("tools/archcheck/main.go\x00"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(bin, "-tests", list)
+	cmd := exec.CommandContext(ctx, bin, "-tests", list)
 	cmd.Dir = filepath.Join("..", "..")
 	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("archcheck -tests: not finished under the 5m ceiling\n%s", out)
+	}
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
 		t.Fatalf("-tests on a non-test file: want exit 2, got %v\n%s", err, out)
@@ -1610,14 +1615,15 @@ func TestCLIWriteFailureIsExit2(t *testing.T) {
 	const sleepy = "internal/x/a_test.go"
 	sleepySrc := "package x\n\nimport \"time\"\n\nfunc f() { time.Sleep(1) }\n"
 	cases := []struct {
-		name string
-		args func(t *testing.T) (string, []string)
+		name    string
+		verdict int
+		args    func(t *testing.T) (string, []string)
 	}{
-		{"-cases", func(t *testing.T) (string, []string) {
-			root := cliRoot(t, nil, nil, nil, map[string]string{sleepy: sleepySrc})
+		{"-cases", 0, func(t *testing.T) (string, []string) {
+			root := cliRoot(t, nil, nil, nil, map[string]string{})
 			return root, []string{"-cases", "internal/x/gone_test.go"}
 		}},
-		{"-tests with a finding", func(t *testing.T) (string, []string) {
+		{"-tests with a finding", 1, func(t *testing.T) (string, []string) {
 			root := cliRoot(t, nil, nil, nil, map[string]string{sleepy: sleepySrc})
 			list := filepath.Join(t.TempDir(), "files.nul")
 			if err := os.WriteFile(list, []byte(sleepy+"\x00"), 0o644); err != nil {
@@ -1625,7 +1631,7 @@ func TestCLIWriteFailureIsExit2(t *testing.T) {
 			}
 			return root, []string{"-tests", list}
 		}},
-		{"-tests clean", func(t *testing.T) (string, []string) {
+		{"-tests clean", 0, func(t *testing.T) (string, []string) {
 			root := cliRoot(t, nil, nil, nil, map[string]string{"internal/x/b_test.go": "package x\n"})
 			list := filepath.Join(t.TempDir(), "files.nul")
 			if err := os.WriteFile(list, []byte("internal/x/b_test.go\x00"), 0o644); err != nil {
@@ -1633,11 +1639,34 @@ func TestCLIWriteFailureIsExit2(t *testing.T) {
 			}
 			return root, []string{"-tests", list}
 		}},
+		{"normal mode with a finding", 1, func(t *testing.T) (string, []string) {
+			root := cliRoot(t, nil, nil, nil, map[string]string{"internal/event/planted.go": "package event\n\nimport _ \"" + mod + "internal/model\"\n"})
+			list := filepath.Join(t.TempDir(), "files.nul")
+			if err := os.WriteFile(list, []byte("internal/event/planted.go\x00"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return root, []string{list}
+		}},
+		{"normal mode clean", 0, func(t *testing.T) (string, []string) {
+			root := cliRoot(t, nil, nil, nil, map[string]string{"internal/model/x.go": "package model\n"})
+			list := filepath.Join(t.TempDir(), "files.nul")
+			if err := os.WriteFile(list, []byte("internal/model/x.go\x00"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return root, []string{list}
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			root, args := c.args(t)
+			var ok strings.Builder
+			if code := cli(root, args, &ok); code != c.verdict {
+				t.Fatalf("witness: cli %v: exit %d, want %d; output %q", args, code, c.verdict, ok.String())
+			}
+			if c.name == "-cases" && !strings.HasPrefix(ok.String(), "internal/x/gone_test.go: fault : ") {
+				t.Fatalf("witness: cli %v: output %q, want the missing file's fault line", args, ok.String())
+			}
 			if code := cli(root, args, failWriter{}); code != 2 {
 				t.Errorf("cli %v with a failing writer: exit %d, want 2", args, code)
 			}
