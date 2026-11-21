@@ -105,13 +105,19 @@ func (rt *router) writeTable(it item) {
 		it.reply <- reply{err: ErrDrained}
 		return
 	}
-	err := a.write(it.table, it.op, it.rows)
-	if err == nil {
-		for _, row := range copyRows(it.rows) { // one record per row: Records counts lines (break-it S1)
-			a.rec.put(recItem{kind: rTable, table: it.table, op: it.op, rows: [][]event.Value{row}})
-		}
+	it.reply <- reply{err: a.applyWrite(it.table, it.op, it.rows)}
+}
+
+// applyWrite applies one table write to a and queues one record per row written (Records counts lines: break-it
+// S1); a write that fails records nothing.
+func (a *appState) applyWrite(table int, op TableOp, rows [][]event.Value) error {
+	if err := a.write(table, op, rows); err != nil {
+		return err
 	}
-	it.reply <- reply{err: err}
+	for _, row := range copyRows(rows) {
+		a.rec.put(recItem{kind: rTable, table: table, op: op, rows: [][]event.Value{row}})
+	}
+	return nil
 }
 
 // event is design §4: the ingest step (stamping e in place), the offers by key, and one message per shard, each a

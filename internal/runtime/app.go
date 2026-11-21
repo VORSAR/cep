@@ -72,7 +72,7 @@ func (r *Runtime) newAppState(id AppID, app App, start int64) *appState {
 		a.dec[sid] = event.NewDecoder(sch)
 	}
 	if app.Recorder != nil {
-		a.rec = newRecQ(app.Recorder, r.cfg.RecordQueue)
+		a.rec = newRecQ(app.Recorder, recordQueueFor(r.cfg.RecordQueue, app.Loads))
 		a.rec.put(recItem{kind: rHeader, arrival: start}) // the header first (design s3-2b-2 §7)
 	}
 	for _, b := range app.Sinks {
@@ -81,6 +81,18 @@ func (r *Runtime) newAppState(id AppID, app App, start int64) *appState {
 		a.all = append(a.all, q)
 	}
 	return a
+}
+
+// recordQueueFor is an app's recording queue: the configured size plus one slot per starting row, which is
+// max(configured, 1 + rows + (configured - 1)). The header and every starting row are queued before the recorder
+// starts, so they always fit and leave the room an app without starting rows has after its header; a full queue
+// still ends the recording (owner D2 of S3.2b-2's design).
+func recordQueueFor(configured int, loads []TableLoad) int {
+	n := configured
+	for _, l := range loads {
+		n += len(l.Rows)
+	}
+	return n
 }
 
 // installRoutes makes the app reachable: per stream, the rules reading it (the router's, once: build for a built

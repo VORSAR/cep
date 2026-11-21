@@ -18,6 +18,10 @@ func build(cfg Config, apps []App) (*Runtime, error) {
 		if err := validateApp(i, &apps[i]); err != nil {
 			return nil, err
 		}
+		if len(apps[i].Loads) > 0 { // applied by the activation step, which a built app never takes
+			return nil, fmt.Errorf(
+				"runtime: app %d: starting rows are applied at Activate, and a built app is never activated", i)
+		}
 	}
 	r := &Runtime{
 		cfg: cfg, intake: make(chan item, cfg.Intake), handoff: make(chan handoff, cfg.Shards),
@@ -85,7 +89,10 @@ func validateApp(i int, a *App) error {
 			return err
 		}
 	}
-	return checkSinks(i, a)
+	if err := checkSinks(i, a); err != nil {
+		return err
+	}
+	return checkLoads(i, a)
 }
 
 // checkSchemas checks that the app has one schema per stream, each describing its stream.
@@ -187,6 +194,23 @@ func checkSinks(i int, a *App) error {
 	for bi, b := range a.Sinks {
 		if b.Stream < 0 || b.Stream >= len(a.Streams) || !a.Streams[b.Stream].Derived || b.Sink == nil {
 			return fmt.Errorf("runtime: app %d sink %d: binds no derived stream, or has no sink", i, bi)
+		}
+	}
+	return nil
+}
+
+// checkLoads checks each starting load against its table and a recording, so the activation step cannot fail.
+func checkLoads(i int, a *App) error {
+	for _, l := range a.Loads {
+		if a.Tables == nil || l.Table < 0 || l.Table >= a.Tables.Len() {
+			return fmt.Errorf("runtime: app %d: starting rows for table %d: the app has no such table", i, l.Table)
+		}
+		tb := a.Tables.Table(l.Table)
+		if err := tb.Check(l.Rows); err != nil {
+			return fmt.Errorf("runtime: app %d: starting rows for table %d: %w", i, l.Table, err)
+		}
+		if err := CheckRows(tb.Name(), tb.Attrs(), l.Rows); err != nil {
+			return fmt.Errorf("runtime: app %d: starting rows for table %d: %w", i, l.Table, err)
 		}
 	}
 	return nil
