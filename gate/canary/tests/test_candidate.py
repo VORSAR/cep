@@ -448,9 +448,9 @@ class Structural(unittest.TestCase):
         i, j = (next(k for k, t in enumerate(tools) if t["name"] == n) for n in ("go", "golangci-lint"))
         tools[i], tools[j] = tools[j], tools[i]
         faults = self.faults()
-        self.assertTrue(faults)
-        self.assertTrue(
-            [f for f in faults if f.startswith("canary: go") or f.startswith("canary: golangci-lint")], faults
+        self.assertEqual(
+            faults,
+            ["canary: go moved: position 3 \u2192 4", "canary: golangci-lint moved: position 4 \u2192 3"],
         )
 
 
