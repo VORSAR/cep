@@ -90,9 +90,8 @@ class BreakitMain(unittest.TestCase):
         token = f"{F10}:{R10}:1"
         code, printed = self.main()
         self.assertEqual(code, 1, printed)
-        if token in printed:
-            code, again = self.main("--accept", token)
-            self.assertEqual(code, 0, f"the tool offered ACCEPT {token}, and following it is refused again:\n{again}")
+        self.assertIn(f"value-change {F10} rule {R10} block 1 key {K1[:12]}: REFUSED", printed)  # the witness
+        self.assertNotIn(token, printed)
 
 
 class BreakitTier1(unittest.TestCase):
