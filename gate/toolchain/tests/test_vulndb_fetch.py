@@ -185,7 +185,8 @@ class Main(unittest.TestCase):
     def test_an_argument_is_a_usage_error(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            self.assertEqual(vulndb_fetch.main(["--now"], self.environ), 2)
+            code = vulndb_fetch.main(["--now"], self.environ)
+        self.assertEqual((code, out.getvalue()), (2, "vulndb: usage: fetch-vulndb takes no arguments, got --now\n"))
 
 
 class CopyRoot(unittest.TestCase):

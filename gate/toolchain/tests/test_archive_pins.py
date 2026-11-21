@@ -4,6 +4,7 @@ Lane F1's own tests, written before QA's equivalence test was on the branch. Eac
 from the archive's bytes, or from the tree the real installer published, never from archive_pins itself.
 """
 
+import errno
 import io
 import os
 import tempfile
@@ -104,8 +105,9 @@ class ArchivePinsTest(support.ToolchainTest):
         self.assertFalse(os.path.lexists(made[0]))
 
     def test_listed_executable_that_is_a_symlink_is_refused(self) -> None:
-        with self.assertRaises(OSError):
+        with self.assertRaises(OSError) as caught:
             install.archive_pins(self.archive, "demo/", ["bin/alias"])
+        self.assertEqual(caught.exception.errno, errno.ELOOP)
 
 
 if __name__ == "__main__":
