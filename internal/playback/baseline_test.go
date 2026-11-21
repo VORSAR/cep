@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -53,6 +54,7 @@ var baselineWrite = flag.String("baseline-write", "", "write the fresh baseline 
 // TestBaseline locks Tier 2: every built corpus file's blocks, run fresh, equal their stored lines byte for byte (the
 // header's spec_rev aside, which only the regen tool writes).
 func TestBaseline(t *testing.T) {
+	t.Parallel()
 	out := *baselineWrite
 	files := blFiles(t)
 	if len(files) != blWantFiles {
@@ -179,7 +181,10 @@ func blKeys(t *testing.T, app *model.App) []string {
 	t.Helper()
 	var keys []string
 	for _, r := range app.Rules {
-		streams, tables := blUses(&r)
+		streams, tables, err := blUses(&r)
+		if err != nil {
+			t.Fatalf("rule %s: %v", r.Name, err)
+		}
 		one := model.App{Language: app.Language, Params: app.Params}
 		for _, s := range app.Streams {
 			if streams[s.Name] {
@@ -213,8 +218,8 @@ func blKeys(t *testing.T, app *model.App) []string {
 }
 
 // blUses is the streams a rule reads or writes and the tables its expressions read (an `in` operand, a text
-// operator's table).
-func blUses(r *model.Rule) (map[string]bool, map[string]bool) {
+// operator's table), from a plain body's source or a window body's; an error for a body kind it does not read.
+func blUses(r *model.Rule) (map[string]bool, map[string]bool, error) {
 	streams, tables := map[string]bool{r.InsertInto: true}, map[string]bool{}
 	var walk func(e *model.Expr)
 	walk = func(e *model.Expr) {
@@ -228,14 +233,39 @@ func blUses(r *model.Rule) (map[string]bool, map[string]bool) {
 			walk(&e.Args[i])
 		}
 	}
-	if src := &r.Body.Source; src.Stream != "" { // a plain or window body; S4.1 adds a pattern's steps here
-		streams[src.Stream] = true
-		walk(&src.Filter)
+	var src *model.Source
+	switch r.Body.Kind {
+	case model.BodyPlain:
+		src = &r.Body.Source
+	case model.BodyWindow:
+		src = &r.Body.Window.Source
+	default: // a pattern's steps come with the pattern engine
+		return nil, nil, fmt.Errorf("a %q body: the block key does not read it yet", r.Body.Kind)
 	}
+	streams[src.Stream] = true
+	walk(&src.Filter)
 	for i := range r.Select {
 		walk(&r.Select[i].Expr)
 	}
-	return streams, tables
+	return streams, tables, nil
+}
+
+// TestTheBlockKeyReadsAWindowRulesSourceAndItsFilterTables: a window body keeps its source in Body.Window.Source
+// (Body.Source stays empty), so blUses reads the stream and the filter's tables there; a body kind it does not read
+// is an error, never a key without the rule's inputs.
+func TestTheBlockKeyReadsAWindowRulesSourceAndItsFilterTables(t *testing.T) {
+	t.Parallel()
+	win := model.Rule{InsertInto: "Out", Body: model.Body{Kind: model.BodyWindow, Window: model.Window{
+		Source: model.Source{Stream: "S", Filter: model.Expr{Kind: model.ExprIn, Table: "T"}}}}}
+	streams, tables, err := blUses(&win)
+	if err != nil || !maps.Equal(streams, map[string]bool{"Out": true, "S": true}) ||
+		!maps.Equal(tables, map[string]bool{"T": true}) {
+		t.Errorf("blUses(window) = %v, %v, %v; want streams {Out, S}, tables {T}, no error", streams, tables, err)
+	}
+	pat := model.Rule{InsertInto: "Out", Body: model.Body{Kind: model.BodyPattern}}
+	if _, _, err := blUses(&pat); err == nil {
+		t.Errorf("blUses(pattern) = nil error; want an error naming the body kind it does not read")
+	}
 }
 
 func blHeaderLine(t *testing.T, name string, specRev int) string {

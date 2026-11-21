@@ -143,21 +143,13 @@ func TestAppendEventRefusesAnArrivalTsOutOfRange(t *testing.T) {
 }
 
 // TestEveryEnvelopeSchemaIsValid guards three blocks no test can reach (owner G1 decision 3, "defensive: guaranteed
-// by <the named contract>"): NewReader's error returns after event.NewSchema on its three constant schemas
-// (reader.go:98-100 the envelope, :103-105 the header, :108-110 the rejected record). Contract: each of those
-// constant schemas is valid. This test builds the same three schemas and fails if one stops being valid.
+// by <the named contract>"): envelopeSchemas' error returns after event.NewSchema on its three constant schemas (the
+// envelope, the header, the rejected record). Contract: each of those constant schemas is valid. This test calls
+// envelopeSchemas itself and fails if one stops being valid.
 func TestEveryEnvelopeSchemaIsValid(t *testing.T) {
 	t.Parallel()
-	if _, err := event.NewSchema("log", envelopeAttrs[:], event.ArrivalTime); err != nil {
-		t.Errorf("the envelope schema (reader.go:97): %v", err)
-	}
-	if _, err := event.NewSchema("recording", []event.Attr{{Name: "start", Type: event.TTimestamp}},
-		event.ArrivalTime); err != nil {
-		t.Errorf("the header schema (reader.go:101): %v", err)
-	}
-	if _, err := event.NewSchema("rejected", []event.Attr{{Name: "attr", Type: event.TString, Optional: true}, {
-		Name: "reason", Type: event.TString}}, event.ArrivalTime); err != nil {
-		t.Errorf("the rejected record's schema (reader.go:106): %v", err)
+	if _, _, _, err := envelopeSchemas(); err != nil {
+		t.Fatalf("envelopeSchemas: %v", err)
 	}
 }
 

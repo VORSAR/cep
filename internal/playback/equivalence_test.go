@@ -4,9 +4,11 @@ package playback_test
 // same recording run live (runtime.Start, N shards, Config.Now popping the recording's arrival stamps, TickEvery 0)
 // and in replay (NewPlanDriver; and runtime.Sync directly, for the counters the driver does not expose) gives, per
 // rule and key, the identical output sequence, and equal stream-late, construct-late, suppressed, purged, errored
-// and key-error counts. Each rule has its own derived stream with the key projected into it, so an output names
-// its rule and key. No `time arrival` stream (its stamping is S3.2b-2's). Teeth: a planted body whose output
-// depends on the shard that built it turns the comparison red for N > 1.
+// and key-error counts. The construct-late count is compared but not exercised: no seed drops an event
+// construct-late, and TestLiveEqualsReplay's coverage guard does not ask for one. Each rule has its own derived
+// stream with the key projected into it, so an output names its rule and key. No `time arrival` stream (its stamping
+// is S3.2b-2's). Teeth: a planted body whose output depends on the shard that built it turns the comparison red for
+// N > 1.
 
 import (
 	"context"
@@ -256,6 +258,9 @@ func eqLive(t testing.TB, p *plan.App, recs []playback.Record, n int) (*eqResult
 	defer mu.Unlock()
 	if extra > 0 {
 		return nil, fmt.Errorf("Config.Now read %d times beyond once at Start and once per event (design §7.8)", extra)
+	}
+	if len(stamps) != 0 {
+		return nil, fmt.Errorf("Config.Now read %d times short of once at Start and once per event (design §7.8)", len(stamps))
 	}
 	res.streamLate, res.rules = lateRow(st.Streams[0]), st.Rules[0]
 	return res, nil

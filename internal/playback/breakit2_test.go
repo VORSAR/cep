@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand/v2"
 	"strconv"
@@ -77,7 +78,7 @@ func bkFault(t *testing.T, app *playback.App, what, log string, line int) {
 func bkClean(t *testing.T, app *playback.App, what, log string, n int) []playback.Record {
 	t.Helper()
 	recs, err := bkRead(t, app, log)
-	if err == nil || err.Error() != "EOF" || len(recs) != n {
+	if !errors.Is(err, io.EOF) || len(recs) != n {
 		t.Errorf("%s: want %d records and EOF, got %d and %v", what, n, len(recs), err)
 	}
 	return recs

@@ -116,7 +116,9 @@ func q2Start(t testing.TB, p *plan.App, shards int, now func() int64, rec runtim
 	t.Cleanup(func() {
 		cctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		_ = r.Close(cctx)
+		if err := r.Close(cctx); err != nil {
+			t.Errorf("Close: %v", err)
+		}
 		l.cancel()
 	})
 	return l
