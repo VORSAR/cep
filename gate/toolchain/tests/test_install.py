@@ -91,18 +91,21 @@ class HappyPath(InstallTest):
 
     def test_the_tool_directory_itself_is_read_only(self):
         home = self.pin(self.MEMBERS)
-        self.run_main("install")
+        code, lines = self.run_main("install")
+        self.assertEqual(code, 0, lines)
         self.assertEqual(stat.S_IMODE(os.stat(home).st_mode) & 0o222, 0)
 
     def test_the_cache_holds_only_the_tool_afterwards(self):
         # Design note §3 step 6: the download and the temporary directory are gone.
         home = self.pin(self.MEMBERS)
-        self.run_main("install")
+        code, lines = self.run_main("install")
+        self.assertEqual(code, 0, lines)
         self.assertEqual(os.listdir(self.cache), [os.path.basename(home)])
 
     def test_the_installed_tree_hashes_as_written_out_by_hand(self):
         home = self.pin([Member("demo/bin/demo", data=b"x", mode=0o755), Member("demo/d", "l", link="bin/demo")])
-        self.run_main("install")
+        code, lines = self.run_main("install")
+        self.assertEqual(code, 0, lines)
         lines = b"d bin -\n" + b"x bin/demo " + support.sha256(b"x").encode() + b"\n" + b"l d bin/demo\n"
         self.assertEqual(manifest.tree_sha256(home), hashlib.sha256(lines).hexdigest())
 

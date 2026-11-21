@@ -316,7 +316,9 @@ class Reader(HandoffTest):
         tools = self.tools()
         missing = os.path.join(self.world, "no-such-handoff.json")
         outcome, _, _ = self.run_check(tools, "full", run_id=RUN_B, handoff_in=missing)
-        self.assertEqual(outcome.covered, 0)  # the witness: at full tree, the same path is a fault
+        self.assertEqual(
+            (outcome.reasons, outcome.covered), ((f"parity: tree hand-off {missing}: No such file or directory",), 0)
+        )  # the witness: at full tree, the same path is read and is a fault
         outcome, children, _ = self.run_check(tools, "t1", run_id=RUN_B, handoff_in=missing, full_tree=False)
         self.assertEqual(outcome, parity.Outcome(reasons=(), covered=2, taken=0, taken_from=""))
         self.assertEqual(children.argvs, [])

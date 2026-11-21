@@ -664,8 +664,18 @@ class RealCache(support.ToolchainTest):
         # The world is this test's HOME; go's telemetry (perhaps a detached child of its own) writes counters there,
         # and under load the world's removal found the folder not empty (S1.1c-5's T4, 2026-11-15).
         go = [tool for tool in self.tools if tool.name == "go"]
-        parity.check(go, self.real_cache, self.env, full_tree=False, spawn=parity.popen, scratch=self.scratch,
-                     run_id=RUN_ID, handoff_in=None)  # fmt: skip  # aligned arguments
+        outcome = parity.check(
+            go,
+            self.real_cache,
+            self.env,
+            full_tree=False,
+            spawn=parity.popen,
+            scratch=self.scratch,
+            run_id=RUN_ID,
+            handoff_in=None,
+        )
+        # The witness that go ran: a probe refused before go (path, version) would leave no telemetry either.
+        self.assertEqual(reasons_of(outcome), [])
         written = [os.path.join(d, f) for d, _, files in os.walk(self.world) for f in files if "telemetry" in d]
         # Only setUp's off switch, written before any probe: no counter, no upload token.
         self.assertEqual([p for p in written if os.path.basename(p) != "mode"], [], written)

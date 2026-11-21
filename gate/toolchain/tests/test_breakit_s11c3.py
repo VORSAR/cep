@@ -23,8 +23,8 @@ def a_tool() -> manifest.Tool:
         version_line="go1.0",
         url="https://example.invalid/go.tar.gz",
         archive_sha256="00" * 32,
-        strip="go",
-        exec_sha256={},
+        strip="go/",
+        exec_sha256={"bin/go": "00" * 32},
         tree_sha256=DIGEST,
     )
 
@@ -56,24 +56,17 @@ class TreeChildFailureIsNotADamagedTool(unittest.TestCase):
 
     def test_a_child_that_cannot_start(self):
         got = self.reason(refusing_spawn, None)
-        self.assertIsNotNone(got)
-        self.assertNotIn("tree differs", got, "BK-S5: a spawn failure (EMFILE) is reported as a damaged tool")
+        self.assertEqual(got, "go: tree hash could not start: [Errno 24] Too many open files")
 
     def test_a_child_that_crashes(self):
         got = self.reason(parity.popen, (sys.executable, "-I", "-B", "-c", "raise RuntimeError('the hasher broke')"))
-        self.assertIsNotNone(got)
-        self.assertNotIn(
-            "tree differs", got, "BK-S5: a crashed tree child (exit 1, a traceback) is reported as a damaged tool"
-        )
+        self.assertEqual(got, "go: tree hash failed (exit 1): Traceback (most recent call last):")
 
     def test_a_child_killed_by_a_signal(self):
         got = self.reason(
             parity.popen, (sys.executable, "-I", "-B", "-c", "import os, signal; os.kill(os.getpid(), signal.SIGKILL)")
         )
-        self.assertIsNotNone(got)
-        self.assertNotIn(
-            "tree differs", got, "BK-S5: a tree child killed by a signal (-9) is reported as a damaged tool"
-        )
+        self.assertEqual(got, "go: tree hash failed (exit -9)")
 
 
 class FinishedTreeHashLeavesNoLiveGroup(unittest.TestCase):
