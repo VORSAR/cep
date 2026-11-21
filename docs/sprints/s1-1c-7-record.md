@@ -248,6 +248,25 @@ Its new later items:
   - `test_mutate` passes 83 tests under `CGO_ENABLED=0`;
   - PR1-F1 to -F5 re-run at F6's tree, all red (the agent's runs).
 
+**Main's red nightly** ([decisions](decisions.md#owner-decisions-2026-11-21--mains-red-nightly-and-pr-1s-ci)):
+- **What failed:** main's nightly at 5b4ddac, run 44896088970, failed in `race-stress`: `panic: test timed out after 10m0s`.
+- **Cause:** the row runs 20 repeats under one `go test` with no `-timeout`. It took 519.8 s on 2026-11-20 and 601 s on 2026-11-21, at the same commit.
+- **Not a hang:** the timeout's stack dump showed the running tests 0–1 s old, and no goroutine blocked for a minute.
+- **The fix, PR #53:** `fix/race-stress-timeout` (4a86074).
+  - `-timeout 25m` under `--repeat`, held in `STRESS_TIMEOUT_MIN`.
+  - A pin test reads the race-stress row and checks 25 min + 60 s + 120 s ≤ its `timeout_s`.
+  - `--repeat=1` and no-repeat cases.
+- **Proofs, re-run by the coordinator:**
+  - green, 27 tests;
+  - the budget pin red at `timeout_s` 600;
+  - the `repeat > 1` mutant red;
+  - the timeout removed, red (2 failures).
+- **Reviews:** blind architecture and QA reviews found no blocker. The should-fix (FRT-A-1 = FRT-Q-1) and FRT-Q-2 are fixed in the commit.
+- **Gate on the branch:** T2 exit 0 (20261121T135342Z-00c60c), T4 lint exit 0, T4 proofs exit 0 (230 s).
+- **Forwarded to the backlog,** pending the owner's acceptance:
+  - FRT-A-2: race.py reads `--repeat` twice; read it once in the parse loop after S1.1c-7 lands;
+  - FRT-Q-3: `--repeat=0` and `-1` reach go with weak reasons. This predates the fix; S1.1c-7's A1-1 already refuses a non-number.
+
 **Process changes:**
 - heavy, load and timing runs are serialised on a quiet machine (E1 held after C5);
 - every lane proof is re-run on the integration branch;
