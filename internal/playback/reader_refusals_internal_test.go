@@ -303,9 +303,9 @@ func TestReaderNamesTheFirstFaultOfALine(t *testing.T) {
 		{"no choosing key after the stop names the stop", cnHeader + "\n" + stop + "\n" + `{"attrs":{}}`, 3,
 			"a record after the stop record"},
 		{"a table with a stream key names the key", `{"table":"T","op":"put","row":{"k":"a","v":1},"stream":"S"}`, 1,
-			`a table record has no "stream" key`},
+			`a table record takes no "stream" key`},
 		{"a tick with a stream key and no header names the key", `{"tick":"` + cnT0 + `","stream":"S"}`, 1,
-			`a tick record has no "stream" key`},
+			`a tick record takes no "stream" key`},
 		{"no choosing key", `{"attrs":{}}`, 1,
 			"a record names none of recording, table, batch_end, tick, stop, rejected or stream"},
 	})

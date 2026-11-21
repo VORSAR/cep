@@ -124,7 +124,7 @@ func (r *Reader) recordKind(vals []event.Value) (RecordKind, error) {
 	rk := &recordKinds[kind]
 	for i := range eCount {
 		if !vals[i].Null && !rk.allowed[i] {
-			return 0, r.fault("a %s record has no %q key", rk.name, envelopeAttrs[i].Name)
+			return 0, r.fault("a %s record takes no %q key", rk.name, envelopeAttrs[i].Name)
 		}
 	}
 	return rk.kind, nil
