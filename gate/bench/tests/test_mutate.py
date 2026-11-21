@@ -160,6 +160,32 @@ func TestGoData(t *testing.T) {
 \t\t}
 \t}
 }
+
+func TestForge(t *testing.T) {
+\tt.Run("sub", func(t *testing.T) {
+\t\tt.Log("a note\\n--- FAIL: TestForge/sub (0.00s)")
+\t\tif Add(0, 0) != 0 {
+\t\t\tt.Fatal("forged: Add(0, 0) != 0")
+\t\t}
+\t})
+}
+
+func TestForgeTimeout(t *testing.T) {
+\tt.Log("a note\\npanic: test timed out after 1s")
+\tif Add(0, 0) != 0 {
+\t\tt.Fatal("forged: Add(0, 0) != 0")
+\t}
+}
+
+func TestNest(t *testing.T) {
+\tt.Run("outer", func(t *testing.T) {
+\t\tt.Run("inner", func(t *testing.T) {
+\t\t\tif Add(2, 3) != 5 {
+\t\t\t\tt.Fatal("Add(2, 3) != 5")
+\t\t\t}
+\t\t})
+\t})
+}
 """
 
 ADD_HEAD = "func TestAdd(t *testing.T) {\n"
@@ -435,6 +461,21 @@ class Outcomes(Base):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines()[-1], "outcome: red", out)
 
+    def test_a_log_line_continued_as_a_timeout_panic_never_reads_timeout(self):
+        """go test -v indents a t.Log continuation line; go's own timeout panic starts its line."""
+        done = subprocess.run(
+            ["go", "test", "-count=1", "-v", "-run", "^TestForgeTimeout$", "./m"],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            timeout=300,
+        )
+        lines = done.stdout.decode("utf-8", errors="replace").splitlines()
+        self.assertIn("        panic: test timed out after 1s", lines)  # the witness: go test prints the log line
+        code, out = self.single("TestForgeTimeout")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
     def test_exit_0_with_no_pass_line_for_the_test_is_invalid(self):
         code, out = self.single("TestNoSuchTest")
         self.assertEqual(code, 1, out)
@@ -699,6 +740,20 @@ class Subtests(Base):
         self.assertEqual(code, 1, out)
         self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
 
+    def test_a_log_line_continued_as_a_fail_line_never_forges_a_red(self):
+        """go test -v writes a subtest's result line four spaces per depth, a t.Log continuation eight spaces in:
+        the subtest passes, and the FAIL text in its log makes the run invalid, never red."""
+        code, out = self.subtest("TestForge", "sub")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+        self.assertIn("\n          --- FAIL: TestForge/sub (0.00s)\n", out)  # the witness, in the tail (two spaces in)
+
+    def test_a_nested_subtest_is_judged_at_its_own_depth(self):
+        code, out = self.subtest("TestNest", "outer/inner")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(ran(out), ["ran: TestNest/outer/inner"], out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
     def test_go_spaces_in_a_subtest_name_are_rewritten_as_go_test_names_them(self):
         """U+00A0 and U+2003 (Go spaces, not ASCII): the names go test itself prints are the ones mutate.py runs."""
         done = subprocess.run(
@@ -895,6 +950,29 @@ class Empty(unittest.TestCase):
 """
 
 CALC = "pkg.tests.test_calc.Calc."
+
+PY_TWO = """\
+import sys
+import unittest
+
+from pkg import calc
+
+
+class Two(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(calc.add(2, 3), 5)
+
+    def test_weak(self):
+        self.assertEqual(calc.add(0, 0), 0)
+
+
+class Echo(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(calc.add(2, 3), 5)
+
+    def test_says_ran_1(self):
+        sys.stderr.write("\\nRan 1 test in 0.001s\\n")
+"""
 PY_FIND = "return a + b"
 
 
@@ -917,6 +995,7 @@ class PyMode(unittest.TestCase):
                 "pkg/calc.py": PY_CALC,
                 "pkg/tests/__init__.py": "",
                 "pkg/tests/test_calc.py": PY_TESTS,
+                "pkg/tests/test_two.py": PY_TWO,
             },
         )
         os.makedirs(os.path.join(self.repo, "gate", "runner"))
@@ -1031,6 +1110,20 @@ class PyMode(unittest.TestCase):
         self.assertIn("copy: detached worktree at ", out)
         self.assertEqual(self.snapshot(), self.before)
         self.assertEqual(self.git("worktree", "list", "--porcelain"), self.worktrees)
+
+    def test_a_class_id_running_two_tests_with_one_failure_is_invalid_never_red(self):
+        """design-W0 item 8: red is one test failing alone; unittest's last line says it ran 2."""
+        code, out = self.py("pkg.tests.test_two.Two", "return a - b")
+        self.assertIn("report: pyshim: pkg.tests.test_two.Two: failed: 1 failures, 0 errors", out)  # the witness
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+
+    def test_a_test_writing_a_ran_1_line_never_forges_a_red(self):
+        """The last `Ran N tests in` line is unittest's own: an earlier one written by a test counts for nothing."""
+        code, out = self.py("pkg.tests.test_two.Echo", "return a - b")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
+        self.assertIn("report: pyshim: pkg.tests.test_two.Echo: failed: 1 failures, 0 errors", out)  # the witness
 
     def test_repeat_with_load_runs_the_py_id_each_time_and_the_hogs_are_gone(self):
         code, out = self.py(CALC + "test_add", "return a - b", "--repeat", "2", "--load")
@@ -1305,6 +1398,33 @@ class Expect(Base):
         self.assertIn(f"entry E old {old}: green (expected green)", out)
         self.assertIn(f"entry E new {new}: red (expected red)", out)
         self.assertEqual(out.splitlines()[-1], "expect: 5 entries, 3 as expected; differing: B, D", out)
+
+    def test_the_old_sides_plant_is_printed_when_it_differs_from_the_new_sides(self):
+        weak = 't.Fatal("Add(0, 0) != 0")'
+        path = self.write_batch(
+            {"id": "A", "file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestWeak", **self.revs()}
+            | {"expect": {"old": "green", "new": "red"}},
+            {
+                "id": "W",
+                "file": "m/m_test.go",
+                "find": weak,
+                "replace": weak.replace("Fatal", "Log"),
+                "test": "TestWeak",
+            }
+            | self.revs()
+            | {"expect": {"old": "green", "new": "green"}},
+        )
+        code, out = self.mutate("--expect", path)
+        self.assertEqual(code, 0, out)
+        old, new = self.rev1[:12], self.rev2[:12]
+        lines = out.splitlines()
+        self.assertEqual(lines.count(f"plant at old {old}:"), 1, out)  # W's alone: m/m_test.go differs between them
+        self.assertEqual(lines.count(f"plant at new {new}:"), 1, out)
+        at_old, at_new = lines.index(f"plant at old {old}:"), lines.index(f"plant at new {new}:")
+        self.assertLess(lines.index("entry W"), at_old, out)
+        self.assertNotEqual(lines[at_old + 1 : at_new], lines[at_new + 1 : at_new + 1 + at_new - at_old - 1], out)
+        self.assertIn('-\t\tt.Fatal("Add(0, 0) != 0")', lines[at_old + 1 : at_new], out)
+        self.assertEqual(lines[-1], "expect: 2 entries, 2 as expected; differing: none", out)
 
     def test_an_entry_without_a_revision_or_naming_an_absent_one_is_refused(self):
         plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestWeak"}

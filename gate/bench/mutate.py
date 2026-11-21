@@ -36,7 +36,8 @@ duration, no exponent), replacing --timeout for that entry. An --expect
 entry also needs id (unique), old_rev and new_rev (full commit ids of this repository) and expect ({"old":
 <outcome>, "new": <outcome>}); old_test, new_test, old_subtest, new_subtest, old_py and new_py name a side's own
 test, and "control": true with no mutation reads the real code. Each entry runs at each revision, the plant built
-on that revision's blob; the mutation must occur exactly once in each. It prints `entry <id> <side> <rev>:
+on that revision's blob; the mutation must occur exactly once in each, and the header prints each side's plant under
+`plant at old <rev>:` and `plant at new <rev>:` when the two differ. It prints `entry <id> <side> <rev>:
 <outcome> (expected <word>)` for each side, then `expect: <n> entries, <k> as expected; differing: <ids or none>`,
 and exits 0 only when nothing differs.
 
@@ -55,12 +56,14 @@ build`): the files compiled are the GoFiles and CgoFiles of each package `go lis
 other file is applied in the worktree, where the test reads it: data, JSON, and a .go file the go tool never
 compiles because a component of its path is named testdata or starts with "_" or ".".
 
-Go outcomes, judged in order: timeout (go test's own -timeout backstop), red (the line `--- FAIL: <Test> (`), green
-(exit 0 and `--- PASS: <Test> (`), invalid (anything else). A subtest is judged by its own lines: invalid with no
-`=== RUN` line for it, or a `--- SKIP:` one; red on its own `--- FAIL:` line (a parent's FAIL alone is invalid);
-green on exit 0, its own `--- PASS:` line and no FAIL line at all; invalid otherwise, as when the probe counts other
-than one run. Python outcomes: timeout (the wall clock), red (exit 1, the shim's only problem `failed: 1 failures, 0
-errors`, and `Ran 1 test in`), green (exit 0 and `passed 1 tests`), invalid (anything else: an import error, a skip,
+Go outcomes, judged in order: timeout (go test's own -timeout backstop, its `panic: test timed out after` at a line's
+start), red (the line `--- FAIL: <Test> (`), green (exit 0 and `--- PASS: <Test> (`), invalid (anything else). A
+subtest is judged by its own lines, four spaces in per t.Run depth (each prefix of its path that ran as a test of its
+own: a t.Log continuation line is eight spaces in): invalid with no `=== RUN` line for it, or a `--- SKIP:` one; red
+on its own `--- FAIL:` line (a parent's FAIL alone is invalid); green on exit 0, its own `--- PASS:` line and no FAIL
+line at all; invalid otherwise, as when the probe counts other than one run. Python outcomes: timeout (the wall
+clock), red (exit 1, the shim's only problem `failed: 1 failures, 0 errors`, and unittest's last `Ran N tests in`
+line saying 1), green (exit 0 and `passed 1 tests`), invalid (anything else: an import error, a skip,
 zero tests, a failure beside a leak). Only red counts (owner, 2026-11-16, G1 decision 4). Single mode exits 0 on
 red, 1 otherwise; batch mode 0 when every entry is red; --repeat N --load runs N times under CPU hogs and exits 0
 when k >= 1 of N. Exit 2 on a refusal or an internal error; the last line says which.
@@ -622,10 +625,19 @@ def diff(c: Change) -> list[str]:
     return [line.rstrip("\n") for line in lines]
 
 
+def depth(text: str, t: Target) -> int:
+    """The designated subtest's t.Run nesting depth: each prefix of its path that go test ran as a test of its own.
+    A level name may hold "/" (t.Run("a/b", ...) is one level, its result line four spaces in, not eight)."""
+    prefixes = ("/".join((t.test, *t.levels[:k])) for k in range(1, len(t.levels) + 1))
+    return sum(1 for prefix in prefixes if re.search(rf"^=== RUN\s+{re.escape(prefix)}$", text, re.MULTILINE))
+
+
 def judge_go(result: gorun.Result, t: Target) -> str:
-    """A subtest is judged by its own lines only: a parent FAIL without the subtest's own FAIL line is invalid."""
+    """A subtest is judged by its own lines only: a parent FAIL without the subtest's own FAIL line is invalid. Its
+    result lines are matched exactly four spaces per depth in, and go's timeout panic only at a line's start: go
+    test -v writes a t.Log continuation line eight spaces in, so a log cannot forge a depth-1 result or a timeout."""
     text = f"{result.stdout}\n{result.stderr}"
-    if "panic: test timed out after" in text:
+    if re.search(r"^panic: test timed out after", text, re.MULTILINE):
         return "timeout"
     if not t.levels:
         if re.search(rf"^--- FAIL: {re.escape(t.test)} \(", text, re.MULTILINE):
@@ -640,14 +652,15 @@ def judge_go(result: gorun.Result, t: Target) -> str:
     name = re.escape(t.full)
     if not re.search(rf"^=== RUN\s+{name}$", text, re.MULTILINE):
         return "invalid"
-    if re.search(rf"^\s*--- SKIP: {name} \(", text, re.MULTILINE):
+    indent = " " * 4 * depth(text, t)
+    if re.search(rf"^{indent}--- SKIP: {name} \(", text, re.MULTILINE):
         return "invalid"
-    if re.search(rf"^\s*--- FAIL: {name} \(", text, re.MULTILINE):
+    if re.search(rf"^{indent}--- FAIL: {name} \(", text, re.MULTILINE):
         return "red"
     if (
         result.exit == 0
         and not result.timed_out
-        and re.search(rf"^\s*--- PASS: {name} \(", text, re.MULTILINE)
+        and re.search(rf"^{indent}--- PASS: {name} \(", text, re.MULTILINE)
         and not re.search(r"^\s*--- FAIL: ", text, re.MULTILINE)
     ):
         return "green"
@@ -655,15 +668,14 @@ def judge_go(result: gorun.Result, t: Target) -> str:
 
 
 def judge_py(result: gorun.Result, said: str, t: Target) -> str:
-    """Red only when the shim's sole problem is the one failure; a failure beside a leak or a skip is invalid."""
+    """Red only when the shim's sole problem is the one failure and unittest's own count, the last `Ran N tests in`
+    line (a test may write an earlier one), says 1; a failure beside a leak or a skip, or one of two tests, is
+    invalid."""
     if result.timed_out:
         return "timeout"
     head = f"pyshim: {t.py}: "
-    if (
-        result.exit == 1
-        and said == head + "failed: 1 failures, 0 errors"
-        and re.search(r"^Ran 1 test in ", result.stderr, re.MULTILINE)
-    ):
+    counts = re.findall(r"^Ran (\d+) tests? in ", result.stderr, re.MULTILINE)
+    if result.exit == 1 and said == head + "failed: 1 failures, 0 errors" and counts[-1:] == ["1"]:
         return "red"
     if result.exit == 0 and said == head + "passed 1 tests":
         return "green"
@@ -891,13 +903,17 @@ def header(e: Entry, head: str = "") -> list[str]:
 
 
 def expect_header(e: Entry) -> list[str]:
-    """An --expect entry's designated tests at each revision, its timeout, and its plant at the new revision."""
+    """An --expect entry's designated tests at each revision, its timeout, and its plant: once when both revisions'
+    plants print alike, else each, built on its own revision's file."""
     named = [
         f"{side}: {t.py or t.full} at {rev[:12]}"
         for side, t, rev in (("old", e.old, e.old_rev), ("new", e.new, e.new_rev))
     ]
     package = [] if e.new.py else [f"package: ./{e.pkg}"]
-    plant = ["control: the real code"] if e.control else [line for change in e.changes for line in diff(change)]
+    old = [line for change in e.old_changes for line in diff(change)]
+    new = [line for change in e.changes for line in diff(change)]
+    both = [f"plant at old {e.old_rev[:12]}:", *old, f"plant at new {e.new_rev[:12]}:", *new]
+    plant = ["control: the real code"] if e.control else new if old == new else both
     return [f"entry {e.id}", f"note: {e.note}", *named, *package, f"timeout: {e.timeout}", *plant]
 
 
