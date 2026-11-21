@@ -1,0 +1,50 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/bench/compare.py",
+    "find": "f\"p {float(p):.4g}, {alloc_text}: {verdict}\"",
+    "id": "G2-6",
+    "new_rev": "8d18dbb6f58f17789d80c9825c9bf89679675c13",
+    "old_rev": "535ecb7b908a54b656e715436301519783d5b23b",
+    "py": "gate.bench.tests.test_compare.RealGo.test_a_real_test_binary_against_itself",
+    "replace": "f\"p {float(p) / 10:.4g}, {alloc_text}: {verdict}\""
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-6-control",
+    "new_rev": "8d18dbb6f58f17789d80c9825c9bf89679675c13",
+    "old_rev": "535ecb7b908a54b656e715436301519783d5b23b",
+    "py": "gate.bench.tests.test_compare.RealGo.test_a_real_test_binary_against_itself"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/bench/load.py",
+    "find": "below = sorted(test for test, (k, f) in counts.items() if f or not k)",
+    "id": "G2-7",
+    "new_rev": "8d18dbb6f58f17789d80c9825c9bf89679675c13",
+    "old_rev": "535ecb7b908a54b656e715436301519783d5b23b",
+    "py": "gate.bench.tests.test_load.DiedOutsideATest.test_a_binary_that_times_out_names_the_test_or_the_cause",
+    "replace": "below: list[str] = []"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-7-control",
+    "new_rev": "8d18dbb6f58f17789d80c9825c9bf89679675c13",
+    "old_rev": "535ecb7b908a54b656e715436301519783d5b23b",
+    "py": "gate.bench.tests.test_load.DiedOutsideATest.test_a_binary_that_times_out_names_the_test_or_the_cause"
+  }
+]

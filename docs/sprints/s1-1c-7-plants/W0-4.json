@@ -1,0 +1,30 @@
+[
+ {
+  "file": "gate/bench/escapes.py",
+  "find": "_texts(before, counted_before)",
+  "note": "W0-4 G10-2: revert plant",
+  "py": "gate.bench.tests.test_escapes.Escapes.test_a_helper_that_existed_before_with_its_own_heap_line_is_no_cost",
+  "replace": "_texts(before, {original_before})"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "\n    def exit(self, status: int = 0, message: str | None = None) -> NoReturn:\n        \"\"\"Reached only from --help, after the usage is printed (error is overridden above).\"\"\"\n        raise Helped\n",
+  "note": "W0-4 G10-3 mutate.py: revert plant",
+  "py": "gate.bench.tests.test_mutate.Refusals.test_help_prints_the_usage_and_exits_0_before_any_go_command",
+  "replace": ""
+ },
+ {
+  "file": "gate/bench/load.py",
+  "find": "\n    def exit(self, status: int = 0, message: str | None = None) -> NoReturn:\n        \"\"\"Reached only from --help, after the usage is printed (error is overridden above).\"\"\"\n        raise Helped\n",
+  "note": "W0-4 G10-3 load.py: revert plant",
+  "py": "gate.bench.tests.test_load.Fake.test_help_prints_the_usage_and_exits_0_before_any_go_command",
+  "replace": ""
+ },
+ {
+  "file": "gate/bench/compare.py",
+  "find": "', '.join(repeated)}\")",
+  "note": "W0-4 G10-4: revert plant",
+  "py": "gate.bench.tests.test_compare.Verdict.test_a_benchmark_reported_twice_is_named_alone",
+  "replace": "', '.join(sorted(names))}\")"
+ }
+]

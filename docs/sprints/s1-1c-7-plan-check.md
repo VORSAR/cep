@@ -13,7 +13,7 @@ The coordinator re-checked every reviewer claim this version relies on (§10).
 ```
 Sprint S1.1c-7 — correctness and truthful tests: every behaviour defect the survey found, sprint ids in text users
 see, and every test that does not test what it claims · routine: full (no semantics panel)
-SP ≈ 39 (S1.1c-6's rate, §1; owner, Q2) · cap 2 weeks · one PR
+SP ≈ 39 (S1.1c-6's rate, §1; owner, Q2) · cap 2 weeks · one PR (annotated 2026-11-21: one per wave, three)
 Entry (G0)   ☐ card complete and approved (§12) ☐ dependencies merged, main green (S1.1c-6, PR #49; close-out #50;
                the gate-hole fix, PR #51, merged as a2a63be and 5b4ddac)
              ☐ fits the cap, lanes ≤ 8 days, commits projected ≤ 95 (§1)
@@ -75,7 +75,7 @@ Then comes **S4.1**, the pattern engine.
    - one fix round;
    - T4;
    - the owner's check.
-5. **One PR,** merged by the owner.
+5. **One PR,** merged by the owner. *(annotated 2026-11-21: one PR per wave, each passing T2, T4 and a blind architecture and QA review of its combined build — [S1.1's pull requests](decisions.md#owner-decisions-2026-11-21--s11s-pull-requests))*
 
 Each proof goes into the record as it is made; G3 waits until every proof made so far has its row. Timing runs on mains power only (sprint model §10).
 
@@ -216,7 +216,7 @@ A package's K1 or K2 commit may split by file once it passes 12 findings, inside
 | Record, T4 and G5 docs | 3 |
 | **Total** | **≈ 80** |
 
-Each lane's ceiling is its line plus 2. The coordinator re-projects from the notes' commit columns before G1; a projection over 95 goes back to the owner. The lanes' ceilings together could reach 96, so at each lane hand-back the coordinator checks a running total: commits made so far plus the remaining projection must stay ≤ 95. A breach stops the next wave and goes to the owner (PA3-L3).
+Each lane's ceiling is its line plus 2. The coordinator re-projects from the notes' commit columns before G1; a projection over 95 goes back to the owner. The lanes' ceilings together could reach 96, so at each lane hand-back the coordinator checks a running total: commits made so far plus the remaining projection must stay ≤ 95. A breach stops the next wave and goes to the owner (PA3-L3). *(annotated 2026-11-21: the cap and the running total apply per pull request — [S1.1's pull requests](decisions.md#owner-decisions-2026-11-21--s11s-pull-requests), decision 2)*
 
 **Size, from S1.1c-6's rate** (owner, Q2):
 - S1.1c-6 was carded at 13 SP and built at about 19, for 91 findings, in six calendar days. That is 0.21 SP a finding and about 3.2 SP a day.
@@ -475,7 +475,7 @@ One kind per commit (§1). Every proof is quoted in the record with its exact co
 - **The coordinator's stdlib checker** (committed as evidence, quoted with its exit line) checks:
   - the ids are exactly the 186;
   - there are no duplicates;
-  - each fix commit is in the PR's range and touches the finding's file;
+  - each fix commit is in the PR's range and touches the finding's file *(annotated 2026-11-21: the sprint's range, across its pull requests)*;
   - each merge target is itself fixed, with no cycles;
   - each rejection has a reason, and each partial fix names its carry target;
   - each fixed id has a proof row whose outcome words fit its kind: K1 red; K1c red with k/N, then 50/50; K1h red with `compare.py`'s verdict (PQ3-L4); K2a green/red/green; K2b green/red/green with 0 → more than 0; K2c red/green with 50/50; K2d timeout/red; K2e the check's red → green; K2-del red on the deleted test and on a remaining test; K6 astequal exit 0 with no `// Output:` change;

@@ -1,0 +1,44 @@
+[
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "_entry_timeout(spec.get(\"timeout\"), default_timeout)",
+  "note": "W0-3 #14b: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Batch.test_an_entry_timeout_replaces_the_runs_timeout_for_that_entry",
+  "replace": "default_timeout"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "    if isinstance(value, str):\n        seconds(value)\n",
+  "note": "W0-3 #14c: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Refusals.test_a_bad_entry_timeout_is_refused_before_any_build",
+  "replace": "    if isinstance(value, str):\n        pass\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "    differing = [e.id for e in entries if outcomes[e.id] != e.expect]\n",
+  "note": "W0-3 #17 (a): feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Expect.test_an_entry_off_its_expectation_exits_1_naming_it_and_the_control_reads_the_real_code",
+  "replace": "    differing = []\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "            _git_ok(\"-C\", path, *NO_HOOKS, \"checkout\", \"-q\", \"--force\", \"--detach\", rev)\n",
+  "note": "W0-3 #17 (b): feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Expect.test_an_entry_off_its_expectation_exits_1_naming_it_and_the_control_reads_the_real_code",
+  "replace": "            pass\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "    if _git(\"rev-parse\", \"--verify\", \"--quiet\", f\"{rev}^{{commit}}\").stdout.strip() != rev:\n",
+  "note": "W0-3 #17a: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Expect.test_an_entry_without_a_revision_or_naming_an_absent_one_is_refused",
+  "replace": "    if False:\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "        unknown = sorted(set(spec) - EXPECT_KEYS)\n",
+  "note": "W0-3 #18: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Refusals.test_an_unknown_key_or_an_expect_key_in_a_plain_batch_is_refused",
+  "replace": "        unknown = sorted(set())\n"
+ }
+]

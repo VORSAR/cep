@@ -1,0 +1,174 @@
+[
+  {
+    "id": "G2-149-clean",
+    "file": "tools/archcheck/main.go",
+    "find": "\t\treturn out.exit(1)\n\t}\n\treturn out.exit(0)\n}",
+    "replace": "\t\treturn out.exit(1)\n\t}\n\tif !tests {\n\t\treturn 0\n\t}\n\treturn out.exit(0)\n}",
+    "test": "TestCLIWriteFailureIsExit2",
+    "pkg": "tools/archcheck",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-149-finding",
+    "file": "tools/archcheck/main.go",
+    "find": "\tif len(findings) > 0 {\n\t\treturn out.exit(1)",
+    "replace": "\tif len(findings) > 0 {\n\t\tif !tests {\n\t\t\treturn 1\n\t\t}\n\t\treturn out.exit(1)",
+    "test": "TestCLIWriteFailureIsExit2",
+    "pkg": "tools/archcheck",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-150",
+    "file": "tools/archcheck/main.go",
+    "find": "\"purity: channel send: only internal/runtime, io/* and cmd use channels (ADR-0015 §2.2)\"",
+    "replace": "\"purity: channel type: only internal/runtime, io/* and cmd use channels (ADR-0015 §2.2)\"",
+    "test": "TestPurity",
+    "pkg": "tools/archcheck",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-151-map",
+    "file": "tools/archcheck/main.go",
+    "find": "\t\tl.Purity[pkg][imp] = append(l.Purity[pkg][imp], ident)\n",
+    "replace": "\t\tl.Purity[pkg][imp] = append(l.Purity[pkg][imp], ident)\n\t\tl.Purity[pkg][imp+\"/x\"] = []string{ident}\n",
+    "test": "TestListsPurity",
+    "pkg": "tools/archcheck",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-151-live",
+    "file": "tools/allowlists/purity.json",
+    "find": "\"target\": \"internal/table: sync.Mutex\"",
+    "replace": "\"target\": \"internal/table: sync.RWMutex\"",
+    "test": "TestListsPurity",
+    "pkg": "tools/archcheck",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "red",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-149-control",
+    "test": "TestCLIWriteFailureIsExit2",
+    "pkg": "tools/archcheck",
+    "control": true,
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-150-control",
+    "test": "TestPurity",
+    "pkg": "tools/archcheck",
+    "control": true,
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-151-control",
+    "test": "TestListsPurity",
+    "pkg": "tools/archcheck",
+    "control": true,
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-147-control",
+    "test": "TestTestsModeRefusesANonTestFile",
+    "pkg": "tools/archcheck",
+    "control": true,
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "3c12b2daf907b3357f26f88d21283c8af672ccaa",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-154-usage",
+    "file": "tools/astequal/main.go",
+    "find": "\"usage: astequal <before-rev> [<after-rev>] [<paths>]\"",
+    "replace": "\"\"",
+    "test": "TestRunExitCodes",
+    "pkg": "tools/astequal",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "64d74ece7f4100fde9faef238cb450f5837ca31a",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-154-git",
+    "file": "tools/astequal/main.go",
+    "find": "readSides(s, paths)\n\tif err != nil {\n\t\t_, _ = fmt.Fprintln(stderr, \"astequal:\", err)",
+    "replace": "readSides(s, paths)\n\tif err != nil {\n\t\t_, _ = fmt.Fprintln(stderr, \"astequal:\")",
+    "test": "TestRunExitCodes",
+    "pkg": "tools/astequal",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "64d74ece7f4100fde9faef238cb450f5837ca31a",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-154-parse",
+    "file": "tools/astequal/main.go",
+    "find": "compareSources(before, after)\n\tif err != nil {\n\t\t_, _ = fmt.Fprintln(stderr, \"astequal:\", err)",
+    "replace": "compareSources(before, after)\n\tif err != nil {\n\t\t_, _ = fmt.Fprintln(stderr, \"astequal:\")",
+    "test": "TestRunExitCodes",
+    "pkg": "tools/astequal",
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "64d74ece7f4100fde9faef238cb450f5837ca31a",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-154-control",
+    "test": "TestRunExitCodes",
+    "pkg": "tools/astequal",
+    "control": true,
+    "old_rev": "d34e1fe5b2e224a3b9e4ea436879d9f3ac2eec57",
+    "new_rev": "64d74ece7f4100fde9faef238cb450f5837ca31a",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  }
+]

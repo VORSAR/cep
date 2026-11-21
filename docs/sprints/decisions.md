@@ -123,6 +123,10 @@
 | 2026-11-19 | [S1.1c-6's review and break-it](#owner-decisions-2026-11-19--s11c-6s-review-and-break-it) |
 | 2026-11-19 | [S1.1c-6's T4 and the owner's check](#owner-decisions-2026-11-19--s11c-6s-t4-and-the-owners-check) |
 | 2026-11-20 | [S1.1c-6's close-out](#owner-decisions-2026-11-20--s11c-6s-close-out) |
+| 2026-11-20 | [S1.1c-7's survey](#owner-decisions-2026-11-20--s11c-7s-survey) |
+| 2026-11-20 | [S1.1c-7's plan check](#owner-decisions-2026-11-20--s11c-7s-plan-check) |
+| 2026-11-20 | [S1.1c-7's design (G1)](#owner-decisions-2026-11-20--s11c-7s-design-g1) |
+| 2026-11-21 | [S1.1's pull requests](#owner-decisions-2026-11-21--s11s-pull-requests) |
 
 ## The decisions
 
@@ -1290,3 +1294,22 @@ After the nine design notes ([the coordination record](s1-1c-7-design-coordinati
 5. **The build runs W0 with four agents** (mutate.py's contract and the bench fixes; the naming tool; W0-go's tool tests; `table.Check`), **then lanes A1, B, E1 and A2 together, then E2 and CD**, with the stratified spot-check after each wave. Rejected: the plan's five waves of two.
 
 The design notes' own choices (undecided behaviour, user text, the recording queue's size, G2-107's narrowed header) are listed in the coordination record as the notes' or the coordinator's choices, not as owner decisions.
+
+### Owner decisions, 2026-11-21 — S1.1's pull requests
+
+During S1.1c-7's W0, the owner said the sprint can use more than one pull request. Three answers followed, all as recommended.
+
+1. **One pull request per wave.** S1.1c-7 has three:
+   - PR 1: the plan check, the design notes and W0 (the proof tools, the naming tool, W0-go's tool tests, `table.Check`);
+   - PR 2: the four lanes of W1 and W2 (A1, A2, B, E1);
+   - PR 3: W3 (E2, CD), T4 and G5.
+
+   Lanes that depend on each other land in the same pull request: A1's G3-72 edit to an A2 driver, and E1's C7 before E2.
+
+   Rejected: one pull request per lane, which forces a merge order across those couplings; two pull requests, the second about 60 commits with one late review.
+2. **The rule holds for all of S1.1** (S1.1c-7 to S1.1c-10): each pull request at most 100 commits, with linear history. Ground rule 19's text is unchanged. This decision overrides its "one sprint = one PR" until the S1.1 row closes, as decision 1 of [S1.1c-7's design (G1)](#owner-decisions-2026-11-20--s11c-7s-design-g1) does for rule 17. The plan check's commit cap and running total apply per pull request.
+
+   Rejected: S1.1c-7 only; changing rule 19 for good.
+3. **Each pull request passes T2 and T4** (the proofs and lint jobs) **and a blind architecture and QA review of its combined build**, whose findings are fixed before the pull request reaches the owner. The whole-engine break-it stays at G5.
+
+   Rejected: the gate alone for each pull request, with one combined review at G5.
