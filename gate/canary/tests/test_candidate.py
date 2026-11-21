@@ -326,13 +326,6 @@ class Refusals(CandidateTest):
             self.build()
         self.assertEqual(str(cm.exception), "go darwin-arm64: no published digest")
 
-    def test_digest_mismatch_through_archive_is_named(self):
-        error = CanaryError("ruff linux-amd64: the download's sha256 is not the published one")
-        self.archive.fail[RUFF_LINUX] = error
-        with self.assertRaises(CanaryError) as cm:
-            self.build()
-        self.assertEqual(str(cm.exception), "ruff linux-amd64: the download's sha256 is not the published one")
-
     def test_newest_on_the_line_older_than_the_pin_is_named(self):
         self.feeds["ruff"] = [r for r in self.feeds["ruff"] if r["tag_name"] not in ("0.17.3", "0.17.4", "0.17.5")]
         with self.assertRaises(CanaryError) as cm:

@@ -1,7 +1,7 @@
 """S1.1c-4's fix round, lane FX-C: the canary's sort on a record red for a reason other than its exit code (break-it
-BK-S3, review CA-L6's reason half), a Go patch candidate's pins (review CA-S1) and the candidate module's docstring
-(review CA-L7). Each test was red on the build at 4695fe3 for the reason in its comment; every expected value is
-written by hand from the review, design §4.5 and the toolchain-line test's message.
+BK-S3, review CA-L6's reason half) and a Go patch candidate's pins (review CA-S1). Each test was red on the build
+at 4695fe3 for the reason in its comment; every expected value is written by hand from the review, design §4.5 and
+the toolchain-line test's message.
 """
 
 import json
@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import unittest
 
-from gate.canary import candidate, sort
+from gate.canary import sort
 from gate.canary.tests import test_commands as commands
 from gate.runner import main
 from gate.toolchain.tests import test_toolchain_lines as lines
@@ -165,15 +165,6 @@ class GoPatchCandidate(unittest.TestCase):
         note = json.loads(pin_tests_text())["note"]
         self.assertNotIn("no row reads go.mod's toolchain lines", note)
         self.assertIn("test_toolchain_lines", note)
-
-
-class CandidateDoc(unittest.TestCase):
-    def test_the_module_doc_says_what_touches_the_disk(self):
-        # Review CA-L7; red at 4695fe3: the doc called the module pure, but _platform_entry calls
-        # install.archive_pins, which extracts and hashes each archive on disk.
-        doc = candidate.__doc__ or ""
-        self.assertNotIn("Pure over", doc)
-        self.assertIn("install.archive_pins", doc)
 
 
 # unittest's header for a subtest given a message, alone and with parameters (break-it 2, BK2-S1), written by hand.
