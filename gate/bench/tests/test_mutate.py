@@ -177,6 +177,35 @@ func TestForgeTimeout(t *testing.T) {
 \t}
 }
 
+func TestForge2(t *testing.T) {
+\tt.Run("outer", func(t *testing.T) {
+\t\tt.Run("inner", func(t *testing.T) {
+\t\t\tt.Log("a note\\n--- FAIL: TestForge2/outer/inner (0.00s)")
+\t\t\tif Add(0, 0) != 0 {
+\t\t\t\tt.Fatal("forged: Add(0, 0) != 0")
+\t\t\t}
+\t\t})
+\t})
+}
+
+func TestForge3(t *testing.T) {
+\tt.Run("outer", func(t *testing.T) {
+\t\tt.Run("inner", func(t *testing.T) {
+\t\t\tt.Log("a note\\n--- PASS: TestForge3/outer/inner (0.00s)")
+\t\t\tif Add(2, 3) != 5 {
+\t\t\t\tt.Fatal("forged: Add(2, 3) != 5")
+\t\t\t}
+\t\t})
+\t})
+}
+
+func TestFakeTimeout(t *testing.T) {
+\tfmt.Println("panic: test timed out after 1s")
+\tif Add(0, 0) != 0 {
+\t\tt.Fatal("forged: Add(0, 0) != 0")
+\t}
+}
+
 func TestNest(t *testing.T) {
 \tt.Run("outer", func(t *testing.T) {
 \t\tt.Run("inner", func(t *testing.T) {
@@ -402,6 +431,17 @@ class Base(unittest.TestCase):
             f.write(text)
         return path
 
+    def go_v(self, test: str) -> list[str]:
+        """go test -v's stdout lines for one top-level test of ./m in the fixture repo (a witness of its output)."""
+        done = subprocess.run(
+            ["go", "test", "-count=1", "-v", "-run", f"^{test}$", "./m"],
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            timeout=300,
+        )
+        return done.stdout.decode("utf-8", errors="replace").splitlines()
+
     def add_python(self) -> None:
         """The Python fixture beside the Go one, committed: pkg/ and a copy of the shim."""
         support.write(
@@ -463,16 +503,15 @@ class Outcomes(Base):
 
     def test_a_log_line_continued_as_a_timeout_panic_never_reads_timeout(self):
         """go test -v indents a t.Log continuation line; go's own timeout panic starts its line."""
-        done = subprocess.run(
-            ["go", "test", "-count=1", "-v", "-run", "^TestForgeTimeout$", "./m"],
-            cwd=self.repo,
-            env=self.env,
-            capture_output=True,
-            timeout=300,
-        )
-        lines = done.stdout.decode("utf-8", errors="replace").splitlines()
-        self.assertIn("        panic: test timed out after 1s", lines)  # the witness: go test prints the log line
+        self.assertIn("        panic: test timed out after 1s", self.go_v("TestForgeTimeout"))  # the witness
         code, out = self.single("TestForgeTimeout")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_test_printing_a_timeout_panic_at_a_line_start_and_passing_is_green(self):
+        """go test's own timeout: the panic from a test that never ended, and the package's fail (go test -json)."""
+        self.assertIn("panic: test timed out after 1s", self.go_v("TestFakeTimeout"))  # the witness, at a line start
+        code, out = self.single("TestFakeTimeout")
         self.assertEqual(code, 1, out)
         self.assertEqual(out.splitlines()[-1], "outcome: green", out)
 
@@ -741,12 +780,23 @@ class Subtests(Base):
         self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
 
     def test_a_log_line_continued_as_a_fail_line_never_forges_a_red(self):
-        """go test -v writes a subtest's result line four spaces per depth, a t.Log continuation eight spaces in:
-        the subtest passes, and the FAIL text in its log makes the run invalid, never red."""
+        """The verdict is go test -json's pass and fail actions for the subtest, never its output's text."""
+        self.assertIn("        --- FAIL: TestForge/sub (0.00s)", self.go_v("TestForge"))  # the witness: the log line
         code, out = self.subtest("TestForge", "sub")
         self.assertEqual(code, 1, out)
-        self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
-        self.assertIn("\n          --- FAIL: TestForge/sub (0.00s)\n", out)  # the witness, in the tail (two spaces in)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_depth_2_log_line_forging_its_own_fail_line_never_reads_red(self):
+        """At depth 2 a t.Log continuation line is byte for byte a result line: eight spaces, then `--- FAIL:`."""
+        self.assertIn("        --- FAIL: TestForge2/outer/inner (0.00s)", self.go_v("TestForge2"))  # the witness
+        code, out = self.subtest("TestForge2", "outer/inner")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_depth_2_log_line_forging_its_own_pass_line_never_hides_a_red(self):
+        code, out = self.subtest("TestForge3", "outer/inner")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
 
     def test_a_nested_subtest_is_judged_at_its_own_depth(self):
         code, out = self.subtest("TestNest", "outer/inner")
