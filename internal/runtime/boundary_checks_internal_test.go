@@ -5,9 +5,11 @@ package runtime
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/vorsar/cep/internal/event"
 )
@@ -351,4 +353,49 @@ func TestSendNamesANullRequiredTimeAttributeAsNotOptional(t *testing.T) {
 	e := cgEv(1)
 	e.Values[1] = event.Value{Kind: event.TTimestamp, T: e.Ts, Null: true}
 	bcSend(t, r, e, `attribute "ts" is null, and it is not optional`)
+}
+
+// Each refusal at the Go boundary states its rule and nothing else: no sprint, review or decision reference.
+func TestBoundaryRefusalsStateTheirRuleWithNoProcessReference(t *testing.T) {
+	t.Parallel()
+	bad, long := "a\xffb", strings.Repeat("a", event.MaxLogLine/6+1)
+	if utf8.ValidString(bad) {
+		t.Fatal("the malformed input is valid UTF-8")
+	}
+	send := func(edit func(e *event.Event)) error {
+		e := bcEv(1)
+		edit(&e)
+		return bcBuild(t, 3, nil).Send(cgCtx(t), 0, e)
+	}
+	str := []event.Attr{{Name: "x", Type: event.TString}}
+	twice := cgApp(t, func(event.Event) error { return nil })
+	twice.Rules[0].Inputs = []int{0, 0}
+	u8 := " holds malformed UTF-8, which a recording would replace with U+FFFD"
+	for name, c := range map[string]struct {
+		err    error
+		want   string
+		suffix bool
+	}{
+		"drained":          {ErrDrained, "runtime: the app is drained: its input has ended", false},
+		"ts":               {send(func(e *event.Event) { e.Ts = cgT0 }), fmt.Sprintf(`runtime: app 0 stream "s": Ts %d differs from the time attribute "ts", %d: an event-time stream's time is its attribute`, cgT0, cgT0+1), false},
+		"line":             {send(func(e *event.Event) { e.Values[1].Str = long }), fmt.Sprintf(`runtime: app 0 stream "s": the event could not fit one recording line of %d bytes`, event.MaxLogLine), false},
+		"unrecordable":     {send(func(e *event.Event) { e.Values[1].Str = bad }), `runtime: app 0 stream "s": attribute "o"` + u8, false},
+		"required":         {send(func(e *event.Event) { e.Values[0] = event.Value{Kind: event.TString, Null: true} }), `runtime: app 0 stream "s": attribute "k" is null, and it is not optional`, false},
+		"NaN":              {send(func(e *event.Event) { e.Values[2] = event.Value{Kind: event.TFloat, F: math.NaN()} }), `runtime: app 0 stream "s": attribute "f" is NaN: NaN and infinities are never values`, false},
+		"row float":        {CheckRows("T", []event.Attr{{Name: "x", Type: event.TFloat}}, [][]event.Value{{{Kind: event.TFloat, F: math.Inf(1)}}}), `row 0: attribute 0 "x": the float +Inf is not finite`, false},
+		"row unrecordable": {CheckRows("T", str, [][]event.Value{{{Kind: event.TString, Str: bad}}}), `row 0: attribute 0 "x"` + u8, false},
+		"row line":         {CheckRows("T", str, [][]event.Value{{{Kind: event.TString, Str: long}}}), fmt.Sprintf("row 0 could not fit one recording line of %d bytes", event.MaxLogLine), false},
+		"tick":             {bcBuild(t, 3, nil).Tick(cgCtx(t), math.MaxInt64), "runtime: Tick at 9223372036854775807 ms: outside the years 0000-9999, which a recording cannot write", false},
+		"input twice":      {validateApp(0, &twice), ": input 0 is listed twice", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			switch {
+			case c.err == nil:
+				t.Fatalf("no error; want %q", c.want)
+			case c.suffix && !strings.HasSuffix(c.err.Error(), c.want), !c.suffix && c.err.Error() != c.want:
+				t.Errorf("error %q; want %q", c.err.Error(), c.want)
+			}
+		})
+	}
 }

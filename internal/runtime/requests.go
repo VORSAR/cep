@@ -114,9 +114,7 @@ func (r *Runtime) Closed() bool { return r.isClosed() || r.inflight.closed() }
 // Tick hands a wall tick to the intake, behind every event already there.
 func (r *Runtime) Tick(ctx context.Context, now int64) error {
 	if !event.TimestampInRange(now) {
-		return fmt.Errorf(
-			"runtime: Tick at %d ms: outside the years 0000-9999, which a recording cannot write (owner D1 of S3.2b-2's "+
-				"design; break-it S2)", now)
+		return fmt.Errorf("runtime: Tick at %d ms: outside the years 0000-9999, which a recording cannot write", now)
 	}
 	if r.isClosed() {
 		return ErrClosed
