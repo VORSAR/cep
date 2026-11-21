@@ -3,6 +3,7 @@ package playback
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/plan"
@@ -58,7 +59,7 @@ func runBlock(p *plan.App, x *plan.Expect) (res BlockResult, err error) {
 	var outs []event.Event
 	d, err := NewPlanDriver(sub, func(e event.Event) { outs = append(outs, e) })
 	if err != nil {
-		return BlockResult{}, fault("%w", err)
+		return BlockResult{}, fault("%w", inPlayback{err})
 	}
 	if tid, err := seedGivenTables(d, x); err != nil {
 		return BlockResult{}, fault("given table %s: %w", p.Tables[tid].Name, err)
@@ -70,6 +71,13 @@ func runBlock(p *plan.App, x *plan.Expect) (res BlockResult, err error) {
 	res.Divergence, res.Line, res.Col = diverge(p.Streams[rule.Target].Schema, x, outs, res.Counts)
 	return res, nil
 }
+
+// inPlayback is a playback error wrapped by runBlock's fault, which already says "playback: ": its text without
+// that prefix, the error itself still in the chain.
+type inPlayback struct{ err error }
+
+func (e inPlayback) Error() string { return strings.TrimPrefix(e.err.Error(), "playback: ") }
+func (e inPlayback) Unwrap() error { return e.err }
 
 // seedGivenTables writes every given table's rows into the sandbox, in written order; the table that refuses a row and
 // TableWrite's own error, 0 and nil when every row is written.

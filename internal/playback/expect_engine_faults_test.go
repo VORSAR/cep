@@ -31,7 +31,7 @@ func TestRunExpectsReportsASandboxThatCannotBeBuilt(t *testing.T) {
 	t.Parallel()
 	p := &plan.App{Streams: []plan.Stream{{}}, Rules: []plan.Rule{{Name: "R"}}, Expects: []plan.Expect{{Block: 1}}}
 	res, err := playback.RunExpects(p)
-	const want = "playback: rule R, expect block 1: playback: stream 0 has no schema"
+	const want = "playback: rule R, expect block 1: stream 0 has no schema"
 	if err == nil || err.Error() != want || res != nil {
 		t.Errorf("RunExpects = %v, %v; want nil, %q", res, err, want)
 	}

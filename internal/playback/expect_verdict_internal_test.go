@@ -1,6 +1,7 @@
 package playback
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -119,5 +120,17 @@ func TestDivergeNamesAnotherOrderOnlyWhenEachThenRecordHasItsOwnOutput(t *testin
 		if text != c.want || line != c.line || col != c.col {
 			t.Errorf("%s: diverge = %q at %d:%d; want %q at %d:%d", c.name, text, line, col, c.want, c.line, c.col)
 		}
+	}
+}
+
+// TestASandboxFaultKeepsTheDriversErrorInTheChain: runBlock's fault for a sandbox NewPlanDriver refuses drops the
+// driver's own "playback: " from its text, and the driver's error stays in the chain (inPlayback), so errors.Is and
+// errors.As still reach it.
+func TestASandboxFaultKeepsTheDriversErrorInTheChain(t *testing.T) {
+	t.Parallel()
+	p := &plan.App{Streams: []plan.Stream{{}}, Rules: []plan.Rule{{Name: "R"}}, Expects: []plan.Expect{{Block: 1}}}
+	_, err := runBlock(p, &p.Expects[0])
+	if w, ok := errors.AsType[inPlayback](err); !ok || w.err.Error() != "playback: stream 0 has no schema" {
+		t.Fatalf("runBlock = %v; want the driver's own error in the chain", err)
 	}
 }
