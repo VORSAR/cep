@@ -1,8 +1,9 @@
 package playback_test
 
-// The log-side test harness for internal/playback (design note s3-2a-1 v2 §1, §5.2, §5.3; owner D1–D6): a test
-// composition that drives playback.Replay through partition.Rule the way S3.2a-2's router will — a test double for
-// that router, not a mirror of any logic under test. For each Step (design §1):
+// The log-side test harness for internal/playback: a test composition that drives playback.Replay through
+// partition.Rule with its own router double — it applies each step's Advances and offers its event to the rules
+// itself — so the tests built on it check playback's steps and the trace, not the runtime's routing (the runtime's
+// router is replayed through NewPlanDriver in plandriver_test.go and equivalence_test.go). For each Step:
 //   1. apply its Advances to every rule that reads the advanced stream;
 //   2. offer a StepEvent's event to every rule that reads its stream, under the attribute the test names as its key;
 //   3. then Advance(step.Tables) every rule and check the derivability invariant (Rule.CheckTimers).
