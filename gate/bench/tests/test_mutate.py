@@ -102,6 +102,8 @@ func TestTable(t *testing.T) {
 \t\t{"x+y (meta)", 0, 0, 0},
 \t\t{"dup", 0, 0, 0},
 \t\t{"dup", 0, 0, 0},
+\t\t{"case", 2, 3, 5},
+\t\t{"case#1", 0, 0, 0},
 \t}
 \tfor _, c := range cases {
 \t\tt.Run(c.name, func(t *testing.T) {
@@ -144,6 +146,18 @@ func TestData(t *testing.T) {
 \t}
 \tif got := fmt.Sprintln(Add(2, 3)); got != string(data) {
 \t\tt.Fatalf("Add(2, 3) = %q, testdata/want.txt holds %q", got, data)
+\t}
+}
+
+func TestGoData(t *testing.T) {
+\tfor _, name := range []string{"testdata/want.go", "_data/want.go"} {
+\t\tdata, err := os.ReadFile(name)
+\t\tif err != nil {
+\t\t\tt.Fatal(err)
+\t\t}
+\t\tif want := fmt.Sprintf("package want\\n\\nconst Sum = %d\\n", Add(2, 3)); string(data) != want {
+\t\t\tt.Fatalf("%s holds %q, want %q", name, data, want)
+\t\t}
 \t}
 }
 """
@@ -208,7 +222,47 @@ func TestNeg(t *testing.T) {
 \t\tt.Fatal("Neg(2) != -2")
 \t}
 }
+
+func TestNeg2(t *testing.T) {
+\tif Neg2(2) != -2 {
+\t\tt.Fatal("Neg2(2) != -2")
+\t}
+}
+
+func TestSep(t *testing.T) {
+\tif Sep(1) != 2 {
+\t\tt.Fatal("Sep(1) != 2")
+\t}
+}
 """
+
+TAIL = """\
+package m
+
+func Abs(a int) int {
+\tif a < 0 {
+\t\treturn -a
+\t}
+\treturn a
+}
+
+func Neg2(a int) int {
+\treturn -a
+}
+"""
+
+SEP_COMMENT = "// Sep: a form feed \x0c, a line separator \u2028, both inside one line."
+
+SEP = f"""\
+package m
+
+{SEP_COMMENT}
+func Sep(a int) int {{
+\treturn a + 1
+}}
+"""
+
+GO_DATA = "package want\n\nconst Sum = 5\n"
 
 GUARD = """\
 package g
@@ -255,6 +309,10 @@ class Base(unittest.TestCase):
                 "m/ignored.go": IGNORED,
                 "m/race.go": RACE_ONLY,
                 "u/u.go": UNUSED,
+                "m/tail.go": TAIL,
+                "m/sep.go": SEP,
+                "m/testdata/want.go": GO_DATA,
+                "m/_data/want.go": GO_DATA,
             },
         )
         self.git("init", "-q")
@@ -398,6 +456,13 @@ class OtherPackage(Base):
         self.assertIn("package: ./m", out)
         self.assertEqual(out.splitlines()[-1], "outcome: invalid", out)
 
+    def test_a_pkg_with_a_leading_dot_slash_is_printed_once(self):
+        code, out = self.single("TestGuard", CAUGHT, "--pkg", "./g")
+        self.assertEqual(code, 0, out)
+        self.assertIn("package: ./g\n", out)
+        self.assertNotIn("././", out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
     def test_a_batch_entry_takes_its_own_pkg(self):
         path = os.path.join(self.tmp, "batch.json")
         entries = [
@@ -507,6 +572,76 @@ class Refusals(Base):
             )
             self.assertIn(f"timeout {value!r} ", out.splitlines()[-1], value)
 
+    def test_a_plant_that_changes_nothing_is_refused_before_any_build(self):
+        # No subTest: a plant reading every case wrong must stop this test at its first case (--py's one failure).
+        context_only = "--- a/m/n.go\n+++ b/m/n.go\n@@ -7,3 +7,3 @@\n func Neg(a int) int {\n \treturn -a\n }\n"
+        cases = (
+            (["--file", "m/m.go", "--find", FIND, "--replace", FIND], "find equals replace"),
+            (["--patch", self.write_patch(context_only)], "a hunk of m/n.go has the same old and new lines"),
+        )
+        for argv, reason in cases:
+            out = self.refused(*argv, "--test", "TestAdd")
+            self.assertEqual(out.splitlines()[-1], f"error: refused: a plant that changes nothing: {reason}", out)
+
+    def test_an_entry_timeout_go_cannot_read_is_refused_naming_the_batch_key(self):
+        # No subTest (as above). Go's time.Duration holds at most 2**63 - 1 ns, about 2562047.788h.
+        longest = "is longer than Go's longest duration, about 2562047h"
+        cases = (
+            ("0s", "timeout '0s' is not positive"),
+            ("2562048h", f"timeout '2562048h' {longest}"),
+            (10**30, f"timeout '1000000000000000000000000000000s' {longest}"),
+            (1e20, f"timeout '100000000000000000000s' {longest}"),
+            (float("inf"), "timeout inf is not a Go duration or positive seconds"),
+            (float("nan"), "timeout nan is not a Go duration or positive seconds"),
+        )
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        for value, reason in cases:
+            out = self.refused("--batch", self.write_batch({**plant, "timeout": value}))
+            self.assertEqual(out.splitlines()[-1], f"error: refused: batch entry 1: {reason}", out)
+
+    def test_a_numeric_entry_timeout_is_written_as_a_go_duration_without_an_exponent(self):
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(self.log)
+        path = self.write_batch({**plant, "timeout": 0.00001}, {**plant, "timeout": "2562047h"})
+        code, out = self.mutate("--batch", path, env=self.fake_env)
+        self.assertEqual(code, 1, out)  # the fake go test prints nothing: invalid, twice
+        self.assertIn("timeout: 0.00001s\n", out)
+        self.assertIn("timeout: 2562047h\n", out)
+        with open(self.log, encoding="utf-8") as f:
+            tests = [line.split() for line in f if line.split()[1] == "test"]
+        self.assertEqual([argv[argv.index("-timeout") + 1] for argv in tests], ["0.00001s", "2562047h"], out)
+
+    def test_an_id_that_is_not_one_token_or_a_note_holding_a_line_break_is_refused_before_any_build(self):
+        # No subTest (as above).
+        head = self.git("rev-parse", "HEAD")
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        sides = {"old_rev": head, "new_rev": head, "expect": {"old": "red", "new": "red"}}
+        forged = "x\nexpect: 9 entries, 9 as expected; differing: none"
+        cases = (
+            ("--batch", {**plant, "id": "a b"}, "id 'a b' is not one printable token"),
+            ("--batch", {**plant, "id": ""}, "id '' is not one printable token"),
+            ("--expect", {**plant, **sides, "id": forged}, f"id {forged!r} is not one printable token"),
+            ("--batch", {**plant, "note": "one\ntwo"}, "note 'one\\ntwo' holds a control character or a line break"),
+            (
+                "--batch",
+                {**plant, "note": "one\u2028two"},
+                "note 'one\\u2028two' holds a control character or a line break",
+            ),
+        )
+        for mode, spec, reason in cases:
+            out = self.refused(mode, self.write_batch(spec))
+            self.assertEqual(out.splitlines()[-1], f"error: refused: batch entry 1: {reason}", out)
+
+    def test_a_subtest_with_a_cpu_list_is_refused_before_any_build(self):
+        argv = ("--file", "m/m.go", "--find", FIND, "--replace", CAUGHT, "--test", "TestTable", "--subtest", "F3")
+        out = self.refused(*argv, "--cpu", "1,2")
+        self.assertEqual(
+            out.splitlines()[-1], "error: refused: a subtest with --cpu 1,2: go test runs it once per value"
+        )
+        code, out = self.mutate(*argv, "--cpu", "2", env=self.fake_env)
+        self.assertEqual(code, 1, out)  # one value: the fake go ran, printed nothing, invalid
+
 
 def ran(out: str) -> list[str]:
     """The `ran:` lines a run printed, in order."""
@@ -583,6 +718,13 @@ class Subtests(Base):
                 self.assertEqual(ran(out), [f"ran: {go_name}"], out)
                 self.assertEqual(out.splitlines()[-1], "outcome: red", out)
 
+    def test_a_sibling_named_with_a_one_digit_suffix_is_not_counted_as_a_repeat(self):
+        """go test writes a repeated name as #NN, two digits or more: a literal sibling `case#1` is another test."""
+        code, out = self.subtest("TestTable", "case")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(ran(out), ["ran: TestTable/case"], out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
     def test_a_skipped_subtest_is_invalid(self):
         code, out = self.subtest("TestSkips", "skipped", "return b + a")
         self.assertEqual(code, 1, out)
@@ -643,6 +785,52 @@ class Patch(Base):
         self.assertEqual(lines[2:4], ["--- a/m/n.go", "+++ b/m/n.go"], diff)
         self.assertRegex(lines[4], r"^@@ -\d+,\d+ \+\d+,\d+ @@ func ", diff)
         code, out = self.mutate("--patch", self.write_patch(diff), "--test", "TestNeg")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_a_hunk_line_without_its_newline_is_refused_before_any_build(self):
+        # git apply --check calls it a corrupt patch; read as it stands, "\treturn a" took the next line's "}".
+        out = self.refused("--patch", self.write_patch(NEG_PATCH.removesuffix(" }\n") + " }"), "--test", "TestNeg")
+        self.assertIn("a hunk line without its newline", out.splitlines()[-1])
+
+    def test_a_crlf_patch_is_refused_before_any_build(self):
+        out = self.refused("--patch", self.write_patch(NEG_PATCH.replace("\n", "\r\n")), "--test", "TestNeg")
+        self.assertIn("CRLF", out.splitlines()[-1])
+
+    def test_a_context_line_holding_a_form_feed_or_a_line_separator_applies(self):
+        patch = (
+            f"--- a/m/sep.go\n+++ b/m/sep.go\n@@ -3,4 +3,4 @@\n {SEP_COMMENT}\n func Sep(a int) int {{\n"
+            "-\treturn a + 1\n+\treturn a + 2\n }\n"
+        )
+        code, out = self.mutate("--patch", self.write_patch(patch), "--test", "TestSep")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_a_hunk_matching_only_inside_a_line_is_refused_before_any_build(self):
+        inside = "--- a/m/m.go\n+++ b/m/m.go\n@@ -4 +4 @@\n-a + b\n+a - b\n"  # m.go's line is "\treturn a + b"
+        out = self.refused("--patch", self.write_patch(inside), "--test", "TestAdd")
+        self.assertEqual(out.splitlines()[-1], "error: refused: a hunk of m/m.go occurs 0 times, not exactly once")
+
+    def test_a_git_diff_hunk_whose_old_line_also_ends_another_line_applies(self):
+        clone = os.path.join(self.tmp, "clone")
+        subprocess.run(
+            ["git", "clone", "-q", self.repo, clone], env=self.env, check=True, capture_output=True, timeout=60
+        )
+        support.write(
+            clone,
+            {
+                "m/tail.go": TAIL.replace(
+                    "func Neg2(a int) int {\n\treturn -a\n", "func Neg2(a int) int {\n\treturn a\n"
+                )
+            },
+        )
+        done = subprocess.run(
+            ["git", "-C", clone, "diff", "--no-color", "-U0"], env=self.env, check=True, capture_output=True, timeout=60
+        )
+        diff = done.stdout.decode()
+        self.assertIn("\n-\treturn -a\n+\treturn a\n", diff)  # zero context: the old block is "\treturn -a\n" alone
+        self.assertEqual(TAIL.count("\treturn -a\n"), 2)  # Neg2's line, and the tail of Abs's "\t\treturn -a"
+        code, out = self.mutate("--patch", self.write_patch(diff), "--test", "TestNeg2")
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines()[-1], "outcome: red", out)
 
@@ -960,6 +1148,14 @@ class Compiled(Base):
             argv = ("--file", file, "--find", find, "--replace", replace, "--test", test, "--pkg", pkg)
             out = self.refused_after_listing(*argv)
             self.assertEqual(out.splitlines()[-1], f"error: refused: {reason}", out)
+
+    def test_a_go_file_under_testdata_or_an_underscore_directory_is_data_and_planted(self):
+        # No subTest (as above). The go tool never compiles testdata, _ or . directories: a test may read them.
+        for path in ("m/testdata/want.go", "m/_data/want.go"):
+            argv = ("--file", path, "--find", "Sum = 5", "--replace", "Sum = 6", "--test", "TestGoData", "--pkg", "m")
+            code, out = self.mutate(*argv)
+            self.assertEqual(code, 0, f"{path}: {out}")
+            self.assertEqual(out.splitlines()[-1], "outcome: red", out)
 
     def test_a_plant_in_a_race_only_file_is_compiled_under_race(self):
         argv = ("--file", "m/race.go", "--find", "return 1", "--replace", "return 2", "--test", "TestAdd", "--race")

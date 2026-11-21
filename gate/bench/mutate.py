@@ -8,10 +8,11 @@ design note W0, Part A as revised).
     python3.15 -I -B gate/bench/mutate.py --expect <entries.json> [--timeout 120s] [--race] [--cpu <list>]
 
 Run from the repo's top level. A mutation is a find text replaced once in one file (it must occur exactly once), or
-a unified diff (`git diff`'s output included; a batch entry's "patch" holds the diff's text): each hunk is placed by
-its old lines occurring exactly once in the progressively patched file, its start lines ignored and its line counts
-checked; a new, deleted or renamed file, a quoted path and the no-newline marker are refused. Every file it names
-must be tracked and equal to HEAD.
+a unified diff (`git diff`'s output included; a batch entry's "patch" holds the diff's text), split on the newline
+alone: each hunk is placed by its old lines occurring exactly once as whole lines of the progressively patched file
+(at its start or right after a newline), its start lines ignored and its line counts checked; a new, deleted or
+renamed file, a quoted path and the no-newline marker are refused. Every file it names must be tracked and equal to
+HEAD.
 
 Every run, Go and --py alike, in every mode (single, --batch, --repeat N --load, --race, --cpu, --expect), is in the
 run's one detached worktree per revision, outside the repo, reset between entries: the plant is committed there,
@@ -24,12 +25,14 @@ The designated test is --test, a top-level Go Test run in the first file's packa
 package's contract may live in a package that imports it), or --py, a dotted unittest id. --subtest (batch key
 "subtest") names one subtest of --test: split at "/", each level rewritten as go test names it (each Go space to
 "_"), QuoteMeta'd and anchored, so F3 never runs F30; a probe run first, each level also allowing go test's #NN
-suffix for a repeated name, must count exactly one run, and each run at the subtest's depth is printed as `ran:`. Go
+suffix for a repeated name (two digits or more, so a sibling named `case#1` is another test), must count exactly one
+run, and each run at the subtest's depth is printed as `ran:`. Go
 runs `go test` in the worktree, never with -trimpath; a --py id runs as `python3.15 -I -B -X dev -W error
 <worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock.
 
-A batch entry holds the single-mode flags as keys (file, find, replace, patch, test, subtest, py, pkg), with note,
-an optional id, and timeout: a Go duration or positive seconds, replacing --timeout for that entry. An --expect
+A batch entry holds the single-mode flags as keys (file, find, replace, patch, test, subtest, py, pkg; a leading
+"./" in pkg is dropped), with note, an optional id, and timeout: a Go duration or positive seconds (written as a Go
+duration, no exponent), replacing --timeout for that entry. An --expect
 entry also needs id (unique), old_rev and new_rev (full commit ids of this repository) and expect ({"old":
 <outcome>, "new": <outcome>}); old_test, new_test, old_subtest, new_subtest, old_py and new_py name a side's own
 test, and "control": true with no mutation reads the real code. Each entry runs at each revision, the plant built
@@ -38,14 +41,19 @@ on that revision's blob; the mutation must occur exactly once in each. It prints
 and exits 0 only when nothing differs.
 
 Refused (exit 2) before any go or Python test command: a file not tracked or differing from HEAD, a find text or a
-hunk occurring other than exactly once, a malformed diff, a --pkg that is not a tracked directory, a test name that
+hunk occurring other than exactly once, a malformed diff (a hunk line without its newline, CRLF line endings), a plant
+that changes nothing (find equals replace, a hunk whose old and new lines are the same), a timeout time.ParseDuration
+would not read as one nanosecond to its longest (about 2562047h) or a number that is not finite, an id that is not
+one printable token, a note holding a control character or a line break, a subtest with a --cpu list of more than
+one value (go test runs it once per value), a --pkg that is not a tracked directory, a test name that
 is not a top-level Test identifier, a --subtest without --test, with an empty level or with a rune go test would
 escape, a --py id that is not dotted identifiers, a mutation or a test given both ways or neither, --subtest,
 --pkg, --race or --cpu with --py, a malformed batch (every entry is checked before the first build), and a .go plant
 in a file the Go test's build does not compile at the revision planted (`<file> is not compiled by ./<pkg>'s test
 build`): the files compiled are the GoFiles and CgoFiles of each package `go list -deps -test -json ./<pkg>` (with
 -race under --race) lists inside the tree, and the TestGoFiles and XTestGoFiles of the package named. A plant in any
-other file (data, JSON, testdata) is applied in the worktree, where the test reads it.
+other file is applied in the worktree, where the test reads it: data, JSON, and a .go file the go tool never
+compiles because a component of its path is named testdata or starts with "_" or ".".
 
 Go outcomes, judged in order: timeout (go test's own -timeout backstop), red (the line `--- FAIL: <Test> (`), green
 (exit 0 and `--- PASS: <Test> (`), invalid (anything else). A subtest is judged by its own lines: invalid with no
@@ -60,15 +68,19 @@ when k >= 1 of N. Exit 2 on a refusal or an internal error; the last line says w
 
 import argparse
 import dataclasses
+import decimal
 import difflib
 import json
+import math
 import os
 import re
 import shutil
 import signal
 import sys
 import tempfile
+import unicodedata
 from collections.abc import Mapping, Sequence
+from fractions import Fraction
 from typing import NoReturn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -123,7 +135,9 @@ GO_SPACES = frozenset(
     )
 )
 _DURATION = re.compile(r"(?:[0-9]+(?:\.[0-9]*)?(?:ns|us|µs|ms|s|m|h))+")
-_UNIT_S = {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "ms": 1e-3, "s": 1.0, "m": 60.0, "h": 3600.0}
+_UNIT_NS = {"ns": 1, "us": 10**3, "µs": 10**3, "ms": 10**6, "s": 10**9, "m": 60 * 10**9, "h": 3600 * 10**9}
+GO_LONGEST_NS = 2**63 - 1  # time.Duration's largest value, about 2562047.788h: time.ParseDuration refuses more
+BREAKS = frozenset({"Cc", "Zl", "Zp"})  # control characters and line or paragraph separators: they can break a line
 _HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 _SKIP = ("diff --git ", "index ", "old mode ", "new mode ")
 _UNSUPPORTED = (
@@ -200,14 +214,17 @@ class Entry:
         return self.new
 
 
-def seconds(duration: str) -> float:
-    """A Go duration (`120s`, `2m30s`, `500ms`) in seconds."""
+def seconds(duration: str, key: str = "--timeout") -> float:
+    """A Go duration (`120s`, `2m30s`, `500ms`) in seconds; refused, naming `key`, unless time.ParseDuration reads it
+    as at least a nanosecond (it truncates less to 0, which go test reads as no timeout) and at most its longest."""
     if not _DURATION.fullmatch(duration):
-        raise Refused(f"--timeout {duration!r} is not a Go duration")
-    total = sum(float(n) * _UNIT_S[u] for n, u in re.findall(r"([0-9.]+)(ns|us|µs|ms|s|m|h)", duration))
-    if total <= 0:
-        raise Refused(f"--timeout {duration!r} is not positive")
-    return total
+        raise Refused(f"{key} {duration!r} is not a Go duration")
+    ns = sum(Fraction(n) * _UNIT_NS[u] for n, u in re.findall(r"([0-9.]+)(ns|us|µs|ms|s|m|h)", duration))
+    if ns < 1:
+        raise Refused(f"{key} {duration!r} is not positive")
+    if ns > GO_LONGEST_NS:
+        raise Refused(f"{key} {duration!r} is longer than Go's longest duration, about 2562047h")
+    return float(ns / 10**9)
 
 
 def _git(*argv: str, env: Mapping[str, str] | None = None) -> gorun.Result:
@@ -275,29 +292,31 @@ def pattern(t: Target, probe: bool) -> str:
     #NN suffix go test gives a repeated name."""
     parts = [f"^{t.test}$"]
     for level in t.levels:
-        parts.append(f"^{quote_meta(level)}{'(#[0-9]+)?' if probe else ''}$")
+        parts.append(f"^{quote_meta(level)}{'(#[0-9]{2,})?' if probe else ''}$")
     return "/".join(parts)
 
 
 def runs(text: str, t: Target) -> list[str]:
     """The probe's count: `=== RUN` names equal to the designated path, each level allowing a `#NN` suffix."""
     rx = r"^=== RUN\s+(" + re.escape(t.test)
-    rx += "".join("/" + re.escape(level) + r"(?:#[0-9]+)?" for level in t.levels) + r")$"
+    rx += "".join("/" + re.escape(level) + r"(?:#[0-9]{2,})?" for level in t.levels) + r")$"
     return re.findall(rx, text, re.MULTILINE)
 
 
 def ran(text: str, t: Target) -> list[str]:
     """Every `=== RUN` name under the designated parent at the designated depth, whatever its last level: a run that
     selected a sibling (F30 beside F3) shows it here."""
-    parent = re.escape(t.test) + "".join("/" + re.escape(level) + r"(?:#[0-9]+)?" for level in t.levels[:-1])
+    parent = re.escape(t.test) + "".join("/" + re.escape(level) + r"(?:#[0-9]{2,})?" for level in t.levels[:-1])
     return re.findall(r"^=== RUN\s+(" + parent + r"/[^/\n]+)$", text, re.MULTILINE)
 
 
 def parse_patch(text: str) -> list[tuple[str, list[tuple[str, str]]]]:
     """A unified diff (git diff's output included) as [(path, [(old block, new block), ...])]. Hunk start lines are
     ignored: each hunk is placed by its old block occurring exactly once; its counts must match its body."""
+    if "\r\n" in text:
+        raise Refused("--patch: CRLF line endings: a patch's lines end in LF alone (a path would keep its CR)")
     files: list[tuple[str, list[tuple[str, str]]]] = []
-    lines = text.splitlines(keepends=True)
+    lines = _lines(text)
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -324,6 +343,14 @@ def parse_patch(text: str) -> list[tuple[str, list[tuple[str, str]]]]:
     return files
 
 
+def _lines(text: str) -> list[str]:
+    """The text's lines, each keeping its newline, split on the newline alone: str.splitlines also splits on form
+    feed, FS, GS, RS, NEL, U+2028 and U+2029, which a context line may hold. A last line without its newline is kept
+    as it is."""
+    parts = text.split("\n")
+    return [part + "\n" for part in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
+
+
 def _patch_path(old: str, new: str) -> str:
     old, new = old.rstrip("\n").split("\t")[0], new.rstrip("\n").split("\t")[0]
     if old.startswith('"') or new.startswith('"'):
@@ -346,6 +373,8 @@ def _hunk(lines: list[str], i: int, old_n: int, new_n: int) -> tuple[str, str, i
         if i >= len(lines):
             raise Refused("--patch: a hunk shorter than its header")
         line = lines[i]
+        if not line.endswith("\n"):
+            raise Refused("--patch: a hunk line without its newline: git apply calls the patch corrupt")
         tag, body = (" ", line) if line == "\n" else (line[0], line[1:])  # an editor may strip a blank context line
         if tag == " ":
             old.append(body)
@@ -364,14 +393,25 @@ def _hunk(lines: list[str], i: int, old_n: int, new_n: int) -> tuple[str, str, i
     return "".join(old), "".join(new), i
 
 
+def _whole_lines(text: str, block: str) -> list[int]:
+    """Where `block` (whole lines, each ending in a newline) occurs as whole lines of `text`: at offset 0 or right
+    after a newline. Overlapping occurrences each count."""
+    found, at = [], text.find(block)
+    while at != -1:
+        if at == 0 or text[at - 1] == "\n":
+            found.append(at)
+        at = text.find(block, at + 1)
+    return found
+
+
 def apply(path: str, original: str, hunks: Sequence[tuple[str, str]]) -> str:
-    """The hunks applied in order on the progressively mutated text, each occurring exactly once."""
+    """The hunks applied in order on the progressively mutated text, each occurring exactly once as whole lines."""
     text = original
     for old, new in hunks:
-        count = _occurrences(text, old)
-        if count != 1:
-            raise Refused(f"a hunk of {path} occurs {count} times, not exactly once")
-        text = text.replace(old, new, 1)
+        found = _whole_lines(text, old)
+        if len(found) != 1:
+            raise Refused(f"a hunk of {path} occurs {len(found)} times, not exactly once")
+        text = text[: found[0]] + new + text[found[0] + len(old) :]
     return text
 
 
@@ -399,6 +439,8 @@ def changes_of(spec: Mapping[str, object], rev: str | None = None) -> tuple[Chan
             hunks.setdefault(path, []).extend(found)
         changes = []
         for path, found in hunks.items():
+            if any(old == new for old, new in found):
+                raise Refused(f"a plant that changes nothing: a hunk of {path} has the same old and new lines")
             original = base_text(path, rev)
             changes.append(Change(path, original, apply(path, original, found)))
         return tuple(changes)
@@ -407,6 +449,8 @@ def changes_of(spec: Mapping[str, object], rev: str | None = None) -> tuple[Chan
         raise Refused(f"--file {file!r} is not a repo-relative path")
     if not find:
         raise Refused("--find is empty")
+    if find == str(spec["replace"]):
+        raise Refused("a plant that changes nothing: find equals replace")
     original = base_text(file, rev)
     count = _occurrences(original, find)
     if count != 1:
@@ -415,14 +459,18 @@ def changes_of(spec: Mapping[str, object], rev: str | None = None) -> tuple[Chan
 
 
 def _entry_timeout(value: object, default: str) -> str:
-    """An entry's "timeout": a Go duration string or positive seconds; the run's --timeout when absent."""
+    """An entry's "timeout": a Go duration string, or positive seconds, written as a Go duration with no exponent;
+    the run's --timeout when absent. Either is refused, naming the batch key, unless go test can read it."""
     if value is None:
         return default
     if isinstance(value, str):
-        seconds(value)
+        seconds(value, "timeout")
         return value
-    if isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
-        return f"{value}s"
+    number = isinstance(value, int | float) and not isinstance(value, bool)
+    if number and (isinstance(value, int) or math.isfinite(value)) and value > 0:
+        duration = format(decimal.Decimal(repr(value)), "f") + "s"
+        seconds(duration, "timeout")
+        return duration
     raise Refused(f"timeout {value!r} is not a Go duration or positive seconds")
 
 
@@ -460,6 +508,8 @@ def entry(spec: Mapping[str, object], timeout: str, expect: bool = False) -> Ent
     if bool(old.py) != bool(new.py):
         raise Refused("an entry is all Go or all Python")
     pkg = None if spec.get("pkg") is None else str(spec["pkg"])
+    while pkg is not None and pkg.startswith("./") and len(pkg) > 2:  # printed as ./<pkg>: never ././
+        pkg = pkg[2:]
     if new.py and pkg is not None:
         raise Refused("pkg names a Go package: not with py")
     if pkg is not None:
@@ -497,7 +547,8 @@ def entry(spec: Mapping[str, object], timeout: str, expect: bool = False) -> Ent
 
 def _value_types(spec: Mapping[str, object]) -> None:
     """expect: exactly an old and a new outcome word; control: the literal true; timeout: checked by
-    _entry_timeout; every other value a string."""
+    _entry_timeout; every other value a string: an id one printable token (it is printed in the summary line), a
+    note with no control character or line break."""
     for key, value in spec.items():
         if key == "expect":
             if (
@@ -509,8 +560,14 @@ def _value_types(spec: Mapping[str, object]) -> None:
         elif key == "control":
             if value is not True:
                 raise Refused(f"control {value!r} is not true")
-        elif key != "timeout" and not isinstance(value, str):
+        elif key == "timeout":
+            continue
+        elif not isinstance(value, str):
             raise Refused(f"{key}: every value but expect, control and timeout must be a string")
+        elif key == "id" and (not value or not value.isprintable() or any(c.isspace() for c in value)):
+            raise Refused(f"id {value!r} is not one printable token")
+        elif key == "note" and any(unicodedata.category(c) in BREAKS for c in value):
+            raise Refused(f"note {value!r} holds a control character or a line break")
 
 
 def read_batch(path: str, expect: bool, default_timeout: str) -> list[Entry]:
@@ -704,6 +761,12 @@ def compiled(trees: Worktrees, rev: str, pkg: str, race: bool) -> frozenset[str]
     return frozenset(files)
 
 
+def _data(path: str) -> bool:
+    """A path the go tool never compiles, so a .go file there is data: a component named testdata, or starting with
+    "_" or "."."""
+    return any(part == "testdata" or part.startswith(("_", ".")) for part in path.split("/"))
+
+
 def check_compiled(entries: Sequence[Entry], race: bool, trees: Worktrees, head: str, batched: bool) -> None:
     """Refused: a .go plant in a file the Go test's build never compiles at the revision planted (a `//go:build
     ignore` file, a package the test does not import), which go test would pass unseen. A plant in any other file
@@ -715,7 +778,7 @@ def check_compiled(entries: Sequence[Entry], race: bool, trees: Worktrees, head:
         sides = ((e.old_rev, e.old_changes), (e.new_rev, e.changes)) if e.old_rev else ((head, e.changes),)
         for rev, changes in sides:
             for change in changes:
-                if not change.file.endswith(".go"):
+                if not change.file.endswith(".go") or _data(change.file):
                     continue
                 if (rev, e.pkg) not in listed:
                     listed[rev, e.pkg] = compiled(trees, rev, e.pkg, race)
@@ -947,6 +1010,8 @@ def mutate(args: argparse.Namespace) -> tuple[int, list[str]]:
     python = any(e.old.py or e.new.py for e in entries)
     if python and (args.race or args.cpu):
         raise Refused("--race and --cpu apply to go test: not with py")
+    if args.cpu is not None and len(args.cpu.split(",")) > 1 and any(e.old.levels or e.new.levels for e in entries):
+        raise Refused(f"a subtest with --cpu {args.cpu}: go test runs it once per value")
     head = _git_ok("rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
     with tempfile.TemporaryDirectory(prefix="mutate-") as scratch, Worktrees() as trees:
         check_compiled(entries, args.race, trees, head, (args.batch, args.expect) != (None, None))
