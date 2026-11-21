@@ -130,12 +130,15 @@ class Fields(unittest.TestCase):
                 self.assertEqual(self.check(), [])
 
     def test_a_missing_field_is_refused_naming_it(self):
+        refusals = {}
         for field in ("correctness", "opened"):
-            with self.subTest(field=field):
-                self.setUp()
-                del self.entry("QB10")[field]
-                faults = self.check()
-                self.assertTrue(any(field in f for f in faults), faults)
+            self.data = copy.deepcopy(DATA)
+            del self.entry("QB10")[field]
+            refusals[field] = self.check()
+        keys = [
+            "gate/known-issues.json: entries[0]: want the keys id, first_seen, forward, decision, correctness, opened"
+        ]
+        self.assertEqual(refusals, {"correctness": keys, "opened": keys})
 
 
 if __name__ == "__main__":

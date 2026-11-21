@@ -82,4 +82,8 @@ class ApidiffBreakit(support.GateTest):
         self.write("go.mod", throwaway_module().replace("module ex.com/m\n", "module ex.com/n\n", 1))
         self.commit("rename the module")
         reason = self.apidiff_of("./p")
-        self.assertNotIn("at the merge base failed", reason, f"{reason}\n--- stdout:\n{self.stdout()}")
+        self.assertEqual(
+            reason,
+            "exit 1: module renamed from ex.com/m to ex.com/n: every public import path changed (incompatible)",
+            f"{reason}\n--- stdout:\n{self.stdout()}",
+        )

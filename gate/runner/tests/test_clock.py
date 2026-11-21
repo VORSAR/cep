@@ -2,6 +2,7 @@
 
 import queue
 import re
+import threading
 import unittest
 
 from gate import wait
@@ -38,11 +39,16 @@ class RealTimers(unittest.TestCase):
 
     def test_a_cancelled_timer_does_not_fire(self):
         q = queue.SimpleQueue()
-        timers = clock.RealTimers()
-        timers.start("late", 3600, lambda: q.put("late")).cancel()
-        timers.start("witness", 0, lambda: q.put("witness"))
-        self.assertEqual(wait.get(q, "the witness timer to fire"), "witness")
-        self.assertTrue(q.empty())
+        before = set(threading.enumerate())
+        timer = clock.RealTimers().start("cancelled", 3600, lambda: q.put("cancelled"))
+        started = [t for t in threading.enumerate() if t not in before]
+        self.assertEqual(len(started), 1)  # witness: start started one timer thread
+        timer.cancel()
+        try:
+            wait.until("the cancelled timer's thread to end", lambda: not started[0].is_alive(), cap_s=30)
+        except wait.WaitTimeout as e:  # WaitTimeout is not an AssertionError: named as this test's failure
+            self.fail(f"cancel did not reach the timer start started: {e}")
+        self.assertTrue(q.empty())  # its thread ended without calling it, so it never will
 
 
 if __name__ == "__main__":
