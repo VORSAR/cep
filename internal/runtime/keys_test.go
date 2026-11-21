@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/vorsar/cep/internal/clock"
@@ -15,8 +16,9 @@ import (
 // +0.0 reach one instance on one shard.
 //
 // Stream "in" (Delay 0; schema [f optional float, s string]). Rules f0..f3 keyed by f (TFloat), TTL 1 h; rule "s"
-// keyed by s, TTL 1 h. Shards 16, and four float rules (each rule index hashes apart): a router that hashed −0.0 and
-// +0.0 apart would put them on one shard of 16 for all four rules with probability (1/16)^4.
+// keyed by s, TTL 1 h. Shards 3: a router that hashed the raw −0.0 and +0.0 would put them on shards 0 and 1 for each
+// of the four float rules, so the one-birth check catches it. At a power-of-two shard count up to 128, FNV-1a keeps the
+// two zeros on one shard and the check could not.
 // Events: 1 s f = −0.0; 2 s f = null; 3 s f = NaN; 4 s f = +0.0; 5 s f = 1.5; all s = "a". Drain (5.001 s).
 // The NaN event is refused by Send itself (fix round, 2026-11-05: NaN and infinities are never values, S3.1-2's D2),
 // so it takes no Seq: the others are #1 @1 s, #2 @2 s, #3 @4 s, #4 @5 s.
@@ -38,13 +40,13 @@ func TestKeyErrorsAndZeroKeys(t *testing.T) {
 		Schemas: []event.Schema{rtSchema(t, "in", rtOpt("f", event.TFloat), rtA("s", event.TString))},
 		Rules:   rules,
 	}
-	r := rtStart(t, runtime.Config{Shards: 16}, app)
+	r := rtStart(t, runtime.Config{Shards: 3}, app)
 	fs := []event.Value{rtFloat(math.Copysign(0, -1)), {Kind: event.TFloat, Null: true}, rtFloat(math.NaN()), rtFloat(0), rtFloat(1.5)}
 	for i, f := range fs {
 		e := rtEv(0, rtAt(float64(i+1)), f, rtStr("a"))
 		if !f.Null && math.IsNaN(f.F) {
-			if err := r.Send(ctx, 0, e); err == nil {
-				t.Errorf("Send with a NaN key: nil, want an error (NaN is never a value)")
+			if err := r.Send(ctx, 0, e); err == nil || !strings.Contains(err.Error(), "NaN and infinities are never values") {
+				t.Errorf("Send with a NaN key: %v; want the non-finite refusal", err)
 			}
 			continue
 		}

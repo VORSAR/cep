@@ -48,7 +48,8 @@ func TestBreakitTwoRemovesAtOnce(t *testing.T) {
 // stores phaseRemoved; installAck then clears a.rec and a.sinks (lifecycle.go:414) while Activate reads a.rec and
 // starts the flushers (lifecycle.go:78-84): a data race, flushers started for a removed app with no last marker, and,
 // when a.rec is read non-nil then nil, a nil recorder's goroutine. Want: Activate either wins (the app is active and
-// Remove refuses it with ErrActive) or loses (ErrRemoved), never both.
+// Remove refuses it with ErrActive, or ErrDrainIncomplete from the router once it activated the app first) or loses
+// (ErrRemoved), never both.
 func TestBreakitActivateRacesRemove(t *testing.T) {
 	t.Parallel()
 	ctx := rtCeiling(t)
@@ -66,6 +67,15 @@ func TestBreakitActivateRacesRemove(t *testing.T) {
 		wg.Wait()
 		if aerr == nil && rerr == nil {
 			t.Fatalf("iteration %d: Activate and Remove of one app both returned nil: the app was activated and removed at once", i)
+		}
+		if aerr != nil && !errors.Is(aerr, runtime.ErrRemoved) {
+			t.Fatalf("iteration %d: Activate racing Remove: %v; want nil or ErrRemoved", i, aerr)
+		}
+		if rerr != nil && !errors.Is(rerr, runtime.ErrActive) && !errors.Is(rerr, runtime.ErrDrainIncomplete) {
+			t.Fatalf("iteration %d: Remove racing Activate: %v; want nil, ErrActive or ErrDrainIncomplete", i, rerr)
+		}
+		if aerr != nil && rerr != nil {
+			t.Fatalf("iteration %d: both refused: Activate %v, Remove %v", i, aerr, rerr)
 		}
 		if aerr == nil { // Activate won: the app is active; drain and remove it
 			rtDrain(t, ctx, r, id)

@@ -25,7 +25,7 @@ func bdApp(t *testing.T) runtime.App {
 	}
 	return runtime.App{
 		Streams: []clock.StreamSpec{rtSrc("S", 0)}, Schemas: []event.Schema{sch}, Tables: table.NewSet([]*table.Table{tb}),
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, NewBody: rtBodies(rtBody{rule: "R", log: &rtLog{}})}},
+		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, NewBody: rtBodies(rtBody{rule: "R", log: newRTLog()})}},
 	}
 }
 
