@@ -215,3 +215,26 @@ func TestCloseWritesTheRecordsQueuedWhenItGaveUp(t *testing.T) {
 		}
 	}
 }
+
+// Two Drains of one active app at once, one whose ctx has already ended: the ended one returns context.Canceled, the
+// other drains the app, and input is refused after both, whichever Drain takes the run lock first.
+func TestTwoDrainsAtOnceOneAlreadyCancelledLeaveTheAppDrained(t *testing.T) {
+	t.Parallel()
+	ctx := cgCtx(t)
+	r := ldRuntime(t)
+	t.Cleanup(func() { ldClose(t, r) })
+	for range ldRounds {
+		id := ldStarted(t, ctx, r, cgApp(t, func(event.Event) error { return nil }))
+		live, ended := ldRace(t, ctx, func() error { _, err := r.Drain(ctx, id); return err },
+			func() error { _, err := r.Drain(ldExpired(), id); return err })
+		if live != nil {
+			t.Fatalf("the live Drain: %v; want nil", live)
+		}
+		if !errors.Is(ended, context.Canceled) {
+			t.Fatalf("the Drain whose ctx had ended: %v; want context.Canceled", ended)
+		}
+		if err := r.Send(ctx, id, cgEv(1)); !errors.Is(err, ErrDrained) {
+			t.Fatalf("Send after both Drains: %v; want ErrDrained", err)
+		}
+	}
+}
