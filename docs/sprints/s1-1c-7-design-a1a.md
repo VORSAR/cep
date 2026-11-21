@@ -808,7 +808,7 @@
    - Dry run: no test or driver pins any text for this case. The new prefix is not in AVAILABILITY.
 2. **G10-10, a bad `--repeat=` value.**
    - Candidates: exit 2 as usage, or a `failed:` line through rows.finish.
-   - **Chosen:** `failed: usage: --repeat=N with N a whole number, not 'x'`, with `GATE_COVERED 0` and exit 1. Every row reports through rows.finish, and the reason reads `exit 1: usage: …`.
+   - **Chosen:** `failed: usage: --repeat=N with N a whole number, not 'x'`, with `GATE_COVERED 0` and exit 1. Every row reports through rows.finish, and the reason reads `exit 1: usage: …`. *(annotated 2026-11-21: after PR #53's reviews (FRT-A-2, FRT-Q-3, FRT-A2-1, FRT-Q2-1, FRT-A2-3) the text is `usage: --repeat=N with N a whole number from 1 to 999999999, not '<value>'`, N accepted only as `[1-9][0-9]{0,8}`, and any other dash argument is refused with `usage: '<arg>' is not a package pattern or --repeat=N`; the sketches above keep the A1-1 text — owner, 2026-11-21, fix both in S1.1c-7 now)*
    - Only a value int() refuses is changed. Zero and negative values stay go's business, so no untested behaviour changes.
    - Dry run: no pin (grep `--repeat=x`).
 3. **G10-13, a base cycle.**
