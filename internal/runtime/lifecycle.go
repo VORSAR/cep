@@ -168,17 +168,16 @@ func (r *Runtime) Run(ctx context.Context, app AppID, runs ...func(ctx context.C
 }
 
 // BatchEnd hands a source's batch-close signal for stream to the intake, behind the events before it (owner,
-// 2026-11-07, design 6). An empty batch id is an error (the recording's reader refuses one). After the drain it is
-// refused with ErrDrained and counted in AfterDrain, as an event is.
+// 2026-11-07, design 6). An empty batch id is an error (the recording's reader refuses one). Once the app's drain has
+// begun it is refused with ErrDrained; a source stream's is still queued, and the router counts it in AfterDrain once
+// it has run the drain. A refused Send is not queued, so it is not counted.
 func (r *Runtime) BatchEnd(ctx context.Context, app AppID, stream int, batch string) error {
 	if batch == "" {
 		return fmt.Errorf("runtime: app %d: an empty batch id cannot end a batch", app)
 	}
 	a, err := r.gate(app)
-	if errors.Is(err, ErrDrained) { // refused, and counted in AfterDrain by the router, as a late event is
-		if a, err2 := r.appOf(app); err2 == nil && stream >= 0 && stream < len(a.app.Streams) {
-			_ = r.enqueue(ctx, item{kind: iBatchEnd, app: app, stream: stream, batch: batch})
-		}
+	if errors.Is(err, ErrDrained) { // refused; a source stream's is queued, and the router counts it once drained
+		r.queueRefusedBatchEnd(ctx, app, stream, batch)
 		return err
 	}
 	if err != nil {
@@ -188,4 +187,13 @@ func (r *Runtime) BatchEnd(ctx context.Context, app AppID, stream int, batch str
 		return fmt.Errorf("runtime: app %d: stream %d is not a source stream", app, stream)
 	}
 	return r.enqueue(ctx, item{kind: iBatchEnd, app: app, stream: stream, batch: batch})
+}
+
+// queueRefusedBatchEnd queues a batch end BatchEnd refused with ErrDrained, for a source stream only: the router
+// counts it in AfterDrain once it has run the drain. A derived stream takes no batch end, so none reaches the router.
+func (r *Runtime) queueRefusedBatchEnd(ctx context.Context, app AppID, stream int, batch string) {
+	if a, err := r.appOf(app); err == nil && stream >= 0 && stream < len(a.app.Streams) &&
+		!a.app.Streams[stream].Derived {
+		_ = r.enqueue(ctx, item{kind: iBatchEnd, app: app, stream: stream, batch: batch})
+	}
 }

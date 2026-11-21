@@ -726,6 +726,51 @@ func TestRecorderRecordsBatchEnd(t *testing.T) {
 	}
 }
 
+// A derived stream takes no batch end. One sent once Stop has begun is refused with ErrDrained and never reaches the
+// router: not taken while the drain item is still to come (no Batches count, so no batch_end record, which a
+// recording's reader refuses on a derived stream), and not counted in AfterDrain after the drain. The Stats reply,
+// queued behind each BatchEnd on the one intake, is the witness that the router has taken everything before it.
+func TestABatchEndOnADerivedStreamOnceStopBeganIsNeitherTakenNorCounted(t *testing.T) {
+	t.Parallel()
+	ctx := rtCeiling(t)
+	r := lcNew(t, runtime.Config{Shards: 1})
+	id := lcStarted(t, ctx, r, lcApp(t, func(event.Event) error { return nil }))
+	cancelled, release := make(chan struct{}), make(chan struct{})
+	rel := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(rel)
+	if err := r.Run(ctx, id, func(rctx context.Context) error { <-rctx.Done(); close(cancelled); <-release; return nil }); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	drained := make(chan error, 1)
+	go func() { _, err := r.Drain(ctx, id); drained <- err }()
+	select {
+	case <-cancelled: // Drain has moved the phase and waits for the run: its drain item is still to come
+	case <-ctx.Done():
+		t.Fatal("Drain never cancelled the run: the ceiling")
+	}
+	if err := r.BatchEnd(ctx, id, 1, "mid"); !errors.Is(err, runtime.ErrDrained) {
+		t.Errorf("BatchEnd on the derived stream once Stop began: %v; want ErrDrained", err)
+	}
+	if ss := rtStats(t, ctx, r).Streams[id][1]; ss.Batches != 0 || ss.AfterDrain != 0 {
+		t.Errorf("derived stream %+v before the drain item; want Batches 0 (no batch_end record) and AfterDrain 0", ss)
+	}
+	rel()
+	select {
+	case err := <-drained:
+		if err != nil {
+			t.Fatalf("Drain: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Drain never returned: the ceiling")
+	}
+	if err := r.BatchEnd(ctx, id, 1, "after"); !errors.Is(err, runtime.ErrDrained) {
+		t.Errorf("BatchEnd on the derived stream after the drain: %v; want ErrDrained", err)
+	}
+	if ss := rtStats(t, ctx, r).Streams[id][1]; ss.AfterDrain != 0 {
+		t.Errorf("derived stream's AfterDrain after the drain: %d; want 0", ss.AfterDrain)
+	}
+}
+
 // TestBatchEndReplaysToTheSameStats (MUST 11; §2.8): Sync.BatchEnd counts as the live router does, so a replay's
 // StreamStats.Batches equals live's.
 func TestBatchEndReplaysToTheSameStats(t *testing.T) {
