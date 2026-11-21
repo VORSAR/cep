@@ -1,0 +1,79 @@
+[
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "    for old, new in hunks:\n",
+  "note": "W0-1 #9: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Patch.test_a_two_hunk_patch_applies_each_hunk_once",
+  "replace": "    for old, new in hunks[:1]:\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "    if old.startswith(\"a/\") and new.startswith(\"b/\"):\n",
+  "note": "W0-1 #9b: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Patch.test_a_patch_from_git_diff_output_applies",
+  "replace": "    if False:\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "        if count != 1:\n            raise Refused(f\"a hunk of",
+  "note": "W0-1 #10 never: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Patch.test_a_hunk_matching_twice_or_never_or_a_dirty_file_or_a_bad_header_is_refused_before_any_build",
+  "replace": "        if count > 1:\n            raise Refused(f\"a hunk of"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "        if count != 1:\n            raise Refused(f\"a hunk of",
+  "note": "W0-1 #10 twice: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.Patch.test_a_hunk_matching_twice_or_never_or_a_dirty_file_or_a_bad_header_is_refused_before_any_build",
+  "replace": "        if count == 0:\n            raise Refused(f\"a hunk of"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "        and said == head + \"failed: 1 failures, 0 errors\"\n",
+  "note": "W0-1 #11: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_caught_python_mutation_is_red_and_a_missed_one_green",
+  "replace": "        and said == head + \"failed: 0 failures, 1 errors\"\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "        and said == head + \"failed: 1 failures, 0 errors\"\n",
+  "note": "W0-1 #12: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_broken_import_a_skip_or_zero_tests_is_invalid",
+  "replace": "        or said == head + \"failed: 1 failures, 0 errors\"\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "            _git_ok(*NO_HOOKS, \"worktree\", \"add\", \"--detach\", path, rev)\n",
+  "note": "W0-1 #13: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_test_running_git_ls_files_reads_as_in_the_tree",
+  "replace": "            _git_ok(*NO_HOOKS, \"worktree\", \"add\", \"--detach\", path, rev)\n            os.remove(os.path.join(path, \".git\"))\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "            _git_ok(\"-C\", path, *NO_HOOKS, \"commit\", \"-q\", \"-m\", \"mutate.py plant\", env=THROWAWAY)\n",
+  "note": "W0-1 #13a: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_plant_elsewhere_leaves_git_diff_and_status_clean",
+  "replace": "            pass\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "    if result.timed_out:\n        return \"timeout\"\n    head = ",
+  "note": "W0-1 #14: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_test_waiting_past_the_timeout_is_timeout",
+  "replace": "    if False:\n        return \"timeout\"\n    head = "
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "        for change in changes:\n",
+  "note": "W0-1 #15: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_python_patch_is_applied_in_the_copy",
+  "replace": "        for change in changes[:0]:\n"
+ },
+ {
+  "file": "gate/bench/mutate.py",
+  "find": "            if _git(\"worktree\", \"remove\", \"--force\", path).exit != 0:\n",
+  "note": "W0-1 #16: feature-off plant",
+  "py": "gate.bench.tests.test_mutate.PyMode.test_a_py_run_leaves_the_tree_and_the_worktree_list_as_they_were",
+  "replace": "            if False:\n"
+ }
+]
