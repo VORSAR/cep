@@ -74,6 +74,9 @@ func BenchmarkAppendValue(b *testing.B) {
 		b.Run(c.name, func(b *testing.B) {
 			b.ReportAllocs()
 			buf := make([]byte, 0, 128)
+			if _, err := AppendValue(buf[:0], c.v); err != nil {
+				b.Fatalf("AppendValue(%s): %v", c.name, err)
+			}
 			for b.Loop() {
 				buf, _ = AppendValue(buf[:0], c.v)
 			}
@@ -101,6 +104,9 @@ func BenchmarkAppendEvent(b *testing.B) {
 	b.ReportAllocs()
 	s, e := hpSchema(b), hpEvent()
 	buf := make([]byte, 0, 256)
+	if _, err := appendEvent(buf[:0], s, e, ""); err != nil {
+		b.Fatalf("appendEvent: %v", err)
+	}
 	for b.Loop() {
 		buf, _ = appendEvent(buf[:0], s, e, "")
 	}
@@ -120,6 +126,9 @@ func BenchmarkRecorderTable(b *testing.B) {
 			b.ReportAllocs()
 			r := NewRecorder(io.Discard, cnTableApp())
 			rows := [][]event.Value{c.row}
+			if err := r.Table(0, c.op, rows); err != nil {
+				b.Fatalf("Table(%s): %v", c.name, err)
+			}
 			for b.Loop() {
 				_ = r.Table(0, c.op, rows)
 			}
@@ -140,6 +149,9 @@ func BenchmarkRecordOneEvent(b *testing.B) {
 			b.ReportAllocs()
 			r := NewRecorder(io.Discard, hpRecordingApp(b))
 			e := hpRecordedEvent()
+			if err := r.Event(&e, hpT0, c.payload); err != nil {
+				b.Fatalf("Event(%s): %v", c.name, err)
+			}
 			for b.Loop() {
 				_ = r.Event(&e, hpT0, c.payload)
 			}
