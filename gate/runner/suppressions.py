@@ -58,8 +58,8 @@ STANDALONE = (
 )
 ALL = "write the linter: //nolint:all waives every linter"
 TYPECHECK = "typecheck cannot be waived"
-FOREIGN = "{linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP … (decision 7)"
-LINE = "a //line directive moves findings between files; not allowed (S1.1c-5)"
+FOREIGN = "{linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP …"
+LINE = "a //line directive moves findings between files; not allowed"
 # The census's honoured forms (gate/runner/testdata/directives.json), as each tool matches them (design §4.1-§4.2):
 # revive `^//\s*revive:`; gocyclo a doc comment starting `//gocyclo:`; gosec `#nosec` at a comment's start after
 # trimming (line or block), and `//gosec:`.

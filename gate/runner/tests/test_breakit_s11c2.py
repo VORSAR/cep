@@ -361,7 +361,7 @@ class PinTiesAProofToItsRow(unittest.TestCase):
 
 
 NOSEC = 'package x\n\nimport (\n\t"crypto/md5" // #nosec G501\n)\n\nvar _ = md5.Sum(nil) // #nosec G401 -- reason\n'
-NOSEC_FAULT = "{where}: gosec honours this form; the only waiver is //nolint:gosec // PERMANENT|TEMP … (decision 7)"
+NOSEC_FAULT = "{where}: gosec honours this form; the only waiver is //nolint:gosec // PERMANENT|TEMP …"
 
 
 class NosecIsAWaiver(unittest.TestCase):
