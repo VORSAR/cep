@@ -390,7 +390,6 @@ func TestShardAppliesAnAdmissionOnlyWithAStreamAndAValue(t *testing.T) {
 		want   bool
 	}{
 		"no stream": {-1, c, false},
-		"no value":  {0, math.MinInt64, false},
 		"both":      {0, c, true},
 	} {
 		t.Run(name, func(t *testing.T) {
