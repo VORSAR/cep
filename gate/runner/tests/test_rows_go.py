@@ -4,13 +4,28 @@ Teeth (QA DQ22, design-QA counter-example 33): each wrapper's count comes from t
 run is red, naming both numbers. Each narrowed case has a full control that passes.
 """
 
+import json
 import os
 import sys
+import unittest
 
+from gate.runner import registry
+from gate.runner.rows import race as race_row
 from gate.runner.tests import support
 
 ROWS = os.path.join(support.GATE, "runner", "rows")
 MOD = "module ex.com/m\n\ngo 1.27.0\n"
+# A `go` that logs its arguments, one JSON line per call, then becomes the pinned go (Race.go_test_argv).
+LOGGED_GO = """\
+import json, os, sys
+with open(LOG, "a", encoding="utf-8") as log:
+    log.write(json.dumps(sys.argv[1:]) + "\\n")
+os.execv(REAL, [REAL, *sys.argv[1:]])
+"""
+GO_KILL_MARGIN_S = 60  # cmd/go kills a test binary a minute after its -timeout (cmd/go/internal/test, testKillTimeout)
+# Chosen, not measured on CI: building the race-instrumented test binary comes before both of go's clocks start, and
+# the row judges test.json and writes its record after go exits; two minutes covers a cold build of one package.
+STRESS_HEADROOM_S = 120
 
 
 def wrapper(name, *args):
@@ -194,6 +209,23 @@ class Unit(GoRows):
         self.assertEqual(self.unit("./a"), "covered 1 ≠ expected 2")
 
 
+class RaceStressBudget(unittest.TestCase):
+    """The real race-stress row, read through the gate's registry loader: its own timeout_s must hold go test's
+    stress timeout, cmd/go's kill margin after it and the build-and-report headroom."""
+
+    def test_race_stress_repeats_and_its_go_timeout_with_margins_fits_its_timeout_s(self):
+        rows = {r.id: r for r in registry.load(os.path.join(support.GATE, "registry.json"))}
+        row = rows["race-stress"]
+        self.assertIn("gate/runner/rows/race.py", row.command)
+        self.assertTrue(any(a.startswith("--repeat=") for a in row.command), row.command)
+        need_s = race_row.STRESS_TIMEOUT_MIN * 60 + GO_KILL_MARGIN_S + STRESS_HEADROOM_S
+        self.assertLessEqual(
+            need_s,
+            row.timeout_s,
+            f"go -timeout {race_row.STRESS_TIMEOUT} + {GO_KILL_MARGIN_S} s + {STRESS_HEADROOM_S} s > timeout_s",
+        )
+
+
 class Race(GoRows):
     """The race row (owner, 2026-11-05: pulled forward from S3.2b): `go test -race -json -count=1`, with cgo on for
     that row alone (ADR-0015 §3.6, residue item 9). A data race fails the test it happened in, naming it."""
@@ -225,6 +257,39 @@ class Race(GoRows):
         self.package("b", self.RACY)
         self.assertEqual(self.race(), "exit 1: ex.com/m/b: TestRacy")
         self.assertIn("ex.com/m/b: TestRacy", self.stdout("race", "race"))
+
+    def go_test_argv(self, *args):
+        """go test's arguments as the row gave them, logged by a `go` ahead of the pinned one that then becomes it."""
+        log = os.path.join(self.root, "go.argv")
+        real = os.path.join(support.tool_bin("go"), "go")
+        logbin = os.path.join(self.root, "logbin")
+        self.script("go", logbin, f"LOG, REAL = {log!r}, {real!r}\n{LOGGED_GO}")
+        self.toolchain.dirs = [logbin, *self.toolchain.dirs]
+        self.package("a")
+        self.assertEqual(self.race(*args), "covered 1")
+        with open(log, encoding="utf-8") as f:
+            calls = [json.loads(line) for line in f]
+        tests = [c for c in calls if c[:1] == ["test"]]
+        self.assertEqual(len(tests), 1, calls)
+        return tests[0]
+
+    def test_a_repeat_gives_go_test_the_stress_timeout(self):
+        # The nightly race-stress row: go test's default -timeout 10m covers all N runs in one test binary, and 20
+        # runs of ./internal/runtime took 519.8 s on CI one night and 601 s (timed out) the next.
+        self.assertEqual(
+            self.go_test_argv("--repeat=20", "./..."),
+            ["test", "-race", "-json", "-count=20", "-timeout", race_row.STRESS_TIMEOUT, "./..."],
+        )
+
+    def test_a_repeat_of_one_still_gives_go_test_the_stress_timeout(self):
+        # The rule is any --repeat, not a repeat above one.
+        self.assertEqual(
+            self.go_test_argv("--repeat=1", "./..."),
+            ["test", "-race", "-json", "-count=1", "-timeout", race_row.STRESS_TIMEOUT, "./..."],
+        )
+
+    def test_no_repeat_leaves_go_tests_default_timeout(self):
+        self.assertEqual(self.go_test_argv("./..."), ["test", "-race", "-json", "-count=1", "./..."])
 
     def test_a_repeat_runs_every_test_that_many_times(self):
         # The nightly race-stress row: --repeat=N is go test's -count=N; a pass needs every run to pass.
