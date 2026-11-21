@@ -189,6 +189,16 @@ func (t *Table) Load(rows [][]event.Value) error {
 	return nil
 }
 
+// Check reports the first row Upsert or Load would refuse, worded as they word it, and changes nothing.
+func (t *Table) Check(rows [][]event.Value) error {
+	for i, r := range rows {
+		if err := t.checkRow(i, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // prepare checks every row and returns the copies to store with their keys.
 func (t *Table) prepare(rows [][]event.Value) ([][]event.Value, []key, error) {
 	stored := make([][]event.Value, len(rows))
