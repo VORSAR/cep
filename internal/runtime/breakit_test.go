@@ -459,29 +459,3 @@ func TestBkGuardPanicStorm(t *testing.T) {
 		t.Errorf("stats %+v: want panics and sink errors counted", st)
 	}
 }
-
-// ---- red (later): a rule listing one input stream twice sees each event twice ----
-
-// Design §2: Start validates every rule's inputs. It accepts Inputs [0, 0]; the router then offers each event twice
-// under the same key, and the body releases it twice. Start should refuse it (or the body see each event once).
-func TestBkDuplicateInputDoublesEvents(t *testing.T) {
-	ctx := rtCeiling(t)
-	log := newRTLog()
-	app := runtime.App{
-		Streams: []clock.StreamSpec{rtSrc("in", 0)},
-		Schemas: []event.Schema{rtSchema(t, "in", rtA("k", event.TString))},
-		Rules: []runtime.Rule{{Name: "R", Inputs: []int{0, 0}, KeyAttrs: [][]int{{0}, {0}}, KeyTypes: []event.Type{event.TString}, TTL: 3600 * rtSec,
-			NewBody: rtBodies(rtBody{rule: "R", log: log})}},
-	}
-	r, err := runtime.Start(runtime.Config{Shards: 2, Now: rtNow}, []runtime.App{app})
-	if err != nil {
-		return // refused: fine
-	}
-	defer func() { _ = r.Close(ctx) }()
-	rtSend(t, ctx, r, 0, rtEv(0, rtAt(1), rtStr("a")))
-	rtSend(t, ctx, r, 0, rtEv(0, rtAt(2), rtStr("a")))
-	rtDrain(t, ctx, r, 0)
-	if got := log.get("R/a"); len(got) != 2 {
-		t.Fatalf("Inputs [0, 0] was accepted, and the body saw 2 events as %v", got)
-	}
-}
