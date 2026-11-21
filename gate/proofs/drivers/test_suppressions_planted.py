@@ -39,8 +39,8 @@ NO_HEADING = "no-such-heading-planted"
 NOT_CANONICAL = "write //nolint:<linter> exactly (two slashes, no space, lower case, one list)"  # S1.1c-5 §4.2
 NOT_ENABLED = "//nolint:gosec: gosec is not enabled in .golangci.toml"  # S1.1c-5 design §4.2
 # S1.1c-5 design §4.2: only //nolint waives.
-FOREIGN = "{linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP … (decision 7)"
-LINE_DIRECTIVE = "a //line directive moves findings between files; not allowed (S1.1c-5)"
+FOREIGN = "{linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP …"
+LINE_DIRECTIVE = "a //line directive moves findings between files; not allowed"
 RUFF_IGNORES = "ruff ignores this form; write # fmt: skip  # <reason>"
 NOQA = "ruff runs --ignore-noqa: this comment waives nothing; remove it"
 

@@ -663,10 +663,8 @@ class Row(support.GateTest):
 # is the data: every comment directive a linter golangci-lint v2.15.0 runs (or gosec, refused anyway, decision 7)
 # honours, with its source reference and its confirmation by the pinned binary.
 CENSUS = os.path.join(support.REPO, "gate", "runner", "testdata", "directives.json")
-FOREIGN_FAULT = (
-    "{where}: {linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP … (decision 7)"
-)
-LINE_FAULT = "{where}: a //line directive moves findings between files; not allowed (S1.1c-5)"
+FOREIGN_FAULT = "{where}: {linter} honours this form; the only waiver is //nolint:{linter} // PERMANENT|TEMP …"
+LINE_FAULT = "{where}: a //line directive moves findings between files; not allowed"
 STANDALONE = (
     "{where}: //nolint stands alone on its line: it would waive the whole next declaration; put it at the end of the"
     " line it waives"
@@ -751,6 +749,13 @@ class Foreign(unittest.TestCase):
                 with self.subTest(form=item["form"]):
                     self.assertTrue(any(p in str(item["form"]) for p in suppressions.PREFILTER), item["form"])
 
+    def test_a_foreign_fault_ends_with_the_waiver_to_write(self):
+        _, faults = suppressions.go_foreign("p.go", "package p\n\nvar _ = 1 //revive:disable-line\n")
+        self.assertIn("…", suppressions.FOREIGN)  # the ellipsis, byte-exact
+        self.assertEqual(
+            faults, ["p.go:3: revive honours this form; the only waiver is //nolint:revive // PERMANENT|TEMP …"]
+        )
+
 
 class LineDirective(unittest.TestCase):
     def test_a_line_directive_is_refused(self):
@@ -764,6 +769,10 @@ class LineDirective(unittest.TestCase):
         for form in ("// line x.go:1", "// the line x.go:1", "//lines x.go:1"):
             with self.subTest(form=form):
                 self.assertEqual(suppressions.go_foreign("p.go", f"package p\n\n{form}\nvar _ = 1\n"), ([], []))
+
+    def test_a_line_directive_fault_ends_with_not_allowed(self):
+        _, faults = suppressions.go_foreign("p.go", "package p\n\n//line x.go:1\nvar _ = 1\n")
+        self.assertEqual(faults, ["p.go:3: a //line directive moves findings between files; not allowed"])
 
 
 def s1_1c_5_ctx() -> allowlists.Ctx:
