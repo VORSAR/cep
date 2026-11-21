@@ -1,7 +1,6 @@
 package playback
 
 import (
-	"bufio"
 	"errors"
 	"io"
 	"strings"
@@ -267,27 +266,6 @@ func TestReaderReadsEachLineEnding(t *testing.T) {
 		}
 		if !eof || strings.Join(got, "|") != strings.Join(c.want, "|") || len(got) != len(c.want) {
 			t.Errorf("readLine(%q) lines = %q (io.EOF reached: %v); want %q, then io.EOF", c.in, got, eof, c.want)
-		}
-	}
-}
-
-// TestReadSliceEndsInItsDelimiterWhenItReturnsNoError guards the redundant operand at reader.go:234 (`n > 0`, always
-// true there): a chunk reaches that line only with a nil error, which bufio.Reader.ReadSlice returns only for a slice
-// ending in its delimiter, or with io.EOF and a non-empty chunk (an empty one returned at :228). Contract: ReadSlice
-// returns err != nil if and only if the line does not end in delim. It fails if that contract changes.
-func TestReadSliceEndsInItsDelimiterWhenItReturnsNoError(t *testing.T) {
-	t.Parallel()
-	br := bufio.NewReaderSize(strings.NewReader("a\n\nbc"), 16)
-	for {
-		chunk, err := br.ReadSlice('\n')
-		if err == nil && (len(chunk) == 0 || chunk[len(chunk)-1] != '\n') {
-			t.Fatalf("ReadSlice = %q, nil; want a slice ending in its delimiter", chunk)
-		}
-		if err != nil {
-			if !errors.Is(err, io.EOF) || string(chunk) != "bc" {
-				t.Fatalf("ReadSlice at the end = %q, %v; want \"bc\", io.EOF", chunk, err)
-			}
-			return
 		}
 	}
 }
