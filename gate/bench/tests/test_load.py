@@ -263,7 +263,9 @@ class DiedOutsideATest(Base):
         # exit 1" with no cause, as it did for internal/event under -race -count=4 -cpu 1,4 and 28 hogs.
         code, out = self.load(["--hogs", "1", "--", "-count=1", "-timeout=3s", "."], os.environ, self.module)
         self.assertEqual(code, 1, out)
-        self.assertTrue("TestSlow" in out.split("verdict:")[-1] or "timed out" in out, out)
+        self.assertIn("TestSlow: 0/1 under load (hogs 1)\n", out)
+        self.assertIn("\n  panic: test timed out after 3s\n", out)
+        self.assertTrue(out.endswith("verdict: below N/N: TestSlow; go test exit 1\n"), out)
 
 
 if __name__ == "__main__":
