@@ -25,9 +25,7 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	if a.started.Load() {
 		runs, err = r.awaitRuns(ctx, a)
 		if err != nil {
-			if !a.waited { // the quiet item was never queued: live, as before this Drain
-				a.revertDrain(was)
-			}
+			a.revertUnlessQuieted(was) // the quiet item was never queued: live, as before this Drain
 			return DrainResult{Runs: runs}, err
 		}
 	}
@@ -69,6 +67,16 @@ func (a *appState) revertDrain(was appPhase) {
 	}
 }
 
+// revertUnlessQuieted moves the app back to was unless a Drain has queued the quiet item. It reads waited under
+// runMu, which awaitRuns holds while it queues that item and sets waited, so the read and the revert never race it.
+func (a *appState) revertUnlessQuieted(was appPhase) {
+	a.runMu.Lock()
+	defer a.runMu.Unlock()
+	if !a.waited {
+		a.revertDrain(was)
+	}
+}
+
 // queueDrain sets the drain flag, then queues the drain item and returns its reply channel. When nothing was queued
 // and no earlier Drain set the flag, it clears the flag and, if the quiet item was never queued, reverts the phase.
 func (r *Runtime) queueDrain(ctx context.Context, a *appState, app AppID, was appPhase) (chan reply, error) {
@@ -77,9 +85,7 @@ func (r *Runtime) queueDrain(ctx context.Context, a *appState, app AppID, was ap
 	if err := r.enqueue(ctx, it); err != nil {
 		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
 			a.draining.Store(false)
-			if !a.waited {
-				a.revertDrain(was)
-			}
+			a.revertUnlessQuieted(was)
 		}
 		return nil, err
 	}
