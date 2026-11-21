@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // src builds a file set from alternating path, source pairs.
@@ -218,10 +220,15 @@ func gitRepo(t *testing.T, files map[string][]byte) string {
 
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid",
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid",
 		"-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"}, args...)...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("git %v: not finished under the 2m ceiling\n%s", args, out)
+	}
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -259,24 +266,28 @@ func TestRunExitCodes(t *testing.T) {
 	t.Parallel()
 	base := src("p/a.go", pkgHead+"func f() int { return 1 }\n\nfunc g() {}\n")
 	for _, tc := range []struct {
-		name  string
-		after map[string][]byte
-		del   string
-		args  func(rev string) []string
-		code  int
-		out   string
+		name   string
+		after  map[string][]byte
+		del    string
+		args   func(rev string) []string
+		code   int
+		out    string
+		errOut string
 	}{
 		{"equal default paths", src("p/a.go", pkgHead+"func f() int {\n\treturn 1\n}\n\nfunc g() {}\n"),
-			"", func(r string) []string { return []string{r} }, 0, "astequal: 1 files, 2 declarations equal\n"},
+			"", func(r string) []string { return []string{r} }, 0, "astequal: 1 files, 2 declarations equal\n", ""},
 		{"move to new file", src("p/a.go", pkgHead+"func f() int { return 1 }\n", "p/b.go", pkgHead+"func g() {}\n"),
 			"", func(r string) []string { return []string{r, "p/a.go", "p/b.go"} }, 0,
-			"astequal: 2 files, 2 declarations equal\n"},
+			"astequal: 2 files, 2 declarations equal\n", ""},
 		{"unequal", src("p/a.go", pkgHead+"func f() int { return 2 }\n\nfunc g() {}\n"),
-			"", func(r string) []string { return []string{r, "p/a.go"} }, 1, "p: func f"},
-		{"deleted file", nil, "p/a.go", func(r string) []string { return []string{r} }, 1, "p: func f"},
-		{"bad revision", nil, "", func(string) []string { return []string{"no-such-rev", "p/a.go"} }, 2, ""},
-		{"no arguments", nil, "", func(string) []string { return nil }, 2, ""},
-		{"parse error", src("p/a.go", "package p\nfunc {"), "", func(r string) []string { return []string{r} }, 2, ""},
+			"", func(r string) []string { return []string{r, "p/a.go"} }, 1, "p: func f", ""},
+		{"deleted file", nil, "p/a.go", func(r string) []string { return []string{r} }, 1, "p: func f", ""},
+		{"bad revision", nil, "", func(string) []string { return []string{"no-such-rev", "p/a.go"} }, 2, "",
+			"astequal: git ls-tree -r -z --name-only no-such-rev -- p/a.go: "},
+		{"no arguments", nil, "", func(string) []string { return nil }, 2, "",
+			"usage: astequal <before-rev> [<after-rev>] [<paths>]\n"},
+		{"parse error", src("p/a.go", "package p\nfunc {"), "", func(r string) []string { return []string{r} }, 2, "",
+			"astequal: p/a.go:2:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -292,8 +303,14 @@ func TestRunExitCodes(t *testing.T) {
 			if code != tc.code {
 				t.Fatalf("exit %d, want %d; stdout %q stderr %q", code, tc.code, stdout.String(), stderr.String())
 			}
-			if !strings.Contains(stdout.String(), tc.out) {
-				t.Fatalf("stdout %q does not name %q", stdout.String(), tc.out)
+			if tc.code == 2 {
+				if tc.errOut == "" || stdout.Len() != 0 || !strings.Contains(stderr.String(), tc.errOut) {
+					t.Fatalf("stdout %q stderr %q; want no stdout and stderr holding %q", stdout.String(), stderr.String(), tc.errOut)
+				}
+				return
+			}
+			if tc.out == "" || stderr.Len() != 0 || !strings.Contains(stdout.String(), tc.out) {
+				t.Fatalf("stdout %q stderr %q; want no stderr and stdout holding %q", stdout.String(), stderr.String(), tc.out)
 			}
 		})
 	}
