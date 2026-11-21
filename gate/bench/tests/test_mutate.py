@@ -1,9 +1,12 @@
-"""mutate.py: one mutation through -overlay, its one designated test, and a tracked file never written."""
+"""mutate.py: one mutation through -overlay or in a throwaway worktree, its one designated test, and a tracked file
+never written."""
 
 import contextlib
 import faulthandler
 import json
 import os
+import re
+import shutil
 import signal
 import stat
 import subprocess
@@ -89,6 +92,38 @@ func TestHold(t *testing.T) {
 }
 """
 
+NEG = """\
+package m
+
+func Mul(a, b int) int {
+\treturn a * b
+}
+
+func Neg(a int) int {
+\treturn -a
+}
+
+func Twice(a int) int {
+\treturn a + a
+}
+
+func Double(a int) int {
+\treturn a + a
+}
+"""
+
+NEG_TESTS = """\
+package m
+
+import "testing"
+
+func TestNeg(t *testing.T) {
+\tif Neg(2) != -2 {
+\t\tt.Fatal("Neg(2) != -2")
+\t}
+}
+"""
+
 GUARD = """\
 package g
 
@@ -121,23 +156,42 @@ class Base(unittest.TestCase):
         self.repo = os.path.join(self.tmp, "repo")
         os.mkdir(self.repo)
         self.env = {**os.environ, **support.GIT_ENV}
-        support.write(self.repo, {"go.mod": MODULE, "m/m.go": SOURCE, "m/m_test.go": TESTS, "g/g_test.go": GUARD})
+        support.write(
+            self.repo,
+            {
+                "go.mod": MODULE,
+                "m/m.go": SOURCE,
+                "m/n.go": NEG,
+                "m/m_test.go": TESTS,
+                "m/n_test.go": NEG_TESTS,
+                "g/g_test.go": GUARD,
+            },
+        )
         self.git("init", "-q")
         self.git("add", "-A")
         self.git("commit", "-q", "-m", "c")
         self.tracked = os.path.join(self.repo, "m", "m.go")
         self.before = self.snapshot()
         self.addCleanup(self.assertUntouched, self.before)
+        self.log, self.fake_env = support.logging_go(self.tmp, self.env)
 
     def git(self, *argv: str) -> str:
         return support.git(self.repo, self.env, *argv)
 
-    def snapshot(self) -> tuple[bytes, int]:
-        with open(self.tracked, "rb") as f:
-            return f.read(), os.stat(self.tracked).st_mtime_ns
+    def snapshot(self) -> dict[str, tuple[bytes, int]]:
+        """The bytes and mtime of each source file a mutation may name."""
+        return {name: support.stamp(os.path.join(self.repo, name)) for name in ("m/m.go", "m/n.go")}
 
-    def assertUntouched(self, before: tuple[bytes, int]) -> None:
-        self.assertEqual(self.snapshot(), before, "the tracked file was written")
+    def assertUntouched(self, before: dict[str, tuple[bytes, int]]) -> None:
+        self.assertEqual(self.snapshot(), before, "a tracked file was written")
+
+    def restore(self, name: str) -> None:
+        """A test that dirtied a file itself puts HEAD's bytes and the first mtime back before the untouched check."""
+        path = os.path.join(self.repo, name)
+        data, mtime = self.before[name]
+        with open(path, "wb") as f:
+            f.write(data)
+        os.utime(path, ns=(mtime, mtime))
 
     def mutate(self, *argv: str, env: dict[str, str] | None = None) -> tuple[int, str]:
         out_path = os.path.join(self.tmp, "mutate.stdout")
@@ -145,6 +199,25 @@ class Base(unittest.TestCase):
 
     def single(self, test: str, replace: str = CAUGHT, *extra: str) -> tuple[int, str]:
         return self.mutate("--file", "m/m.go", "--find", FIND, "--replace", replace, "--test", test, *extra)
+
+    def refused(self, *argv: str) -> str:
+        """Exit 2 with a refusal as the last line, and no go command run by this call (the fake go's log, emptied
+        first, never written), so one subTest's go call never fails the next."""
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(self.log)
+        code, out = self.mutate(*argv, env=self.fake_env)
+        self.assertEqual(code, 2, out)
+        self.assertTrue(out.splitlines()[-1].startswith("error: refused: "), out)
+        self.assertFalse(os.path.exists(self.log), "a go command ran before the refusal")
+        return out
+
+    def write_patch(self, text: str) -> str:
+        """The diff in a file of its own (a name no other call of this test reuses)."""
+        fd, path = tempfile.mkstemp(suffix=".diff", dir=self.tmp)
+        os.close(fd)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
 
 
 class Outcomes(Base):
@@ -216,23 +289,6 @@ class OtherPackage(Base):
 class Refusals(Base):
     """Refused with exit 2 before any go command: a fake go on PATH records every call."""
 
-    def setUp(self) -> None:
-        super().setUp()
-        self.log = os.path.join(self.tmp, "go.log")
-        body = (
-            "import sys\n"
-            f"with open({self.log!r}, 'a', encoding='utf-8') as f:\n"
-            "    f.write(' '.join(sys.argv) + '\\n')\n"
-        )
-        self.fake_env = {**self.env, "PATH": support.fake_go(self.tmp, body) + os.pathsep + self.env["PATH"]}
-
-    def refused(self, *argv: str) -> str:
-        code, out = self.mutate(*argv, env=self.fake_env)
-        self.assertEqual(code, 2, out)
-        self.assertTrue(out.splitlines()[-1].startswith("error: refused: "), out)
-        self.assertFalse(os.path.exists(self.log), "a go command ran before the refusal")
-        return out
-
     def test_witness_the_fake_go_records_a_call(self):
         code, out = self.mutate(
             "--file", "m/m.go", "--find", FIND, "--replace", CAUGHT, "--test", "TestAdd", env=self.fake_env
@@ -253,7 +309,7 @@ class Refusals(Base):
             f.write("// dirty\n")
         with open(self.tracked, "rb") as f:
             dirty = f.read()
-        self.addCleanup(self.restore)
+        self.addCleanup(self.restore, "m/m.go")
         mtime = os.stat(self.tracked).st_mtime_ns
         out = self.refused("--file", "m/m.go", "--find", FIND, "--replace", CAUGHT, "--test", "TestAdd")
         self.assertIn("differs from HEAD", out)
@@ -261,15 +317,9 @@ class Refusals(Base):
             self.assertEqual(f.read(), dirty)
         self.assertEqual(os.stat(self.tracked).st_mtime_ns, mtime)
 
-    def restore(self) -> None:
-        """This test dirtied the file itself; HEAD's bytes and the first mtime go back before the untouched check."""
-        with open(self.tracked, "wb") as f:
-            f.write(self.before[0])
-        os.utime(self.tracked, ns=(self.before[1], self.before[1]))
-
     def test_an_untracked_file_is_refused(self):
-        support.write(self.repo, {"m/n.go": "package m\n\nfunc N() int { return 1 }\n"})
-        out = self.refused("--file", "m/n.go", "--find", "return 1", "--replace", "return 2", "--test", "TestAdd")
+        support.write(self.repo, {"m/u.go": "package m\n\nfunc U() int { return 1 }\n"})
+        out = self.refused("--file", "m/u.go", "--find", "return 1", "--replace", "return 2", "--test", "TestAdd")
         self.assertIn("not tracked", out)
 
     def test_a_subtest_name_is_refused(self):
@@ -291,6 +341,346 @@ class Refusals(Base):
             json.dump([good, {**good, "extra": 1}], f)
         out = self.refused("--batch", path)
         self.assertIn("entry 2", out)
+
+
+TWO_HUNKS = """\
+--- a/m/n.go
++++ b/m/n.go
+@@ -4 +4 @@
+-\treturn a * b
++\treturn a / b
+@@ -8 +8 @@
+-\treturn -a
++\treturn a
+"""
+
+NEG_PATCH = """\
+--- a/m/n.go
++++ b/m/n.go
+@@ -7,3 +7,3 @@
+ func Neg(a int) int {
+-\treturn -a
++\treturn a
+ }
+"""
+
+
+class Patch(Base):
+    """--patch: a unified diff, each hunk placed by its old lines occurring exactly once in HEAD's file."""
+
+    def test_a_two_hunk_patch_applies_each_hunk_once(self):
+        code, out = self.mutate("--patch", self.write_patch(TWO_HUNKS), "--test", "TestNeg")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+        self.assertIn("-\treturn a * b\n+\treturn a / b\n", out)  # both hunks in the printed diff
+        self.assertIn("-\treturn -a\n+\treturn a\n", out)
+        self.assertIn("package: ./m", out)
+
+    def test_a_patch_from_git_diff_output_applies(self):
+        clone = os.path.join(self.tmp, "clone")
+        subprocess.run(
+            ["git", "clone", "-q", self.repo, clone], env=self.env, check=True, capture_output=True, timeout=60
+        )
+        neg = os.path.join(clone, "m", "n.go")
+        with open(neg, encoding="utf-8") as f:
+            text = f.read()
+        self.assertEqual(text.count("\treturn -a\n"), 1)
+        with open(neg, "w", encoding="utf-8") as f:
+            f.write(text.replace("\treturn -a\n", "\treturn a\n"))
+        done = subprocess.run(
+            ["git", "-C", clone, "diff", "--no-color"], env=self.env, check=True, capture_output=True, timeout=60
+        )
+        diff = done.stdout.decode()
+        lines = diff.splitlines()
+        self.assertEqual(lines[0], "diff --git a/m/n.go b/m/n.go", diff)  # git's own headers, each witnessed first
+        self.assertTrue(lines[1].startswith("index "), diff)
+        self.assertEqual(lines[2:4], ["--- a/m/n.go", "+++ b/m/n.go"], diff)
+        self.assertRegex(lines[4], r"^@@ -\d+,\d+ \+\d+,\d+ @@ func ", diff)
+        code, out = self.mutate("--patch", self.write_patch(diff), "--test", "TestNeg")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+
+    def test_a_hunk_matching_twice_or_never_or_a_dirty_file_or_a_bad_header_is_refused_before_any_build(self):
+        hunk = "--- a/m/n.go\n+++ b/m/n.go\n@@ -1 +1 @@\n-{old}\n+{new}\n"
+        cases = (
+            ("twice", hunk.format(old="\treturn a + a", new="\treturn a - a"), "occurs 2 times"),
+            ("never", hunk.format(old="\treturn a % b", new="\treturn a"), "occurs 0 times"),
+            ("dirty", NEG_PATCH, "differs from HEAD"),
+            ("count", NEG_PATCH.replace("@@ -7,3 +7,3 @@", "@@ -7,4 +7,4 @@"), "shorter than its header"),
+            ("paths", NEG_PATCH.replace("+++ b/m/n.go", "+++ b/m/m.go"), "name different files"),
+        )
+        for name, text, reason in cases:
+            with self.subTest(name):
+                if name == "dirty":
+                    self.addCleanup(self.restore, "m/n.go")
+                    with open(os.path.join(self.repo, "m", "n.go"), "a", encoding="utf-8") as f:
+                        f.write("// dirty\n")
+                out = self.refused("--patch", self.write_patch(text), "--test", "TestNeg")
+                self.assertIn(reason, out)
+
+
+PY_CALC = "def add(a, b):\n    return a + b\n"
+
+PY_TESTS = """\
+import subprocess
+import threading
+import unittest
+
+from pkg import calc
+
+
+class Calc(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(calc.add(2, 3), 5)
+
+    def test_weak(self):
+        self.assertEqual(calc.add(0, 0), 0)
+
+    def test_skips(self):
+        self.skipTest("skipped on purpose")
+
+    def test_lists_tracked_files(self):
+        done = subprocess.run(["git", "ls-files"], capture_output=True, check=True, timeout=60)
+        self.assertIn("pkg/calc.py", done.stdout.decode().splitlines())
+
+    def test_tree_is_clean(self):
+        subprocess.run(["git", "diff", "--quiet", "HEAD"], check=True, timeout=60)
+        done = subprocess.run(["git", "status", "--porcelain"], capture_output=True, check=True, timeout=60)
+        self.assertEqual(done.stdout.decode(), "")
+
+    def test_waits_forever(self):
+        threading.Event().wait()
+
+    def test_fails_and_leaks(self):
+        open(__file__)
+        self.assertEqual(calc.add(2, 3), 5)
+
+
+class Empty(unittest.TestCase):
+    pass
+"""
+
+CALC = "pkg.tests.test_calc.Calc."
+PY_FIND = "return a + b"
+
+
+class PyMode(unittest.TestCase):
+    """--py: the unittest id runs under the pytests row's shim in a detached worktree holding the committed plant."""
+
+    def setUp(self) -> None:
+        faulthandler.dump_traceback_later(600, exit=True)
+        self.addCleanup(faulthandler.cancel_dump_traceback_later)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = tmp.name
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        self.env = {**os.environ, **support.GIT_ENV}
+        support.write(
+            self.repo,
+            {
+                "pkg/__init__.py": "",
+                "pkg/calc.py": PY_CALC,
+                "pkg/tests/__init__.py": "",
+                "pkg/tests/test_calc.py": PY_TESTS,
+            },
+        )
+        os.makedirs(os.path.join(self.repo, "gate", "runner"))
+        shutil.copyfile(
+            os.path.join(support.REPO, "gate", "runner", "pyshim.py"),
+            os.path.join(self.repo, "gate", "runner", "pyshim.py"),
+        )
+        self.git("init", "-q")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "c")
+        self.before = self.snapshot()
+        self.worktrees = self.git("worktree", "list", "--porcelain")
+        self.checked_in_the_test = False
+        self.addCleanup(self.assertUntouched)
+
+    def git(self, *argv: str) -> str:
+        return support.git(self.repo, self.env, *argv)
+
+    def snapshot(self) -> dict[str, tuple[bytes, int]]:
+        names = self.git("ls-files").splitlines()
+        return {name: support.stamp(os.path.join(self.repo, name)) for name in names}
+
+    def assertUntouched(self) -> None:
+        """Every tracked file byte- and mtime-identical, and the worktree list as it was before the run (#16).
+
+        The test of exactly these makes them its own assertions instead: a failing cleanup is a second failure, and
+        --py's red is exactly one."""
+        if self.checked_in_the_test:
+            return
+        self.assertEqual(self.snapshot(), self.before, "a tracked file was written")
+        self.assertEqual(self.git("worktree", "list", "--porcelain"), self.worktrees, "a worktree was left")
+
+    def mutate(self, *argv: str) -> tuple[int, str]:
+        return support.tool("mutate", list(argv), self.repo, self.env, os.path.join(self.tmp, "mutate.stdout"))
+
+    def py(self, test: str, replace: str, *extra: str) -> tuple[int, str]:
+        return self.mutate("--py", test, "--file", "pkg/calc.py", "--find", PY_FIND, "--replace", replace, *extra)
+
+    def test_a_caught_python_mutation_is_red_and_a_missed_one_green(self):
+        for test, code_want, word in ((CALC + "test_add", 0, "red"), (CALC + "test_weak", 1, "green")):
+            with self.subTest(test):
+                code, out = self.py(test, "return a - b")
+                self.assertEqual(code, code_want, out)
+                self.assertEqual(out.splitlines()[-1], f"outcome: {word}", out)
+                self.assertIn(f"py: {test}", out)
+                self.assertIn("-    return a + b\n+    return a - b\n", out)
+                self.assertIn(f"copy: detached worktree at {self.git('rev-parse', 'HEAD')}", out)
+                self.assertRegex(out, r"(?m)^python: Python 3\.")
+
+    def test_a_broken_import_a_skip_or_zero_tests_is_invalid(self):
+        cases = (
+            ("import", CALC + "test_add", "return a +"),
+            ("skip", CALC + "test_skips", "return b + a"),
+            ("zero", "pkg.tests.test_calc.Empty", "return b + a"),
+            ("leak", CALC + "test_fails_and_leaks", "return a - b"),
+        )
+        # No subTest: each failing subTest is a failure of its own, and --py's red is exactly one failure, so a
+        # plant reading every case red must stop this test at its first case.
+        for name, test, replace in cases:
+            code, out = self.py(test, replace)
+            self.assertEqual(code, 1, f"{name}: {out}")
+            self.assertEqual(out.splitlines()[-1], "outcome: invalid", f"{name}: {out}")
+            self.assertIn(f"report: pyshim: {test}: ", out, name)
+
+    def test_a_test_running_git_ls_files_reads_as_in_the_tree(self):
+        test = CALC + "test_lists_tracked_files"
+        report = os.path.join(self.tmp, "direct.report")
+        shim = os.path.join(self.repo, "gate", "runner", "pyshim.py")
+        with open(os.path.join(self.tmp, "direct.stdout"), "wb") as out:
+            subprocess.run(
+                [support.PY, "-I", "-B", "-X", "dev", "-W", "error", shim, self.repo, test, report],
+                cwd=self.repo,
+                env=self.env,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=out,
+                timeout=120,
+            )
+        with open(report, encoding="utf-8") as f:
+            self.assertEqual(f.read(), f"pyshim: {test}: passed 1 tests\n")  # the outcome in the tree itself
+        code, out = self.py(test, "return b + a")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_plant_elsewhere_leaves_git_diff_and_status_clean(self):
+        code, out = self.py(CALC + "test_tree_is_clean", "return b + a")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: green", out)
+
+    def test_a_test_waiting_past_the_timeout_is_timeout(self):
+        code, out = self.py(CALC + "test_waits_forever", "return b + a", "--timeout", "5s")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: timeout", out)
+
+    def test_a_python_patch_is_applied_in_the_copy(self):
+        path = os.path.join(self.tmp, "calc.diff")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(
+                "--- a/pkg/calc.py\n+++ b/pkg/calc.py\n@@ -1,2 +1,2 @@\n def add(a, b):\n"
+                "-    return a + b\n+    return a - b\n"
+            )
+        code, out = self.mutate("--py", CALC + "test_add", "--patch", path)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)
+        self.assertEqual(self.snapshot(), self.before)  # pkg/calc.py untouched
+
+    def test_a_py_run_leaves_the_tree_and_the_worktree_list_as_they_were(self):
+        self.checked_in_the_test = True
+        code, out = self.py(CALC + "test_add", "return a - b")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "outcome: red", out)  # the witness: the plant ran somewhere
+        self.assertIn("copy: detached worktree at ", out)
+        self.assertEqual(self.snapshot(), self.before)
+        self.assertEqual(self.git("worktree", "list", "--porcelain"), self.worktrees)
+
+    def test_repeat_with_load_runs_the_py_id_each_time_and_the_hogs_are_gone(self):
+        code, out = self.py(CALC + "test_add", "return a - b", "--repeat", "2", "--load")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "caught 2/2", out)
+        self.assertEqual(re.findall(r"(?m)^run \d/2: (\w+)$", out), ["red", "red"], out)
+        pids = support.pids_line(out, "load:")
+        self.assertGreaterEqual(len(pids), 1, out)  # the witness: hogs ran
+        self.assertEqual([p for p in pids if support.alive(p)], [], out)
+
+    def test_a_plain_batch_runs_each_py_entry_in_the_one_worktree(self):
+        path = os.path.join(self.tmp, "batch.json")
+        entries = [
+            {"file": "pkg/calc.py", "find": PY_FIND, "replace": "return a - b", "py": CALC + "test_add"},
+            {"file": "pkg/calc.py", "find": PY_FIND, "replace": "return a - b", "py": CALC + "test_weak"},
+        ]
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(entries, f)
+        code, out = self.mutate("--batch", path)
+        self.assertEqual(code, 1, out)
+        self.assertIn("entry 1: red", out)
+        self.assertIn("entry 2: green", out)
+        self.assertEqual(out.splitlines()[-1], "counts: red 1, green 1, timeout 0, invalid 0", out)
+
+
+class Forms(Base):
+    """Each mode's required keys: one mutation form (file, find and replace, or patch) and one target (test or py)."""
+
+    def batch(self, *entries: dict[str, object]) -> str:
+        """The entries in a batch file of their own (a name no other call of this test reuses)."""
+        fd, path = tempfile.mkstemp(suffix=".json", dir=self.tmp)
+        os.close(fd)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(list(entries), f)
+        return path
+
+    def test_a_mutation_or_a_target_given_twice_or_in_part_is_refused_before_any_build(self):
+        good = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        patch = self.write_patch(NEG_PATCH)
+        cases = (
+            ("find with patch", ["--batch", self.batch({**good, "patch": NEG_PATCH})], "patch: not both"),
+            (
+                "no replace",
+                ["--batch", self.batch({"file": "m/m.go", "find": FIND, "test": "TestAdd"})],
+                "missing replace",
+            ),
+            ("test with py", ["--batch", self.batch({**good, "py": "pkg.tests.Calc"})], "test or py: not both"),
+            ("neither target", ["--file", "m/m.go", "--find", FIND, "--replace", CAUGHT], "neither is given"),
+            ("pkg with py", ["--patch", patch, "--py", "a.b", "--pkg", "m"], "not with py"),
+            ("race with py", ["--patch", patch, "--py", "a.b", "--race"], "--race and --cpu"),
+            ("patch with file", ["--patch", patch, "--file", "m/m.go", "--test", "TestNeg"], "not both"),
+            ("a one-part py id", ["--patch", patch, "--py", "calc"], "'calc' is not a dotted unittest id"),
+            ("a bad py id part", ["--patch", patch, "--py", "pkg.1x"], "'pkg.1x' is not a dotted unittest id"),
+            (
+                "an absolute patch path",
+                [
+                    "--patch",
+                    self.write_patch(NEG_PATCH.replace("a/m/", "/m/").replace("b/m/", "/m/")),
+                    "--test",
+                    "TestNeg",
+                ],
+                "repo-relative",
+            ),
+            (
+                "a new file",
+                [
+                    "--patch",
+                    self.write_patch("--- /dev/null\n+++ b/m/x.go\n@@ -0,0 +1 @@\n+package m\n"),
+                    "--test",
+                    "TestNeg",
+                ],
+                "in place",
+            ),
+        )
+        for name, argv, fragment in cases:
+            with self.subTest(name):
+                out = self.refused(*argv)
+                self.assertIn(fragment, out.splitlines()[-1])
+
+    def test_a_batch_patch_entry_holds_the_diff_text_and_a_go_entry_reads_red(self):
+        code, out = self.mutate("--batch", self.batch({"patch": NEG_PATCH, "test": "TestNeg"}))
+        self.assertEqual(code, 0, out)
+        self.assertIn("entry 1: red", out)
+        self.assertEqual(out.splitlines()[-1], "counts: red 1, green 0, timeout 0, invalid 0", out)
 
 
 class Batch(Base):

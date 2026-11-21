@@ -103,6 +103,19 @@ def fake_go(directory: str, body: str) -> str:
     return bin_dir
 
 
+def logging_go(directory: str, env: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """A fake go that only appends its argv to a log: the log's path, and `env` with the fake first on PATH."""
+    log = os.path.join(directory, "go.log")
+    body = f"import sys\nwith open({log!r}, 'a', encoding='utf-8') as f:\n    f.write(' '.join(sys.argv) + '\\n')\n"
+    return log, {**env, "PATH": fake_go(directory, body) + os.pathsep + env["PATH"]}
+
+
+def stamp(path: str) -> tuple[bytes, int]:
+    """A file's bytes and mtime: equal before and after means it was never written."""
+    with open(path, "rb") as f:
+        return f.read(), os.stat(path).st_mtime_ns
+
+
 def tool(name: str, argv: list[str], cwd: str, env: dict[str, str], out_path: str) -> tuple[int, str]:
     """Run gate/bench/<name>.py as a lane does; its exit code and combined output."""
     script = os.path.join(REPO, "gate", "bench", f"{name}.py")
