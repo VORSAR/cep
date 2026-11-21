@@ -219,8 +219,8 @@ func TestPlanDriverErrorIsPerRule(t *testing.T) {
 		pbSyncEvent(s, &e, e.Ts)
 	}
 	st := s.Stats()
-	if st.Rules[0][0].Errored != 1 || st.Rules[0][1].Errored != 0 {
-		t.Errorf("Errored: Divide %d, Plain %d; want 1, 0", st.Rules[0][0].Errored, st.Rules[0][1].Errored)
+	if q2RuleStats(t, st, 0).Errored != 1 || q2RuleStats(t, st, 1).Errored != 0 {
+		t.Errorf("Errored: Divide %d, Plain %d; want 1, 0", q2RuleStats(t, st, 0).Errored, q2RuleStats(t, st, 1).Errored)
 	}
 }
 

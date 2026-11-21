@@ -81,6 +81,7 @@ func TestARecordingThatFallsBehindStops(t *testing.T) {
 	w := &bdStuck{release: make(chan struct{})}
 	var mu sync.Mutex
 	outs := 0
+	all := make(chan struct{})
 	ok := q2Stream(t, p, "OK")
 	var sinks []runtime.SinkBinding
 	for i, s := range p.Streams {
@@ -89,6 +90,9 @@ func TestARecordingThatFallsBehindStops(t *testing.T) {
 				if e.StreamID == ok {
 					mu.Lock()
 					outs++
+					if outs == 20 {
+						close(all)
+					}
 					mu.Unlock()
 				}
 				return nil
@@ -113,6 +117,13 @@ func TestARecordingThatFallsBehindStops(t *testing.T) {
 		if err := r.SendPayload(ctx, 0, 0, []byte(rcS(int64(i)*2*ldMin, "a", 4, 2, ""))); err != nil {
 			t.Fatalf("SendPayload %d: %v", i, err)
 		}
+	}
+	// every alert out, waited for by state under ctx's 60 s cap: the 300 ms below then bounds only what it is about,
+	// how long the drain waits for the stalled recording
+	select {
+	case <-all:
+	case <-ctx.Done():
+		t.Fatalf("waiting for Keyed's 20 alerts: %v", ctx.Err())
 	}
 	dctx, dcancel := context.WithTimeout(ctx, 300*time.Millisecond) // the drain's deadline: the stalled recording holds it no longer
 	defer dcancel()

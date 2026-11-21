@@ -132,6 +132,18 @@ func TestTraceStepEventWritesNothing(t *testing.T) {
 	}
 }
 
+// enByName is the enEntries entry named name.
+func enByName(t testing.TB, name string) enEntry {
+	t.Helper()
+	for _, e := range enEntries {
+		if e.name == name {
+			return e
+		}
+	}
+	t.Fatalf("no enEntries entry %q", name)
+	return enEntry{}
+}
+
 // TestTraceOrder: entries come out in the order recorded, the driver's and the rules' interleaved; Bytes is the
 // trace so far, so a mid-way Bytes is a prefix of the final one. An empty trace is empty.
 func TestTraceOrder(t *testing.T) {
@@ -141,12 +153,14 @@ func TestTraceOrder(t *testing.T) {
 	}
 	// The driver's and the rules' entries interleaved, in an order sorted neither by at nor by k: the trace keeps the
 	// recorded order.
-	order := []int{0, 8, 1, 9, 2, 10, 13, 11, 4, 12, 5, 6, 7}
+	order := []string{"recording", "event", "stream_late", "construct_late", "table put", "timer", "note", "discard",
+		"batch_end", "purge", "tick", "stop", "end"}
 	var want strings.Builder
 	var mid string
-	for i, idx := range order {
-		enEntries[idx].write(tr)
-		want.WriteString(enEntries[idx].want + "\n")
+	for i, name := range order {
+		e := enByName(t, name)
+		e.write(tr)
+		want.WriteString(e.want + "\n")
 		if i == 5 {
 			mid = enTraceBytes(t, tr)
 			if mid != want.String() {
@@ -196,8 +210,9 @@ func TestTraceBytesFirstError(t *testing.T) {
 // TestTraceLateCounters: the late counters are the stream_late and construct_late entries' counts (§5.5).
 func TestTraceLateCounters(t *testing.T) {
 	tr := playback.NewTrace(enTraceApp(t))
-	for _, idx := range []int{0, 1, 9, 8, 1, 9, 10, 9, 7} { // stream_late x2, construct_late x3
-		enEntries[idx].write(tr)
+	for _, name := range []string{"recording", "stream_late", "construct_late", "event", "stream_late", "construct_late",
+		"timer", "construct_late", "end"} { // stream_late x2, construct_late x3
+		enByName(t, name).write(tr)
 	}
 	counts := map[string]int{}
 	for _, line := range strings.Split(strings.TrimSuffix(enTraceBytes(t, tr), "\n"), "\n") {
