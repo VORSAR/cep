@@ -290,12 +290,15 @@ def _reaches(
     return red, row_pass, rows
 
 
-def _methods(cls: ast.ClassDef, classes: Mapping[str, ast.ClassDef]) -> dict[str, Function]:
-    """The class's methods over its bases defined in the same module."""
+def _methods(
+    cls: ast.ClassDef, classes: Mapping[str, ast.ClassDef], seen: frozenset[str] = frozenset()
+) -> dict[str, Function]:
+    """The class's methods over its bases defined in the same module, each base walked once on a path (a cycle of
+    bases parses, though the module could never import)."""
     out: dict[str, Function] = {}
     for base in cls.bases:
-        if isinstance(base, ast.Name) and base.id in classes and classes[base.id] is not cls:
-            out.update(_methods(classes[base.id], classes))
+        if isinstance(base, ast.Name) and base.id in classes and classes[base.id] is not cls and base.id not in seen:
+            out.update(_methods(classes[base.id], classes, seen | {cls.name}))
     out.update({n.name: n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))})
     return out
 

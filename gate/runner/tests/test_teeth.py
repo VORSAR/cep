@@ -275,6 +275,18 @@ class StrengthRuleTightened(unittest.TestCase):
         )
         self.assertEqual(teeth.python_cases(source, "d.py"), (["D.test_red"], []))
 
+    def test_bases_that_form_a_cycle_are_walked_once(self):
+        source = (
+            HEAD.replace("class D(support.DriverTest)", "class D(Base, support.DriverTest)")
+            + RED
+            + ("\nclass Base(D):\n    pass\n")
+        )
+        try:
+            found = teeth.python_cases(source, "d.py")
+        except RecursionError:
+            self.fail("a cycle of bases sends the methods walk round it until RecursionError")
+        self.assertEqual(found, (["D.test_red"], []))
+
 
 class RedRows(unittest.TestCase):
     """BK-S7: the rows a driver's red cases land on: the literal row id passed to the red helper or to a helper of
