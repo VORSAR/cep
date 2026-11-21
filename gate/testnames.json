@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "note": "The naming rule's word list (plan check §3; owner, 2026-11-20, decision 5): each pattern matches a whole run of normalised tokens. Read by gate/runner/testnames.py only.",
+  "rules": [
+    {"id": "sprint id", "pattern": "s\\d+_\\d+[a-z]?(?:_\\d+)?|s\\d+c\\d+(?:_\\d+)?|s\\d+_\\d+_\\d+"},
+    {"id": "review step", "pattern": "break_?its?\\d*|fix_?rounds?\\d*|fix_s\\d+\\S*"},
+    {"id": "lane or wave", "pattern": "lane_[a-z]\\d?|wave_?\\d+"},
+    {"id": "review id with a digit", "pattern": "(?:qb|qa|bk|pa|pq|cv|cvi|cg|ar|br)\\d+[a-z]?"},
+    {"id": "review-role or sprint-shorthand prefix", "pattern": "bk|qa|qb|pq|pa|cv|cvi|cn|q2|pb"}
+  ]
+}

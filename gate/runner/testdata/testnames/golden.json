@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "note": "The naming tool's golden table (plan check §3 and §6 #20-31; S1.1c-7 design W0, Part B): each row's verdict was written by hand from the plan, before the matcher existed. Rows marked §3 pin the scanner's declaration shapes and the file scope beyond the numbered counter-examples. Read by gate/runner/tests/test_testnames.py only.",
+  "names": [
+    {"row": "20", "name": "breakit_s3_3_1", "rules": ["review step", "sprint id"]},
+    {"row": "21", "name": "TestBreakitDecoderShared", "rules": ["review step"]},
+    {"row": "21", "name": "BreakIt", "rules": ["review step"]},
+    {"row": "22", "name": "LaneA", "rules": ["lane or wave"]},
+    {"row": "22", "name": "lane_d", "rules": ["lane or wave"]},
+    {"row": "22", "name": "wave2", "rules": ["lane or wave"]},
+    {"row": "23", "name": "TestTwoLanesMerge", "rules": []},
+    {"row": "23", "name": "TestLaneAware", "rules": []},
+    {"row": "23", "name": "planet", "rules": []},
+    {"row": "23", "name": "test_fixture_paths", "rules": []},
+    {"row": "24", "name": "test_qb3_reads_once", "rules": ["review id with a digit"]},
+    {"row": "24", "name": "test_bk2_1_holds", "rules": ["review id with a digit"]},
+    {"row": "25", "name": "TestCvOptionsRefuseNil", "rules": ["review-role or sprint-shorthand prefix"]},
+    {"row": "25", "name": "bkMsg", "rules": ["review-role or sprint-shorthand prefix"]},
+    {"row": "25", "name": "pqSnapshot", "rules": ["review-role or sprint-shorthand prefix"]},
+    {"row": "25", "name": "pbReplay", "rules": ["review-role or sprint-shorthand prefix"]},
+    {"row": "25", "name": "cnFailWriter", "rules": ["review-role or sprint-shorthand prefix"]},
+    {"row": "26", "name": "pbx", "rules": []},
+    {"row": "26", "name": "cvs", "rules": []},
+    {"row": "26", "name": "TestPbufRoundTrip", "rules": []},
+    {"row": "26", "name": "qaz", "rules": []},
+    {"row": "29", "name": "test_s1_1c_10_does_not_match_s1_1c_1", "rules": ["sprint id"]},
+    {"row": "30", "name": "cgApp", "rules": []},
+    {"row": "30", "name": "ldParked", "rules": []},
+    {"row": "30", "name": "hpApp", "rules": []},
+    {"row": "30", "name": "test_the_marker_at_todays_row_passes", "rules": []},
+    {"row": "31", "name": "BenchmarkSendPath", "rules": []}
+  ],
+  "sources": [
+    {
+      "row": "27",
+      "path": "internal/x/group_test.go",
+      "text": "package x\n\nconst (\n\tbkPhaseEvent = iota\n\tplainPhase\n)\n\nvar pqSec, pqMin = 1, 2\n\ntype (\n\tholder struct {\n\t\tbkInner int\n\t}\n)\n",
+      "names": [["file", "group"], ["const", "bkPhaseEvent"], ["const", "plainPhase"], ["var", "pqSec"], ["var", "pqMin"], ["type", "holder"]],
+      "hits": [
+        ["const", "bkPhaseEvent", ["review-role or sprint-shorthand prefix"]],
+        ["var", "pqSec", ["review-role or sprint-shorthand prefix"]],
+        ["var", "pqMin", ["review-role or sprint-shorthand prefix"]]
+      ]
+    },
+    {
+      "row": "28",
+      "path": "internal/x/sink_test.go",
+      "text": "package x\n\ntype bkSink struct{}\n\nfunc (s *bkSink) Write(p []byte) (int, error) { return len(p), nil }\n",
+      "names": [["file", "sink"], ["type", "bkSink"], ["method", "Write"]],
+      "hits": [["type", "bkSink", ["review-role or sprint-shorthand prefix"]]]
+    },
+    {
+      "row": "21",
+      "path": "gate/x/tests/test_breakit.py",
+      "text": "import unittest\n\nclass BreakIt(unittest.TestCase):\n    def test_holds(self):\n        pass\n\nqb3_cap = 1\n",
+      "names": [["file", "test_breakit"], ["class", "BreakIt"], ["method", "test_holds"], ["var", "qb3_cap"]],
+      "hits": [
+        ["file", "test_breakit", ["review step"]],
+        ["class", "BreakIt", ["review step"]],
+        ["var", "qb3_cap", ["review id with a digit"]]
+      ]
+    },
+    {
+      "row": "30",
+      "path": "internal/x/watermark_test.go",
+      "text": "package x\n\nimport \"testing\"\n\nfunc TestWatermarkHolds(t *testing.T) {\n\tt.Run(\"F3/watermark\", func(t *testing.T) {})\n\tt.Run(\"breakit_s3_3_1/lane_a\", func(t *testing.T) {})\n}\n",
+      "names": [["file", "watermark"], ["func", "TestWatermarkHolds"]],
+      "hits": []
+    },
+    {
+      "row": "§3",
+      "path": "internal/x/shapes_test.go",
+      "text": "package x\n\n// bkComment is a comment, never a name.\nvar (\n\t// pqDoc documents the next spec.\n\tpqNext = map[string]int{\n\t\t\"bkKey\": 1,\n\t}\n\t_, cvLast = 1, 2\n)\n\ntype pbPair[T any] struct{ a, b T }\n\nfunc (p *pbPair[T]) Swap() {}\n\nfunc qaBuild[T any](v T) T { return v }\n\nconst src = `\nfunc bkFixture() {}\ntype bkFake int\n`\n",
+      "names": [["file", "shapes"], ["var", "pqNext"], ["var", "cvLast"], ["type", "pbPair"], ["method", "Swap"], ["func", "qaBuild"], ["const", "src"]],
+      "hits": [
+        ["var", "pqNext", ["review-role or sprint-shorthand prefix"]],
+        ["var", "cvLast", ["review-role or sprint-shorthand prefix"]],
+        ["type", "pbPair", ["review-role or sprint-shorthand prefix"]],
+        ["func", "qaBuild", ["review-role or sprint-shorthand prefix"]]
+      ]
+    },
+    {
+      "row": "§3",
+      "path": "gate/x/tests/test_shapes.py",
+      "text": "bk_limit: int = 3\npq_a, cv_b = 1, 2\n[pb_c, other] = 4, 5\n\n\nasync def qa_fetch():\n    cn_local = 1\n    return cn_local\n\n\nclass Holder:\n    bk_field = 1\n\n    async def wave2_step(self):\n        def bk_inner():\n            pass\n",
+      "names": [["file", "test_shapes"], ["var", "bk_limit"], ["var", "pq_a"], ["var", "cv_b"], ["var", "pb_c"], ["var", "other"], ["func", "qa_fetch"], ["class", "Holder"], ["method", "wave2_step"]],
+      "hits": [
+        ["var", "bk_limit", ["review-role or sprint-shorthand prefix"]],
+        ["var", "pq_a", ["review-role or sprint-shorthand prefix"]],
+        ["var", "cv_b", ["review-role or sprint-shorthand prefix"]],
+        ["var", "pb_c", ["review-role or sprint-shorthand prefix"]],
+        ["func", "qa_fetch", ["review-role or sprint-shorthand prefix"]],
+        ["method", "wave2_step", ["lane or wave"]]
+      ]
+    }
+  ],
+  "scope": [
+    {"row": "31", "path": "internal/playback/s3_2b_2.go", "in_scope": false},
+    {"row": "20", "path": "breakit_s3_3_1_test.go", "in_scope": true},
+    {"row": "§3", "path": "internal/x/testdata/a_test.go", "in_scope": false},
+    {"row": "§3", "path": "gate/proofs/drivers/test_x_planted.py", "in_scope": true},
+    {"row": "§3", "path": "bench/b_test.go", "in_scope": true},
+    {"row": "§3", "path": "docs/language/checks/test_c.py", "in_scope": true},
+    {"row": "§3", "path": "testdata/c_test.go", "in_scope": false},
+    {"row": "§3", "path": "gate/runner/tests/support.py", "in_scope": false},
+    {"row": "§3", "path": "gate/runner/testnames.py", "in_scope": false}
+  ]
+}
