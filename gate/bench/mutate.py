@@ -43,7 +43,8 @@ and exits 0 only when nothing differs.
 
 Refused (exit 2) before any go or Python test command: a file not tracked or differing from HEAD, a find text or a
 hunk occurring other than exactly once, a malformed diff (a hunk line without its newline, CRLF line endings), a plant
-that changes nothing (find equals replace, a hunk whose old and new lines are the same), a timeout time.ParseDuration
+that changes nothing (find equals replace, a hunk whose old and new lines are the same, hunks that cancel out), a
+--file that is not a regular file, a timeout time.ParseDuration
 would not read as one nanosecond to its longest (about 2562047h) or a number that is not finite, an id that is not
 one printable token, a note holding a control character or a line break, a subtest with a --cpu list of more than
 one value (go test runs it once per value), a --pkg that is not a tracked directory, a test name that
@@ -67,6 +68,11 @@ tests in` line saying 1), green (exit 0 and `passed 1 tests`), invalid (anything
 zero tests, a failure beside a leak). Only red counts (owner, 2026-11-16, G1 decision 4). Single mode exits 0 on
 red, 1 otherwise; batch mode 0 when every entry is red; --repeat N --load runs N times under CPU hogs and exits 0
 when k >= 1 of N. Exit 2 on a refusal or an internal error; the last line says which.
+
+Known limits: a literal sibling named like go test's repeat suffix (`x#01` beside `x`) makes the probe count 2, so
+it reads invalid (go test names both alike; invalid is the safe answer). A test that writes go's 0x16 framing byte,
+or forges unittest's last `Ran` line after its summary, is a deliberately hostile test: the residue class of
+ADR-0015 §3.6.
 """
 
 import argparse
@@ -83,7 +89,6 @@ import sys
 import tempfile
 import unicodedata
 from collections.abc import Mapping, Sequence
-from fractions import Fraction
 from typing import NoReturn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -222,12 +227,45 @@ def seconds(duration: str, key: str = "--timeout") -> float:
     as at least a nanosecond (it truncates less to 0, which go test reads as no timeout) and at most its longest."""
     if not _DURATION.fullmatch(duration):
         raise Refused(f"{key} {duration!r} is not a Go duration")
-    ns = sum(Fraction(n) * _UNIT_NS[u] for n, u in re.findall(r"([0-9.]+)(ns|us|µs|ms|s|m|h)", duration))
-    if ns < 1:
+    ns = _go_ns(duration)
+    if ns is not None and ns < 1:
         raise Refused(f"{key} {duration!r} is not positive")
-    if ns > GO_LONGEST_NS:
+    if ns is None or ns > GO_LONGEST_NS:
         raise Refused(f"{key} {duration!r} is longer than Go's longest duration, about 2562047h")
-    return float(ns / 10**9)
+    return ns / 10**9
+
+
+def _go_ns(duration: str) -> int | None:
+    """time.ParseDuration's nanoseconds for a duration _DURATION matches, step for step as go1.27.4's time/format.go
+    computes them: each part's integer times its unit, plus its fraction in float64 truncated to whole nanoseconds
+    (so 0.5ns0.5ns is 0, as the pinned go returns); None where Go reports an overflow."""
+    total = 0
+    for whole, fraction, unit in re.findall(r"([0-9]+)(?:\.([0-9]*))?(ns|us|µs|ms|s|m|h)", duration):
+        v = 0
+        for c in whole:  # leadingInt
+            if v > (1 << 63) // 10:
+                return None
+            v = v * 10 + int(c)
+            if v > 1 << 63:
+                return None
+        f, scale, overflow = 0, 1.0, False
+        for c in fraction:  # leadingFraction: digits past the precision are dropped
+            if overflow or f > ((1 << 63) - 1) // 10 or f * 10 + int(c) > 1 << 63:
+                overflow = True
+                continue
+            f, scale = f * 10 + int(c), scale * 10
+        u = _UNIT_NS[unit]
+        if v > (1 << 63) // u:
+            return None
+        v *= u
+        if f > 0:
+            v += int(float(f) * (float(u) / scale))
+            if v > 1 << 63:
+                return None
+        total += v
+        if total > 1 << 63:
+            return None
+    return total
 
 
 def _git(*argv: str, env: Mapping[str, str] | None = None) -> gorun.Result:
@@ -434,15 +472,20 @@ def apply(path: str, original: str, hunks: Sequence[tuple[str, str]]) -> str:
     return text
 
 
-def base_text(path: str, rev: str | None = None) -> str:
-    """A repo-relative file's text: at HEAD, refused unless it is tracked and equal to HEAD; or at `rev`, refused
-    unless it exists there."""
+def base_text(path: str, rev: str | None = None, label: str = "") -> str:
+    """A repo-relative file's text: at HEAD, refused unless it is a tracked regular file equal to HEAD; or at `rev`,
+    refused unless it exists there as a blob (a directory names a tree). `label` names it in the refusal."""
+    named = label or path
     if rev is not None:
         if _git("cat-file", "-e", f"{rev}:{path}").exit != 0:
             raise Refused(f"{path} does not exist at {rev[:12]}")
+        if _git("cat-file", "-t", f"{rev}:{path}").stdout.strip() != "blob":
+            raise Refused(f"{named} is not a regular file")
         return _git_ok("show", f"{rev}:{path}").stdout
     if _git("ls-files", "--error-unmatch", "--", path).exit != 0:
         raise Refused(f"{path} is not tracked")
+    if not os.path.isfile(path):
+        raise Refused(f"{named} is not a regular file")
     if _git("diff", "--quiet", "HEAD", "--", path).exit != 0:
         raise Refused(f"{path} differs from HEAD")
     with open(path, "rb") as f:
@@ -461,7 +504,10 @@ def changes_of(spec: Mapping[str, object], rev: str | None = None) -> tuple[Chan
             if any(old == new for old, new in found):
                 raise Refused(f"a plant that changes nothing: a hunk of {path} has the same old and new lines")
             original = base_text(path, rev)
-            changes.append(Change(path, original, apply(path, original, found)))
+            mutant = apply(path, original, found)
+            if mutant == original:
+                raise Refused(f"a plant that changes nothing: {path}'s hunks cancel out")
+            changes.append(Change(path, original, mutant))
         return tuple(changes)
     file, find = str(spec["file"]), str(spec["find"])
     if not file or os.path.isabs(file) or ".." in file.split("/"):
@@ -470,7 +516,7 @@ def changes_of(spec: Mapping[str, object], rev: str | None = None) -> tuple[Chan
         raise Refused("--find is empty")
     if find == str(spec["replace"]):
         raise Refused("a plant that changes nothing: find equals replace")
-    original = base_text(file, rev)
+    original = base_text(file, rev, f"--file {file}")
     count = _occurrences(original, find)
     if count != 1:
         raise Refused(f"--find occurs {count} times in {file}, not exactly once")

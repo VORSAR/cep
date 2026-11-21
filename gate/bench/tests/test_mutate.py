@@ -663,6 +663,51 @@ class Refusals(Base):
             out = self.refused(*argv, "--test", "TestAdd")
             self.assertEqual(out.splitlines()[-1], f"error: refused: a plant that changes nothing: {reason}", out)
 
+    def test_hunks_that_cancel_out_are_refused_before_any_build(self):
+        cancel = (
+            "--- a/m/n.go\n+++ b/m/n.go\n@@ -4 +4 @@\n-\treturn a * b\n+\treturn a / b\n"
+            "@@ -4 +4 @@\n-\treturn a / b\n+\treturn a * b\n"
+        )
+        good = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        out = self.refused("--batch", self.write_batch(good, {"patch": cancel, "test": "TestNeg"}))
+        self.assertEqual(
+            out.splitlines()[-1],
+            "error: refused: batch entry 2: a plant that changes nothing: m/n.go's hunks cancel out",
+        )
+
+    def test_a_file_that_is_a_directory_is_refused_before_any_build(self):
+        # No subTest: a plant reading every case wrong must stop this test at its first case (--py's one failure).
+        head = self.git("rev-parse", "HEAD")
+        plant = {"file": "m", "find": "x", "replace": "y", "test": "TestAdd", "pkg": "m"}
+        sides = {"id": "A", "old_rev": head, "new_rev": head, "expect": {"old": "red", "new": "red"}}
+        cases = (
+            (["--file", "m", "--find", "x", "--replace", "y", "--test", "TestAdd", "--pkg", "m"], ""),
+            (["--batch", self.write_batch(plant)], "batch entry 1: "),
+            (["--expect", self.write_batch({**plant, **sides})], "batch entry 1: "),
+        )
+        for argv, where in cases:
+            out = self.refused(*argv)
+            self.assertEqual(out.splitlines()[-1], f"error: refused: {where}--file m is not a regular file", out)
+
+    def test_a_timeout_is_read_as_time_parseduration_reads_it(self):
+        """go1.27.4's time.ParseDuration, run on the pinned go: 0.5ns0.5ns -> 0, 0.9ns -> 0, 1.5ns -> 1,
+        0.000000001s -> 1, 1h0.5ns -> 3600000000000 (each part's fraction truncated to whole nanoseconds); go test
+        reads 0 as no timeout."""
+        plant = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
+        for value in ("0.5ns0.5ns", "0.9ns"):  # No subTest (as above).
+            out = self.refused("--batch", self.write_batch({**plant, "timeout": value}))
+            self.assertEqual(out.splitlines()[-1], f"error: refused: batch entry 1: timeout {value!r} is not positive")
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(self.log)
+        kept = ("1.5ns", "0.000000001s", "1h0.5ns")
+        code, out = self.mutate(
+            "--batch", self.write_batch(*({**plant, "timeout": value} for value in kept)), env=self.fake_env
+        )
+        self.assertEqual(code, 1, out)  # the fake go test prints nothing: invalid, three times
+        with open(self.log, encoding="utf-8") as f:
+            tests = [line.split() for line in f if line.split()[1] == "test"]
+        self.assertEqual([argv[argv.index("-timeout") + 1] for argv in tests], list(kept), out)
+
     def test_an_entry_timeout_go_cannot_read_is_refused_naming_the_batch_key(self):
         # No subTest (as above). Go's time.Duration holds at most 2**63 - 1 ns, about 2562047.788h.
         longest = "is longer than Go's longest duration, about 2562047h"
