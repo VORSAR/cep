@@ -118,8 +118,11 @@ class Group(support.GateTest):
 
     def test_signalling_a_finished_step_is_harmless(self):
         group = proc.Group()
-        group.reap(self.spawn(group, "status", 0))
-        group.signal(signal.SIGTERM)
+        self.assertEqual(group.reap(self.spawn(group, "status", 0)), (0, False))
+        with mock.patch.object(proc.os, "killpg") as killpg:
+            group.signal(signal.SIGTERM)
+        killpg.assert_not_called()  # no signal reaches the reaped leader's pid, which the kernel may reuse
+        self.assertIsNone(self.spawn(group, "status", 0))  # and nothing starts after the signal
 
     def test_a_missing_command_raises_oserror(self):
         group = proc.Group()

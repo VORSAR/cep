@@ -10,7 +10,7 @@ import shutil
 import sys
 from unittest import mock
 
-from gate.runner import main
+from gate.runner import clock, main
 from gate.runner.tests import support
 from gate.toolchain.parity import Outcome
 
@@ -112,11 +112,25 @@ class Cli(support.GateTest):
         self.assertRefused(self.cli("--tier", "T2", "--registry", self.reg(), environ=env), "VORSAR_CEP_WORKERS")
 
     def test_workers_reach_the_scheduler(self):
+        # Two rows that meet through two FIFOs finish only side by side. With one worker the first row waits forever;
+        # its real watchdog (30 s, a ceiling that breaks the hang, never a measure) turns that into a named timeout.
         f1, f2 = self.fifo("f1"), self.fifo("f2")
-        rows = (self.good("x", "openw", f1, "openr", f2), self.good("y", "openr", f1, "openw", f2))
+        rows = (
+            self.good("x", "openw", f1, "openr", f2, timeout_s=30),
+            self.good("y", "openr", f1, "openw", f2, timeout_s=30),
+        )
         env = dict(support.base_env(), VORSAR_CEP_WORKERS="2")
-        code = self.cli("--tier", "T2", "--registry", self.reg(*rows), "--run-dir", self.run_dir, environ=env)
-        self.assertEqual(code, 0)
+        code = self.cli(
+            "--tier",
+            "T2",
+            "--registry",
+            self.reg(*rows),
+            "--run-dir",
+            self.run_dir,
+            environ=env,
+            timers=clock.RealTimers(),
+        )
+        self.assertEqual(code, 0, self.output)
 
     def test_every_exception_is_exit_2_with_the_contract_lines(self):
         def boom(repo, environ):
