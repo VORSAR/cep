@@ -21,8 +21,9 @@ ALLOWED_IN_TESTS = frozenset({"__init__.py", "support.py"})
 
 def tracked_under_gate(row_dir: str) -> set[str]:
     out, err = os.path.join(row_dir, "tracked.stdout"), os.path.join(row_dir, "tracked.stderr")
-    if rows.run_tool(["git", "ls-files", "-z", "--", "gate"], out, err) != 0:
-        raise SystemExit(f"git ls-files failed: {rows.read_text(err)}")
+    code = rows.run_tool(["git", "ls-files", "-z", "--", "gate"], out, err)
+    if code != 0:
+        raise OSError(f"git ls-files: exit {code}: {rows.read_text(err).strip()}")
     return {rows.show(path) for path in rows.read_list(out)}
 
 
@@ -87,7 +88,12 @@ def row_scope(row_dir: str, paths: list[str]) -> set[str]:
 def main(argv: list[str]) -> int:
     row_dir = rows.start()
     paths = [rows.show(path) for path in rows.read_list(argv[1])]
-    failures = misplaced(tracked_under_gate(row_dir), row_scope(row_dir, paths)) + missing_init(paths)
+    try:
+        tracked = tracked_under_gate(row_dir)
+    except OSError as e:  # the walk needs the tracked set: one named line, as every row's fault
+        rows.covered(0)
+        return rows.finish([str(e)])
+    failures = misplaced(tracked, row_scope(row_dir, paths)) + missing_init(paths)
     passed, problems = rows.run_modules(PYTHON, paths, row_dir)
     rows.covered(passed)
     return rows.finish(sorted(set(failures + problems)))  # the walk and run_modules may name one collision

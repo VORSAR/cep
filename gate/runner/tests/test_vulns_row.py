@@ -5,6 +5,7 @@ loader returns no module and no error, and the row is red by name, `vulns: no mo
 that read nothing. The positive witness first: the same copy and files with one module read is green.
 """
 
+import errno
 import hashlib
 import io
 import json
@@ -133,6 +134,37 @@ class Exempt(Scan):
                 self.waive(target)
                 faults, _ = self.scan(loaded(dep))
                 self.assertEqual(faults, [f"vulns: {target} matches nothing: remove it"])
+
+
+class UnreadableCopyFile(Scan):
+    """A file of the copy that exists but cannot be read (a directory in its place) is one named fault, never a
+    traceback out of scan; an unreadable vulndb.zip or stamp.json leaves the copy unscanned."""
+
+    def scan_faults(self, name: str) -> list[str]:
+        path = os.path.join(self.copy, name)
+        if os.path.exists(path):
+            os.remove(path)
+        os.mkdir(path)
+        dep = gomods.Module("example.com/dep", "v1.0.0", "", "", "", True)
+        try:
+            faults, self.lines = self.scan(loaded(dep))
+        except OSError as e:  # the row died with a traceback and no named fault
+            self.fail(f"scan raised {e!r}")
+        return faults
+
+    def unreadable(self, name: str) -> str:
+        return f"vulns: cannot read {os.path.join(self.copy, name)}: {os.strerror(errno.EISDIR)}: run make vulndb"
+
+    def test_a_directory_in_place_of_the_zip_is_named(self):
+        self.assertEqual(self.scan_faults("vulndb.zip"), [self.unreadable("vulndb.zip")])
+
+    def test_a_directory_in_place_of_the_stamp_is_named_and_the_copy_is_not_scanned(self):
+        self.assertEqual(self.scan_faults("stamp.json"), [self.unreadable("stamp.json")])
+        self.assertFalse(any(" entries; " in x for x in self.lines), self.lines)
+
+    def test_a_directory_in_place_of_the_fetch_error_is_named_and_the_copy_is_scanned(self):
+        self.assertEqual(self.scan_faults("fetch-error.txt"), [self.unreadable("fetch-error.txt")])
+        self.assertTrue(any("1 entries; 1 modules (1 built)" in x for x in self.lines), self.lines)
 
 
 TESTDATA = os.path.join(support.REPO, "gate", "runner", "testdata", "buildinfo")
