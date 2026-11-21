@@ -5,6 +5,7 @@ design note W0, Part A as revised).
         (--test <TopLevelTestName> [--subtest <path>] [--pkg <dir>] [--race] [--cpu <list>] | --py <unittest id>) \\
         [--timeout 120s] [--repeat N --load]
     python3.15 -I -B gate/bench/mutate.py --batch <mutations.json> [--timeout 120s] [--race] [--cpu <list>]
+    python3.15 -I -B gate/bench/mutate.py --expect <entries.json> [--timeout 120s] [--race] [--cpu <list>]
 
 Run from the repo's top level. A mutation is a find text replaced once in one file (it must occur exactly once), or
 a unified diff (`git diff`'s output included; a batch entry's "patch" holds the diff's text): each hunk is placed by
@@ -23,6 +24,16 @@ a test calling git there sees a clean tree; the id runs as `python3.15 -I -B -X 
 <worktree>/gate/runner/pyshim.py <worktree> <id> <report>` from the worktree, with --timeout as its wall clock. The
 worktree is removed when the run ends, a stop included; one of this run's worktrees still listed or on disk after
 that is exit 2.
+
+A batch entry holds the single-mode flags as keys (file, find, replace, patch, test, subtest, py, pkg), with note,
+an optional id, and timeout: a Go duration or positive seconds, replacing --timeout for that entry. An --expect
+entry also needs id (unique), old_rev and new_rev (full commit ids of this repository) and expect ({"old":
+<outcome>, "new": <outcome>}); old_test, new_test, old_subtest, new_subtest, old_py and new_py name a side's own
+test, and "control": true with no mutation reads the real code. Each entry runs at each revision in the run's one
+worktree per revision, reset between entries, the plant committed there (Go included, no overlay); the mutation must
+occur exactly once in each revision's blob. It prints `entry <id> <side> <rev>: <outcome> (expected <word>)` for
+each side, then `expect: <n> entries, <k> as expected; differing: <ids or none>`, and exits 0 only when nothing
+differs.
 
 Refused (exit 2) before any go or Python test command: a file not tracked or differing from HEAD, a find text or a
 hunk occurring other than exactly once, a malformed diff, a --pkg that is not a tracked directory, a test name that
@@ -68,7 +79,11 @@ PYTHON = "python3.15"  # the pytests row's interpreter (gate/runner/rows/pytests
 TRIPLE = frozenset({"file", "find", "replace"})
 MUTATION_KEYS = TRIPLE | {"patch"}
 TARGET_KEYS = frozenset({"test", "subtest", "py"})
-PLAIN_KEYS = MUTATION_KEYS | TARGET_KEYS | {"note", "pkg"}
+PLAIN_KEYS = MUTATION_KEYS | TARGET_KEYS | {"id", "note", "pkg", "timeout"}
+SIDE_KEYS = frozenset(f"{side}_{key}" for side in ("old", "new") for key in TARGET_KEYS)
+EXPECT_KEYS = PLAIN_KEYS | SIDE_KEYS | {"old_rev", "new_rev", "expect", "control"}
+EXPECT_REQUIRED = ("id", "old_rev", "new_rev", "expect")
+FULL_REV = re.compile(r"[0-9a-f]{40}")
 THROWAWAY = {
     "GIT_AUTHOR_NAME": "mutate.py",
     "GIT_AUTHOR_EMAIL": "mutate@invalid",
@@ -151,10 +166,23 @@ class Change:
 
 @dataclasses.dataclass(frozen=True)
 class Entry:
-    changes: tuple[Change, ...]
-    target: Target
+    id: str
+    changes: tuple[Change, ...]  # the plant at HEAD (plain and single mode) or at new_rev (--expect); () for a control
+    old: Target  # plain and single mode: old == new
+    new: Target
     pkg: str  # the Go package directory; "" for Python
     note: str
+    timeout: str  # a Go duration: the entry's "timeout", else the run's --timeout
+    old_rev: str = ""
+    new_rev: str = ""
+    expect: tuple[str, str] = ("", "")
+    control: bool = False
+    old_changes: tuple[Change, ...] = ()  # --expect: the plant applied to old_rev's blobs
+
+    @property
+    def target(self) -> Target:
+        """Plain and single mode's one target."""
+        return self.new
 
 
 def seconds(duration: str) -> float:
@@ -332,8 +360,13 @@ def apply(path: str, original: str, hunks: Sequence[tuple[str, str]]) -> str:
     return text
 
 
-def base_text(path: str) -> str:
-    """A repo-relative file's text, refused unless it is tracked and equal to HEAD."""
+def base_text(path: str, rev: str | None = None) -> str:
+    """A repo-relative file's text: at HEAD, refused unless it is tracked and equal to HEAD; or at `rev`, refused
+    unless it exists there."""
+    if rev is not None:
+        if _git("cat-file", "-e", f"{rev}:{path}").exit != 0:
+            raise Refused(f"{path} does not exist at {rev[:12]}")
+        return _git_ok("show", f"{rev}:{path}").stdout
     if _git("ls-files", "--error-unmatch", "--", path).exit != 0:
         raise Refused(f"{path} is not tracked")
     if _git("diff", "--quiet", "HEAD", "--", path).exit != 0:
@@ -342,56 +375,131 @@ def base_text(path: str) -> str:
         return f.read().decode("utf-8", errors="surrogateescape")
 
 
-def changes_of(spec: Mapping[str, str]) -> tuple[Change, ...]:
-    """The mutation's changed files: one from file, find and replace, or one per path of the patch, the hunks of a
-    path named in several ---/+++ pairs merged in order."""
+def changes_of(spec: Mapping[str, object], rev: str | None = None) -> tuple[Change, ...]:
+    """The mutation's changed files, on HEAD's file or `rev`'s blob: one from file, find and replace, or one per path
+    of the patch, the hunks of a path named in several ---/+++ pairs merged in order."""
     if "patch" in spec:
         hunks: dict[str, list[tuple[str, str]]] = {}
-        for path, found in parse_patch(spec["patch"]):
+        for path, found in parse_patch(str(spec["patch"])):
             hunks.setdefault(path, []).extend(found)
         changes = []
         for path, found in hunks.items():
-            original = base_text(path)
+            original = base_text(path, rev)
             changes.append(Change(path, original, apply(path, original, found)))
         return tuple(changes)
-    file, find = spec["file"], spec["find"]
+    file, find = str(spec["file"]), str(spec["find"])
     if not file or os.path.isabs(file) or ".." in file.split("/"):
         raise Refused(f"--file {file!r} is not a repo-relative path")
     if not find:
         raise Refused("--find is empty")
-    original = base_text(file)
+    original = base_text(file, rev)
     count = _occurrences(original, find)
     if count != 1:
         raise Refused(f"--find occurs {count} times in {file}, not exactly once")
-    return (Change(file, original, original.replace(find, spec["replace"], 1)),)
+    return (Change(file, original, original.replace(find, str(spec["replace"]), 1)),)
 
 
-def entry(spec: Mapping[str, str]) -> Entry:
-    """Every refusal of one mutation and its designated test, before any go or Python test command: one mutation
-    form, one target, and pkg with Go only."""
+def _entry_timeout(value: object, default: str) -> str:
+    """An entry's "timeout": a Go duration string or positive seconds; the run's --timeout when absent."""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        seconds(value)
+        return value
+    if isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
+        return f"{value}s"
+    raise Refused(f"timeout {value!r} is not a Go duration or positive seconds")
+
+
+def _side(spec: Mapping[str, object], side: str) -> Target:
+    """One side's designated test: each of test, subtest and py from `<side>_<key>` if present, else `<key>`."""
+    keys = ("test", "subtest", "py")
+    found = [spec.get(f"{side}_{key}", spec.get(key)) for key in keys]
+    return target(*(None if value is None else str(value) for value in found))
+
+
+def _rev(spec: Mapping[str, object], key: str) -> str:
+    """A full commit id naming a commit of this repository."""
+    rev = str(spec[key])
+    if not FULL_REV.fullmatch(rev):
+        raise Refused(f"{key} {rev!r} is not a full commit id")
+    if _git("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}").stdout.strip() != rev:
+        raise Refused(f"{key} {rev} names no commit")
+    return rev
+
+
+def entry(spec: Mapping[str, object], timeout: str, expect: bool = False) -> Entry:
+    """Every refusal of one mutation and its designated tests, before any go or Python test command: one mutation
+    form (none for a control), one target per side, all Go or all Python, pkg with Go only; with --expect, an id,
+    two revisions that exist and the outcome expected at each, the mutation exact-once at both."""
     keys = set(spec)
-    if "patch" in keys and keys & TRIPLE:
+    control = spec.get("control") is True
+    if control:
+        if keys & MUTATION_KEYS:
+            raise Refused(f"a control entry has no mutation: {sorted(keys & MUTATION_KEYS)}")
+    elif "patch" in keys and keys & TRIPLE:
         raise Refused("the mutation is file, find and replace, or patch: not both")
-    if "patch" not in keys and TRIPLE - keys:
+    elif "patch" not in keys and TRIPLE - keys:
         raise Refused(f"the mutation is file, find and replace, or patch: missing {', '.join(sorted(TRIPLE - keys))}")
-    t = target(spec.get("test"), spec.get("subtest"), spec.get("py"))
-    pkg = spec.get("pkg")
-    if t.py and pkg is not None:
+    old, new = _side(spec, "old"), _side(spec, "new")
+    if bool(old.py) != bool(new.py):
+        raise Refused("an entry is all Go or all Python")
+    pkg = None if spec.get("pkg") is None else str(spec["pkg"])
+    if new.py and pkg is not None:
         raise Refused("pkg names a Go package: not with py")
     if pkg is not None:
         if not pkg or os.path.isabs(pkg) or ".." in pkg.split("/"):
             raise Refused(f"--pkg {pkg!r} is not a repo-relative directory")
         if not os.path.isdir(pkg) or not _git("ls-files", "--", pkg).stdout.strip():
             raise Refused(f"--pkg {pkg!r} is not a directory holding tracked files")
-    changes = changes_of(spec)
-    if t.py:
+    extra: dict[str, object] = {}
+    if expect:
+        missing = [key for key in EXPECT_REQUIRED if key not in keys]
+        if missing:
+            raise Refused(f"an --expect entry needs id, old_rev, new_rev and expect: missing {', '.join(missing)}")
+        old_rev, new_rev = _rev(spec, "old_rev"), _rev(spec, "new_rev")
+        words = spec["expect"]
+        assert isinstance(words, dict)  # read_batch checked its shape
+        changes = () if control else changes_of(spec, new_rev)
+        extra = {
+            "old_rev": old_rev,
+            "new_rev": new_rev,
+            "expect": (words["old"], words["new"]),
+            "control": control,
+            "old_changes": () if control else changes_of(spec, old_rev),
+        }
+    else:
+        changes = changes_of(spec)
+    if new.py:
         pkg = ""
     elif pkg is None:
+        if not changes:
+            raise Refused("a Go control entry names its pkg")
         pkg = os.path.dirname(changes[0].file) or "."
-    return Entry(changes, t, pkg, spec.get("note", ""))
+    note, ident = str(spec.get("note", "")), str(spec.get("id", ""))
+    return Entry(ident, changes, old, new, pkg, note, timeout, **extra)
 
 
-def read_batch(path: str) -> list[Entry]:
+def _value_types(spec: Mapping[str, object]) -> None:
+    """expect: exactly an old and a new outcome word; control: the literal true; timeout: checked by
+    _entry_timeout; every other value a string."""
+    for key, value in spec.items():
+        if key == "expect":
+            if (
+                not isinstance(value, dict)
+                or set(value) != {"old", "new"}
+                or not all(word in OUTCOMES for word in value.values())
+            ):
+                raise Refused(f'expect {value!r} is not {{"old": <outcome>, "new": <outcome>}}')
+        elif key == "control":
+            if value is not True:
+                raise Refused(f"control {value!r} is not true")
+        elif key != "timeout" and not isinstance(value, str):
+            raise Refused(f"{key}: every value but expect, control and timeout must be a string")
+
+
+def read_batch(path: str, expect: bool, default_timeout: str) -> list[Entry]:
+    """Every entry of a plain batch or an --expect batch, each checked before the first build or worktree."""
     try:
         with open(path, "rb") as f:
             specs = json.loads(f.read().decode("utf-8"))
@@ -399,19 +507,22 @@ def read_batch(path: str) -> list[Entry]:
         raise Refused(f"batch {path}: {e}") from None
     if not isinstance(specs, list) or not specs:
         raise Refused(f"batch {path}: not a non-empty list of entries")
-    entries = []
+    entries: list[Entry] = []
     for index, spec in enumerate(specs, 1):
         if not isinstance(spec, dict):
             raise Refused(f"batch entry {index}: not an object")
-        extra = sorted(set(spec) - PLAIN_KEYS)
-        if extra:
-            raise Refused(f"batch entry {index}: unknown keys {extra}")
-        if not all(isinstance(value, str) for value in spec.values()):
-            raise Refused(f"batch entry {index}: every value must be a string")
+        unknown = sorted(set(spec) - EXPECT_KEYS)
+        if unknown:
+            raise Refused(f"batch entry {index}: unknown keys {unknown}")
+        if not expect and set(spec) - PLAIN_KEYS:
+            raise Refused(f"batch entry {index}: an --expect key in a plain batch: {sorted(set(spec) - PLAIN_KEYS)}")
         try:
-            entries.append(entry(spec))
+            _value_types(spec)
+            entries.append(entry(spec, _entry_timeout(spec.get("timeout"), default_timeout), expect))
         except Refused as e:
             raise Refused(f"batch entry {index}: {e}") from None
+        if expect and entries[-1].id in {e.id for e in entries[:-1]}:
+            raise Refused(f"batch entry {index}: id {entries[-1].id!r} is not unique")
     return entries
 
 
@@ -566,25 +677,29 @@ def _overlay(e: Entry, scratch: str, top: str) -> str:
     return overlay
 
 
-def run_go(e: Entry, args: argparse.Namespace, scratch: str) -> tuple[str, gorun.Result, list[str]]:
-    """One Go run of the entry's target through the overlay, after a probe that must count exactly one run of a
-    designated subtest; the `ran:` lines name every run at the subtest's depth."""
-    side = e.target
+def run_go(
+    e: Entry, side: Target, args: argparse.Namespace, scratch: str, cwd: str | None = None
+) -> tuple[str, gorun.Result, list[str]]:
+    """One Go run of `side`: through the overlay in the tracked tree (cwd None), or in a worktree holding the plant;
+    a designated subtest's probe must count exactly one run first; the `ran:` lines name every run at its depth."""
     if side.levels:
-        probe = _go(e, args, scratch, pattern(side, probe=True))
+        probe = _go(e, args, scratch, cwd, pattern(side, probe=True))
         n = len(runs(f"{probe.stdout}\n{probe.stderr}", side))
         if n != 1:
             return "invalid", probe, [f"probe: {n} subtests run as {side.full}"]
-    result = _go(e, args, scratch, pattern(side, probe=False))
+    result = _go(e, args, scratch, cwd, pattern(side, probe=False))
     names = ran(f"{result.stdout}\n{result.stderr}", side) if side.levels else []
     return judge_go(result, side), result, [f"ran: {name}" for name in names]
 
 
-def _go(e: Entry, args: argparse.Namespace, scratch: str, run: str) -> gorun.Result:
-    """go test -run `run` with the mutants built through -overlay; the tracked files are only ever read."""
-    top = os.getcwd()
-    argv = ["go", "test", f"-overlay={_overlay(e, scratch, top)}", "-count=1", "-v", "-run", run]
-    argv += ["-timeout", args.timeout]
+def _go(e: Entry, args: argparse.Namespace, scratch: str, cwd: str | None, run: str) -> gorun.Result:
+    """go test -run `run` with the entry's -timeout: in the tracked tree with the mutants through -overlay (the
+    tracked files only ever read), or in `cwd`, a worktree holding the committed plant."""
+    top = cwd or os.getcwd()
+    argv = ["go", "test"]
+    if cwd is None:
+        argv.append(f"-overlay={_overlay(e, scratch, top)}")
+    argv += ["-count=1", "-v", "-run", run, "-timeout", e.timeout]
     if args.race:
         argv.append("-race")
     if args.cpu:
@@ -593,7 +708,7 @@ def _go(e: Entry, args: argparse.Namespace, scratch: str, run: str) -> gorun.Res
     # PWD names the real directory, so go's working directory matches the overlay's key. Never -trimpath: frame
     # tables and line-anchored tests match file paths in stack frames.
     env = {**os.environ, "PWD": top}
-    return gorun.run(argv, cwd=top, env=env, timeout_s=seconds(args.timeout) + WALL_EXTRA_S)
+    return gorun.run(argv, cwd=top, env=env, timeout_s=seconds(e.timeout) + WALL_EXTRA_S)
 
 
 def _said(report: str, py: str) -> str:
@@ -608,16 +723,17 @@ def _said(report: str, py: str) -> str:
 
 
 def run_py(
-    e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, rev: str
+    e: Entry, side: Target, scratch: str, trees: Worktrees, rev: str, changes: tuple[Change, ...]
 ) -> tuple[str, gorun.Result, str]:
-    """The id under the pytests row's shim and flags, the copy's own shim, in the worktree holding the plant."""
-    wt = trees.at(rev, e.changes)
+    """The id under the pytests row's shim and flags, the copy's own shim, in the worktree at `rev` holding the
+    plant, with the entry's timeout as its wall clock."""
+    wt = trees.at(rev, changes)
     with tempfile.TemporaryDirectory(dir=scratch) as own:  # never in the worktree: git status would see it (#13a)
         report = os.path.join(own, "report")
-        argv = [PYTHON, *rows.SHIM_FLAGS, os.path.join(wt, "gate", "runner", "pyshim.py"), wt, e.target.py, report]
-        result = gorun.run(argv, cwd=wt, env={**os.environ, "PWD": wt}, timeout_s=seconds(args.timeout))
-        said = _said(report, e.target.py)
-    return judge_py(result, said, e.target), result, said
+        argv = [PYTHON, *rows.SHIM_FLAGS, os.path.join(wt, "gate", "runner", "pyshim.py"), wt, side.py, report]
+        result = gorun.run(argv, cwd=wt, env={**os.environ, "PWD": wt}, timeout_s=seconds(e.timeout))
+        said = _said(report, side.py)
+    return judge_py(result, said, side), result, said
 
 
 def run_one(
@@ -625,10 +741,24 @@ def run_one(
 ) -> tuple[str, gorun.Result, list[str]]:
     """One run of the entry's designated test against its mutation: the outcome, the run, and its notes (a Go
     subtest's probe or `ran:` lines; an invalid Python run's shim line)."""
-    if e.target.py:
-        outcome, result, said = run_py(e, args, scratch, trees, head)
+    return run_side(e, e.target, args, scratch, trees, head, e.changes, None)
+
+
+def run_side(
+    e: Entry,
+    side: Target,
+    args: argparse.Namespace,
+    scratch: str,
+    trees: Worktrees,
+    rev: str,
+    changes: tuple[Change, ...],
+    cwd: str | None,
+) -> tuple[str, gorun.Result, list[str]]:
+    """One side: Python in the worktree at `rev`; Go through the overlay (cwd None) or in the worktree `cwd`."""
+    if side.py:
+        outcome, result, said = run_py(e, side, scratch, trees, rev, changes)
         return outcome, result, [f"report: {said or '(no pyshim line)'}"] if outcome == "invalid" else []
-    return run_go(e, args, scratch)
+    return run_go(e, side, args, scratch, cwd)
 
 
 def details(outcome: str, result: gorun.Result, notes: list[str]) -> list[str]:
@@ -654,7 +784,18 @@ def header(e: Entry, head: str = "") -> list[str]:
         named = [f"test: {e.target.test}", f"package: ./{e.pkg}"]
         if e.target.levels:
             named.append(f"subtest: {e.target.full}")
-    return [*named, *(line for change in e.changes for line in diff(change))]
+    return [*named, f"timeout: {e.timeout}", *(line for change in e.changes for line in diff(change))]
+
+
+def expect_header(e: Entry) -> list[str]:
+    """An --expect entry's designated tests at each revision, its timeout, and its plant at the new revision."""
+    named = [
+        f"{side}: {t.py or t.full} at {rev[:12]}"
+        for side, t, rev in (("old", e.old, e.old_rev), ("new", e.new, e.new_rev))
+    ]
+    package = [] if e.new.py else [f"package: ./{e.pkg}"]
+    plant = ["control: the real code"] if e.control else [line for change in e.changes for line in diff(change)]
+    return [f"entry {e.id}", f"note: {e.note}", *named, *package, f"timeout: {e.timeout}", *plant]
 
 
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -668,6 +809,7 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--py")
     parser.add_argument("--pkg")
     parser.add_argument("--batch")
+    parser.add_argument("--expect")
     parser.add_argument("--timeout", default="120s")
     parser.add_argument("--race", action="store_true")
     parser.add_argument("--cpu")
@@ -675,9 +817,12 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--load", action="store_true")
     args = parser.parse_args(argv)
     singles = (args.file, args.find, args.replace, args.patch, args.test, args.subtest, args.py, args.pkg, args.repeat)
-    if args.batch is not None and (any(value is not None for value in singles) or args.load):
+    if args.batch is not None and args.expect is not None:
+        raise Refused("--batch and --expect exclude each other")
+    if (args.batch, args.expect) != (None, None) and (any(value is not None for value in singles) or args.load):
         raise Refused(
-            "--batch takes no --file, --find, --replace, --patch, --test, --subtest, --py, --pkg, --repeat or --load"
+            "--batch and --expect take no --file, --find, --replace, --patch, --test, --subtest, --py, --pkg, --repeat"
+            " or --load"
         )
     if (args.repeat is None) != (not args.load):
         raise Refused("--repeat N and --load go together")
@@ -726,13 +871,45 @@ def batch(
     return (0 if counts["red"] == len(entries) else 1), [f"counts: {summary}"]
 
 
+def expect(entries: list[Entry], args: argparse.Namespace, scratch: str, trees: Worktrees) -> tuple[int, list[str]]:
+    """Each entry at its old and its new revision, in the run's one worktree per revision (reset between entries);
+    exit 0 only when every outcome is the one expected."""
+    _print(record(any(e.new.py for e in entries)))
+    outcomes: dict[str, tuple[str, ...]] = {}
+    for e in entries:
+        _print(expect_header(e))
+        got = []
+        sides = (
+            ("old", e.old_rev, e.old, e.expect[0], e.old_changes),
+            ("new", e.new_rev, e.new, e.expect[1], e.changes),
+        )
+        for name, rev, side, want, changes in sides:
+            with tempfile.TemporaryDirectory(dir=scratch) as own:
+                wt = None if side.py else trees.at(rev, changes)
+                outcome, result, notes = run_side(e, side, args, own, trees, rev, changes, wt)
+            got.append(outcome)
+            _print([*details(outcome, result, notes), f"entry {e.id} {name} {rev[:12]}: {outcome} (expected {want})"])
+        outcomes[e.id] = tuple(got)
+    differing = [e.id for e in entries if outcomes[e.id] != e.expect]
+    kept = len(entries) - len(differing)
+    summary = f"expect: {len(entries)} entries, {kept} as expected; differing: {', '.join(differing) or 'none'}"
+    return (1 if differing else 0), [summary]
+
+
 def mutate(args: argparse.Namespace) -> tuple[int, list[str]]:
-    entries = read_batch(args.batch) if args.batch is not None else [entry(single_spec(args))]
-    python = any(e.target.py for e in entries)
+    if args.expect is not None:
+        entries = read_batch(args.expect, True, args.timeout)
+    elif args.batch is not None:
+        entries = read_batch(args.batch, False, args.timeout)
+    else:
+        entries = [entry(single_spec(args), args.timeout)]
+    python = any(e.old.py or e.new.py for e in entries)
     if python and (args.race or args.cpu):
         raise Refused("--race and --cpu apply to go test: not with py")
     head = _git_ok("rev-parse", "--verify", "HEAD^{commit}").stdout.strip() if python else ""
     with tempfile.TemporaryDirectory(prefix="mutate-") as scratch, Worktrees() as trees:
+        if args.expect is not None:
+            return expect(entries, args, scratch, trees)
         if args.batch is not None:
             return batch(entries, args, scratch, trees, head)
         if args.repeat is not None:
