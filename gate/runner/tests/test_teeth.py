@@ -220,36 +220,69 @@ class StrengthRuleTightened(unittest.TestCase):
                 self.assertCaseFaulted(*body)
 
     def test_a_driver_may_not_define_a_verdict_helpers_name(self):
-        for why, source in {
-            "a method": HEAD + "    def assertGateFailed(self, run):\n        pass\n\n" + RED,
-            "a class attribute": HEAD + "    assertRed = print\n\n" + RED,
-            "an attribute set in a case": HEAD + case("test_b", "self.assertRow = print") + RED,
-            "a module function": "def assertRed(*args):\n    pass\n\n\n" + HEAD + RED,
-            "an import alias": "from os import path as assertRed\n" + HEAD + RED,
-            "assertParityPassed": HEAD + "    def assertParityPassed(self, run, job):\n        pass\n\n" + RED,
+        named = "is a verdict helper's name: a driver may not define or assign it"
+        for why, (source, fault) in {
+            "a method": (
+                HEAD + "    def assertGateFailed(self, run):\n        pass\n\n" + RED,
+                f"teeth: d.py:5: assertGateFailed {named}",
+            ),
+            "a class attribute": (HEAD + "    assertRed = print\n\n" + RED, f"teeth: d.py:5: assertRed {named}"),
+            "an attribute set in a case": (  # the case has a verdict, so the redefinition is its only fault
+                HEAD + case("test_b", "self.assertRow = print", "run = self.run_row()", VERDICT) + RED,
+                f"teeth: d.py:6: assertRow {named}",
+            ),
+            "a module function": (
+                "def assertRed(*args):\n    pass\n\n\n" + HEAD + RED,
+                f"teeth: d.py:1: assertRed {named}",
+            ),
+            "an import alias": ("from os import path as assertRed\n" + HEAD + RED, f"teeth: d.py:1: assertRed {named}"),
+            "assertParityPassed": (
+                HEAD + "    def assertParityPassed(self, run, job):\n        pass\n\n" + RED,
+                f"teeth: d.py:5: assertParityPassed {named}",
+            ),
         }.items():
             with self.subTest(why=why):
                 _, faults = teeth.python_cases(source, "d.py")
-                self.assertTrue(faults, f"{why}: a redefined verdict helper passes")
+                self.assertEqual(faults, [fault])
 
     def test_a_module_shape_that_changes_what_unittest_loads_is_a_fault(self):
-        for why, tail in {
-            "setattr": "\n\nsetattr(D, 'test_red', None)\n",
-            "delattr": "\n\ndelattr(D, 'test_red')\n",
-            "del": "\n\ndel D.test_red\n",
-            "__test__": "\n\n__test__ = False\n",
-            "load_tests assigned": "\n\nload_tests = None\n",
-            "an attribute assigned": "\n\nD.test_red = None\n",
-            "an if at module level": "\n\nif True:\n    D.test_red = None\n",
-            "a call at module level": "\n\nprint(D)\n",
+        at = "teeth: d.py:11:"  # HEAD and RED are 8 lines; each tail starts with two blank lines
+        expr = f"{at} a module-level Expr may change what unittest loads"
+        for why, (tail, want) in {
+            "setattr": (
+                "\n\nsetattr(D, 'test_red', None)\n",
+                [expr, f"{at} setattr() at import may change what unittest loads"],
+            ),
+            "delattr": (
+                "\n\ndelattr(D, 'test_red')\n",
+                [expr, f"{at} delattr() at import may change what unittest loads"],
+            ),
+            "del": (
+                "\n\ndel D.test_red\n",
+                [
+                    f"{at} a module-level Delete may change what unittest loads",
+                    f"{at} a del at import may remove a counted case",
+                ],
+            ),
+            "__test__": ("\n\n__test__ = False\n", [f"{at} __test__ decides what unittest loads"]),
+            "load_tests assigned": ("\n\nload_tests = None\n", [f"{at} load_tests decides what unittest loads"]),
+            "an attribute assigned": (
+                "\n\nD.test_red = None\n",
+                [f"{at} a module-level assignment to an attribute or item may change what unittest loads"],
+            ),
+            "an if at module level": (
+                "\n\nif True:\n    D.test_red = None\n",
+                [f"{at} a module-level If may change what unittest loads"],
+            ),
+            "a call at module level": ("\n\nprint(D)\n", [expr]),
         }.items():
             with self.subTest(why=why):
                 _, faults = teeth.python_cases(HEAD + RED + tail, "d.py")
-                self.assertTrue(faults, f"{why}: the case is counted but may never run")
+                self.assertEqual(faults, want)
 
     def test_a_class_level_test_flag_is_a_fault(self):
         _, faults = teeth.python_cases(HEAD + "    __test__ = False\n\n" + RED, "d.py")
-        self.assertTrue(faults)
+        self.assertEqual(faults, ["teeth: d.py:5: __test__ decides what unittest loads"])
 
     def test_a_class_whose_bases_reach_no_testcase_is_not_counted(self):
         for base in ("object", "support.World", "Mixin"):

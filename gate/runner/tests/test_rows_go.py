@@ -1,4 +1,4 @@
-"""The real gofmt, vet and unit wrappers over temporary Go modules, with the pinned go (design note §5).
+"""The real gofmt, vet, unit and race wrappers over temporary Go modules, with the pinned go (design note §5).
 
 Teeth (QA DQ22, design-QA counter-example 33): each wrapper's count comes from the tool's own work, so a narrowed
 run is red, naming both numbers. Each narrowed case has a full control that passes.
@@ -251,6 +251,11 @@ class Race(GoRows):
         self.package("a")
         self.package("b")
         self.assertEqual(self.race(), "covered 2")
+
+    def test_narrowed_to_one_of_two_packages_is_red(self):
+        self.package("a")
+        self.package("b")
+        self.assertEqual(self.race("./a"), "covered 1 ≠ expected 2")
 
     def test_a_data_race_fails_naming_its_test(self):
         self.package("a")
