@@ -263,20 +263,37 @@ class Race(GoRows):
         self.assertEqual(self.race(), "exit 1: ex.com/m/b: TestRacy")
         self.assertIn("ex.com/m/b: TestRacy", self.stdout("race", "race"))
 
-    def go_test_argv(self, *args):
-        """go test's arguments as the row gave them, logged by a `go` ahead of the pinned one that then becomes it."""
+    def go_calls(self, *args):
+        """The row's reason and every go call it made, logged by a `go` ahead of the pinned one that then becomes it.
+        The log exists, empty, before the row starts, so a row that never runs go reads as no calls."""
         log = os.path.join(self.root, "go.argv")
+        with open(log, "x", encoding="utf-8"):
+            pass
         real = os.path.join(support.tool_bin("go"), "go")
         logbin = os.path.join(self.root, "logbin")
         self.script("go", logbin, f"LOG, REAL = {log!r}, {real!r}\n{LOGGED_GO}")
         self.toolchain.dirs = [logbin, *self.toolchain.dirs]
         self.package("a")
-        self.assertEqual(self.race(*args), "covered 1")
+        reason = self.race(*args)
         with open(log, encoding="utf-8") as f:
-            calls = [json.loads(line) for line in f]
+            return reason, [json.loads(line) for line in f]
+
+    def go_test_argv(self, *args):
+        """go test's arguments as the row gave them."""
+        reason, calls = self.go_calls(*args)
+        self.assertEqual(reason, "covered 1")
         tests = [c for c in calls if c[:1] == ["test"]]
         self.assertEqual(len(tests), 1, calls)
         return tests[0]
+
+    def assertRefusedBeforeGo(self, reason, *args):
+        """The row refuses `args` as a usage failure and never runs go test."""
+        got, calls = self.go_calls(*args)
+        self.assertEqual(got, reason)
+        # The logged go was the row's go and had its chance: the runner's scope check (go list) went through it.
+        self.assertIn(["list", "-e", "-json", "./..."], calls)
+        self.assertEqual([c for c in calls if c[:1] == ["test"]], [], calls)
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "rows", "race", "race", "test.json")))
 
     def test_a_repeat_gives_go_test_the_stress_timeout(self):
         # The nightly race-stress row: go test's default -timeout 10m covers all N runs in one test binary, and 20
@@ -303,8 +320,46 @@ class Race(GoRows):
         passes = b'"Action":"pass","Package":"ex.com/m/a","Test":"TestOk"'
         self.assertEqual(self.row_file("race", "race", "test.json").count(passes), 3)
 
+    # One grammar for N, covered.py's for a count: a whole number from 1 to 999999999, ASCII digits, no sign, space,
+    # underscore or leading zero. Anything else is refused before go runs, with one message.
+    USAGE_N = "exit 1: usage: --repeat=N with N a whole number from 1 to 999999999, not "
+
     def test_a_repeat_that_is_not_a_number_is_a_usage_failure(self):
-        self.package("a")
-        self.assertEqual(self.race("--repeat=x", "./..."), "exit 1: usage: --repeat=N with N a whole number, not 'x'")
-        # go never ran
-        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "rows", "race", "race", "test.json")))
+        self.assertRefusedBeforeGo(self.USAGE_N + "'x'", "--repeat=x", "./...")
+
+    def test_a_repeat_of_zero_is_a_usage_failure(self):
+        # go test's -count=0 runs no test, which the row would read as "no test ran": a weak reason for a bad flag.
+        self.assertRefusedBeforeGo(self.USAGE_N + "'0'", "--repeat=0", "./...")
+
+    def test_a_negative_repeat_is_a_usage_failure(self):
+        # go test refuses -count=-1, which the row would read as a failed package: a weak reason for a bad flag.
+        self.assertRefusedBeforeGo(self.USAGE_N + "'-1'", "--repeat=-1", "./...")
+
+    def test_a_repeat_with_a_plus_sign_is_a_usage_failure(self):
+        self.assertRefusedBeforeGo(self.USAGE_N + "'+3'", "--repeat=+3", "./...")
+
+    def test_a_repeat_with_a_leading_space_is_a_usage_failure(self):
+        self.assertRefusedBeforeGo(self.USAGE_N + "' 3'", "--repeat= 3", "./...")
+
+    def test_a_repeat_with_an_underscore_is_a_usage_failure(self):
+        self.assertRefusedBeforeGo(self.USAGE_N + "'1_0'", "--repeat=1_0", "./...")
+
+    def test_a_repeat_with_a_leading_zero_is_a_usage_failure(self):
+        self.assertRefusedBeforeGo(self.USAGE_N + "'03'", "--repeat=03", "./...")
+
+    def test_a_repeat_in_non_ascii_digits_is_a_usage_failure(self):
+        # ARABIC-INDIC DIGIT THREE, which int() reads as 3; written as an escape, never as the raw character.
+        self.assertRefusedBeforeGo(self.USAGE_N + "'\u0663'", "--repeat=\u0663", "./...")
+
+    def test_a_repeat_past_go_tests_count_is_a_usage_failure(self):
+        # 2^63: go test's -count cannot hold it and exits 2, which the row would read as a bare "go test exit 2".
+        self.assertRefusedBeforeGo(self.USAGE_N + "'9223372036854775808'", "--repeat=9223372036854775808", "./...")
+
+    def test_a_repeat_with_its_value_as_the_next_argument_is_a_usage_failure(self):
+        # The other arguments are package patterns, and no package pattern starts with a dash.
+        self.assertRefusedBeforeGo(
+            "exit 1: usage: '--repeat' is not a package pattern or --repeat=N", "--repeat", "20", "./..."
+        )
+
+    def test_a_dash_argument_is_a_usage_failure(self):
+        self.assertRefusedBeforeGo("exit 1: usage: '-x' is not a package pattern or --repeat=N", "-x", "./...")
