@@ -12,9 +12,11 @@ call (owner, 2026-11-11, "the GitNexus hook"). A server under anything else is l
 
 It never blocks or fails Claude: whatever goes wrong (no git, no registry, no gitnexus, bad input), it does
 nothing, prints nothing and exits 0. A linked worktree is not in the registry, so an agent's lane is left alone.
-A pidfile in the index's storage keeps a second run from starting while one is going.
+A lock in the index's storage, held from the check to the start, keeps two calls at once from both starting a run,
+and a pidfile keeps a second run from starting while one is going.
 """
 
+import fcntl
 import itertools
 import json
 import os
@@ -26,6 +28,7 @@ import sys
 from collections.abc import Callable, Mapping
 
 PIDFILE = "auto-reindex.pid"
+LOCKFILE = "auto-reindex.lock"  # held from the pidfile's check to the follow-up's start: two calls start one run
 FOLLOW_UP = "--reindex"  # the argument that runs this file as the detached follow-up
 NO_RESTART = "GITNEXUS_REINDEX_NO_RESTART"  # "1": the follow-up re-indexes but restarts nothing (the hook's tests)
 LOGFILE = "auto-reindex.log"
@@ -119,13 +122,18 @@ def main(text: str, environ: Mapping[str, str]) -> int:
     if entry is None or entry.get("lastCommit") == head:
         return 0
     storage = entry.get("storagePath")
-    if not isinstance(storage, str) or not os.path.isdir(storage) or running(os.path.join(storage, PIDFILE)):
+    if not isinstance(storage, str) or not os.path.isdir(storage):
         return 0
     gitnexus = shutil.which("gitnexus", path=environ.get("PATH"))
     if gitnexus is None:
         return 0
     try:
-        start(gitnexus, os.path.realpath(checkout), storage, environ)
+        with open(os.path.join(storage, LOCKFILE), "a", encoding="utf-8") as lock:
+            # flock, not lockf: a POSIX record lock is the process's, so two calls in one process would share it.
+            # Held by a call between its check and its start, it raises BlockingIOError: that call starts the run.
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if not running(os.path.join(storage, PIDFILE)):
+                start(gitnexus, os.path.realpath(checkout), storage, environ)
     except OSError:
         return 0
     return 0

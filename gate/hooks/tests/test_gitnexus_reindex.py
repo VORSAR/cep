@@ -7,11 +7,14 @@ Each test owns its world: a temporary git repository, a temporary GitNexus regis
 import contextlib
 import json
 import os
+import queue
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import warnings
+from unittest import mock
 
 from gate import wait
 from gate.hooks import gitnexus_reindex
@@ -320,6 +323,36 @@ def _alive(pid: int) -> bool:
 def _kill_quietly(pid: int) -> None:
     with contextlib.suppress(OSError):
         os.kill(pid, 9)
+
+
+class Overlap(unittest.TestCase):
+    """Two hook calls at once (a prompt and a Bash call's PostToolUse) start one run between them."""
+
+    def test_a_call_arriving_between_another_calls_check_and_its_start_starts_nothing(self):
+        world = World(self, indexed="0" * 40)
+        parked: queue.SimpleQueue[str] = queue.SimpleQueue()
+        release: queue.SimpleQueue[str] = queue.SimpleQueue()
+        starts: list[str] = []
+
+        def holding_start(gitnexus: str, checkout: str, storage: str, environ) -> None:
+            starts.append(checkout)
+            if len(starts) == 1:  # the first call is parked here: after its check, before anything is started
+                parked.put("parked")
+                wait.get(release, "the test to release the first call's start", cap_s=30)
+
+        self.enterContext(mock.patch.object(gitnexus_reindex, "start", holding_start))
+        text = json.dumps(world.prompt())
+        first = threading.Thread(
+            target=gitnexus_reindex.main, args=(text, world.environ), name="first-hook-call", daemon=True
+        )
+        first.start()
+        try:
+            wait.get(parked, "the first call to reach its start", cap_s=30)
+            self.assertEqual(gitnexus_reindex.main(text, world.environ), 0)
+        finally:
+            release.put("go")
+        wait.until("the first call to return after its release", lambda: not first.is_alive(), cap_s=30)
+        self.assertEqual(starts, [world.repo])
 
 
 if __name__ == "__main__":
