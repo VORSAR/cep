@@ -228,13 +228,20 @@
       "row": "lawdelta",
       "lands_in": "S1.1c-1",
       "code": [
+        "gate/baseline/regen.py",
         "gate/runner/allowlists.py",
+        "gate/runner/anchors.py",
+        "gate/runner/env.py",
         "gate/runner/git.py",
         "gate/runner/law.py",
         "gate/runner/records.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/lawdelta.py",
-        "gate/runner/suppressions.py"
+        "gate/runner/sprintid.py",
+        "gate/runner/suppressions.py",
+        "gate/runner/workers.py",
+        "gate/term.py",
+        "gate/toolchain/manifest.py"
       ],
       "proofs": [
         {
@@ -260,7 +267,9 @@
       "lands_in": "S1.1a-1",
       "code": [
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/gofmt.py"
+        "gate/runner/rows/gofmt.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -288,7 +297,9 @@
       "code": [
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/vet.py"
+        "gate/runner/rows/vet.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -341,7 +352,9 @@
       "lands_in": "S1.1a-1",
       "code": [
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/ruff.py"
+        "gate/runner/rows/ruff.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -372,9 +385,10 @@
       "row": "pyfloor",
       "lands_in": "S1.1a-1",
       "code": [
-        "gate/runner/pyshim.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/pyfloor.py"
+        "gate/runner/rows/pyfloor.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -404,7 +418,9 @@
       "lands_in": "S1.1a-2",
       "code": [
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/hooks.py"
+        "gate/runner/rows/hooks.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -433,7 +449,9 @@
         "gate/ci/generate.py",
         "gate/runner/registry.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/ci_fresh.py"
+        "gate/runner/rows/ci_fresh.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -462,7 +480,9 @@
       "code": [
         "gate/runner/anchors.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/doclinks.py"
+        "gate/runner/rows/doclinks.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -541,7 +561,9 @@
       "code": [
         "gate/runner/git.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/apidiff.py"
+        "gate/runner/rows/apidiff.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -571,7 +593,9 @@
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/deps.py",
         "gate/runner/rows/gomods.py",
-        "gate/runner/sprintid.py"
+        "gate/runner/sprintid.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -703,9 +727,12 @@
       "row": "docsync",
       "lands_in": "S1.1c-2",
       "code": [
+        "gate/runner/anchors.py",
         "gate/runner/docsync.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/docsync.py"
+        "gate/runner/rows/docsync.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -810,7 +837,9 @@
       "code": [
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -837,7 +866,11 @@
         "gate/coverage/classify.py",
         "gate/coverage/coverprofile.py",
         "gate/coverage/main.py",
-        "gate/runner/jsonstream.py"
+        "gate/runner/allowlists.py",
+        "gate/runner/anchors.py",
+        "gate/runner/jsonstream.py",
+        "gate/runner/sprintid.py",
+        "gate/runner/suppressions.py"
       ],
       "proofs": [
         {
@@ -868,9 +901,10 @@
       "row": "pytests",
       "lands_in": "S1.1a-1",
       "code": [
-        "gate/runner/pyshim.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/pytests.py"
+        "gate/runner/rows/pytests.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -901,7 +935,10 @@
       "code": [
         "gate/differential/shapes.py",
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/differential.py"
+        "gate/runner/rows/differential.py",
+        "gate/runner/workers.py",
+        "gate/term.py",
+        "gate/toolchain/manifest.py"
       ],
       "proofs": [
         {
@@ -926,7 +963,9 @@
       "lands_in": "S3.1-1",
       "code": [
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/semantics.py"
+        "gate/runner/rows/semantics.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -950,9 +989,12 @@
       "row": "race",
       "lands_in": "S3.2a-2",
       "code": [
+        "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/race.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -977,7 +1019,9 @@
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/gotest.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1004,7 +1048,9 @@
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/gotest.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1031,7 +1077,9 @@
         "gate/runner/notbuilt.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/notbuilt.py",
-        "gate/runner/sprintid.py"
+        "gate/runner/sprintid.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1056,7 +1104,9 @@
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/gotest.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1081,7 +1131,9 @@
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/gotest.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1106,7 +1158,9 @@
         "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/gotest.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1129,8 +1183,9 @@
       "lands_in": "S1.1a-1",
       "code": [
         "gate/proofs/row.py",
-        "gate/runner/pyshim.py",
-        "gate/runner/rows/__init__.py"
+        "gate/runner/rows/__init__.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1153,7 +1208,9 @@
       "lands_in": "S2.2a",
       "code": [
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/gofuzz.py"
+        "gate/runner/rows/gofuzz.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1176,7 +1233,9 @@
       "lands_in": "S3.1-2",
       "code": [
         "gate/runner/rows/__init__.py",
-        "gate/runner/rows/gofuzz.py"
+        "gate/runner/rows/gofuzz.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
@@ -1198,9 +1257,12 @@
       "row": "race-stress",
       "lands_in": "S3.2a-2",
       "code": [
+        "gate/runner/jsonstream.py",
         "gate/runner/rows/__init__.py",
         "gate/runner/rows/race.py",
-        "gate/runner/rows/unit.py"
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
       ],
       "proofs": [
         {
