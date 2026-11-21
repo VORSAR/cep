@@ -90,10 +90,6 @@ class Passed(unittest.TestCase):
                 self.assertTrue(part in said or marker in said, said)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # S1.1c-5 design §3.2, §8 3.1: `Order.reached_part(part, marker)`, the parts printed as rows after their open row.
 PRINTED = sprintid.Order(
     tuple(
@@ -150,3 +146,7 @@ class ReachedPart(unittest.TestCase):
         # Printed order: S1.1c-6 before S1.1c-10; a string sort puts "S1.1c-10" first.
         self.assertIs(PRINTED.reached_part("S1.1c-10", "S1.1c-6"), False)
         self.assertIs(PRINTED.reached_part("S1.1c-6", "S1.1c-10"), True)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -37,8 +37,7 @@ class BreakIt2(unittest.TestCase):
         # (about 96 MiB), not one member.
         data = bomb()
         self.assertLess(len(data), 1 << 20)
-        copy = vulns.Copy("/nonexistent")
-        copy.zip = zipfile.ZipFile(io.BytesIO(data))
+        copy = vulns.Copy("/nonexistent", zip=zipfile.ZipFile(io.BytesIO(data)))
         tracemalloc.start()
         try:
             entries, complete = vulns.entries_of(copy)

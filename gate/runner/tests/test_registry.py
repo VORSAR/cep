@@ -233,10 +233,6 @@ class T0Kinds(unittest.TestCase):
             registry.loads(json.dumps(doc))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheRepositorysRegistry(unittest.TestCase):
     def test_every_nightly_only_row_is_blocking(self):
         # Owner, 2026-11-04 (S2.2a, decision 3): a fuzz crash makes the nightly run red. A non-blocking failure is a
@@ -251,3 +247,7 @@ class TheRepositorysRegistry(unittest.TestCase):
         for r in nightly:
             with self.subTest(r["id"]):
                 self.assertTrue(r["blocking"], f"nightly row {r['id']} is non-blocking: its failure would read WARN")
+
+
+if __name__ == "__main__":
+    unittest.main()

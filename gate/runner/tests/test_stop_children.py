@@ -62,10 +62,16 @@ class StopTest(support.GateTest):
         )
 
     def kill_child(self) -> None:
+        """The cleanup: a child the test did not prove gone is killed. A proven-gone child's pidfile is removed, so a
+        pid that may already be another process's is never signalled."""
         with contextlib.suppress(FileNotFoundError, ValueError), open(self.pidfile, encoding="ascii") as f:
             pid = int(f.read())
             with contextlib.suppress(ProcessLookupError):
                 os.kill(pid, signal.SIGKILL)
+
+    def proven_gone(self) -> None:
+        """The child is gone, so its pid may be reused at once: the cleanup must not signal it."""
+        os.unlink(self.pidfile)
 
     def assertGone(self, w: support.Witness) -> None:
         def at_eof() -> bool:
@@ -78,6 +84,7 @@ class StopTest(support.GateTest):
             wait.until("the stopped program's child to be gone", at_eof, cap_s=CAP_S)
         except wait.WaitTimeout:
             self.fail(f"the child started in its own session is still running {CAP_S}s after its parent was stopped")
+        self.proven_gone()
 
 
 class DriverRunProcess(StopTest):
@@ -163,3 +170,4 @@ class StressHarness(StopTest):
             self.assertEqual(f.read(), "0\n", self.output())
         with self.assertRaises(ProcessLookupError):  # the harness reaped it: its pid is free
             os.kill(hog, 0)
+        self.proven_gone()

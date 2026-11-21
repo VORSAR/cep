@@ -659,10 +659,6 @@ class Row(support.GateTest):
         self.assertIn("tools/allowlists/generated.json: internal/x/gone.go: does not exist (a stale target)", out)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # S1.1c-5 design §4, §8 2.1-2.7: only //nolint waives. The census (gate/runner/testdata/directives.json, design §4.1)
 # is the data: every comment directive a linter golangci-lint v2.15.0 runs (or gosec, refused anyway, decision 7)
 # honours, with its source reference and its confirmation by the pinned binary.
@@ -851,3 +847,7 @@ class Enabled(unittest.TestCase):
         directives, _ = suppressions.go_directives("p.go", go_line(f"//nolint:gosec // {META}"))
         got = suppressions.check(directives, fixture_ctx(), frozenset({"lll"}))
         self.assertEqual(got, ["p.go:3: //nolint:gosec: gosec is not enabled in .golangci.toml"])
+
+
+if __name__ == "__main__":
+    unittest.main()

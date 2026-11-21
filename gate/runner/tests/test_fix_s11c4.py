@@ -94,19 +94,16 @@ class MemberUnreadable(support.GateTest):
 
     def test_entries_of_marks_the_scan_incomplete(self):
         body = zip_of(db_members(osv("GO-2099-0200", "example.com/dep", "1.0.1")))
-        copy = vulns.Copy("/x", zip=zipfile.ZipFile(io.BytesIO(body)))
-        entries, complete = vulns.entries_of(copy)
+        entries, complete = vulns.entries_of(vulns.Copy("/x", zip=zipfile.ZipFile(io.BytesIO(body))))
         self.assertEqual((len(entries), complete), (1, True))  # the witness: the same copy read whole
-        real = copy.zip.open
-        copy.cache.clear()
+        real = zipfile.ZipFile(io.BytesIO(body))
 
         def open_(name: str):
             if name == "ID/GO-2099-0200.json":
                 raise zlib.error("Error -3 while decompressing data: invalid code lengths set")
-            return real(name)
+            return real.open(name)
 
-        copy.zip = mock.Mock(open=open_)
-        self.assertEqual(vulns.entries_of(copy), ([], False))
+        self.assertEqual(vulns.entries_of(vulns.Copy("/x", zip=mock.Mock(open=open_))), ([], False))
 
 
 class Findings(support.GateTest):

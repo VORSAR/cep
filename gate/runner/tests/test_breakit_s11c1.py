@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import os
+import unittest
 from unittest import mock
 
 from gate.runner import git, law
@@ -18,7 +19,7 @@ IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
 FLAG = "SPEC changed — owner decision required"
 
 
-class DocLine(support.GateTest):
+class DocLine(unittest.TestCase):
     def test_a_changed_heading_names_its_own_section(self):
         """The first changed line IS a heading: the block must name that section, not the one above it."""
         old = "# T\n\n## 1. A\nx\n\n## 2. B\ny\n"

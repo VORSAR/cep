@@ -218,6 +218,8 @@ class HashesThenBreaksTheLoop(support.FakeToolchain):
             proc = spawn(argv, **kw)
             wait.until(f"the planted tree child to write {self.marker}", lambda: os.path.exists(self.marker))
             assert self.runner is not None
+            # private seam: scheduler.Runner._q, the loop's queue; no public hook plants a bug in the loop, and an
+            # event it does not know makes _handle raise
             self.runner._q.put_nowait(("not an event",))
             return proc
 
