@@ -15,6 +15,7 @@ median(after) > 1.02 x median(before). Exit 0 no cost, 1 costs, 2 an error; the 
 """
 
 import argparse
+import collections
 import dataclasses
 import math
 import os
@@ -112,8 +113,9 @@ def _run(binary: str, flags: list[str], cwd: str) -> list[gorun.Bench]:
     except gorun.ParseError as e:
         raise Error(f"{binary}: {e}") from None
     names = [b.name for b in benches]
-    if len(set(names)) != len(names):
-        raise Error(f"{binary} reported a benchmark twice: {', '.join(sorted(names))}")
+    repeated = sorted(n for n, k in collections.Counter(names).items() if k > 1)
+    if repeated:
+        raise Error(f"{binary} reported a benchmark twice: {', '.join(repeated)}")
     return benches
 
 

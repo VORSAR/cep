@@ -388,6 +388,13 @@ class Refusals(Base):
                 )
                 self.assertIn(reason, out)
 
+    def test_help_prints_the_usage_and_exits_0_before_any_go_command(self):
+        code, out = self.mutate("--help", env=self.fake_env)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("usage: gate/bench/mutate.py "), out)
+        self.assertNotIn("error:", out)
+        self.assertFalse(os.path.exists(self.log), "a go command ran")
+
     def test_a_batch_entry_with_an_extra_key_is_refused_before_any_build(self):
         good = {"file": "m/m.go", "find": FIND, "replace": CAUGHT, "test": "TestAdd"}
         path = os.path.join(self.tmp, "batch.json")
