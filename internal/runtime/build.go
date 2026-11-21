@@ -156,7 +156,7 @@ func checkRuleInputs(a *App, rule Rule, bad func(format string, args ...any) err
 			return bad("input %d is not a source stream", sid)
 		}
 		if seen[sid] {
-			return bad("input %d is listed twice (break-it V2)", sid)
+			return bad("input %d is listed twice", sid)
 		}
 		seen[sid] = true
 		if rule.KeyAttrs == nil {

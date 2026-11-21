@@ -176,12 +176,12 @@ func checkEvent(app AppID, a *App, e event.Event) error {
 	if ta := sch.TimeAttr(); ta != event.ArrivalTime && e.Ts != e.Values[ta].T {
 		return fmt.Errorf(
 			"runtime: app %d stream %q: Ts %d differs from the time attribute %q, %d: an event-time stream's time is its "+
-				"attribute (S3.2a-1's D2; owner D1 of S3.2b-2's design)",
+				"attribute",
 			app, sch.Stream(), e.Ts, sch.Attr(ta).Name, e.Values[ta].T)
 	}
 	if lineBound(sch, e) > event.MaxLogLine {
 		return fmt.Errorf(
-			"runtime: app %d stream %q: the event could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)",
+			"runtime: app %d stream %q: the event could not fit one recording line of %d bytes",
 			app, sch.Stream(), event.MaxLogLine)
 	}
 	return nil
@@ -196,8 +196,7 @@ func checkValues(app AppID, sch event.Schema, values []event.Value) error {
 			return err
 		}
 		if err := recordable(v); err != nil {
-			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v (owner D1 of S3.2b-2's design)", app, sch.Stream(),
-				at.Name, err)
+			return fmt.Errorf("runtime: app %d stream %q: attribute %q %v", app, sch.Stream(), at.Name, err)
 		}
 	}
 	return nil
@@ -211,15 +210,15 @@ func checkValue(app AppID, sch event.Schema, i int, at event.Attr, v event.Value
 		return fmt.Errorf("runtime: app %d stream %q: attribute %q holds a %v value; it is declared %v", app, sch.Stream(),
 			at.Name, v.Kind, at.Type)
 	case v.Null && !at.Optional:
-		return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional (break-it V1)", app,
-			sch.Stream(), at.Name)
+		return fmt.Errorf("runtime: app %d stream %q: attribute %q is null, and it is not optional", app, sch.Stream(),
+			at.Name)
 	case v.Null && i == sch.TimeAttr():
 		// the decoder refuses a null time attribute (event.DecodeNull); the Go boundary agrees, so no event enters
 		// at timestamp 0 (S3.3-1's break-it S1)
 		return fmt.Errorf("runtime: app %d stream %q: the time attribute %q is null", app, sch.Stream(), at.Name)
 	case nonFinite(v):
-		return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values (S3.1-2's D2)",
-			app, sch.Stream(), at.Name, v.F)
+		return fmt.Errorf("runtime: app %d stream %q: attribute %q is %v: NaN and infinities are never values", app,
+			sch.Stream(), at.Name, v.F)
 	}
 	return nil
 }
@@ -240,15 +239,14 @@ func CheckRows(table string, attrs []event.Attr, rows [][]event.Value) error {
 				name = fmt.Sprintf("%d %q", ci, attrs[ci].Name)
 			}
 			if v.Kind == event.TFloat && !v.Null && (math.IsNaN(v.F) || math.IsInf(v.F, 0)) {
-				return fmt.Errorf("row %d: attribute %s: the float %v is not finite (S3.1-2's D2)", ri, name, v.F)
+				return fmt.Errorf("row %d: attribute %s: the float %v is not finite", ri, name, v.F)
 			}
 			if err := recordable(v); err != nil {
-				return fmt.Errorf("row %d: attribute %s %v (owner D1 of S3.2b-2's design)", ri, name, err)
+				return fmt.Errorf("row %d: attribute %s %v", ri, name, err)
 			}
 		}
 		if rowBound(table, attrs, row) > event.MaxLogLine {
-			return fmt.Errorf("row %d could not fit one recording line of %d bytes (owner D1 of S3.2b-2's design)", ri,
-				event.MaxLogLine)
+			return fmt.Errorf("row %d could not fit one recording line of %d bytes", ri, event.MaxLogLine)
 		}
 	}
 	return nil

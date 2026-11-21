@@ -81,7 +81,7 @@ type Config struct {
 // The errors a caller sees.
 var (
 	ErrClosed   = errors.New("runtime: closed")
-	ErrDrained  = errors.New("runtime: the app is drained: its input has ended (owner F5)")
+	ErrDrained  = errors.New("runtime: the app is drained: its input has ended")
 	ErrInactive = errors.New("runtime: the app is not activated")          // design s3-3-1 §2.1
 	ErrStarted  = errors.New("runtime: the app is already activated")      // design s3-3-1 §2.1
 	ErrRemoved  = errors.New("runtime: the app is removed")                // design s3-3-1 §2.1
