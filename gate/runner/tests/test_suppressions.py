@@ -841,7 +841,6 @@ class Enabled(unittest.TestCase):
         with open(os.path.join(support.REPO, ".golangci.toml"), encoding="utf-8") as f:
             enabled = golangci.enabled(golangci.load(f.read()))
         self.assertEqual(enabled, frozenset(golangci.LINTERS))
-        self.assertEqual(frozenset(golangci.LINTERS), enabled)
         self.assertFalse(hasattr(suppressions, "ENABLED"), "ENABLED is removed as a constant (design §4.2)")
 
     def test_a_linter_not_in_the_config_is_not_enabled_text(self):

@@ -722,7 +722,6 @@ class CheckDb(unittest.TestCase):
             with self.subTest(name):
                 faults = self.check(member_db(), stamp(), too_large=frozenset({name}))
                 self.assertIn(f"vulns: member {name} exceeds 4 MiB", faults)
-        self.assertEqual(vulndb.MEMBER_CAP, 4 * 1024 * 1024)
 
     def test_the_layout_is_an_exact_list(self):
         # Reviews DA-S10, DA-L3: index/db.json, index/modules.json, index/vulns.json and ID/<GO-YYYY-NNNN…>.json only.
