@@ -46,12 +46,24 @@ func TestARecordingThatOverflowsStaysReadable(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+	released, closed := false, false
+	defer func() { // a failure before the end still releases the writer, then closes the runtime: goleak sees no leak
+		if !released {
+			close(w.gate)
+		}
+		if !closed {
+			if err := r.Close(ctx); err != nil {
+				t.Errorf("Close: %v", err)
+			}
+		}
+	}()
 	for i := range 2000 {
 		if err := r.SendPayload(ctx, 0, 0, []byte(rcS(int64(i)*ldSec, fmt.Sprintf("k%04d-%s", i, strings.Repeat("x", 40)), 4, 2, ""))); err != nil {
 			t.Fatal(err)
 		}
 	}
 	close(w.gate)
+	released = true
 	if _, err := r.Drain(ctx, 0); err != nil {
 		t.Fatalf("Drain: %v", err)
 	}
@@ -59,13 +71,19 @@ func TestARecordingThatOverflowsStaysReadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Close(ctx); err != nil {
+	err = r.Close(ctx)
+	closed = true
+	if err != nil {
 		t.Fatal(err)
 	}
 	text := w.buf.String()
+	if len(st.Recording) != 1 {
+		t.Fatalf("Stats.Recording %+v; want one recording", st.Recording)
+	}
 	rs := st.Recording[0]
-	if !rs.Failed || !strings.Contains(rs.Err, "queue full") || rs.Records != int64(strings.Count(text, "\n")) || !strings.HasSuffix(text, "\n") {
-		t.Fatalf("Recording %+v; the file has %d lines, ends with a newline: %v; want Failed (queue full), Records = lines, whole lines",
+	if !rs.Failed || !strings.Contains(rs.Err, "queue full") || rs.Records != int64(strings.Count(text, "\n")) || !strings.HasSuffix(text, "\n") ||
+		!strings.Contains(rs.Err, fmt.Sprintf("queue full after record %d:", rs.Records)) {
+		t.Fatalf("Recording %+v; the file has %d lines, ends with a newline: %v; want Failed (queue full), Records = lines, whole lines, the message naming record Records",
 			rs, strings.Count(text, "\n"), strings.HasSuffix(text, "\n"))
 	}
 	rd := ldReader(t, pbApp(p), text)

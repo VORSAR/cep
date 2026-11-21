@@ -222,7 +222,9 @@ func TestTripwire(t *testing.T) {
 		}
 		ceilings[m] = c
 	}
+	measured := map[string]bool{}
 	check := func(metric, name string, v int64) {
+		measured[metric] = true
 		c, ok := ceilings[metric]
 		if !ok || c.Ceiling == "none" {
 			return
@@ -250,14 +252,25 @@ func TestTripwire(t *testing.T) {
 			for ri, rs := range st.Rules[0] {
 				check("outbox", prog.p.Rules[ri].Name, rs.OutboxHigh)
 			}
+			if len(st.SinkHigh) == 0 {
+				t.Fatalf("Stats.SinkHigh %v has no app 0", st.SinkHigh)
+			}
 			b := 0
 			for _, s := range prog.p.Streams {
 				if s.Derived {
+					if b >= len(st.SinkHigh[0]) {
+						t.Fatalf("Stats.SinkHigh[0] has %d sinks; derived stream %s has none", len(st.SinkHigh[0]), s.Schema.Stream())
+					}
 					check("sink-depth", s.Schema.Stream(), int64(st.SinkHigh[0][b]))
 					b++
 				}
 			}
 			check("drained_pending", prog.name, drained.Pending)
+		}
+	}
+	for _, m := range twTracked {
+		if c, ok := ceilings[m]; ok && c.Ceiling != "none" && !measured[m] {
+			t.Errorf("%s: a numeric ceiling and no measurement: the tripwire measures nothing for it (%s)", m, path)
 		}
 	}
 }

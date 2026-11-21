@@ -93,7 +93,7 @@ func TestReaderFaults(t *testing.T) {
 		// in the payload (owner D6): the cause rides in Decode
 		{"payload wrong type", ldLog(ldGood, `{"stream":"S","attrs":{"ts":"2026-01-01T10:00:01Z","k":5}}`), 2, "", true},
 		{"payload missing its time", ldLog(`{"stream":"S","attrs":{"k":"a"}}`), 1, "", true},
-		{"payload not an object", ldLog(`{"stream":"S","attrs":[1]}`), 1, "", false},
+		{"payload not an object", ldLog(`{"stream":"S","attrs":[1]}`), 1, "", true},
 		// lines
 		{"BOM at line 1", "\ufeff" + ldLog(ldGood), 1, "", false},
 		{"a line over 16 MiB", ldLog(ldGood, ldE("S", ldAt(1), strings.Repeat("a", 16<<20+16), "", "")), 2, "", false},
@@ -119,7 +119,7 @@ func TestReaderFaults(t *testing.T) {
 				if le.Decode == nil {
 					t.Errorf("a payload fault without its *event.DecodeError (design §5.2, D6): %q", le.Msg)
 				}
-			} else if le.Decode != nil && !strings.HasPrefix(c.name, "payload") {
+			} else if le.Decode != nil {
 				t.Errorf("Decode %v set on a non-payload fault", le.Decode)
 			}
 			if !strings.Contains(le.Error(), le.Msg) {
@@ -240,7 +240,10 @@ func TestReplayStopsAtTheFirstFault(t *testing.T) {
 		t.Errorf("steps delivered at lines %v, want [1 2]: every step before the fault, nothing after (no End)", lines)
 	}
 	stop := errors.New("planted")
-	d2, _ := playback.NewDriver(app)
+	d2, err := playback.NewDriver(app)
+	if err != nil {
+		t.Fatalf("NewDriver: %v", err)
+	}
 	lines = nil
 	rerr = playback.Replay(ldReader(t, app, ldLog(ldGood, ldGood, ldGood)), d2, func(s *playback.Step) error {
 		lines = append(lines, s.Line)

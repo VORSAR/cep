@@ -318,7 +318,7 @@ func TestLiveOrderPerKeyEqualsReplay(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Stats: %v", err)
 			}
-			if st.Streams[0][0].Late != 1 || st.Streams[0][1].Late != 0 {
+			if q2StreamStats(t, st, 0).Late != 1 || q2StreamStats(t, st, 1).Late != 0 {
 				t.Errorf("stream_late %v, want [1 0] (A4 k1)", lateRow(st.Streams[0]))
 			}
 			live.mu.Lock()

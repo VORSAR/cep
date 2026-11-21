@@ -142,13 +142,18 @@ func TestDriverStreamLateMovesNothing(t *testing.T) {
 	if s.Kind != playback.StepStreamLate || len(s.Advances) != 0 || s.Event.Seq != 2 {
 		t.Fatalf("step %+v, want StepStreamLate, no Advances, Seq 2", s)
 	}
+	n := 0
 	d.Registry().Walk(func(_, key string, st any) {
+		n++
 		got, want := st.(clock.StreamState), before[key]
 		want.LastArrival = got.LastArrival
 		if got != want {
 			t.Errorf("stream %s moved on a stream-late event: %+v, was %+v", key, got, want)
 		}
 	})
+	if len(before) != 2 || n != 2 {
+		t.Fatalf("Walk yielded %d then %d streams; want A and B each time", len(before), n)
+	}
 }
 
 // RT-01 (SEMANTICS §2.1; design §5.3 step 5): an empty stream never stalls a rule reading it — the virtual floor
@@ -296,8 +301,8 @@ func TestRecordingStopDrainsPastTheMaxEventTime(t *testing.T) {
 	})
 }
 
-// A `time arrival` stream's ts is its arrival (design §5.2): its recorded line carries "ts" and no "arrival", and
-// the record's Arrival equals its Event.Ts; the registry's last arrival is that time.
+// A `time arrival` stream's ts is its arrival (design §5.2): a log line on a time-arrival stream carries "ts" and no
+// "arrival", and the record's Arrival equals its Event.Ts; the registry's last arrival is that time.
 func TestRecordingArrivalStreamTsIsItsArrival(t *testing.T) {
 	t.Parallel()
 	app := &playback.App{Streams: []playback.Stream{ldArrival(t, "R", 0, 0)}}
@@ -310,9 +315,14 @@ func TestRecordingArrivalStreamTsIsItsArrival(t *testing.T) {
 		t.Fatalf("record %+v, want an event with Ts = Arrival = 10:00:05", r)
 	}
 	w := ldRun(t, app, log)
+	n := 0
 	w.d.Registry().Walk(func(_, key string, s any) {
+		n++
 		if st := s.(clock.StreamState); st.LastArrival != ldAt(5) || st.MaxTs != ldAt(5) {
 			t.Errorf("stream %s: %+v, want LastArrival = MaxTs = 10:00:05", key, st)
 		}
 	})
+	if n != 1 {
+		t.Fatalf("Walk yielded %d streams; want R", n)
+	}
 }
