@@ -158,6 +158,80 @@ At most two agents at once; the plan check §1 holds the order:
   - **GitNexus:** W0-4 is rated high. Its flows are compare.py's and escapes.py's own, and no gate row runs either tool. W0-5 changes no symbol.
 - **The one-failure rule for `--py`** (raised by W0-1; it binds every lane): the plan check §2 makes red "the shim's only problem is `failed: 1 failures, 0 errors`". unittest counts each failing subtest as one failure, so an id whose plant breaks two subtests reads invalid. The rule stands as the plan states it. Lanes write each pinning test, or choose each plant, so that the id fails once. A lane that cannot do so reports it, and the coordinator takes it to the owner.
 
+**PR 1: the W0 spot-check, the blind reviews and the fix round** (the owner's rule for every S1.1 pull request; [decisions](decisions.md#owner-decisions-2026-11-21--s11c-7s-pr-1-review)):
+
+**The spot-check** (plan check §7.6), by a fresh qa-expert, blind, at d699d2e:
+- **The draw:** every K1 (G10-1-A, G10-2, -3, -4); no K2-del; lane W0-py's K2 (G2-6, -7); lane W0-go's five lowest-ranked K2 (G2-155, -150, -154, -147, -152); the coordinator's G0 fixes (G2-16, -17, -25, -29); and W0-1, W0-2 and W0-3's plant batches in full.
+- **The result:** 16 of 17 drawn ids pass all five checks. Every proof re-ran to its recorded outcome words.
+- **G2-17 failed the design-match check** (should-fix): the plan check said the test reads fixtures, but d521725 kept it reading the live plan without saying so, and its witness needed a live issue old enough to age.
+- **The owner's choice:** keep the live-plan check (the one check of S1.1c-5's design, decision 2, on the real files) and make the witness made-up issues.
+- **The fix, f65a3a9:**
+  - WITNESS-1 names no decision.
+  - WITNESS-2 names a real decisions.md section that does not name it.
+  - **Proofs, re-run by the coordinator at f65a3a9:**
+    - with gate/known-issues.json's entries emptied, the old test fails and the new one passes;
+    - a plant making `knownissues.names` return True reads `outcome: red`;
+    - a plant switching rule 1 off reads `outcome: red`;
+    - `test_aging` passes 47 tests.
+- **Re-check:** that lane's whole K2e class (G2-16, -17, -25, -29) was in the draw. Only G2-17 failed.
+
+**The blind reviews of `main..d699d2e`:** architecture (PR1A-1 to -7) and QA with a break-it (PR1Q-1 to -13).
+- **Blockers:**
+  - Go runs outside `--expect` read the working tree through `-overlay` while naming HEAD (PR1A-2 = PR1Q-7). A dirty test file could give a false red.
+  - A plant in a file the build never compiles read green (PR1A-1 = PR1Q-11).
+  - A patch without its final newline glued on the next source line, a false red (PR1Q-1).
+- **The owner chose "one way of running"** for the first two.
+
+**The fix round** (fresh python-engineer; branch s1-1c-7/pr1-fix; each commit picked onto the integration branch):
+
+| Fix | Commit | Findings | Plants (`docs/sprints/s1-1c-7-plants/`) |
+|---|---|---|---|
+| F1: every Go run in a worktree at the commit; uncompiled `.go` plants refused | 72d39ef | PR1A-1, PR1A-2, PR1Q-7, PR1Q-11 | PR1-F1.json, 6 |
+| F2: bad input refused before any build; testdata, `_` and `.` paths treated as data | b621171 | PR1Q-1, -2, -3, -5, -6, -13; PR1A-3 | PR1-F2.json, 17 |
+| F3: the judges | 6496fc2 | PR1A-4 in part, PR1A-5, PR1Q-4, PR1A-6 | PR1-F3.json, 3 |
+| F4: Go runs judged from `go test -json` actions | da15a51 | PR1A-4 (the depth-2 forge) | PR1-F4.json, 8 |
+| F5: cancelling hunks and a directory refused; durations parsed exactly as Go's `time.ParseDuration` | 84fa71a | PR1A2-1 = PR1Q2-1, PR1Q2-3, PR1Q-13 (rest) | PR1-F5.json, 4 |
+
+- **Red first:** each commit's new tests failed against the previous tool (the agent's runs).
+- **Re-run by the coordinator** at the branch tips c56da34 and 83127d4, and again on the integration branch at 84fa71a:
+  - the five batches give `red 6`, `red 17`, `red 3`, `red 8` and `red 4`, each with `green 0, timeout 0, invalid 0`;
+  - the five bench modules pass, 140 tests (17, 21, 10, 11, 81).
+- **The reviewers' replays at F5:** every blocker's replay passes. The only failure is PR1Q-8, the naming tool's, which goes to S1.1c-8.
+- **Process breaches by the fix agent,** recorded: F2's impact queries ran after editing, and F3's detect_changes ran after committing. Neither recurred in F4 or F5.
+
+**The narrow re-check** (the same two reviewers, at c56da34 and c6bae08):
+- architecture: PR1A-1 to -6 closed;
+- QA: PR1Q-1 to -7 and -11 closed, PR1Q-13 in part.
+
+Its new later items:
+- PR1A2-1 = PR1Q2-1, PR1Q2-3 and PR1Q-13's rest: fixed by F5;
+- PR1A2-2, the witness never reaching the decisions reader: fixed by f65a3a9's WITNESS-2;
+- PR1Q2-2, a literal `x#01` sibling reading invalid: recorded as a known limit (Go names both alike, and invalid is the safe answer).
+
+**Forwarded and recorded:**
+- To S1.1c-8 (binding input): the naming tool's PR1A-7 = PR1Q-8 (continuation lines in a grouped declaration read as names), PR1Q-9 (nested and starred Python bindings, a BOM) and PR1Q-10 (token-rule coverage, a question for the owner). Also G2-152's witness, which is gated on the case name `-cases`; the S1.1c-8 rename must move that gate, or key it on a field.
+- Known limits, in mutate.py's docstring:
+  - PR1Q2-2;
+  - a deliberately hostile test writing go's 0x16 framing byte, or forging unittest's last `Ran` line after its summary (the residue class of ADR-0015 §3.6);
+  - PR1Q-12: the `--expect` old side is judged by old_rev's own pyshim. No effect in this sprint.
+
+**The risk register** (coordinator, 2026-11-21; the owner: "accuracy of the software matters more than speed of delivery, always"). Each HIGH or CRITICAL symbol, with its calls-only rating and hidden callers:
+
+| Change | Calls only | Real exposure | Proof or action |
+|---|---|---|---|
+| mutate.py (W0, F1–F5) | CRITICAL (inside Bench) | every proof in the sprint | 2 blind reviews, a narrow re-check, 38 plants; every lane batch re-run on the fixed tool |
+| `go_foreign` (A1, G3-72) | HIGH, 6 direct | the suppressions row, LAW Δ's exemptions; proofs driver texts | the coupling edit in the same commit; T2; T4 proofs |
+| `_json_file` (A1, G10-8) | HIGH, 1 direct, 3 flows | the vulns row | T2; T4 proofs |
+| `q2Start` (B, G2-108) | HIGH, 21 direct | 22 playback tests | load 50/50 over all 22 |
+| `gitnexus_reindex.main` (A2, G10-5) | LOW | hidden caller: `.claude/settings.json`, every session | stress 50/50; a live smoke test of the settings.json command, twice at once |
+| `runBlock` (B), `Runtime.Tick` (E1) | LOW, MEDIUM | error text on the Deploy and refusal paths | T2; a grep for old-text pins |
+
+**Process changes:**
+- heavy, load and timing runs are serialised on a quiet machine (E1 held after C5);
+- every lane proof is re-run on the integration branch;
+- a trial combine of F1 and 27 lane commits onto c6bae08 gave 28 of 28 clean;
+- GitNexus is re-indexed after the lane picks, and the HIGH symbols are re-rated before PR 2's review, whose brief names them.
+
 ## The finding ledger
 
 186 ids: G10's 23, G7a's 6, G2's 156 and G3-72. The ledger is built through the sprint and checked by `docs/sprints/s1-1c-7-plants/check_ledger.py` (plan check §7.5).
@@ -167,7 +241,7 @@ At most two agents at once; the plan check §1 holds the order:
 | G10-6 | fixed elsewhere | 5b4ddac (PR #51) | the fix PR's red-first tests: `test_git` GitFailures, `test_lawdelta`'s two | the same defect as G1-1 |
 | G2-16 | fixed | a2aeb02 | K2e: a direct run 43 → 47, equal to the module's 47 | |
 | G2-17 | fixed | d521725 | K2e: old red on the re-cut data, new green | |
-| G2-25 | fixed | a2aeb02 | K2e: the AST check, 3 faults → none | |
+| G2-25 | fixed | a2aeb02 | K2e: the AST check `docs/sprints/s1-1c-7-plants/g2_25_ast.py` (the spot-checker's), 3 faults → none | |
 | G2-29 | fixed | d521725 | K2e: old red on the re-cut data (32 != 29), new green | |
 | G10-2 | fixed | 535ecb7 | K1: `W0-4.json` revert plant red; red first `1 != 0` | |
 | G10-3 | fixed | 535ecb7 | K1: `W0-4.json` revert plants (mutate.py, load.py) red; red first `2 != 0` twice | |

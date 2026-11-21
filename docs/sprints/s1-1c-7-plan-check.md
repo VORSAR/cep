@@ -239,7 +239,7 @@ Each lane's ceiling is its line plus 2. The coordinator re-projects from the not
   - **Duplicates:** Go matches `-run` against the unique name (`a`, then `a#01`), so an anchored `^a$` would silently run only the first row. Before the real run, a probe run with the last level `^a(#[0-9]+)?$` counts the `=== RUN` lines; more than one makes the outcome **invalid** (PQ3-S4).
 - **Multi-hunk plants:** `--patch <unified diff>` (batch key `"patch"`).
   - Each hunk applies exactly once; the tracked files must equal HEAD.
-  - Go applies it through the overlay; the Python mode applies it in its copy.
+  - Go applies it through the overlay; the Python mode applies it in its copy. *(annotated 2026-11-21: Go now applies it in the same worktree copy at the commit; the overlay is deleted — [S1.1c-7's PR 1 review](decisions.md#owner-decisions-2026-11-21--s11c-7s-pr-1-review), decision 1)*
   - Used for defects with more than one site (G2-115) and for K1's revert plants.
 - **The Python mode:** `--py <unittest id>` (batch key `"py"`), combinable with `--patch`.
   - **The copy:** a detached temporary worktree (`git worktree add --detach <tmp> HEAD`, removed afterwards, even on failure), so tests that call git see a repository. The mutation is applied there; the tracked tree is never written.
@@ -744,7 +744,7 @@ A fresh `qa-expert`, blind to the lane's report. The input commit is the integra
    - `LAST_PART` and `parts.py:4` → S1.1c-9;
    - the `smells.json` note and its 13 TEMP reasons → S1.1c-9;
    - `test_parts.py`'s bound tests re-pinned, each named for what it asserts. Its fixture `ORDER` (`:18-31`) gains S1.1c-10, so the "forward past the bound" test reads "past S1.1c-9", not "not a printed part" (PA3-L1);
-   - **G2-17 and G2-29:** `test_aging.py` and `test_sprintid.py` read fixtures instead of the live plan. The re-cut must edit those live pins anyway, so they are replaced once; their K2e proofs go in the record.
+   - **G2-17 and G2-29:** `test_aging.py` and `test_sprintid.py` read fixtures instead of the live plan. The re-cut must edit those live pins anyway, so they are replaced once; their K2e proofs go in the record. *(annotated 2026-11-21: G2-17's test keeps reading the live plan, unpinned, with made-up witnesses — [S1.1c-7's PR 1 review](decisions.md#owner-decisions-2026-11-21--s11c-7s-pr-1-review), decision 2)*
 
    The red-first run (the re-pinned tests against the old values) is recorded. The re-cut lands before the marker's effect, so no part is reached and every tier stays green.
 

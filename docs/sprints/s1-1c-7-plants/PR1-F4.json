@@ -1,0 +1,64 @@
+[
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    mine = {e.get(\"Action\") for e in evs if e.get(\"Test\") == t.full}",
+    "id": "F4-forge2",
+    "note": "output text decides a fail (the depth-2 forge)",
+    "py": "gate.bench.tests.test_mutate.Subtests.test_a_depth_2_log_line_forging_its_own_fail_line_never_reads_red",
+    "replace": "    mine = {e.get(\"Action\") for e in evs if e.get(\"Test\") == t.full} | ({\"fail\"} if f\"--- FAIL: {t.full} (\" in result.stdout else set())"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    mine = {e.get(\"Action\") for e in evs if e.get(\"Test\") == t.full}",
+    "id": "F4-forge1",
+    "note": "output text decides a fail (the depth-1 forge)",
+    "py": "gate.bench.tests.test_mutate.Subtests.test_a_log_line_continued_as_a_fail_line_never_forges_a_red",
+    "replace": "    mine = {e.get(\"Action\") for e in evs if e.get(\"Test\") == t.full} | ({\"fail\"} if f\"--- FAIL: {t.full} (\" in result.stdout else set())"
+  },
+  {
+    "id": "F4-shape",
+    "note": "the measured timeout shape off: any test's panic line, package passed or not",
+    "patch": "--- a/gate/bench/mutate.py\n+++ b/gate/bench/mutate.py\n@@ -1 +1 @@\n-    return package_failed and any(\n+    return any(\n@@ -1,2 +1 @@\n         and str(e.get(\"Output\", \"\")).startswith(\"panic: test timed out after \")\n-        and e.get(\"Test\") in unended\n",
+    "py": "gate.bench.tests.test_mutate.Outcomes.test_a_test_printing_a_timeout_panic_at_a_line_start_and_passing_is_green"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if _timed_out(evs):",
+    "id": "F4-text-timeout",
+    "note": "the timeout read from output text",
+    "py": "gate.bench.tests.test_mutate.Outcomes.test_a_log_line_continued_as_a_timeout_panic_never_reads_timeout",
+    "replace": "    if \"panic: test timed out after\" in result.stdout:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    package_failed = any(e.get(\"Action\") == \"fail\" and not e.get(\"Test\") for e in evs)",
+    "id": "F4-real-timeout",
+    "note": "no timeout at all",
+    "py": "gate.bench.tests.test_mutate.Outcomes.test_a_test_hanging_past_the_timeout_is_timeout",
+    "replace": "    package_failed = False"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if \"fail\" in mine:",
+    "id": "F4-red",
+    "note": "the fail action not read",
+    "py": "gate.bench.tests.test_mutate.Subtests.test_a_depth_2_log_line_forging_its_own_pass_line_never_hides_a_red",
+    "replace": "    if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return [name for name in _started(evs) if re.fullmatch(rx, name)]",
+    "id": "F4-probe",
+    "note": "the probe counts every run event",
+    "py": "gate.bench.tests.test_mutate.Subtests.test_a_subtest_failing_against_the_plant_is_red_while_its_sibling_passes",
+    "replace": "    return _started(evs)"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    return [name for name in _started(evs) if re.fullmatch(parent + r\"/[^/]+\", name)]",
+    "id": "F4-ran",
+    "note": "ran: every run event",
+    "py": "gate.bench.tests.test_mutate.Subtests.test_f3_never_runs_its_sibling_f30",
+    "replace": "    return _started(evs)"
+  }
+]

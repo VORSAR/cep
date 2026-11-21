@@ -1,0 +1,26 @@
+[
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if result.exit == 1 and said == head + \"failed: 1 failures, 0 errors\" and counts[-1:] == [\"1\"]:",
+    "id": "A5-last",
+    "note": "PR1A-5: any `Ran 1 test in` line, not the last",
+    "py": "gate.bench.tests.test_mutate.PyMode.test_a_test_writing_a_ran_1_line_never_forges_a_red",
+    "replace": "    if result.exit == 1 and said == head + \"failed: 1 failures, 0 errors\" and \"1\" in counts:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if result.exit == 1 and said == head + \"failed: 1 failures, 0 errors\" and counts[-1:] == [\"1\"]:",
+    "id": "Q4-classid",
+    "note": "PR1Q-4, design-W0 item 8: no Ran count checked",
+    "py": "gate.bench.tests.test_mutate.PyMode.test_a_class_id_running_two_tests_with_one_failure_is_invalid_never_red",
+    "replace": "    if result.exit == 1 and said == head + \"failed: 1 failures, 0 errors\":"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    plant = [\"control: the real code\"] if e.control else new if old == new else both",
+    "id": "A6-oldplant",
+    "note": "PR1A-6: only the new side's plant printed",
+    "py": "gate.bench.tests.test_mutate.Expect.test_the_old_sides_plant_is_printed_when_it_differs_from_the_new_sides",
+    "replace": "    plant = [\"control: the real code\"] if e.control else new"
+  }
+]

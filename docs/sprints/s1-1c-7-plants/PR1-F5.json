@@ -1,0 +1,34 @@
+[
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "            if mutant == original:",
+    "id": "A2-1-cancel",
+    "note": "PR1A2-1: hunks that cancel out accepted",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_hunks_that_cancel_out_are_refused_before_any_build",
+    "replace": "            if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "    if not os.path.isfile(path):",
+    "id": "Q13-dir",
+    "note": "PR1Q-13: a directory accepted as --file (the working tree)",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_file_that_is_a_directory_is_refused_before_any_build",
+    "replace": "    if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "        if _git(\"cat-file\", \"-t\", f\"{rev}:{path}\").stdout.strip() != \"blob\":",
+    "id": "Q13-dir-rev",
+    "note": "PR1Q-13: a tree accepted as --file at a revision",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_file_that_is_a_directory_is_refused_before_any_build",
+    "replace": "        if False:"
+  },
+  {
+    "file": "gate/bench/mutate.py",
+    "find": "            v += int(float(f) * (float(u) / scale))",
+    "id": "Q2-3-truncate",
+    "note": "PR1Q2-3: each part's fraction kept, not truncated to whole nanoseconds",
+    "py": "gate.bench.tests.test_mutate.Refusals.test_a_timeout_is_read_as_time_parseduration_reads_it",
+    "replace": "            v += float(f) * (float(u) / scale)"
+  }
+]
