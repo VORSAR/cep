@@ -33,8 +33,9 @@ func TestRouterKeepsRoutingAfterAHeadSend(t *testing.T) {
 	}
 	for want := range AppID(2) {
 		done := make(chan added, 1)
+		app := cgApp(t, func(event.Event) error { return nil })
 		go func() {
-			id, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil }))
+			id, err := r.Add(ctx, app)
 			done <- added{id, err}
 		}()
 		select {

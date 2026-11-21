@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/vorsar/cep/internal/event"
 )
@@ -113,11 +112,13 @@ func TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline(t *testing.T) {
 	t.Parallel()
 	ctx := cgCtx(t)
 	w, r, id := rdOverflowed(t, ctx)
-	dctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond) // the drain's deadline; the test waits for Drain's return
+	dctx, cancel := context.WithCancel(ctx) // the drain's deadline is cancel, called by recordingWait after the barrier
 	defer cancel()
+	r.recordingWait = cancel
 	if _, err := r.Drain(dctx, id); err != nil {
 		t.Fatalf("Drain: %v; want success at its deadline", err)
 	}
+	r.recordingWait = nil
 	st, err := r.Stats(ctx)
 	if err != nil {
 		t.Fatal(err)

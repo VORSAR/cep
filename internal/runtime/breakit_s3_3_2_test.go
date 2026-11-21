@@ -28,8 +28,9 @@ func TestBreakitAddAfterAClosedDeadlineIsNotLeftInstalled(t *testing.T) {
 		err error
 	}
 	add := make(chan added, 1)
+	app := cgApp(t, func(event.Event) error { return nil })
 	go func() {
-		id, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil }))
+		id, err := r.Add(ctx, app)
 		add <- added{id, err}
 	}()
 	gctx, gcancel := context.WithTimeout(ctx, 10*time.Second)
@@ -49,7 +50,9 @@ func TestBreakitAddAfterAClosedDeadlineIsNotLeftInstalled(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("the Add never returned: the ceiling")
 	}
-	t.Logf("the Add after Close's deadline: id %d, %v", a.id, a.err)
+	if !errors.Is(a.err, ErrClosed) {
+		t.Errorf("the Add released after Close gave up: id %d, %v; want ErrClosed", a.id, a.err)
+	}
 	second, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel2()
 	if err := r.Close(second); err != nil {
