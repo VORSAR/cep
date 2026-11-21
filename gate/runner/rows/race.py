@@ -27,7 +27,12 @@ def main(argv: list[str]) -> int:
     repeat, patterns = 1, []
     for arg in argv[1:]:
         if arg.startswith("--repeat="):
-            repeat = int(arg.removeprefix("--repeat="))
+            value = arg.removeprefix("--repeat=")
+            try:
+                repeat = int(value)
+            except ValueError:
+                rows.covered(0)
+                return rows.finish([f"usage: --repeat=N with N a whole number, not {value!r}"])
         else:
             patterns.append(arg)
     os.environ["CGO_ENABLED"] = "1"  # this row's own go only: every other row keeps the pinned 0

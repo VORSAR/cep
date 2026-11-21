@@ -73,15 +73,22 @@ class Copy:
 
 
 def _json_file(path: str) -> tuple[bool, object]:
-    """(present, parsed): parsed is the ValueError when the file is not JSON."""
+    """(present, parsed): parsed is the ValueError when the file is not JSON, the OSError when it exists but cannot be
+    read."""
     try:
         text = rows.read_text(path)
     except FileNotFoundError:
         return False, None
+    except OSError as e:
+        return True, e
     try:
         return True, json.loads(text)
     except ValueError as e:
         return True, e
+
+
+def _unreadable(path: str, e: OSError) -> str:
+    return f"vulns: cannot read {path}: {e.strerror}: run make vulndb"
 
 
 def _parsed(data: bytes | None) -> object:
@@ -101,6 +108,8 @@ def open_copy(root: str, now: datetime) -> Copy:
             body = f.read(vulndb.FETCH_CAP + 1)
     except FileNotFoundError:
         copy.faults.append(f"vulns: no vulndb.zip at {root}: run make vulndb")
+    except OSError as e:
+        copy.faults.append(_unreadable(path, e))
     if body is not None and len(body) > vulndb.FETCH_CAP:
         copy.faults.append(f"vulns: {path} is larger than {vulndb.FETCH_CAP >> 20} MiB: run make vulndb")
     elif body is not None:
@@ -111,11 +120,18 @@ def open_copy(root: str, now: datetime) -> Copy:
             copy.sha256 = hashlib.sha256(body).hexdigest()
         except zipfile.BadZipFile, OSError, ValueError, EOFError:
             copy.faults.append(f"vulns: {path} is not a zip: run make vulndb")
-    present, stamp = _json_file(os.path.join(root, vulndb_fetch.STAMP))
+    stamp_path = os.path.join(root, vulndb_fetch.STAMP)
+    present, stamp = _json_file(stamp_path)
+    if isinstance(stamp, OSError):  # the copy's origin cannot be read: it is not scanned
+        copy.faults.append(_unreadable(stamp_path, stamp))
+        copy.zip, present, stamp = None, False, None
     copy.stamp = stamp if present and not isinstance(stamp, ValueError) else ("not JSON" if present else None)
     fetched = vulndb._time(stamp.get("fetched")) if isinstance(stamp, dict) else None
-    present, error = _json_file(os.path.join(root, vulndb_fetch.ERROR))
-    if present:
+    error_path = os.path.join(root, vulndb_fetch.ERROR)
+    present, error = _json_file(error_path)
+    if isinstance(error, OSError):
+        copy.faults.append(_unreadable(error_path, error))
+    elif present:
         well_formed = isinstance(error, dict) and set(error) == {"at", "error"} and isinstance(error["error"], str)
         at = vulndb._time(error["at"]) if well_formed else None
         if at is None:

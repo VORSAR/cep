@@ -297,3 +297,9 @@ class Race(GoRows):
         self.assertEqual(self.race("--repeat=3", "./..."), "covered 1")
         passes = b'"Action":"pass","Package":"ex.com/m/a","Test":"TestOk"'
         self.assertEqual(self.row_file("race", "race", "test.json").count(passes), 3)
+
+    def test_a_repeat_that_is_not_a_number_is_a_usage_failure(self):
+        self.package("a")
+        self.assertEqual(self.race("--repeat=x", "./..."), "exit 1: usage: --repeat=N with N a whole number, not 'x'")
+        # go never ran
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "rows", "race", "race", "test.json")))

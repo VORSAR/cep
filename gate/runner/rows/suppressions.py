@@ -125,6 +125,22 @@ def _pair(target: str) -> tuple[str, str]:
     return file, code
 
 
+def _waived(lint: dict) -> tuple[set[tuple[str, str]], list[str]]:
+    """The (file, code) pairs lint's per-file tables waive, and a fault for each table that is not a table of string
+    lists (tomllib gives a list, a string or a number as readily as a table)."""
+    waived: set[tuple[str, str]] = set()
+    faults: list[str] = []
+    for key in RUFF_WAIVERS:
+        table = lint.get(key, {})
+        if type(table) is not dict or any(
+            type(codes) is not list or any(type(code) is not str for code in codes) for codes in table.values()
+        ):
+            faults.append(f"{RUFF_TOML}: lint.{key} is not a table of code lists")
+            continue
+        waived |= {(file, code) for file, codes in table.items() for code in codes}
+    return waived, faults
+
+
 def ruff_pin(lists: dict[str, allowlists.AllowList]) -> list[str]:
     """ruff.toml pinned whole (S1.1c-5 design §5): the document minus lint.per-file-ignores equals RUFF_PINNED
     type-strictly, each difference named by its path (`pin.differences`); then ruff.toml's per-file waivers and
@@ -156,7 +172,9 @@ def ruff_pin(lists: dict[str, allowlists.AllowList]) -> list[str]:
         if not any(line.startswith(f"{RUFF_TOML}: {path}: ") for path in denied)
     ]
     faults += denied.values()
-    waived = {(file, code) for key in RUFF_WAIVERS for file, codes in lint.get(key, {}).items() for code in codes}
+    waived, shape = _waived(lint)
+    if shape:  # a both-ways comparison against an unreadable table would name only false pairs
+        return faults + shape
     listed = {_pair(e.target) for e in lists["ruff"].entries} if "ruff" in lists else set()
     for file, code in sorted(waived - listed):
         faults.append(f"ruff.toml waives {code} for {file} without an entry in tools/allowlists/ruff.json")
@@ -243,7 +261,7 @@ def main(argv: list[str]) -> int:
         ctx = context(set(tracked))
         enabled = golangci.enabled(golangci.load(rows.read_text(golangci.CONFIG)))
     except SIDE_FAULTS as e:
-        return rows.finish([f"suppressions: {e}"])
+        return rows.finish([f"suppressions: {fault}" for fault in [str(e), *file_faults]])
     lists, faults = load_lists(tracked)
     for name in sorted(lists):
         faults += allowlists.check(lists[name], ctx)

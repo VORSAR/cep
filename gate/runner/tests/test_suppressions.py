@@ -498,6 +498,44 @@ class RuffPinRefuses(support.GateTest):
                 )
 
 
+SHAPE = "ruff.toml: lint.{key} is not a table of code lists"
+
+
+class RuffWaiverTableOfTheWrongShape(support.GateTest):
+    """lint.per-file-ignores is left out of the whole-document pin (ruff.json checks it both ways), so its shape is
+    checked on its own: a table of string lists, or one named fault and no both-ways comparison."""
+
+    def pin(self, lines: str) -> list[str]:
+        text = pinned_ruff_toml().replace("[lint]\n", f"[lint]\n{lines}", 1)
+        self.assertNotEqual(text, pinned_ruff_toml())  # witness: the edit applied
+        self.write("ruff.toml", text)
+        with contextlib.chdir(self.repo):
+            try:
+                return row.ruff_pin({})
+            except (AttributeError, TypeError) as e:  # the row died with a traceback and no named fault
+                self.fail(f"ruff_pin raised {e!r}")
+
+    def test_a_list_in_place_of_the_table_is_named(self):
+        self.assertEqual(self.pin('per-file-ignores = ["E501"]\n'), [SHAPE.format(key="per-file-ignores")])
+
+    def test_a_string_in_place_of_a_code_list_is_named_once(self):
+        self.assertEqual(
+            self.pin('per-file-ignores = {"gate/x.py" = "E501"}\n'), [SHAPE.format(key="per-file-ignores")]
+        )
+
+    def test_a_code_that_is_not_a_string_is_named(self):
+        self.assertEqual(self.pin('per-file-ignores = {"gate/x.py" = [501]}\n'), [SHAPE.format(key="per-file-ignores")])
+
+    def test_an_extend_table_of_the_wrong_shape_is_named(self):
+        self.assertEqual(
+            self.pin('extend-per-file-ignores = ["E501"]\n'),
+            [
+                "ruff.toml: lint.extend-per-file-ignores: not pinned (remove it)",
+                SHAPE.format(key="extend-per-file-ignores"),
+            ],
+        )
+
+
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
 ROW = os.path.join(support.REPO, "gate", "runner", "rows", "suppressions.py")
 SPRINTS = '{"schema": 1, "note": "n", "rows": [{"id": "S3.1", "closed": true}, {"id": "S1.1c", "closed": false}]}\n'
@@ -556,6 +594,22 @@ class Row(support.GateTest):
         code, out = self.run_row(["tools/allowlists/purity.json", ".githooks/pre-commit"])
         self.assertEqual(code, 1, out)
         self.assertIn(f".githooks/pre-commit:2: {NOQA}", out)
+
+    def test_a_side_input_that_fails_keeps_the_listed_files_faults(self):
+        self.world("docs/sprints/decisions.md#title")
+        self.track("gate/known-issues.json", "{")  # not JSON: a side input that fails
+        self.track(".githooks/pre-commit", "#!/usr/bin/env python3\nimport os  # noqa\n")
+        code, out = self.run_row(["tools/allowlists/purity.json", ".githooks/pre-commit"])
+        failed = [line for line in out.splitlines() if line.startswith("failed: ")]
+        self.assertEqual(code, 1, out)
+        self.assertEqual(
+            failed,
+            [
+                "failed: suppressions: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+                f"failed: suppressions: .githooks/pre-commit:2: {NOQA}",
+            ],
+            out,
+        )
 
     # BK-S6: a generated file is listed by path in tools/allowlists/generated.json (rule `generated`).
 

@@ -249,3 +249,19 @@ class Pyfloor(Base):
         scope = ("git", "gate/runner/tests/test_run_guard.py")
         self.run_rows([self.row("pyfloor", command=wrapper("pyfloor"), expected_scope=scope)], repo=support.REPO)
         self.assertEqual(self.reason("pyfloor"), "covered 1")
+
+
+class TrackedListFailure(support.GateTest):
+    def test_a_failed_git_ls_files_is_a_failed_line(self):
+        outside = os.path.join(self.root, "outside")  # no repository here or above: git ls-files fails
+        os.mkdir(outside)
+        listing = os.path.join(self.root, "files.nul")
+        with open(listing, "wb"):
+            pass
+        env = dict(support.base_env(), GATE_ROW_DIR=self.run_dir, GIT_CEILING_DIRECTORIES=self.root)
+        argv = [sys.executable, "-I", "-B", "-X", "utf8", os.path.join(ROWS, "pytests.py"), listing]
+        code, out, err = support.run_tool(argv, outside, env)
+        text = out.decode("utf-8", errors="replace")
+        self.assertEqual(code, 1, err.decode("utf-8", errors="replace"))
+        self.assertRegex(text, r"\AGATE_COVERED 0\nfailed: git ls-files: exit [1-9][0-9]*: fatal: not a git repository")
+        self.assertEqual(text.count("failed: "), 1, text)
