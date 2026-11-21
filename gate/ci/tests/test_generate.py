@@ -192,15 +192,18 @@ class Scans(unittest.TestCase):
         # download is followed by restoring both go.sum files, in the root (form D: owner, 2026-11-13, during
         # S1.1c-4's build, decision 2). No go.sum-writing step may follow the restore.
         text = generate.render([*ROWS, row("deps", "lint", ("T4",))])
+        checked = []
         for job, body in jobs_of(text).items():
             with self.subTest(job):
                 if "go mod download" not in body:
                     continue
+                checked.append(job)
                 self.assertEqual(body.count(RESTORE), 1, body)
                 restore = body.index(RESTORE)
                 self.assertGreater(restore, body.rindex("go mod download all"), body)
                 self.assertLess(restore, body.index("bootstrap.py exec"), body)
                 self.assertNotIn("working-directory", body[restore : body.index("bootstrap.py exec")], body)
+        self.assertEqual(checked, ["lint", "proofs"])  # the witness: the jobs that download were checked
 
 
 class Canary(unittest.TestCase):
@@ -268,7 +271,9 @@ class Canary(unittest.TestCase):
         self.assertEqual(set(uses), {f"actions/cache/restore@{sha}"})
 
     def test_every_action_is_pinned_by_a_full_sha(self):
-        for ref in re.findall(r"uses: (\S+)", self.text):
+        uses = re.findall(r"uses: (\S+)", self.text)
+        self.assertTrue(uses)
+        for ref in uses:
             self.assertRegex(ref, r"^actions/(checkout|cache/restore|upload-artifact|download-artifact)@[0-9a-f]{40}$")
 
     def test_the_token_is_on_the_feeds_step_only(self):
