@@ -84,10 +84,25 @@ func (rt *router) activate(it item) {
 	case a.activated:
 		it.reply <- reply{err: ErrStarted}
 	default:
+		if err := rt.applyLoads(a); err != nil { // checked at Add: only a broken invariant reaches here
+			it.reply <- reply{err: err}
+			return
+		}
 		a.activated = true
 		a.started.Store(true)
 		it.reply <- reply{}
 	}
+}
+
+// applyLoads puts the app's starting rows (App.Loads) table by table in load order and records them as table
+// writes; Add checked them, so it returns nil unless that check and the table disagree.
+func (rt *router) applyLoads(a *appState) error {
+	for _, l := range a.app.Loads {
+		if err := a.applyWrite(l.Table, TablePut, l.Rows); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // installAck is one shard's ack of an mAdd or mRemove; the last one completes the item.

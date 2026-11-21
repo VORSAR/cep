@@ -77,10 +77,11 @@ func (r *Runtime) requestQueued(ctx context.Context, it item) (reply, error) {
 
 // Activate starts the app's sink flushers and, with a Recorder, its recorder goroutine (the header, queued at Add,
 // is its first record), then opens its input: Send, SendPayload, TableWrite and BatchEnd accept the app from here,
-// and the engine's ticks reach it (owner, 2026-11-08: an app's clock starts at Start). The router decides, in intake
-// order, whether the app is activated — a drain or a removal queued first wins, and the router never writes a field
-// a caller reads (review B1; break-it B2). Errors: ErrStarted (already active), ErrDrained (after Drain), ErrRemoved
-// (after or during Remove).
+// and the engine's ticks reach it (owner, 2026-11-08: an app's clock starts at Start). The router puts the app's
+// starting rows (App.Loads) in the same step, before it answers, so the app's first tick and first event read them
+// and their table records follow the header. The router decides, in intake order, whether the app is activated — a
+// drain or a removal queued first wins, and the router never writes a field a caller reads (review B1; break-it
+// B2). Errors: ErrStarted (already active), ErrDrained (after Drain), ErrRemoved (after or during Remove).
 func (r *Runtime) Activate(ctx context.Context, app AppID) error {
 	if r.isClosed() || !r.inflight.enter() { // Close has begun (S3.3-1-2)
 		return ErrClosed

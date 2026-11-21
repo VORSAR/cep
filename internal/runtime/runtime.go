@@ -48,6 +48,18 @@ type App struct {
 	// OnRemoved, if set, is called once, on the caller's goroutine of Remove or Close, after the app's goroutines
 	// were asked to stop: the facade cancels its sinks' context here (design s3-3-1 §2.1, §3.6). Never called twice.
 	OnRemoved func()
+	// Loads are the app's starting rows, put table by table in load order by the router's activation step
+	// (Activate), before the app takes any input; Add checks each, so applying them cannot fail. The runtime keeps
+	// the rows: the caller must not change them after Add. With a Recorder, the app's recording queue is
+	// Config.RecordQueue plus one slot per starting row, so the header and the starting rows, queued before the
+	// recorder starts, always fit and leave the configured room for later records. A built app (NewSync) takes none.
+	Loads []TableLoad
+}
+
+// TableLoad is one table's starting rows: whole rows put into table Table of App.Tables at activation.
+type TableLoad struct {
+	Table int
+	Rows  [][]event.Value
 }
 
 // Recorder writes one app's recording (design s3-2b-2 §7). The runtime calls it from the app's recorder goroutine —
@@ -73,8 +85,8 @@ type Config struct {
 	SinkQueue int           // per sink binding; 0: 1024
 	TickEvery time.Duration // live idle ticks from an internal ticker; 0: none
 	Now       func() int64  // wall ms; nil: time.Now
-	// RecordQueue is each recording's queue, in records; 0: 65,536. A full queue ends the recording (owner D2 of
-	// S3.2b-2's design).
+	// RecordQueue is each recording's queue, in records, plus one slot per starting row of the app (App.Loads); 0:
+	// 65,536. A full queue ends the recording (owner D2 of S3.2b-2's design).
 	RecordQueue int
 }
 
