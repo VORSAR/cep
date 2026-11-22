@@ -101,12 +101,15 @@ func (h *rtHeld) Table(int, TableOp, [][]event.Value) error {
 	return nil
 }
 
-// TestFullQueueWithABusyRecorderGetsNoTurn (design s1-1c-7-design-starvation; owner D2 of S3.2b-2's design): a
-// recorder goroutine that is inside its Recorder is behind, not waiting for the processor, so at a full queue the
-// router yields nothing and the recording ends at once. The witness that the full queue was met is Failed.
-func TestFullQueueWithABusyRecorderGetsNoTurn(t *testing.T) {
+// TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns (design s1-1c-7-design-starvation; owner D2 of
+// S3.2b-2's design; owner, 2026-11-22, the starvation fix under load): at a full queue the router yields at most twice,
+// whatever the recorder goroutine is doing, and offers the record again. A goroutine blocked inside its Recorder is
+// not runnable and takes nothing, so at the first full queue the router yields exactly twice and the recording ends;
+// every write returns, so detection goes on. The witness that the full queue was met is Failed. The bound is the
+// owner's, written here, not read from recTurns, so a changed constant turns this red.
+func TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns(t *testing.T) {
 	t.Parallel()
-	const queue = 4
+	const queue, turns = 4, 2 // turns: the owner's "at most twice" (2026-11-22)
 	ctx := cgCtx(t)
 	r, err := New(Config{Shards: 1, RecordQueue: queue, Now: func() int64 { return cgT0 }})
 	if err != nil {
@@ -132,31 +135,33 @@ func TestFullQueueWithABusyRecorderGetsNoTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	select {
-	case <-held.entered: // the goroutine is inside its Recorder, having taken a record: it is not waiting
+	case <-held.entered: // the goroutine has taken the header and this record and is blocked in Table: the queue is empty
 	case <-ctx.Done():
 		t.Fatal("the recorder never entered Table: the ceiling")
 	}
-	failed := false
+	writes := 0
 	for range 4 * queue { // the queue is empty and holds 4: the fifth write finds it full
-		if err := r.TableWrite(ctx, id, 0, TablePut, row); err != nil {
+		if err := r.TableWrite(ctx, id, 0, TablePut, row); err != nil { // returns: detection goes on
 			t.Fatal(err)
 		}
+		writes++
 		st, err := r.Stats(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if failed = st.Recording[id].Failed; failed {
+		if st.Recording[id].Failed {
 			break
 		}
 	}
-	if !failed {
-		t.Fatalf("the recording did not end after %d writes into a queue of %d behind a held Recorder", 4*queue, queue)
+	if writes != queue+1 {
+		t.Fatalf("the recording ended at write %d into a queue of %d behind a blocked Recorder, want write %d",
+			writes, queue, queue+1)
 	}
 	close(held.release)
 	if err := r.Close(ctx); err != nil { // nil: every goroutine has returned, the router too, so turns is read safely
 		t.Fatalf("Close: %v", err)
 	}
-	if got := r.appList()[id].rec.turns; got != 0 {
-		t.Fatalf("the router yielded %d times at a full queue behind a busy Recorder, want 0", got)
+	if got := r.appList()[id].rec.turns; got != turns {
+		t.Fatalf("the router yielded %d times at a full queue behind a blocked Recorder, want %d", got, turns)
 	}
 }

@@ -86,10 +86,9 @@ type Config struct {
 	TickEvery time.Duration // live idle ticks from an internal ticker; 0: none
 	Now       func() int64  // wall ms; nil: time.Now
 	// RecordQueue is each recording's queue, in records, plus one slot per starting row of the app (App.Loads); 0:
-	// 65,536. A full queue ends the recording (owner D2 of S3.2b-2's design), unless the recorder's goroutine has not
-	// had the processor: the router then gives it up, at most twice, and offers the record again. The queue must be
-	// large enough to cover the recorder's wake-up, and values far below the default can end a recording under bursts
-	// at any CPU count.
+	// 65,536. At a full queue the router first gives up the processor, at most twice, and offers the record again; if
+	// the queue is still full, the recording ends (owner D2 of S3.2b-2's design). The queue must be large enough to
+	// cover the recorder's wake-up, and values far below the default can end a recording under bursts at any CPU count.
 	RecordQueue int
 }
 
