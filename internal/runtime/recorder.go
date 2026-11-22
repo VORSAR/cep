@@ -58,6 +58,8 @@ type recQ struct {
 	broken    bool // the goroutine's: the Recorder failed or panicked; it is never called again
 	isSettled bool // the goroutine's: settled is closed
 
+	turns int64 // the router's: the yields it made at a full queue
+
 	mu      sync.Mutex // guards the results, read by Stats outside the cut
 	records int64
 	failed  bool // the recording has ended: a full queue (set by the router at once) or the Recorder's failure
