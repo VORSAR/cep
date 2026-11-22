@@ -217,16 +217,43 @@ def closure(root: str) -> set[str]:
 
 class CodeClosure(unittest.TestCase):
     """S1.1c-5 design §2.5 (DA-S5, DQ-L3), §8 row L.1: a row instrument's Python `code` is its row module plus the
-    transitive closure of its `gate.*` imports, compared both ways; config and Go files are not compared. Held for every
-    instrument whose row runs a Python module (owner, S1.1c-7 Q10, survey G2-24). The instruments this rule cannot judge
-    are named by kind in NOT_JUDGED, each with its reason; any other instrument is judged, and the witness counts them
-    against the registry's rows."""
+    transitive closure of its `gate.*` imports, compared both ways. Held for every instrument whose row runs a Python
+    module (owner, S1.1c-7 Q10, survey G2-24).
 
-    # The kinds of instrument the import rule cannot judge (survey G2-24: list the known gaps by name).
+    Who is judged: every instrument NOT_JUDGED does not name. A judged instrument is keyed by its row, its row's
+    command in gate/registry.json names a .py module, and the .py files of its `code` are that module's closure. So an
+    instrument leaves the judged set only through an edit to NOT_JUDGED: a row whose command stops naming its .py, or
+    an instrument moved under another row, is red here by its own id.
+
+    What the witness sees: every instrument is judged or named; each id NOT_JUDGED names is exactly one instrument, of
+    the kind it is named under, so none that the rule could judge is named.
+
+    What it cannot see: a named instrument's `code` list is not compared at all, a Go-test instrument's no more than a
+    `go run` tool's, so a stranger file there passes; in a judged list only the .py files are compared, never config
+    or Go files; the closure follows imports written by name, from the first .py argument of the row's command; two
+    instruments for one row are teeth.pin's to refuse (RealTree below), not this test's."""
+
+    # The instruments the import rule cannot judge, each named by id under its kind and the kind's reason (survey
+    # G2-24: list the known gaps by name).
     NOT_JUDGED = {
-        "go_test": "a Go-test instrument, keyed by its go_test under another row: its code is Go test files",
-        "no Python module": "its row's command runs no .py module (a `go run` tool): there are no imports to follow",
+        "go_test": (
+            "a Go-test instrument, keyed by its go_test under another row: its code is Go test files and their data",
+            ("docsync-b-catalog", "docsync-b-keywords", "docsync-c", "docsync-d", "fragments", "nosleep"),
+        ),
+        "no Python module": (
+            "its row's command runs no .py module (a `go run` tool): there are no imports to follow",
+            ("apipartition", "archcheck", "clockgolden", "testhygiene"),
+        ),
     }
+
+    @staticmethod
+    def kind(instrument: dict, commands: dict[str, list[str]]) -> str:
+        """The kind of instrument the import rule cannot judge that this one is, or "judgeable" for one it can."""
+        if "go_test" in instrument and instrument["id"] != instrument["row"]:
+            return "go_test"
+        if instrument["row"] in commands and not any(a.endswith(".py") for a in commands[instrument["row"]]):
+            return "no Python module"
+        return "judgeable"
 
     def test_each_instruments_code_is_its_import_closure(self):
         with open(os.path.join(REPO, "gate", "law.json"), encoding="utf-8") as f:
@@ -235,29 +262,37 @@ class CodeClosure(unittest.TestCase):
             commands = {row["id"]: row["command"] for row in json.load(f)["rows"]}
         with self.subTest("the smells instrument is staged"):  # §8 counts: the smells instrument is new
             self.assertIn("smells", [i["id"] for i in instruments])
-        judged, not_judged = [], {}
+        listed = [(id, kind) for kind, (_, ids) in self.NOT_JUDGED.items() for id in ids]
+        named = dict(listed)
+        judged, found = [], []
         for instrument in instruments:
-            roots = [a for a in commands.get(instrument["row"], []) if a.endswith(".py")]
-            if "go_test" in instrument and instrument["id"] != instrument["row"]:
-                not_judged[instrument["id"]] = "go_test"
-                continue
-            if instrument["row"] in commands and not roots:
-                not_judged[instrument["id"]] = "no Python module"
+            if instrument["id"] in named:  # the one way out of the judged set
+                found.append((instrument["id"], self.kind(instrument, commands)))
                 continue
             judged.append(instrument["id"])
             with self.subTest(instrument=instrument["id"]):
-                self.assertEqual(instrument["id"], instrument["row"], "a row instrument is keyed by its row")
-                self.assertTrue(roots, f"row {instrument['row']!r} is not in gate/registry.json")
+                self.assertEqual(
+                    instrument["id"],
+                    instrument["row"],
+                    "a row instrument is keyed by its row (one the import rule cannot judge is named in NOT_JUDGED)",
+                )
+                roots = [a for a in commands.get(instrument["row"], []) if a.endswith(".py")]
+                self.assertTrue(
+                    roots,
+                    f"gate/registry.json has no row {instrument['row']!r} whose command names a .py module"
+                    " (an instrument the import rule cannot judge is named in NOT_JUDGED)",
+                )
                 code = {p for p in instrument["code"] if p.endswith(".py")}
                 want = closure(roots[0])
                 self.assertEqual(
                     (sorted(want - code), sorted(code - want)), ([], []), "(missing from code, not imported)"
                 )
-        # Witness: every instrument is judged or named with its kind's reason, and the judged ones are one per registry
-        # row that runs a Python module (teeth.pin holds one row instrument per row), counted from the registry alone.
-        self.assertEqual(sorted(set(not_judged.values()) - set(self.NOT_JUDGED)), [])
-        self.assertEqual(len(judged) + len(not_judged), len(instruments))
-        self.assertEqual(len(judged), sum(1 for c in commands.values() if any(a.endswith(".py") for a in c)), judged)
+        # Witness. No id is named under two kinds. Each named id is exactly one instrument, of the kind it is named
+        # under: a missing one is absent on the left, a second one is there twice, and one the rule could judge reads
+        # "judgeable". Every instrument is judged or named: the loop has no third way, and this holds it to that.
+        self.assertEqual(len(listed), len(named), "NOT_JUDGED names an id under two kinds")
+        self.assertEqual(sorted(found), sorted(named.items()), "(named instruments as found) != NOT_JUDGED")
+        self.assertEqual(sorted([*judged, *(id for id, _ in found)]), sorted(i["id"] for i in instruments))
 
 
 class RealTree(unittest.TestCase):
