@@ -355,5 +355,47 @@ class Overlap(unittest.TestCase):
         self.assertEqual(starts, [world.repo])
 
 
+class CheckUnderLock(unittest.TestCase):
+    """The check for a run in progress is made under the lock. A call that has made its check and started nothing
+    yet still holds the lock, so no other call can check, start a run and return in between: were the check made
+    in front of the lock, both calls would find no run and each would start one."""
+
+    def test_a_call_parked_in_its_check_and_a_whole_second_call_start_one_run_between_them(self):
+        world = World(self, indexed="0" * 40)
+        parked: queue.SimpleQueue[str] = queue.SimpleQueue()
+        release: queue.SimpleQueue[str] = queue.SimpleQueue()
+        checks: list[str] = []
+        starts: list[str] = []
+        real_running = gitnexus_reindex.running
+
+        def holding_running(pidfile: str) -> bool:
+            checks.append(pidfile)
+            answer = real_running(pidfile)
+            if len(checks) == 1:  # the first call is parked here: its check made, nothing started yet
+                parked.put("parked")
+                wait.get(release, "the test to release the first call's check", cap_s=30)
+            return answer
+
+        def recording_start(gitnexus: str, checkout: str, storage: str, environ) -> None:
+            starts.append(checkout)
+            with open(os.path.join(storage, gitnexus_reindex.PIDFILE), "w", encoding="utf-8") as f:
+                f.write(str(os.getpid()))  # a live run, as start records it
+
+        self.enterContext(mock.patch.object(gitnexus_reindex, "running", holding_running))
+        self.enterContext(mock.patch.object(gitnexus_reindex, "start", recording_start))
+        text = json.dumps(world.prompt())
+        first = threading.Thread(
+            target=gitnexus_reindex.main, args=(text, world.environ), name="first-hook-call", daemon=True
+        )
+        first.start()
+        try:
+            wait.get(parked, "the first call to make its check", cap_s=30)
+            self.assertEqual(gitnexus_reindex.main(text, world.environ), 0)  # a whole second call, its start included
+        finally:
+            release.put("go")
+        wait.until("the first call to return after its release", lambda: not first.is_alive(), cap_s=30)
+        self.assertEqual(starts, [world.repo])
+
+
 if __name__ == "__main__":
     unittest.main()
