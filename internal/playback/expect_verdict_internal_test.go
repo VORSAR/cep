@@ -134,3 +134,23 @@ func TestASandboxFaultKeepsTheDriversErrorInTheChain(t *testing.T) {
 		t.Fatalf("runBlock = %v; want the driver's own error in the chain", err)
 	}
 }
+
+// TestASandboxFaultReachesTheDriversErrorThroughErrorsIs: the wrapper unwraps to the driver's own error, so errors.Is
+// finds that error from runBlock's fault, and the fault's text says "playback: " once: the rule and the block, then
+// the driver's words without their prefix.
+func TestASandboxFaultReachesTheDriversErrorThroughErrorsIs(t *testing.T) {
+	t.Parallel()
+	p := &plan.App{Streams: []plan.Stream{{}}, Rules: []plan.Rule{{Name: "R"}}, Expects: []plan.Expect{{Block: 1}}}
+	_, err := runBlock(p, &p.Expects[0])
+	w, ok := errors.AsType[inPlayback](err)
+	if !ok {
+		t.Fatalf("runBlock = %v; want the wrapper of the driver's error in the chain", err)
+	}
+	if !errors.Is(err, w.err) {
+		t.Errorf("errors.Is(%q, the driver's error %q) = false; want true (the wrapper unwraps to it)", err, w.err)
+	}
+	const want = "playback: rule R, expect block 1: stream 0 has no schema"
+	if got := err.Error(); got != want {
+		t.Errorf("runBlock's error reads %q; want %q", got, want)
+	}
+}
