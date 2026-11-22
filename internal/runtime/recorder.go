@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"fmt"
+	goruntime "runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/vorsar/cep/internal/event"
 )
@@ -38,7 +40,8 @@ type recItem struct {
 }
 
 // recQ is one app's recording (owner D2 of S3.2b-2's design; review F2; MUST 13): a bounded queue the router puts
-// records on without ever blocking, drained in order by the app's recorder goroutine, the only caller of the
+// records on without ever blocking (at a full queue it yields the processor at most recTurns times to a goroutine
+// that is waiting for it, and no more), drained in order by the app's recorder goroutine, the only caller of the
 // Recorder. A full queue or the Recorder's first error or panic ends the recording for good: the app goes on. After a
 // full queue the goroutine still writes every record already queued, then flushes, so the file holds whole lines
 // (review C3), and a drain waits for that through settled, so Stats after a drain counts them.
@@ -57,8 +60,10 @@ type recQ struct {
 
 	broken    bool // the goroutine's: the Recorder failed or panicked; it is never called again
 	isSettled bool // the goroutine's: settled is closed
-
-	turns int64 // the router's: the yields it made at a full queue
+	// the goroutine's: true from the queue's making, and whenever it is at its select having taken no record since;
+	// false while it handles one. The router reads it at a full queue only.
+	waiting atomic.Bool
+	turns   int64 // the router's: the yields it made at a full queue
 
 	mu      sync.Mutex // guards the results, read by Stats outside the cut
 	records int64
@@ -67,9 +72,16 @@ type recQ struct {
 	cutOff  bool // a drain's deadline cut the recording off while it still had writes to make (cut, once)
 }
 
+// recTurns is how many times the router gives the processor away at a full queue whose goroutine is waiting for it
+// (design s1-1c-7-design-starvation §1.3): one yield can be handed straight back by the scheduler's fairness check,
+// the second reaches the run queue. More would make detection wait for the recording (owner D2 of S3.2b-2's design).
+const recTurns = 2
+
 func newRecQ(rec Recorder, capacity int) *recQ {
-	return &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1), stop: make(chan struct{}),
+	q := &recQ{q: make(chan recItem, capacity), rec: rec, overflow: make(chan int64, 1), stop: make(chan struct{}),
 		returned: make(chan struct{}), settled: make(chan struct{})}
+	q.waiting.Store(true) // not yet started is waiting too: a goroutine that has never run has taken nothing
+	return q
 }
 
 // drainStop is the router's drain step: it queues the recording's stop and a marker closed once the stop is written,
@@ -89,7 +101,7 @@ func (q *recQ) drainStop() chan struct{} {
 }
 
 // put is the router's non-blocking hand-over; it reports whether the record was queued. A full queue ends the
-// recording, with the record it could not take named.
+// recording, with the record it could not take named, once turn has not made room.
 func (q *recQ) put(it recItem) bool {
 	if q == nil || q.ended {
 		return false
@@ -103,12 +115,32 @@ func (q *recQ) put(it recItem) bool {
 		q.queued++
 		return true
 	default:
+		if q.turn(it) {
+			return true
+		}
 		q.ended = true
 		q.fail(fmt.Sprintf("runtime: recording queue full after record %d: the recording stopped; detection goes on",
 			q.queued))
 		q.overflow <- q.queued // once: ended stops every later put; the goroutine writes what is queued
 		return false
 	}
+}
+
+// turn is put's step at a full queue: while the goroutine is waiting for the processor, having taken nothing, the
+// router yields it and offers the record again, at most recTurns times. A goroutine that is handling a record gets no
+// yield: its Recorder is behind, and the recording ends (owner D2 of S3.2b-2's design).
+func (q *recQ) turn(it recItem) bool {
+	for i := 0; i < recTurns && q.waiting.Load(); i++ {
+		q.turns++
+		goruntime.Gosched()
+		select {
+		case q.q <- it:
+			q.queued++
+			return true
+		default:
+		}
+	}
+	return false
 }
 
 func (q *recQ) fail(msg string) {
@@ -155,14 +187,17 @@ func (q *recQ) stats() RecordingStats {
 
 // run is the recorder goroutine: it waits only on its queue and its own Recorder. After a failure it calls the
 // Recorder no more but still closes markers, so a drain never waits on a dead recording. At stop it writes what is
-// queued, then flushes a Recorder that can.
+// queued, then flushes a Recorder that can. It marks itself waiting at its select, so the router can tell a goroutine
+// without the processor from a Recorder that is behind.
 func (q *recQ) run(r *Runtime) {
 	defer r.wg.Done()
 	defer close(q.returned)
 	defer q.settle()
 	for {
+		q.waiting.Store(true)
 		select {
 		case it := <-q.q:
+			q.waiting.Store(false)
 			q.handle(it)
 		case <-q.stop: // Remove: every record queued before it is in q (the router put them first): write, flush, return
 			q.drainQueue()
