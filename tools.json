@@ -150,30 +150,30 @@
       "path_dir": ".",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "4ffadabec5c5fee1ddb2eecac0787ffe6fa18c665b73da9258b84211f40c5829",
+          "archive_sha256": "72a886253072cd1bb6a5978a33a5a7add848ee315a8b0f1589f164a11c26328d",
           "exec_sha256": {
-            "ruff": "1af9b4c19c81c8cc3ead3b71ad1d38f89a18d0e5ed8e39f7611a07977b23ea01"
+            "ruff": "d0ee7b66ee25be92e61ac281f1ea31a012b5b62608297c15c2cb96a4fa575eb5"
           },
           "strip": "ruff-aarch64-apple-darwin/",
-          "tree_sha256": "06241daaaef456ed77514a0ee3759197587340aac08c4c3d1f8e50e4a7f996b2",
-          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-aarch64-apple-darwin.tar.gz"
+          "tree_sha256": "7c196e5c3718eba3ae80ce304dcbb9799ab9cef6ad0578ae7de592a5175f26dd",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.6/ruff-aarch64-apple-darwin.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "7d261fc981a784668e19e9fa6ad437bfd95b67f2dc263fc1eab87d54d72fcc90",
+          "archive_sha256": "94b33791f48cd54ab35ad673a443a5c001d3e6d87effeaba9899070b700d45f3",
           "exec_sha256": {
-            "ruff": "fd6368438e0e10bb2c30a9a2782ddb7866de4828490e51d6f18808a2569dd6c2"
+            "ruff": "8fb6a01bcc4c3e610aeb445642d4dbd928889bb0aee66aad50bbf9606414757d"
           },
           "strip": "ruff-x86_64-unknown-linux-gnu/",
-          "tree_sha256": "8413133d95f8a9146726a538f91459c70c444d2c0f071705078f7f3fe290b38a",
-          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.5/ruff-x86_64-unknown-linux-gnu.tar.gz"
+          "tree_sha256": "adde3358c37ea84b38f0f552b4d63d9e6d1101643fb0097e809691597522e8ea",
+          "url": "https://github.com/astral-sh/ruff/releases/download/0.17.6/ruff-x86_64-unknown-linux-gnu.tar.gz"
         }
       },
-      "version": "0.17.5",
+      "version": "0.17.6",
       "version_argv": [
         "ruff",
         "--version"
       ],
-      "version_line": "ruff 0.17.5"
+      "version_line": "ruff 0.17.6"
     },
     {
       "kind": "python-package",

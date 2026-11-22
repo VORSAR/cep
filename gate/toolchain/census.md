@@ -8,6 +8,8 @@ S1.1a-1 Lane B's first commit (design note [s1-1a-gate-design.md](../../docs/spr
 
 *(Annotated 2026-11-14, ruff 0.17.3 → 0.17.5 and python-build-standalone 20261026 → 20261110 for CPython 3.15.2 and 3.12.16: the six rows re-taken the same way, each archive's sha256 first checked against GitHub's published asset digest, the method first reproducing the four 20261026 Python rows exactly. Each Python archive's only change is its bundled pip, 26.2.2 → 26.3: 32 regular files out and 67 in (35 more), with two more directories created on demand (`pip/_internal/exceptions/`, `pip/_vendor/rich/_unicode_data/`), every new file 0o664. ruff 0.17.5's rows equal 0.17.3's. Nothing else changes: the same links and targets, each on the same side of its target, the same 1038 terminfo links and the same 33 case collisions in both Linux Pythons, no special bit, no non-ASCII name, no hard link, device or FIFO, the same `DT_NEEDED` and `RPATH` for both Linux interpreters, Linux ruff still dynamic against system libraries only, the same extension modules; §2–§6 hold as written, with §4's on-demand counts updated.)*
 
+*(Annotated 2026-11-22, ruff 0.17.5 → 0.17.6: the two ruff rows re-taken the same way, each archive's sha256 first checked against GitHub's published asset digest, the method first reproducing the two 0.17.5 rows exactly. ruff 0.17.6's rows equal 0.17.5's: the root directory member and the one `ruff` executable, both 0o755, no link, no special bit, no collision, no non-ASCII name. Linux ruff is still dynamic against system libraries only, with the same `DT_NEEDED` as 0.17.5 (`libgcc_s.so.1`, `librt.so.1`, `libpthread.so.0`, `libm.so.6`, `libdl.so.2`, `libc.so.6`) and no `RPATH`; §2–§6 hold as written.)*
+
 ## 1. Counts
 
 | Tool | Platform | Members | Regular | Dir | Symlink | Hard link | Device, FIFO, other | `strip` | Member equal to `strip` | Parents created on demand | Modes (non-symlink) |
@@ -20,8 +22,8 @@ S1.1a-1 Lane B's first commit (design note [s1-1a-gate-design.md](../../docs/spr
 | go go1.27.4 | linux-amd64 | 17375 | 15659 | 1716 | 0 | 0 | 0 | `go/` | `go` (dir 0o755, member #0) | 0 | dir 0o755 ×1716; reg 0o644 ×15605, 0o755 ×54 |
 | golangci-lint v2.15.0 | darwin-arm64 | 3 | 3 | 0 | 0 | 0 | 0 | `golangci-lint-2.15.0-darwin-arm64/` | none | 0 | reg 0o644 ×2, 0o755 ×1 |
 | golangci-lint v2.15.0 | linux-amd64 | 3 | 3 | 0 | 0 | 0 | 0 | `golangci-lint-2.15.0-linux-amd64/` | none | 0 | reg 0o644 ×2, 0o755 ×1 |
-| ruff 0.17.5 | darwin-arm64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-aarch64-apple-darwin/` | `ruff-aarch64-apple-darwin` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
-| ruff 0.17.5 | linux-amd64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-x86_64-unknown-linux-gnu/` | `ruff-x86_64-unknown-linux-gnu` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
+| ruff 0.17.6 | darwin-arm64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-aarch64-apple-darwin/` | `ruff-aarch64-apple-darwin` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
+| ruff 0.17.6 | linux-amd64 | 2 | 1 | 1 | 0 | 0 | 0 | `ruff-x86_64-unknown-linux-gnu/` | `ruff-x86_64-unknown-linux-gnu` (dir 0o755, member #0) | 0 | dir 0o755 ×1; reg 0o755 ×1 |
 
 `tarfile` names a directory member without its trailing slash, so the go and ruff root members appear as `go` and `ruff-…`, not as `strip` itself.
 
