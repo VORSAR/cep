@@ -1,0 +1,215 @@
+[
+  {
+    "id": "G2-20",
+    "note": "the rename passes silently (reason covered 1)",
+    "timeout": 300,
+    "file": "gate/runner/rows/apidiff.py",
+    "find": "[f\"module renamed from {base_module} to {module}: every public import path changed (incompatible)\"]",
+    "replace": "[]",
+    "py": "gate.runner.tests.test_apidiff_breakit.ApidiffBreakit.test_renamed_module_is_compared_not_a_tool_failure",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-20-control",
+    "control": true,
+    "timeout": 300,
+    "py": "gate.runner.tests.test_apidiff_breakit.ApidiffBreakit.test_renamed_module_is_compared_not_a_tool_failure",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-21a",
+    "note": "P21a: the clearer texts dropped, the pin's generic line left",
+    "patch": "--- a/gate/runner/rows/suppressions.py\n+++ b/gate/runner/rows/suppressions.py\n@@ -157,10 +157,10 @@\n     if type(lint) is not dict:\n         return [f\"{RUFF_TOML}: lint is not a table\"]\n     denied: dict[str, str] = {}  # path → the clearer text; the pin's line for that path is left out\n-    if \"extend\" in top:\n+    if False:\n         denied[\"extend\"] = \"ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there\"\n     for key in (*RUFF_GLOBAL, *RUFF_WAIVERS):\n-        if top.get(key):  # an empty one waives nothing, as for lint.ignore\n+        if False:  # an empty one waives nothing, as for lint.ignore\n             denied[key] = f\"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)\"\n     for key in RUFF_GLOBAL:\n         if lint.get(key):\n",
+    "py": "gate.runner.tests.test_breakit_s11c2.RuffPinReadsEveryWaiver.test_a_top_level_ignore_is_red",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-21b",
+    "note": "P21a",
+    "patch": "--- a/gate/runner/rows/suppressions.py\n+++ b/gate/runner/rows/suppressions.py\n@@ -157,10 +157,10 @@\n     if type(lint) is not dict:\n         return [f\"{RUFF_TOML}: lint is not a table\"]\n     denied: dict[str, str] = {}  # path → the clearer text; the pin's line for that path is left out\n-    if \"extend\" in top:\n+    if False:\n         denied[\"extend\"] = \"ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there\"\n     for key in (*RUFF_GLOBAL, *RUFF_WAIVERS):\n-        if top.get(key):  # an empty one waives nothing, as for lint.ignore\n+        if False:  # an empty one waives nothing, as for lint.ignore\n             denied[key] = f\"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)\"\n     for key in RUFF_GLOBAL:\n         if lint.get(key):\n",
+    "py": "gate.runner.tests.test_breakit_s11c2.RuffPinReadsEveryWaiver.test_a_top_level_extend_ignore_is_red",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-21c",
+    "note": "P21b: the top-level waiver unseen",
+    "patch": "--- a/gate/runner/rows/suppressions.py\n+++ b/gate/runner/rows/suppressions.py\n@@ -160,12 +160,12 @@\n     if \"extend\" in top:\n         denied[\"extend\"] = \"ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there\"\n     for key in (*RUFF_GLOBAL, *RUFF_WAIVERS):\n-        if top.get(key):  # an empty one waives nothing, as for lint.ignore\n+        if False:  # an empty one waives nothing, as for lint.ignore\n             denied[key] = f\"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)\"\n     for key in RUFF_GLOBAL:\n         if lint.get(key):\n             denied[f\"lint.{key}\"] = f\"ruff.toml sets lint.{key}: write per-file waivers\"\n-    pinned = {**top, \"lint\": {key: value for key, value in lint.items() if key != \"per-file-ignores\"}}\n+    pinned = {**{k: v for k, v in top.items() if k not in (*RUFF_GLOBAL, *RUFF_WAIVERS)}, \"lint\": {key: value for key, value in lint.items() if key != \"per-file-ignores\"}}\n     faults = [\n         line\n         for line in pin.differences(pinned, RUFF_PINNED, RUFF_TOML)\n",
+    "py": "gate.runner.tests.test_breakit_s11c2.RuffPinReadsEveryWaiver.test_a_top_level_per_file_ignores_is_pinned",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-21d",
+    "note": "P21a",
+    "patch": "--- a/gate/runner/rows/suppressions.py\n+++ b/gate/runner/rows/suppressions.py\n@@ -157,10 +157,10 @@\n     if type(lint) is not dict:\n         return [f\"{RUFF_TOML}: lint is not a table\"]\n     denied: dict[str, str] = {}  # path → the clearer text; the pin's line for that path is left out\n-    if \"extend\" in top:\n+    if False:\n         denied[\"extend\"] = \"ruff.toml sets extend: the ruff pin reads ruff.toml alone; write every setting there\"\n     for key in (*RUFF_GLOBAL, *RUFF_WAIVERS):\n-        if top.get(key):  # an empty one waives nothing, as for lint.ignore\n+        if False:  # an empty one waives nothing, as for lint.ignore\n             denied[key] = f\"ruff.toml sets top-level {key}: write per-file waivers under [lint] (ruff deprecates it)\"\n     for key in RUFF_GLOBAL:\n         if lint.get(key):\n",
+    "py": "gate.runner.tests.test_breakit_s11c2.RuffPinReadsEveryWaiver.test_a_waiver_in_an_extended_file_is_pinned",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-21-control",
+    "control": true,
+    "py": "gate.runner.tests.test_breakit_s11c2.RuffPinReadsEveryWaiver.test_the_lint_table_is_red_today_as_a_control",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-22",
+    "note": "an unstarted Timer returned, so cancel misses the started one",
+    "timeout": 120,
+    "file": "gate/runner/clock.py",
+    "find": "        return timer\n",
+    "replace": "        return threading.Timer(delay_s, fire)\n",
+    "py": "gate.runner.tests.test_clock.RealTimers.test_a_cancelled_timer_does_not_fire",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-22-control",
+    "control": true,
+    "timeout": 120,
+    "py": "gate.runner.tests.test_clock.RealTimers.test_a_cancelled_timer_does_not_fire",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-38",
+    "note": "the header's Directive of the wrong kind, so rows/suppressions.generated() skips it",
+    "file": "gate/runner/suppressions.py",
+    "find": "Directive(path, line, (\"generated\",), \"GENERATED\", {})",
+    "replace": "Directive(path, line, (\"generated\",), \"MARKER\", {})",
+    "py": "gate.runner.tests.test_breakit_s11c2.GeneratedHeaderIsAnExemption.test_a_generated_header_is_read",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-38-control",
+    "control": true,
+    "py": "gate.runner.tests.test_breakit_s11c2.GeneratedHeaderIsAnExemption.test_a_generated_header_is_read",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-41",
+    "note": "a misleading refusal that still lists the keys",
+    "file": "gate/runner/knownissues.py",
+    "find": "raise ValueError(f\"entries[{i}]: want the keys {', '.join(ENTRY_KEYS)}\")",
+    "replace": "raise ValueError(f\"entries[{i}]: unexpected keys {', '.join(ENTRY_KEYS)}\")",
+    "py": "gate.runner.tests.test_known_issues_fields.Fields.test_a_missing_field_is_refused_naming_it",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-41-control",
+    "control": true,
+    "py": "gate.runner.tests.test_known_issues_fields.Fields.test_entries_carrying_both_fields_pass",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-42",
+    "note": "K2d: one worker; the old test hangs to its ceiling, the new reds on the 30 s watchdogs",
+    "timeout": 180,
+    "file": "gate/runner/main.py",
+    "find": "        workers=count,\n",
+    "replace": "        workers=1,\n",
+    "py": "gate.runner.tests.test_main.Cli.test_workers_reach_the_scheduler",
+    "expect": {
+      "old": "timeout",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-42-control",
+    "control": true,
+    "timeout": 180,
+    "py": "gate.runner.tests.test_main.Cli.test_workers_reach_the_scheduler",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-44",
+    "note": "a reaped leader's pid still signalled",
+    "patch": "--- a/gate/runner/proc.py\n+++ b/gate/runner/proc.py\n@@ -30,7 +30,7 @@\n         (parity.tree_digest's capped wait, BK-L2), so no later signal, probe or KILL reaches a pid the kernel may\n         have reused. Residue (design note §4): the instant between the reap and Popen setting its returncode.\"\"\"\n         leader = self._leader\n-        return None if leader is None or leader.returncode is not None else leader.pid\n+        return None if leader is None else leader.pid\n \n     def spawn(\n         self, argv: Sequence[str], *, cwd: str, env: Mapping[str, str], stdout: str, stderr: str\n@@ -61,8 +61,7 @@\n         \"\"\"\n         code = proc.wait()\n         with self._lock:\n-            if self._leader is proc:\n-                self._leader = None\n+            pass\n         left, self.left_detail = probe(proc.pid)\n         if left:\n             with contextlib.suppress(ProcessLookupError, PermissionError):\n",
+    "py": "gate.runner.tests.test_proc.Group.test_signalling_a_finished_step_is_harmless",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  },
+  {
+    "id": "G2-44-control",
+    "control": true,
+    "py": "gate.runner.tests.test_proc.Group.test_nothing_starts_after_the_group_is_signalled",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "new_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39"
+  }
+]

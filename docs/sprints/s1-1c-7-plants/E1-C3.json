@@ -1,0 +1,198 @@
+[
+  {
+    "id": "g2-111",
+    "note": "G2-111 K2a: Activate on a removing app refused with ErrStarted instead of ErrRemoved",
+    "file": "internal/runtime/transitions.go",
+    "find": "a.removing:\n\t\tit.reply <- reply{err: ErrRemoved}",
+    "replace": "a.removing:\n\t\tit.reply <- reply{err: ErrStarted}",
+    "test": "TestBreakitActivateRacesRemove",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-111-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestBreakitActivateRacesRemove",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-114",
+    "note": "G2-114 K2b: the non-finite check never fires",
+    "file": "internal/runtime/boundary.go",
+    "find": "\tcase nonFinite(v):\n",
+    "replace": "\tcase false && nonFinite(v):\n",
+    "test": "TestSendRefusesNonFiniteFloat",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-114-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestSendRefusesNonFiniteFloat",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-115",
+    "note": "G2-115 K2a: the router hashes the raw value and stores the normalised key",
+    "patch": "--- a/internal/runtime/router_in.go\n+++ b/internal/runtime/router_in.go\n@@ -137,7 +137,7 @@\n \t\t\ta.keyErr[rr.rule]++ // a null or NaN part: this rule's key error only (SEMANTICS §9, §10)\n \t\t\tcontinue\n \t\t}\n-\t\tsid := rt.shardOf(a.id, rr.rule, rr.attrs != nil, key)\n+\t\tsid := rt.shardOf(a.id, rr.rule, rr.attrs != nil, rawKey(rr.attrs, e.Values, key))\n \t\trt.offers[sid] = append(rt.offers[sid], offer{rule: rr.rule, key: key})\n \t}\n \tfor sid := range rt.r.shards {\n--- a/internal/runtime/keys.go\n+++ b/internal/runtime/keys.go\n@@ -43,6 +43,13 @@\n \treturn key, true\n }\n \n+func rawKey(attrs []int, values []event.Value, key partition.Key) partition.Key {\n+\tif attrs == nil {\n+\t\treturn key\n+\t}\n+\treturn partition.Single(values[attrs[0]])\n+}\n+\n // shardOf is fnv-1a over (app, rule, the key's parts in order): a key-less rule hashes (app, rule). A single-part key\n // hashes as it did before multi-part keys.\n func (rt *router) shardOf(app AppID, rule int, keyed bool, key partition.Key) int {\n",
+    "test": "TestKeyErrorsAndZeroKeys",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-115-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestKeyErrorsAndZeroKeys",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-120",
+    "note": "G2-120 K2a: End delivers its final walk to shard 0 as a plain message (admStream 0) instead of broadcasting it; a new test, so old_test is the existing broadcast test",
+    "file": "internal/runtime/sync.go",
+    "find": "\t\ts.rt.broadcast(message{kind: mWalk, app: s.a.id, adv: adv, tables: s.a.ing.Snapshot(), final: true})",
+    "replace": "\t\ts.rt.deliver(0, message{kind: mWalk, app: s.a.id, adv: adv, tables: s.a.ing.Snapshot(), final: true})",
+    "old_test": "TestBroadcastCarriesNoAdmission",
+    "new_test": "TestSyncEndBroadcastsAWalkWithNoAdmission",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-120-control",
+    "note": "real code",
+    "control": true,
+    "old_test": "TestBroadcastCarriesNoAdmission",
+    "new_test": "TestSyncEndBroadcastsAWalkWithNoAdmission",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-125",
+    "note": "G2-125 K2a: a NaN refused for the wrong reason (as a type mismatch)",
+    "file": "internal/runtime/boundary.go",
+    "find": "\tcase v.Kind != at.Type:\n",
+    "replace": "\tcase v.Kind != at.Type || (v.Kind == event.TFloat && v.F != v.F):\n",
+    "test": "TestKeyErrorsAndZeroKeys",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-125-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestKeyErrorsAndZeroKeys",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-127",
+    "note": "G2-127 K2a: time imported as tm and tm.Sleep used",
+    "patch": "--- a/internal/runtime/drain.go\n+++ b/internal/runtime/drain.go\n@@ -4,6 +4,7 @@\n \t\"context\"\n \t\"errors\"\n \t\"fmt\"\n+\ttm \"time\"\n )\n \n // Drain runs the drain barrier for app (design §5; s3-3-1 §2.4): the app's input ends (owner F5); every output\n@@ -151,3 +152,5 @@\n \t}\n \treturn err\n }\n+\n+var _ = tm.Sleep\n",
+    "test": "TestNoSleepOrPollingInRuntime",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-127-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestNoSleepOrPollingInRuntime",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-132",
+    "note": "G2-132 K2d: an ordinary Tick waits for its ctx's end",
+    "file": "internal/runtime/requests.go",
+    "find": "\treturn r.enqueue(ctx, item{kind: iTick, now: now})\n",
+    "replace": "\t<-ctx.Done()\n\treturn ctx.Err()\n",
+    "test": "TestTickRefusesATimeARecordingCannotWrite",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "timeout",
+      "new": "red"
+    },
+    "timeout": 180
+  },
+  {
+    "id": "g2-132-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestTickRefusesATimeARecordingCannotWrite",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "f618b660907086fa47e3025c56280d93dc2a9a54",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "timeout": 180
+  }
+]

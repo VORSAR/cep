@@ -1,0 +1,26 @@
+[
+  {
+    "expect": {
+      "new": "green",
+      "old": "red"
+    },
+    "file": "gate/current-sprint",
+    "find": "S1.1c-7\n",
+    "id": "G2-15",
+    "new_rev": "fb7f089650dfcdddfd1fda80b603652375578e2a",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.proofs.drivers.test_lawdelta_planted.LawDeltaPlanted.test_a_dirty_law_file_is_named_on_a_last_line_and_the_row_passes",
+    "replace": "S4.1\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-15-control",
+    "new_rev": "fb7f089650dfcdddfd1fda80b603652375578e2a",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.proofs.drivers.test_lawdelta_planted.LawDeltaPlanted.test_a_dirty_law_file_is_named_on_a_last_line_and_the_row_passes"
+  }
+]

@@ -1,0 +1,142 @@
+[
+  {
+    "id": "g2-112",
+    "note": "G2-112 K2a: the released Add's error dropped (nil instead of ErrClosed)",
+    "file": "internal/runtime/lifecycle.go",
+    "find": "\trep, err := r.requestQueued(ctx, item{kind: iAdd, add: &app})\n\tif err != nil {\n\t\treturn 0, err\n\t}",
+    "replace": "\trep, err := r.requestQueued(ctx, item{kind: iAdd, add: &app})\n\tif err != nil {\n\t\treturn 0, nil\n\t}",
+    "test": "TestBreakitAddAfterAClosedDeadlineIsNotLeftInstalled",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-112-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestBreakitAddAfterAClosedDeadlineIsNotLeftInstalled",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-116",
+    "note": "G2-116 K2a: the drain cuts the recording after its stop was written",
+    "file": "internal/runtime/drain.go",
+    "find": "\tr.awaitRecordingStop(ctx, a, rep.recMarker)\n",
+    "replace": "\tr.awaitRecordingStop(ctx, a, rep.recMarker)\n\ta.rec.cut()\n",
+    "test": "TestCloseRemovesAnAppWhoseDeadlinePassedAsItsDrainEnded",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-116-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestCloseRemovesAnAppWhoseDeadlinePassedAsItsDrainEnded",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-117",
+    "note": "G2-117 K2c slowdown: a 400 ms sleep before queueDrain, past the old test's 300 ms deadline",
+    "patch": "--- a/internal/runtime/drain.go\n+++ b/internal/runtime/drain.go\n@@ -4,6 +4,7 @@\n \t\"context\"\n \t\"errors\"\n \t\"fmt\"\n+\t\"time\"\n )\n \n // Drain runs the drain barrier for app (design §5; s3-3-1 §2.4): the app's input ends (owner F5); every output\n@@ -31,6 +32,7 @@\n \t\t\treturn DrainResult{Runs: runs}, err\n \t\t}\n \t}\n+\ttime.Sleep(400 * time.Millisecond)\n \tch, err := r.queueDrain(ctx, a, app, was)\n \tif err != nil {\n \t\treturn DrainResult{Runs: runs}, err\n",
+    "test": "TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "red",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-117-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "g2-118",
+    "note": "G2-118 K2a: the recorder goroutine leaves its select at the overflow",
+    "file": "internal/runtime/recorder.go",
+    "find": "\t\t\tq.settle() // the output is final: nothing is put after a full queue; a drain waiting for it goes on\n",
+    "replace": "\t\t\tq.settle() // the output is final: nothing is put after a full queue; a drain waiting for it goes on\n\t\t\t<-q.stop\n\t\t\tq.drainQueue()\n\t\t\tq.flush()\n\t\t\treturn\n",
+    "test": "TestAnOverflowedRecordingWritesItsQueuedRecordsThenSettles",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "timeout": 180
+  },
+  {
+    "id": "g2-118-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestAnOverflowedRecordingWritesItsQueuedRecordsThenSettles",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "timeout": 180
+  },
+  {
+    "id": "g2-128",
+    "note": "G2-128 K2a: a given-up Close returns ErrClosed instead of ctx's error",
+    "file": "internal/runtime/shutdown.go",
+    "find": "\treturn r.awaitGoroutines(ctx, first, failed)\n}",
+    "replace": "\tif err := r.awaitGoroutines(ctx, first, failed); err != nil {\n\t\treturn ErrClosed\n\t}\n\treturn nil\n}",
+    "test": "TestCloseStopsAnIdleRecorderItGaveUpOn",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "g2-128-control",
+    "note": "real code",
+    "control": true,
+    "test": "TestCloseStopsAnIdleRecorderItGaveUpOn",
+    "pkg": "./internal/runtime",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "new_rev": "7400bb4cbf6c610e2956656166ce0f7748c11340",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  }
+]

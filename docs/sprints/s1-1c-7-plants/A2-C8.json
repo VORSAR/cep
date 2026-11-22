@@ -1,0 +1,26 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/hooks/gitnexus_reindex.py",
+    "find": " and os.path.realpath(row[\"path\"]) == target:",
+    "id": "G2-14",
+    "new_rev": "0ac6df85ce385925fd53e069eeb68a16e5132921",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.hooks.tests.test_gitnexus_reindex.LeaveAlone.test_a_repository_gitnexus_does_not_index_is_left_alone",
+    "replace": ":"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-14-control",
+    "new_rev": "0ac6df85ce385925fd53e069eeb68a16e5132921",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.hooks.tests.test_gitnexus_reindex.LeaveAlone.test_a_repository_gitnexus_does_not_index_is_left_alone"
+  }
+]

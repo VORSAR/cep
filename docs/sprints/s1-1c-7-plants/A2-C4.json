@@ -1,0 +1,28 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "red"
+    },
+    "file": "gate/canary/candidate.py",
+    "find": "    except DigestMismatch as e:\n        raise CanaryError(f\"{name} {platform}: the download's sha256 is not the published one\") from e\n",
+    "id": "G2-8",
+    "new_py": "gate.canary.tests.test_f1_feeds.BuildNamesTheSeamsErrors.test_digest_mismatch_from_the_real_seam_is_named",
+    "new_rev": "17623dd2664540b32000eb6afa606efb99f827a5",
+    "old_py": "gate.canary.tests.test_candidate.Refusals.test_digest_mismatch_through_archive_is_named",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "replace": "    except CanaryError as e:\n        raise CanaryError(f\"{name} {platform}: the download's sha256 does not match\") from e\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-8-control",
+    "new_py": "gate.canary.tests.test_f1_feeds.BuildNamesTheSeamsErrors.test_digest_mismatch_from_the_real_seam_is_named",
+    "new_rev": "17623dd2664540b32000eb6afa606efb99f827a5",
+    "old_py": "gate.canary.tests.test_candidate.Refusals.test_digest_mismatch_through_archive_is_named",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa"
+  }
+]

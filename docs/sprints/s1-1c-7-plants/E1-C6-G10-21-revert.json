@@ -1,0 +1,11 @@
+[
+ {
+  "id": "g10-21-revert",
+  "note": "G10-21 K1h: the refused branch queues a derived stream's batch end again (the Derived check removed)",
+  "file": "internal/runtime/lifecycle.go",
+  "find": "stream < len(a.app.Streams) &&\n\t\t!a.app.Streams[stream].Derived {",
+  "replace": "stream < len(a.app.Streams) {",
+  "test": "TestABatchEndOnADerivedStreamOnceStopBeganIsNeitherTakenNorCounted",
+  "pkg": "./internal/runtime"
+ }
+]

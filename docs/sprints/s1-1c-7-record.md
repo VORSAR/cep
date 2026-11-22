@@ -263,7 +263,7 @@ Its new later items:
   - the timeout removed, red (2 failures).
 - **Reviews:** blind architecture and QA reviews found no blocker. The should-fix (FRT-A-1 = FRT-Q-1) and FRT-Q-2 are fixed in the commit.
 - **Gate on the branch:** T2 exit 0 (20261121T135342Z-00c60c), T4 lint exit 0, T4 proofs exit 0 (230 s).
-- **Forwarded to the backlog,** pending the owner's acceptance:
+- **Forwarded to the backlog,** pending the owner's acceptance *(annotated 2026-11-21: the owner chose to fix both in S1.1c-7, de42f64; [decisions](decisions.md#owner-decisions-2026-11-21--after-pr-52-and-53-merged))*:
   - FRT-A-2: race.py reads `--repeat` twice; read it once in the parse loop after S1.1c-7 lands;
   - FRT-Q-3: `--repeat=0` and `-1` reach go with weak reasons. This predates the fix; S1.1c-7's A1-1 already refuses a non-number.
 
@@ -273,9 +273,85 @@ Its new later items:
 - a trial combine of F1 and 27 lane commits onto c6bae08 gave 28 of 28 clean;
 - GitNexus is re-indexed after the lane picks, and the HIGH symbols are re-rated before PR 2's review, whose brief names them.
 
+**Main's CI after PR #52 and #53** (the owner's report, 2026-11-22): the gate workflow is green at e7bceb3, PR #52's last commit, and at 35588ba, #53's. The next scheduled nightly, the first whose race-stress has `-timeout 25m`, is #53's real proof.
+
+**W1 and W2: lanes A1, A2, B and E1** (the coordinator, 2026-11-21 to 2026-11-22):
+- **The lanes' commits:**
+  - A1, 7: 95c96f9 to 87acc34, G3-72's driver coupling made at the pick;
+  - A2, 9: c669865 to 262ae0d;
+  - B, 6: eaaec1c to 125a170;
+  - E1, C1 to C5: e99e127 to aeec09c. E1 was then held, so that heavy runs stayed serial. C6 is bc23749, and C7, the lane's last, is e0f0e13.
+- **Picked, then rebased:**
+  - Each lane commit was picked onto the integration branch once PR 1's content was final. A trial combine onto c6bae08 had given 28 of 28 clean.
+  - After PR #52 and #53 merged, the branch was rebased onto main (06f17b5) with no conflicts. Its tree differed from before only in #53's two files.
+  - [`commit-map.json`](s1-1c-7-plants/commit-map.json) maps each lane commit to its pick.
+- **Every lane proof, re-run by the coordinator** at 06f17b5 after the rebase, one at a time, alone, on mains power:
+  - **Plain batches:**
+    - `A1-2.json` red 2, `G3-72.json` red 2, `B-K1.json` red 3.
+    - `A1-1.json` is refused at 06f17b5, because de42f64 rewrote the race.py lines its hunks match. At its own commit, 95c96f9, it reads red 10. mutate.py has not changed since that commit.
+  - **The 17 `--expect` batches,** each `expect: <n> entries, <n> as expected; differing: none`:
+    - A1: A1-3-G2-47 2, A1-4a 17, A1-4b 21, A1-5-G2-52 1;
+    - A2: A2-C1 1, A2-C2 20, A2-C3 2, A2-C4 2, A2-C5 4, A2-C6 2, A2-C7 2, A2-C8 2, A2-C9 1;
+    - B: B-K2a 13, B-K2b 10;
+    - E1: E1-C2 10, E1-C3 14.
+  - **G7a-5's revert plant:** `outcome: red`.
+  - **G2-98's live-data plant,** which no one had run before: `B-G2-98.json`, 2 of 2 as expected. The new side fails at s3_2b_2_corpus_test.go:273 naming partial-count, checked by hand.
+  - **No mutate worktree was left** afterwards.
+- **Load and stress runs** (`gate/bench/load.py` under 28 hogs; `gate/runner/stress.py --runs 50`), at e23b6dc, the head before the rebase. Its tree differs from 06f17b5 only in race.py and test_rows_go.py.
+  - A1's stress runs for G2-22, -42, -44, -47 and -48, A2's G10-5 and every B and E1 load run: N/N.
+  - **G2-45's stress** covers test_rows_go, which de42f64 changed, so it was re-run at the head, bd413f3: `stress: 39 tests, 0 below 50/50`, 2,310 s.
+  - **G10-20's K1c race plant** (`E1-G10-20-revert.diff` under `--race --repeat 50 --load`): caught 7 of 50. Its load run: 50/50.
+  - **G2-92 (TestLiveEqualsReplay)** ran out of time twice, with no failure:
+    - at run 39, on go's `-timeout 50m`, at about 79 s a run under the hogs;
+    - at run 46, on load.py's own 3,600 s `--wall`.
+
+    All 83 finished runs passed. The clean run at 06f17b5, with `--wall 6600` and `-timeout 105m`: 50/50 in 3,888 s.
+- **The gate at 06f17b5** (mains power, no agent running):
+  - **T2:** exit 0, run 20261121T220554Z-901a89, 214 s.
+  - **T4, lint job:** exit 0, run 20261121T220928Z-a70856.
+  - **T4, proofs job alone:** exit 0, run 20261121T220944Z-ced2d3, 239 s.
+- **The re-index hook, live (G10-5):** two calls at once, with a git payload and HEAD one commit past the index. Both exit 0, and one run starts: one pidfile, one analyze.
+- **E1 C6 (G10-21), bc23749:**
+  - The coordinator's re-run at bc23749: the revert plant `E1-C6-G10-21-revert.json` red 1; `go test` and `go test -race` over `internal/runtime` ok.
+  - **Load** (`TestABatchEndOnADerivedStreamOnceStopBeganIsNeitherTakenNorCounted`): 50/50.
+  - **Timing,** parent 06f17b5 against bc23749: `compare.py` on BenchmarkSendPath and BenchmarkSendPayloadPath, 10 pairs, mains power before and after.
+    - Run 1: exit 1, `verdict: costs (BenchmarkSendPayloadPath/recorded)`. No benchmark's time moved (ratios 0.989 to 1.008, every p ≥ 0.17). The flag was B/op, 1089 before against 1078 after: fewer bytes, with allocs/op equal.
+    - Run 2, ground rule 13a's confirming re-run: exit 0, `verdict: no cost`, B/op 1089/1089.
+    - The flag did not repeat, so C6 has no cost.
+- **E1 C7 (G10-1's runtime half, option B), e0f0e13:**
+  - The coordinator's re-runs at e0f0e13: the five revert plants, `E1-C7-G10-1-reverts.json`, red 5 (apply ×2, size, check, build); `go test` and `go test -race` over `internal/runtime` ok; `go test ./...` exit 0, 21 packages.
+  - **Loads** (`TestActivateAppliesTheStartingRowsInItsStep`, `TestAddRefusesStartingRowsItCouldNotApply`, `TestStartingRowsBeyondRecordQueueRecordInFull`): 50/50 each.
+  - **Timing, Send and SendPayload,** parent bc23749 with the benchmark file overlaid against e0f0e13: exit 0, `verdict: no cost` (ratios 0.992 to 1.007).
+  - **BenchmarkTableWritePath could not be judged.** At compare.py's `-test.cpu=1` it fails on both binaries, 3 runs of 3 each (`recording queue full after record 67…`); at the default 14 CPUs it passes. The cause is the recorder's starvation, below. **Open:** the table-write timing, on a benchmark with no recorder (the owner's choice).
+- **The recorder's starvation,** found by C7's benchmark and already on main ([decisions](decisions.md#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing)):
+  - **What happens:** with one CPU, a caller that waits for each `TableWrite`'s reply and the router hand the processor to each other, and the app's recorder goroutine rarely runs. Its 65,536-record queue fills, and the recording ends with "recording queue full". Detection goes on.
+  - **Evidence:** bc23749 with the benchmark file and e0f0e13 both fail the same way, the recorder having written about 1,700 of some 67,000 records.
+  - **Send is not affected:** a scratch probe of the recorded Send and SendPayload worlds at one CPU keeps its recording (1,000,839 records for 1,000,000 events, not Failed). So the recorded hot-path benchmarks measure what they claim.
+  - **Open:** the fix, by the owner's choice in S1.1c-7, with its design note, review, red-first test and timings.
+- **No spot-check for W1 and W2** (the owner, [decisions](decisions.md#owner-decisions-2026-11-22--pr-2s-remaining-steps)): the coordinator's full re-run above stands in for the sample.
+- **A mistake in the coordinator's timing script, corrected:** the pinned-Go setup file sets a variable the script also used, so four test binaries and two scratch files were written into the gate's tools cache. They were moved out before any gate run; the cache again holds only its tools.
+- **G2-24, the coordinator's coupling commit, bd413f3** (built by a fresh python-engineer, test-first; in PR 2 by the owner's choice, [decisions](decisions.md#owner-decisions-2026-11-22--g2-24s-code-lists)):
+  - `test_instruments_pin.py`'s CodeClosure judges all 31 instruments whose row runs a Python module. It names the two kinds it cannot judge, each with its reason: the Go-test instruments keyed under another row, and the rows with no Python module.
+  - **Red first,** re-run by the coordinator: the new test on the old law.json, `failed: 27 failures, 0 errors`.
+  - **law.json:** 65 module entries added over 27 instruments, and `gate/runner/pyshim.py` removed from pyfloor, pytests and proofs (the owner's strict rule). Nothing else in the file changed (checked field by field).
+  - **Proof:** `G2-24.json` (gofmt's row module dropped from its list), old green → new red, control green/green: 2 of 2 as expected, re-run on the pick.
+- **The coordinator's rulings:**
+  - **E1 C3's G2-120 keeps no clock assertion.** After End, the on-arrival rule's clock is MaxInt64 by owner D1 of S3.2b-1, so only the message's admStream can show a missing admission.
+  - **E1's G2-111 landed in C3,** not in C2 as the design planned.
+  - **B's G2-107:** the stop rule fired at pre-check 1, so the guard is unchanged and the rest goes to S1.1c-10.
+  - **E1 C7's three departures from the design's words,** none changing behaviour:
+    - App.Loads' doc reads "A built app (NewSync) takes none": runtime.Start is New, then Add and Activate, so it applies the rows (the design note is annotated);
+    - Activate's added sentence follows the sentence it was to split;
+    - BenchmarkTableWritePath loops on `b.Loop`, which times the same span as the design's `ResetTimer`, `b.N` loop and `StopTimer`. Both timed binaries carry the same file.
+  - **E1 C6:** written inline, the design's condition takes BatchEnd's cyclomatic complexity to 11, over the smells row's 10. The refused branch's queuing moved into `queueRefusedBatchEnd`, with the condition word for word and the accepted path byte-unchanged. Accepted: the same behaviour, and no waiver.
+- **Hidden concurrency, found and handled:** the session's own GitNexus re-index hook starts a background re-index of about 23 s after any Bash call that runs git. Timing and load runs now start only when `pgrep -f 'gitnexus.*analyze'` is empty, and no git command runs during them.
+
 ## The finding ledger
 
 186 ids: G10's 23, G7a's 6, G2's 156 and G3-72. The ledger is built through the sprint and checked by `docs/sprints/s1-1c-7-plants/check_ledger.py` (plan check §7.5).
+
+- **Commit ids.** The G0 and W0 rows name each commit as it was before PR #52's rebase-merge. The W1 and W2 rows name the commits on the integration branch after its rebase onto main (06f17b5). [`commit-map.json`](s1-1c-7-plants/commit-map.json) maps both kinds, and each lane branch's commit, to the new ids.
+- **Proof files.** Each batch or script a row names is in [`s1-1c-7-plants/`](s1-1c-7-plants/), its revisions on the current history.
 
 | Id | Outcome | Commit | Proof | Reason or target |
 |---|---|---|---|---|
@@ -298,6 +374,120 @@ Its new later items:
 | G2-153 | fixed | 3c12b2d | K2e: the design's probe file, green → red | |
 | G2-154 | fixed | 64d74ec | K2a: `W0-go.json` G2-154-usage, -git and -parse green → red, control green/green; load 50/50 | |
 | G2-155 | fixed | 64d74ec | K2e: the D-1 grep, `exec.Command(` at astequal_test.go:221 → none | |
+| G10-7 | fixed | 95c96f9 | K1: `A1-1.json`, four revert plants red (the whole batch re-run at 95c96f9: red 10 of 10); red first: RuffWaiverTableOfTheWrongShape, 4 failures | |
+| G10-8 | fixed | 95c96f9 | K1: `A1-1.json`, three revert plants red; red first: UnreadableCopyFile, 3 failures (IsADirectoryError out of scan) | |
+| G10-9 | fixed | 95c96f9 | K1: `A1-1.json`, revert plant red; red first: TrackedListFailure | |
+| G10-10 | fixed | 95c96f9 | K1: `A1-1.json`, revert plant red; red first: the Race test (`'exit 1' !=` the usage reason) | de42f64 also refuses a count below 1 (PR #53's FRT-Q-3) |
+| G10-11 | fixed | 95c96f9 | K1: `A1-1.json`, revert plant red; red first: the Row test (one failed: line, not two) | |
+| G10-12 | fixed | 4c103df | K1: `A1-2.json`, revert plant red at test_step.py:391; red first | |
+| G10-13 | fixed | 4c103df | K1: `A1-2.json`, revert plant red at test_teeth.py:285; red first | |
+| G2-18 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, a direct run 45 of the loader's 47 → 47 of 47 | |
+| G2-23 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, 42 of 46 → 46 of 46 | |
+| G2-26 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, 26 of 27 → 27 of 27 | |
+| G2-30 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, 12 of 17 → 17 of 17 | |
+| G2-31 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, 51 of 64 → 64 of 64 | |
+| G2-34 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, 6 of 8 → 8 of 8 | |
+| G2-37 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, DocLine with support.run_tool refused: exit 1 → exit 0 | |
+| G2-40 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, private Copy attributes at four lines → none | |
+| G2-43 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, the access at :221 with no seam comment → none | |
+| G2-47 | fixed | c1d9b33 | K2e (live data): `A1-3-G2-47.json` old red → new green, control green/green; stress 50/50 | |
+| G2-48 | fixed | c1d9b33 | K2e: `a1_3_checks.py`, sigkills 3 → 0; stress 50/50 | |
+| G2-20 | fixed | cb40d47 | K2a: `A1-4a.json` G2-20 green → red, control green/green | |
+| G2-21 | fixed in part | cb40d47 | K2a: `A1-4a.json` G2-21a to -21d green → red, control green/green | two renames, `..._is_pinned` → `..._is_red`, to S1.1c-8 |
+| G2-22 | fixed | cb40d47 | K2a: `A1-4a.json` G2-22 green → red, control green/green; stress 50/50 | |
+| G2-38 | fixed | cb40d47 | K2a: `A1-4a.json` G2-38 green → red, control green/green | |
+| G2-41 | fixed | cb40d47 | K2a: `A1-4a.json` G2-41 green → red, control green/green | |
+| G2-42 | fixed | cb40d47 | K2d: `A1-4a.json` G2-42 timeout → red, control green/green; stress 50/50 | |
+| G2-44 | fixed | cb40d47 | K2a: `A1-4a.json` G2-44 green → red, control green/green; stress 50/50 | |
+| G2-27 | fixed in part | bf73b1a | K2a: `A1-4b.json` G2-27 green → red, control green/green | the rename to `test_dropping_isolation_or_no_bytecode_or_utf8_mode_is_refused`, to S1.1c-8 |
+| G2-28 | fixed | bf73b1a | K2a: `A1-4b.json` G2-28 green → red, control green/green | |
+| G2-32 | fixed | bf73b1a | K2a: `A1-4b.json` G2-32 green → red, control green/green | |
+| G2-33 | fixed | bf73b1a | K2a: `A1-4b.json` G2-33-attribute, -setattr, -del and -flag green → red, three controls green/green | |
+| G2-35 | fixed | bf73b1a | K2a: `A1-4b.json` G2-35 green → red, control green/green | |
+| G2-36 | fixed in part | bf73b1a | K2a: `A1-4b.json` G2-36 green → red, control green/green | the rename to `test_an_experiment_suffix_is_red_naming_the_version`, to S1.1c-8 |
+| G2-45 | fixed | bf73b1a | K2a: `A1-4b.json` G2-45 green → red, control green/green; stress 50/50 | |
+| G2-53 | fixed | bf73b1a | K2a: `A1-4b.json` G2-53 green → red, control green/green | |
+| G2-49 | fixed in part | c71a26b | K2-del: `a1_5_covered.py`, the four traced runs equal, the old test's 6 lines in both new runs | the rename to `test_the_enabled_set_is_the_configs_and_no_enabled_constant_exists`, to S1.1c-8 |
+| G2-52 | fixed in part | c71a26b | K2-del: `A1-5-G2-52.json`, old red on the removed assertion's test, new red on `test_the_cap_constants` | the rename of `test_the_testdata_holds_exactly_the_real_entries_and_their_notice`, to S1.1c-8 |
+| G3-72 | fixed | 87acc34 | K1: `G3-72.json`, two revert plants red; red first at test_suppressions.py:755 and :775; the proofs job exit 0 with the driver's coupling (test_suppressions_planted.py:42-43) | |
+| G2-19 | rejected | | | the real-file test and the planted test compute the same expression, and the smells row already reds a real target of the wrong shape (design-a1a G2-19) |
+| G2-50 | rejected | | | the test already fails on a raise: unittest records any exception from the block as an error, which pyshim fails (design-a1b G2-50) |
+| G2-54 | rejected | | | every private seam fails loudly on a rename, so none passes vacuously; the real fix is a production rename outside S1.1c-7 (design-a1b G2-54) |
+| G2-39 | carried in full to S1.1c-8 | | | rename only |
+| G2-46 | carried in full to S1.1c-8 | | | rename only |
+| G2-51 | carried in full to S1.1c-8 | | | rename only: one name covers both assertions, so no split |
+| G10-14 | fixed | c669865 | K1: `A2-C1.json`, the revert plant red/red; red first `(1, []) != (2, [])` | |
+| G2-55 | fixed in part | 37fe273 | K2a: `A2-C2.json` G2-55-start, -crash and -signal green → red, controls green/green | three renames to S1.1c-8; the duplicate of test_tree_digest to S1.1c-10 |
+| G2-56 | fixed | 37fe273 | K2a: `A2-C2.json` G2-56 green → red, control green/green | |
+| G2-59 | fixed | 37fe273 | K2a: `A2-C2.json` G2-59 green → red, control green/green | |
+| G2-60 | fixed | 37fe273 | K2e (broken fixture): the manifest loader on a_tool, old refused (`field 'strip' must end with '/'`), new accepted | |
+| G2-61 | fixed | 37fe273 | K2a: `A2-C2.json` G2-61-readonly, -cache and -hash green → red, controls green/green | |
+| G2-63 | fixed | 37fe273 | K2a: `A2-C2.json` G2-63 green → red, control green/green | |
+| G2-64 | fixed | 37fe273 | K2a: `A2-C2.json` G2-64 green → red, control green/green | |
+| G2-9 | fixed | bb85a47 | K2a: `A2-C3.json` G2-9 green → red, control green/green | |
+| G2-8 | fixed | 17623dd | K2-del: `A2-C4.json` G2-8 old red on the removed test, new red on test_f1_feeds' real-seam test, control green/green; `a2_covset.py`, gate/canary's covered set 510 lines in all four runs, the deleted test's own set inside it | |
+| G2-10 | fixed | 17623dd | K2-del: `a2_covset.py`, the covered set unchanged (510 lines, four runs equal); the deleted test's own set empty | |
+| G2-11 | fixed in part | 0830621 | K2a: `A2-C5.json` G2-11 green → red, control green/green | the rename to S1.1c-8 |
+| G2-12 | fixed | 0830621 | K2a: `A2-C5.json` G2-12 green → red, control green/green | |
+| G2-5 | fixed in part | 581a415 | K2a: `A2-C6.json` G2-5 green → red at assertNotIn, control green/green | moving the cases into test_regen.Main, to S1.1c-10 |
+| G2-15 | fixed | fb7f089 | K2e (live data): `A2-C7.json` G2-15 old red → new green, control green/green | |
+| G2-13 | fixed | 0ac6df8 | K2e: a direct run 15 of the loader's 20 → 20 of 20 | |
+| G2-14 | fixed | 0ac6df8 | K2b: `A2-C8.json` G2-14 green → red, control green/green; `a2_linecount.py`, gitnexus_reindex.py:68 runs 0 → 1 times | |
+| G10-5 | fixed in part | 262ae0d | K1c: `A2-C9.json`, the revert plant red/red (the test's hold makes the race deterministic: 1/1); stress 50/50 | the "EPERM means alive" sub-claim rejected (the follow-up runs as the hook's own user); the pid-reuse sub-claim to S1.1c-10 |
+| G2-57 | carried in full to S1.1c-8 | | | rename only |
+| G2-58 | carried in full to S1.1c-8 | | | rename only |
+| G2-62 | carried in full to S1.1c-10 | | | the split to S1.1c-10, its names to S1.1c-8 |
+| G10-18 | fixed | eaaec1c | K1: `B-K1.json` G10-18 revert plant red; red first | |
+| G10-19 | fixed | eaaec1c | K1: `B-K1.json` G10-19 and G10-19-chain revert plants red; red first | |
+| G2-89 | fixed | 576b0f0 | K2e: grep `case model.BodyWindow:` and `r.Body.Window.Source` in baseline_test.go, none → 2 lines; TestBaseline green, so no stored key moved | |
+| G2-90 | fixed in part | 576b0f0 | K2a: `B-K2a.json` G2-90a and -90b green → red, control green/green | the move to internal/validate to S1.1c-10; the rename to S1.1c-8 |
+| G2-91 | fixed in part | 576b0f0 | K2a: `B-K2a.json` G2-91 green → red, control green/green | the rename to S1.1c-8 |
+| G2-92 | fixed | 576b0f0 | K2a (risk named): `B-K2a.json` G2-92 green → red, control green/green; load 50/50 at 06f17b5 | |
+| G2-94 | fixed | 576b0f0 | K2a: `B-K2a.json` G2-94 green → red, control green/green | |
+| G2-103 | fixed | 576b0f0 | K2a: `B-K2a.json` G2-103 green → red, control green/green | |
+| G2-106 | fixed in part | 576b0f0 | K2e: `b_g2_73_check.py` over the 19 pairs, 19 with neither t.Parallel nor a reason → 0; load 50/50 | partition's ttl_test.go and panic_test.go, to lane E2 (W3) |
+| G2-107 | fixed in part | 576b0f0 | the stop rule fired at pre-check 1 (no seed drops an event construct-late), so the guard is unchanged; the header now says the count is compared but not exercised | a generator that drops an event construct-late, to S1.1c-10 |
+| G2-108 | fixed | 576b0f0 | K2a: `B-K2a.json` G2-108 green → red, control green/green; load 50/50 | |
+| G2-96 | fixed | 0e2b630 | K2a (subtest): `B-K2b.json` G2-96 green → red, control green/green | |
+| G2-97 | fixed | 0e2b630 | K2c: `B-K2b.json`, the slowdown plant (sink.go, 25 ms per delivery) old red → new green, control green/green; load 50/50 | |
+| G2-98 | fixed | 0e2b630 | K2e (live data): `B-G2-98.json`, partial-count given a numeric ceiling, old green → new red (s3_2b_2_corpus_test.go:273 names partial-count), control green/green | |
+| G2-99 | fixed | 0e2b630 | K2a: `B-K2b.json` G2-99 green → red, control green/green; load 50/50 | |
+| G2-100 | fixed | 0e2b630 | K2e: `defer func()` in the test, 0 → 1 | |
+| G2-102 | fixed | 0e2b630 | K2e: `enEntries[...]` by position, 3 lines → none | |
+| G2-104 | fixed | 0e2b630 | K2a: `B-K2b.json` G2-104a and -104b green → red, controls green/green | |
+| G2-109 | fixed | 0e2b630 | K2e: unguarded `st.Streams[0][n]` and `st.Rules[0][n]` reads, 3 lines → none; the guards' texts 0 → 1 each | |
+| G2-110 | fixed in part | 0e2b630 | K2e: `, _ := playback.NewDriver`, 1 line → none | the rename of `d2` to S1.1c-8 |
+| G2-93 | fixed in part | ee30320 | K6: astequal, 59 declarations equal; no `// Output:` line | porting driver_test and exits_test to NewPlanDriver, to S1.1c-10 |
+| G2-95 | fixed | 20010b5 | K2-del: `b_covered_set.py`, the deleted test's 6 blocks (init only) inside both remaining-suite runs | |
+| G2-105 | fixed | 125a170 | K2e (bench input): under an overlay plant, the parent's four benchmarks exit 0 and the new four exit 1 | |
+| G2-101 | carried in full to S1.1c-8 | | | rename only |
+| G2-113 | fixed | e99e127 | K2-del: `e1_covset.py`, the deleted test's blocks (union 201) inside the remaining suite's two runs (intersection 1504) | |
+| G2-129 | fixed | e99e127 | K2-del: the same subset check; the "no stream" row alone covers the guard's block, shard.go:183 | |
+| G2-112 | fixed in part | 7400bb4 | K2a: `E1-C2.json` G2-112 green → red, control green/green; load 50/50 | the rename and the file rename to S1.1c-8; the move to S1.1c-10 |
+| G2-116 | fixed | 7400bb4 | K2a: `E1-C2.json` G2-116 green → red, control green/green; load 50/50 | |
+| G2-117 | fixed | 7400bb4 | K2c: `E1-C2.json`, the slowdown plant (400 ms before queueDrain) old red → new green, control green/green; load 50/50 | |
+| G2-118 | fixed | 7400bb4 | K2a: `E1-C2.json` G2-118 green → red, control green/green; load 50/50 | |
+| G2-128 | fixed | 7400bb4 | K2a: `E1-C2.json` G2-128 green → red, control green/green; load 50/50 | |
+| G2-131 | fixed | 7400bb4 | K2e: `e1_astcheck.go.txt`, 3 hits → 0; load 50/50 over the three tests | |
+| G2-111 | fixed in part | f618b66 | K2a: `E1-C3.json` G2-111 green → red, control green/green; load 50/50 | the renames to S1.1c-8; the merge and delete to S1.1c-10 |
+| G2-114 | fixed | f618b66 | K2b: `E1-C3.json` G2-114 green → red, control green/green; boundary.go:221's block covered 0 → 1; load 50/50 | |
+| G2-115 | fixed | f618b66 | K2a: `E1-C3.json` G2-115 (the router hashes the raw value) green → red, control green/green; load 50/50 | |
+| G2-120 | fixed | f618b66 | K2a: `E1-C3.json` G2-120 (Sync.End delivers its walk to shard 0), old TestBroadcastCarriesNoAdmission green → new TestSyncEndBroadcastsAWalkWithNoAdmission red, control green/green | |
+| G2-122 | fixed | f618b66 | K2e: `&rtLog{}`, 1 hit → 0; load 50/50 | |
+| G2-125 | fixed | f618b66 | K2a: `E1-C3.json` G2-125 green → red, control green/green | |
+| G2-127 | fixed | f618b66 | K2a: `E1-C3.json` G2-127 (time imported as tm) green → red, control green/green; the proofs job exit 0 (nosleep_test.go is a law path) | |
+| G2-132 | fixed | f618b66 | K2d: `E1-C3.json` G2-132 old timeout → new red, control green/green | |
+| G7a-5 | fixed | 4ee80f0 | K1: `E1-G7a-5-revert.diff` red (re-run at 06f17b5); red first: all 11 subtests | |
+| G10-20 | fixed | aeec09c | K1c: `E1-G10-20-revert.diff` under `--race --repeat 50 --load` caught 7 of 50 (k ≥ 1); load 50/50; red first: DATA RACE, drain.go:119 against :28 | the leftover logic window is known issue S1.1c-7-1, to S1.1c-10 (owner, G1) |
+| G2-119 | carried in full to S1.1c-8 | | | rename only |
+| G2-121 | carried in full to S1.1c-8 | | | a rename and a doc comment |
+| G2-123 | carried in full to S1.1c-10 | | | a split |
+| G2-124 | carried in full to S1.1c-10 | | | moving three tests onto the gr* helpers changes how they measure, and no plant shows an outcome difference today |
+| G2-126 | carried in full to S1.1c-10 | | | cleanups in ldRuntime and rdOverflowed touch about 20 callers and change no outcome on real code |
+| G2-130 | carried in full to S1.1c-10 | | | a fidelity refactor: no production defect tells the fixture from the real tombstone |
+| G2-24 | fixed | bd413f3 | K2a: `G2-24.json` green → red, control green/green; red first: CodeClosure on the old law.json, 27 failures | |
+| G10-21 | fixed in part | bc23749 | K1h: `E1-C6-G10-21-revert.json` red; red first at lifecycle_test.go:755 and :770; load 50/50; timing no cost on the confirming re-run | the counting rule (a drained batch end counted, a drained Send not) to S3.3-1-3's fix at S8 (owner, G1) |
+| G10-1 | fixed in part | c52933a, e0f0e13 | K1: `table.Check`'s revert plant red (W0). K1h: `E1-C7-G10-1-reverts.json` red 5; loads 50/50; Send and SendPayload timing no cost | the facade half to lane E2 (W3); the table-write timing waits for the benchmark with no recorder |
 
 ## Test material
 
@@ -305,7 +495,11 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 
 ## Scope changes
 
-*(none after G0)*
+- **PR #53's FRT-A-2 and FRT-Q-3 fixed in the sprint** (de42f64), not put in the backlog ([owner, 2026-11-21](decisions.md#owner-decisions-2026-11-21--after-pr-52-and-53-merged)).
+- **G2-24 by the strict rule,** in PR 2 ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--g2-24s-code-lists)).
+- **The recorder's starvation fixed in the sprint** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing)). Not built yet.
+- **W1 and W2 without their spot-check** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--pr-2s-remaining-steps)).
+- **What follows S1.1c-7 is re-planned** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--the-mvp-first-re-plan)); the re-cut is made at a plan check after PR 2.
 
 ## Findings
 

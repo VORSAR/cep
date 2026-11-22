@@ -1,0 +1,14 @@
+[
+  {
+    "id": "G10-12",
+    "note": "G10-12 revert plant: reap's code dropped and the partial renamed again",
+    "patch": "--- a/gate/runner/scheduler.py\n+++ b/gate/runner/scheduler.py\n@@ -305,13 +305,8 @@\n             records.write_atomic(errors, f\"go env: could not start: {e}\\n\".encode())\n             return\n         if proc is not None:\n-            code, _ = self._parity_group.reap(proc)\n-            if code == 0:\n-                os.rename(partial, os.path.join(self._run_dir, \"go-env.json\"))\n-            else:  # its partial stdout describes nothing: dropped, the exit code noted beside go's own stderr\n-                os.remove(partial)\n-                with open(errors, \"ab\") as f:\n-                    f.write(f\"go env: exit {code}\\n\".encode())\n+            self._parity_group.reap(proc)\n+            os.rename(partial, os.path.join(self._run_dir, \"go-env.json\"))\n \n     def _parity_end(self, outcome: Outcome) -> None:\n         \"\"\"A failure's reason is its reasons joined and never names a reuse; a pass reads `covered <n>`, and when trees\n",
+    "py": "gate.runner.tests.test_step.RunFiles.test_a_go_env_that_fails_leaves_no_go_env_json"
+  },
+  {
+    "id": "G10-13",
+    "note": "G10-13 revert plant: the old signature and condition, no seen set",
+    "patch": "--- a/gate/runner/teeth.py\n+++ b/gate/runner/teeth.py\n@@ -290,15 +290,12 @@\n     return red, row_pass, rows\n \n \n-def _methods(\n-    cls: ast.ClassDef, classes: Mapping[str, ast.ClassDef], seen: frozenset[str] = frozenset()\n-) -> dict[str, Function]:\n-    \"\"\"The class's methods over its bases defined in the same module, each base walked once on a path (a cycle of\n-    bases parses, though the module could never import).\"\"\"\n+def _methods(cls: ast.ClassDef, classes: Mapping[str, ast.ClassDef]) -> dict[str, Function]:\n+    \"\"\"The class's methods over its bases defined in the same module.\"\"\"\n     out: dict[str, Function] = {}\n     for base in cls.bases:\n-        if isinstance(base, ast.Name) and base.id in classes and classes[base.id] is not cls and base.id not in seen:\n-            out.update(_methods(classes[base.id], classes, seen | {cls.name}))\n+        if isinstance(base, ast.Name) and base.id in classes and classes[base.id] is not cls:\n+            out.update(_methods(classes[base.id], classes))\n     out.update({n.name: n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))})\n     return out\n \n",
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_bases_that_form_a_cycle_are_walked_once"
+  }
+]

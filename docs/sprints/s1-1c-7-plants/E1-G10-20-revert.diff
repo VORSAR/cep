@@ -1,0 +1,24 @@
+--- a/internal/runtime/drain.go
++++ b/internal/runtime/drain.go
+@@ -25,7 +25,9 @@
+ 	if a.started.Load() {
+ 		runs, err = r.awaitRuns(ctx, a)
+ 		if err != nil {
+-			a.revertUnlessQuieted(was) // the quiet item was never queued: live, as before this Drain
++			if !a.waited { // the quiet item was never queued: live, as before this Drain
++				a.revertDrain(was)
++			}
+ 			return DrainResult{Runs: runs}, err
+ 		}
+ 	}
+@@ -85,7 +87,9 @@
+ 	if err := r.enqueue(ctx, it); err != nil {
+ 		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
+ 			a.draining.Store(false)
+-			a.revertUnlessQuieted(was)
++			if !a.waited {
++				a.revertDrain(was)
++			}
+ 		}
+ 		return nil, err
+ 	}

@@ -1,0 +1,242 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/parity.py",
+    "find": "tree hash could not start: {e}",
+    "id": "G2-55-start",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_breakit_s11c3.TreeChildFailureIsNotADamagedTool.test_a_child_that_cannot_start",
+    "replace": "tree hash failed: {e}"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-55-start-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_breakit_s11c3.TreeChildFailureIsNotADamagedTool.test_a_child_that_cannot_start"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/parity.py",
+    "find": "tree hash failed (exit {e.code}){line}",
+    "id": "G2-55-crash",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_breakit_s11c3.TreeChildFailureIsNotADamagedTool.test_a_child_that_crashes",
+    "replace": "tree hash failed{line}"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-55-crash-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_breakit_s11c3.TreeChildFailureIsNotADamagedTool.test_a_child_that_crashes"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/parity.py",
+    "find": "tree hash failed (exit {e.code}){line}",
+    "id": "G2-55-signal",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_breakit_s11c3.TreeChildFailureIsNotADamagedTool.test_a_child_killed_by_a_signal",
+    "replace": "tree hash failed{line}"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-55-signal-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_breakit_s11c3.TreeChildFailureIsNotADamagedTool.test_a_child_killed_by_a_signal"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/parity.py",
+    "find": "_version_failure(tool, home, want, env, probes, timing)",
+    "id": "G2-56",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_parity.RealCache.test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world",
+    "replace": "f\"{tool.name}: version: not probed\""
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-56-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_parity.RealCache.test_a_probe_of_the_real_go_leaves_no_telemetry_in_the_world"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/install.py",
+    "find": "            os.symlink(member.linkname, target)\n",
+    "id": "G2-59",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_archive_pins.ArchivePinsTest.test_listed_executable_that_is_a_symlink_is_refused",
+    "replace": "            pass\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-59-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_archive_pins.ArchivePinsTest.test_listed_executable_that_is_a_symlink_is_refused"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/install.py",
+    "find": "        return install(\n            os.path.join(repo, \"tools.json\"), cache, manifest.platform_key(), out, fetch=fetch, rename=rename\n        )\n",
+    "id": "G2-61-readonly",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_install.HappyPath.test_the_tool_directory_itself_is_read_only",
+    "replace": "        install(\n            os.path.join(repo, \"tools.json\"), cache, manifest.platform_key(), out, fetch=fetch, rename=rename\n        )\n        return 2\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-61-readonly-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_install.HappyPath.test_the_tool_directory_itself_is_read_only"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/install.py",
+    "find": "        return install(\n            os.path.join(repo, \"tools.json\"), cache, manifest.platform_key(), out, fetch=fetch, rename=rename\n        )\n",
+    "id": "G2-61-cache",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_install.HappyPath.test_the_cache_holds_only_the_tool_afterwards",
+    "replace": "        install(\n            os.path.join(repo, \"tools.json\"), cache, manifest.platform_key(), out, fetch=fetch, rename=rename\n        )\n        return 2\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-61-cache-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_install.HappyPath.test_the_cache_holds_only_the_tool_afterwards"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/install.py",
+    "find": "        return install(\n            os.path.join(repo, \"tools.json\"), cache, manifest.platform_key(), out, fetch=fetch, rename=rename\n        )\n",
+    "id": "G2-61-hash",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_install.HappyPath.test_the_installed_tree_hashes_as_written_out_by_hand",
+    "replace": "        install(\n            os.path.join(repo, \"tools.json\"), cache, manifest.platform_key(), out, fetch=fetch, rename=rename\n        )\n        return 2\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-61-hash-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_install.HappyPath.test_the_installed_tree_hashes_as_written_out_by_hand"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/parity.py",
+    "find": "    entries: dict[str, Entry] = {}\n    if full_tree and handoff_in is not None:\n",
+    "id": "G2-63",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_parity_handoff.Reader.test_below_t2_the_hand_off_is_never_read",
+    "replace": "    entries: dict[str, Entry] = {}\n    if full_tree:\n        return Outcome(reasons=(\"parity: planted failure\",), covered=0, taken=0, taken_from=\"\")\n    if full_tree and handoff_in is not None:\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-63-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_parity_handoff.Reader.test_below_t2_the_hand_off_is_never_read"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/toolchain/vulndb_fetch.py",
+    "find": "        print(f\"vulndb: usage: fetch-vulndb takes no arguments, got {' '.join(argv)}\", flush=True)\n        return 2\n",
+    "id": "G2-64",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_vulndb_fetch.Main.test_an_argument_is_a_usage_error",
+    "replace": "        return 2\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-64-control",
+    "new_rev": "37fe27349d0f0311777df412adc460a06708e2b0",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.toolchain.tests.test_vulndb_fetch.Main.test_an_argument_is_a_usage_error"
+  }
+]

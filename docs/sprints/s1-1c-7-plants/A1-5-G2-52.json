@@ -1,0 +1,17 @@
+[
+  {
+    "id": "G2-52",
+    "note": "MEMBER_CAP moved off 4 MiB; the fault text is a literal, so only the cap assertions see it",
+    "file": "gate/runner/vulndb.py",
+    "find": "MEMBER_CAP = 4 << 20",
+    "replace": "MEMBER_CAP = 5 << 20",
+    "old_py": "gate.runner.tests.test_vulndb.CheckDb.test_a_member_past_4_mib_is_red",
+    "new_py": "gate.runner.tests.test_vulndb.Findings.test_the_cap_constants",
+    "old_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f",
+    "new_rev": "c71a26bd350ecf4621c165c995efe0d3c83bf29b",
+    "expect": {
+      "old": "red",
+      "new": "red"
+    }
+  }
+]

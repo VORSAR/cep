@@ -1,0 +1,268 @@
+[
+  {
+    "id": "G2-27",
+    "note": "the utf8_mode clause removed from the guard",
+    "file": "gate/run.py",
+    "find": "    if not (sys.flags.isolated and sys.dont_write_bytecode and sys.flags.utf8_mode):\n",
+    "replace": "    if not (sys.flags.isolated and sys.dont_write_bytecode):\n",
+    "py": "gate.runner.tests.test_run_guard.Guard.test_each_interpreter_flag_is_required",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-27-control",
+    "control": true,
+    "py": "gate.runner.tests.test_run_guard.Guard.test_each_interpreter_flag_is_required",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-28",
+    "note": "a crash before main is imported",
+    "file": "gate/run.py",
+    "find": "    sys.path.insert(0, REPO)\n",
+    "replace": "    pass  # planted: the repository is never put on sys.path\n",
+    "py": "gate.runner.tests.test_run_guard.Copy.test_no_bytecode_lands_in_the_repository",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-28-control",
+    "control": true,
+    "py": "gate.runner.tests.test_run_guard.Copy.test_no_bytecode_lands_in_the_repository",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-32",
+    "note": "a linter enabled with no census row",
+    "file": "gate/runner/golangci.py",
+    "find": "        \"enable\": [\"errcheck\", \"forbidigo\", \"funlen\", \"gocritic\", \"gocyclo\", \"lll\", \"nolintlint\", \"revive\"],\n",
+    "replace": "        \"enable\": [\"errcheck\", \"forbidigo\", \"funlen\", \"gocritic\", \"gocyclo\", \"lll\", \"misspell\", \"nolintlint\", \"revive\"],\n",
+    "py": "gate.runner.tests.test_suppressions.Census.test_every_enabled_linter_has_a_row",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-32-control",
+    "control": true,
+    "py": "gate.runner.tests.test_suppressions.Census.test_every_enabled_linter_has_a_row",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-attribute",
+    "note": "a stored attribute defines no name",
+    "file": "gate/runner/teeth.py",
+    "find": "    if isinstance(node, ast.Attribute) and isinstance(node.ctx, (ast.Store, ast.Del)):\n        return [node.attr]\n",
+    "replace": "    # planted: a stored attribute defines no name\n",
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_driver_may_not_define_a_verdict_helpers_name",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-setattr",
+    "note": "setattr no longer a loader hook",
+    "file": "gate/runner/teeth.py",
+    "find": "LOADER_HOOKS = frozenset({\"setattr\", \"delattr\",",
+    "replace": "LOADER_HOOKS = frozenset({\"delattr\",",
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_module_shape_that_changes_what_unittest_loads_is_a_fault",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-del",
+    "note": "a del at import not named",
+    "file": "gate/runner/teeth.py",
+    "find": "            fault(node, \"a del at import may remove a counted case\")\n",
+    "replace": "            pass  # planted: a del at import is not named\n",
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_module_shape_that_changes_what_unittest_loads_is_a_fault",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-flag",
+    "note": "the flag's fault reworded",
+    "file": "gate/runner/teeth.py",
+    "find": "fault(node, f\"{name} decides what unittest loads\")",
+    "replace": "fault(node, f\"{name} is reserved\")",
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_class_level_test_flag_is_a_fault",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-attribute-control",
+    "control": true,
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_driver_may_not_define_a_verdict_helpers_name",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-module-control",
+    "control": true,
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_module_shape_that_changes_what_unittest_loads_is_a_fault",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-33-flag-control",
+    "control": true,
+    "py": "gate.runner.tests.test_teeth.StrengthRuleTightened.test_a_class_level_test_flag_is_a_fault",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-35",
+    "note": "one entry's blocks leak into the next entry's verdict",
+    "patch": "--- a/gate/runner/vulndb.py\n+++ b/gate/runner/vulndb.py\n@@ -255,6 +255,7 @@\n     except InvalidVersion:\n         go = None\n         faults.append((\"\", \"\", f\"vulns: the go version {tag} cannot be ordered: stdlib and toolchain not judged\"))\n+    blocks: dict[str, list[Sequence[Mapping[str, object]]]] = {}  # planted: one entry's blocks leak into the next\n     for entry in entries:\n         entry_id = entry.get(\"id\") if isinstance(entry, Mapping) else None\n         if not isinstance(entry_id, str) or not isinstance(entry.get(\"affected\"), list):\n@@ -266,7 +267,6 @@\n         if withdrawn is not None:\n             faults.append((entry_id, \"\", f\"vulns: {entry_id}: withdrawn {_shown(withdrawn)} is not an RFC 3339 time\"))\n             continue\n-        blocks: dict[str, list[Sequence[Mapping[str, object]]]] = {}\n         for block in entry[\"affected\"]:\n             package = block.get(\"package\") if isinstance(block, Mapping) else None\n             if not isinstance(package, Mapping) or package.get(\"ecosystem\") != \"Go\":\n",
+    "old_py": "gate.runner.tests.test_vulndb.Agreement.test_every_row_agrees",
+    "new_py": "gate.runner.tests.test_vulndb.Agreement.test_two_entries_for_one_module_are_each_judged_by_their_own_ranges",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-35-control",
+    "control": true,
+    "old_py": "gate.runner.tests.test_vulndb.Agreement.test_every_row_agrees",
+    "new_py": "gate.runner.tests.test_vulndb.Agreement.test_two_entries_for_one_module_are_each_judged_by_their_own_ranges",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-36",
+    "note": "the experiment suffix stripped in silence",
+    "file": "gate/runner/rows/vulns.py",
+    "find": "    head, sep, go = lines[0].rpartition(\": \")\n",
+    "replace": "    head, sep, go = lines[0].rpartition(\": \")\n    go = go.split(\" \")[0]  # planted: the experiment suffix stripped in silence\n",
+    "py": "gate.runner.tests.test_vulns_row.BuildInfo.test_an_experiment_suffix_is_parsed_or_red",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-36-control",
+    "control": true,
+    "py": "gate.runner.tests.test_vulns_row.BuildInfo.test_an_experiment_suffix_is_parsed_or_red",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-45",
+    "note": "race.py ignores its package arguments",
+    "file": "gate/runner/rows/race.py",
+    "find": "*(patterns or [\"./...\"])",
+    "replace": "\"./...\"",
+    "old_py": "gate.runner.tests.test_rows_go.Race.test_passing_packages",
+    "new_py": "gate.runner.tests.test_rows_go.Race.test_narrowed_to_one_of_two_packages_is_red",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-45-control",
+    "control": true,
+    "old_py": "gate.runner.tests.test_rows_go.Race.test_passing_packages",
+    "new_py": "gate.runner.tests.test_rows_go.Race.test_narrowed_to_one_of_two_packages_is_red",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-53",
+    "note": "the walk stops at a bad go version",
+    "file": "gate/runner/vulndb.py",
+    "find": "        faults.append((\"\", \"\", f\"vulns: the go version {tag} cannot be ordered: stdlib and toolchain not judged\"))\n",
+    "replace": "        faults.append((\"\", \"\", f\"vulns: the go version {tag} cannot be ordered: stdlib and toolchain not judged\"))\n        return found, faults  # planted: the walk stops at a bad go version\n",
+    "py": "gate.runner.tests.test_vulndb.Findings.test_an_invalid_go_version_is_a_fault_never_a_finding_or_a_crash",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  },
+  {
+    "id": "G2-53-control",
+    "control": true,
+    "py": "gate.runner.tests.test_vulndb.Findings.test_an_invalid_go_version_is_a_fault_never_a_finding_or_a_crash",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "old_rev": "cb40d47cc23d89f83da57709e10d23ea3fd1de39",
+    "new_rev": "bf73b1ae71a5e8dcb75e6e4aaf20b12d4a8ece5f"
+  }
+]

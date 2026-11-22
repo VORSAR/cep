@@ -1,0 +1,174 @@
+[
+  {
+    "id": "G2-90a",
+    "file": "internal/validate/bounds.go",
+    "find": "c.report(\"E-PART-004\", k.Pos,",
+    "replace": "c.report(\"E-PART-007\", k.Pos,",
+    "test": "TestBreakitPartitionKeyNotDropped",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-90b",
+    "file": "internal/validate/bounds.go",
+    "find": "f, twice := first[k.Stream]",
+    "replace": "f, twice := first[k.Stream]\n\t\ttwice = false",
+    "test": "TestBreakitPartitionKeyNotDropped",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-90-control",
+    "control": true,
+    "test": "TestBreakitPartitionKeyNotDropped",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-91",
+    "file": "internal/playback/reader.go",
+    "find": "[]event.Attr{{Name: \"start\", Type: event.TTimestamp}}",
+    "replace": "[]event.Attr{{Name: \"start\", Type: event.TTimestamp}, {Name: \"start\", Type: event.TTimestamp}}",
+    "test": "TestEveryEnvelopeSchemaIsValid",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-91-control",
+    "control": true,
+    "test": "TestEveryEnvelopeSchemaIsValid",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-92",
+    "file": "internal/runtime/transitions.go",
+    "find": "\tstart := rt.now(r.cfg.Now())\n",
+    "replace": "\tstart := rt.now(rt.stamp)\n",
+    "test": "TestLiveEqualsReplay",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "timeout": "300s"
+  },
+  {
+    "id": "G2-92-control",
+    "control": true,
+    "test": "TestLiveEqualsReplay",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "timeout": "300s"
+  },
+  {
+    "id": "G2-94",
+    "file": "internal/partition/partition.go",
+    "find": "in.Op = r.body.NewState(in)\n\t}\n\tin.LastActivity = e.Ts",
+    "replace": "in.Op = nil\n\t}\n\tin.LastActivity = e.Ts",
+    "test": "TestDriverEmptyStreamNeverStalls",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-94-control",
+    "control": true,
+    "test": "TestDriverEmptyStreamNeverStalls",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-103",
+    "file": "internal/playback/reader.go",
+    "find": "return Record{}, io.EOF",
+    "replace": "return Record{}, errors.New(\"EOF\")",
+    "test": "TestBreakitGuardReaderEdges",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-103-control",
+    "control": true,
+    "test": "TestBreakitGuardReaderEdges",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-108",
+    "file": "internal/runtime/shutdown.go",
+    "find": "\treturn r.awaitGoroutines(ctx, first, failed)",
+    "replace": "\tif err := r.awaitGoroutines(ctx, first, failed); err != nil {\n\t\treturn err\n\t}\n\treturn ErrClosed",
+    "test": "TestRecordingStampsNeverFallBelowTheStart",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-108-control",
+    "control": true,
+    "test": "TestRecordingStampsNeverFallBelowTheStart",
+    "pkg": "./internal/playback",
+    "old_rev": "eaaec1c0fb5bf72988f2fbff67306fcc6ab42746",
+    "new_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  }
+]
