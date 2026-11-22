@@ -1,0 +1,57 @@
+// Command astcheck is G2-131's mechanical check: inside every go statement (its call and, for a function literal,
+// its whole body), no call takes the test's t, or a local alias assigned from t, as an argument.
+package main
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+)
+
+func main() {
+	fset := token.NewFileSet()
+	hits := 0
+	for _, path := range os.Args[1:] {
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		aliases := map[string]bool{"t": true}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if as, ok := n.(*ast.AssignStmt); ok && len(as.Lhs) == len(as.Rhs) {
+				for i, r := range as.Rhs {
+					if id, ok := r.(*ast.Ident); ok && aliases[id.Name] {
+						if l, ok := as.Lhs[i].(*ast.Ident); ok {
+							aliases[l.Name] = true
+						}
+					}
+				}
+			}
+			return true
+		})
+		ast.Inspect(f, func(n ast.Node) bool {
+			g, ok := n.(*ast.GoStmt)
+			if !ok {
+				return true
+			}
+			ast.Inspect(g.Call, func(m ast.Node) bool {
+				c, ok := m.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				for _, a := range c.Args {
+					if id, ok := a.(*ast.Ident); ok && aliases[id.Name] {
+						hits++
+						fmt.Printf("hit: %s: a call taking %s inside a go statement\n", fset.Position(c.Pos()), id.Name)
+					}
+				}
+				return true
+			})
+			return false
+		})
+	}
+	fmt.Printf("astcheck: %d hits\n", hits)
+}

@@ -1,0 +1,5 @@
+[
+{"id": "G10-18", "file": "internal/playback/records.go", "find": "\"a %s record takes no %q key\"", "replace": "\"a %s record has no %q key\"", "test": "TestReaderNamesTheFirstFaultOfALine", "subtest": "a table with a stream key names the key", "pkg": "./internal/playback", "note": "revert plant: the old text"},
+{"id": "G10-19", "file": "internal/playback/expect.go", "find": "fault(\"%w\", inPlayback{err})", "replace": "fault(\"%w\", err)", "test": "TestRunExpectsReportsASandboxThatCannotBeBuilt", "pkg": "./internal/playback", "note": "revert plant: the doubled prefix"},
+{"id": "G10-19-chain", "file": "internal/playback/expect.go", "find": "fault(\"%w\", inPlayback{err})", "replace": "fault(\"%v\", inPlayback{err})", "test": "TestASandboxFaultKeepsTheDriversErrorInTheChain", "pkg": "./internal/playback", "note": "the chain plant: same text, no chain"}
+]

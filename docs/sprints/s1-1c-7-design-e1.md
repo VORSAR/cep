@@ -1380,6 +1380,7 @@ func recordQueueFor(configured int, loads []TableLoad) int {
   	// takes none.
   	Loads []TableLoad
   ```
+  *(annotated 2026-11-22: the code reads "A built app (NewSync) takes none." `runtime.Start` is New, then Add and Activate per app (runtime.go:186-205), so it applies the rows; only `NewSync` goes through `build`. The same holds for line 870's "`runtime.Start` or `NewSync`". C7, e0f0e13.)*
 - `Config.RecordQueue`:
   ```go
   	// RecordQueue is each recording's queue, in records, plus one slot per starting row of the app (App.Loads); 0:

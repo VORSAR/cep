@@ -1,0 +1,18 @@
+[
+  {
+    "id": "G3-72-foreign",
+    "note": "revert plant: FOREIGN ends in (decision 7) again",
+    "file": "gate/runner/suppressions.py",
+    "find": "//nolint:{linter} // PERMANENT|TEMP …\"",
+    "replace": "//nolint:{linter} // PERMANENT|TEMP … (decision 7)\"",
+    "py": "gate.runner.tests.test_suppressions.Foreign.test_a_foreign_fault_ends_with_the_waiver_to_write"
+  },
+  {
+    "id": "G3-72-line",
+    "note": "revert plant: LINE ends in (S1.1c-5) again",
+    "file": "gate/runner/suppressions.py",
+    "find": "moves findings between files; not allowed\"",
+    "replace": "moves findings between files; not allowed (S1.1c-5)\"",
+    "py": "gate.runner.tests.test_suppressions.LineDirective.test_a_line_directive_fault_ends_with_not_allowed"
+  }
+]

@@ -1,0 +1,28 @@
+[
+  {
+    "id": "G2-47",
+    "note": "a second code on one waived path: the old test overwrites the first plant and wants only _0 files",
+    "file": "ruff.toml",
+    "find": "\"gate/wait.py\" = [\"TID251\"]",
+    "replace": "\"gate/wait.py\" = [\"TID251\", \"BLE001\"]",
+    "py": "gate.runner.tests.test_rows_ruff.Wrapper.test_each_waiver_covers_its_own_file_only",
+    "old_rev": "4c103df6ba0feb475014033a2e32fbe4139f34f2",
+    "new_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "expect": {
+      "old": "red",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-47-control",
+    "note": "the real ruff.toml: green at both revisions",
+    "control": true,
+    "py": "gate.runner.tests.test_rows_ruff.Wrapper.test_each_waiver_covers_its_own_file_only",
+    "old_rev": "4c103df6ba0feb475014033a2e32fbe4139f34f2",
+    "new_rev": "c1d9b3397f1afcc81b1867299dda7f28c6493fab",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  }
+]

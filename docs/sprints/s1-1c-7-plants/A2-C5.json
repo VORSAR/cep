@@ -1,0 +1,50 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/ci/generate.py",
+    "find": "        *(MODULE_STEPS if modules else []),\n",
+    "id": "G2-11",
+    "new_rev": "08306217792515ed8cd294731b085c4c5dc5d513",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.ci.tests.test_generate.Scans.test_the_download_step_is_not_the_form_that_writes_go_sum",
+    "replace": "        *([] if modules else []),\n"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-11-control",
+    "new_rev": "08306217792515ed8cd294731b085c4c5dc5d513",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.ci.tests.test_generate.Scans.test_the_download_step_is_not_the_form_that_writes_go_sum"
+  },
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/ci/generate.py",
+    "find": "    return f\"uses: {repo}{sub}@{sha}  # {version}\"",
+    "id": "G2-12",
+    "new_rev": "08306217792515ed8cd294731b085c4c5dc5d513",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.ci.tests.test_generate.Canary.test_every_action_is_pinned_by_a_full_sha",
+    "replace": "    return f\"uses:{repo}{sub}@{sha}  # {version}\""
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-12-control",
+    "new_rev": "08306217792515ed8cd294731b085c4c5dc5d513",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.ci.tests.test_generate.Canary.test_every_action_is_pinned_by_a_full_sha"
+  }
+]

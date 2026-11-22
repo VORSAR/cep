@@ -1,0 +1,8 @@
+[
+  {"id": "G2-98", "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d", "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372", "file": "gate/tripwire.json",
+   "find": "\"partial-count\": {\"ceiling\": \"none\",", "replace": "\"partial-count\": {\"ceiling\": 0,",
+   "test": "TestTripwire", "pkg": "./internal/playback", "expect": {"old": "green", "new": "red"},
+   "note": "K2e live data (design-b G2-98): a numeric ceiling for partial-count, which the tripwire never measures; old passes (the check misses), new fails naming partial-count"},
+  {"id": "G2-98-control", "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d", "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372", "control": true, "test": "TestTripwire", "pkg": "./internal/playback",
+   "expect": {"old": "green", "new": "green"}, "note": "the real tripwire.json: both pass"}
+]

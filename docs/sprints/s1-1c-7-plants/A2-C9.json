@@ -1,0 +1,13 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "red"
+    },
+    "id": "G10-5",
+    "new_rev": "262ae0d3e0e754342ae5206eb8be7793811fa330",
+    "old_rev": "262ae0d3e0e754342ae5206eb8be7793811fa330",
+    "patch": "--- a/gate/hooks/gitnexus_reindex.py\n+++ b/gate/hooks/gitnexus_reindex.py\n@@ -16,7 +16,6 @@\n and a pidfile keeps a second run from starting while one is going.\n \"\"\"\n \n-import fcntl\n import itertools\n import json\n import os\n@@ -28,7 +27,6 @@\n from collections.abc import Callable, Mapping\n \n PIDFILE = \"auto-reindex.pid\"\n-LOCKFILE = \"auto-reindex.lock\"  # held from the pidfile's check to the follow-up's start: two calls start one run\n FOLLOW_UP = \"--reindex\"  # the argument that runs this file as the detached follow-up\n NO_RESTART = \"GITNEXUS_REINDEX_NO_RESTART\"  # \"1\": the follow-up re-indexes but restarts nothing (the hook's tests)\n LOGFILE = \"auto-reindex.log\"\n@@ -122,18 +120,13 @@\n     if entry is None or entry.get(\"lastCommit\") == head:\n         return 0\n     storage = entry.get(\"storagePath\")\n-    if not isinstance(storage, str) or not os.path.isdir(storage):\n+    if not isinstance(storage, str) or not os.path.isdir(storage) or running(os.path.join(storage, PIDFILE)):\n         return 0\n     gitnexus = shutil.which(\"gitnexus\", path=environ.get(\"PATH\"))\n     if gitnexus is None:\n         return 0\n     try:\n-        with open(os.path.join(storage, LOCKFILE), \"a\", encoding=\"utf-8\") as lock:\n-            # flock, not lockf: a POSIX record lock is the process's, so two calls in one process would share it.\n-            # Held by a call between its check and its start, it raises BlockingIOError: that call starts the run.\n-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)\n-            if not running(os.path.join(storage, PIDFILE)):\n-                start(gitnexus, os.path.realpath(checkout), storage, environ)\n+        start(gitnexus, os.path.realpath(checkout), storage, environ)\n     except OSError:\n         return 0\n     return 0\n",
+    "py": "gate.hooks.tests.test_gitnexus_reindex.Overlap.test_a_call_arriving_between_another_calls_check_and_its_start_starts_nothing"
+  }
+]

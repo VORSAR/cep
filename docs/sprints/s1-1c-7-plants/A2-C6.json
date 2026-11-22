@@ -1,0 +1,24 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "id": "G2-5",
+    "new_rev": "581a415f61b8c3995f75a5fd4c28dc83020b38de",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "patch": "--- a/gate/baseline/regen.py\n+++ b/gate/baseline/regen.py\n@@ -151,3 +151,3 @@\n         return \"drop-change\", False\n-    if spec_rev > stored_rev and _accepted(new, accept):\n+    if _accepted(new, accept):\n         return \"spec-rev\", True\n@@ -319,3 +319,3 @@\n             print(f\"{v.cls} {v.file} rule {v.rule} block {v.ordinal} key {v.key[:12]}: {verdict}\")\n-            if v.cls == \"value-change\" and v.file in old and spec_rev > old[v.file].spec_rev:  # it can record (Q-S4)\n+            if v.cls == \"value-change\" and v.file in old:  # it can record (Q-S4)\n                 print(f\"  to accept it as a SPEC revision's change: ACCEPT {v.file}:{v.rule}:{v.ordinal}\")\n",
+    "py": "gate.baseline.tests.test_breakit_s3_3_2.BreakitMain.test_the_printed_accept_token_is_offered_only_when_it_can_record"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-5-control",
+    "new_rev": "581a415f61b8c3995f75a5fd4c28dc83020b38de",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.baseline.tests.test_breakit_s3_3_2.BreakitMain.test_the_printed_accept_token_is_offered_only_when_it_can_record"
+  }
+]

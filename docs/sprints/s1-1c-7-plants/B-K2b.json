@@ -1,0 +1,133 @@
+[
+  {
+    "id": "G2-96",
+    "file": "internal/playback/records.go",
+    "find": "\t\terrors.As(err, &de)\n\t\treturn values, info, &LoadError{",
+    "replace": "\t\terrors.As(err, &de)\n\t\tif de != nil && de.Reason == event.DecodeSyntax {\n\t\t\tde = nil\n\t\t}\n\t\treturn values, info, &LoadError{",
+    "test": "TestReaderFaults",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    },
+    "subtest": "payload not an object"
+  },
+  {
+    "id": "G2-96-control",
+    "control": true,
+    "test": "TestReaderFaults",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    },
+    "subtest": "payload not an object"
+  },
+  {
+    "id": "G2-97",
+    "patch": "--- a/internal/runtime/sink.go\n+++ b/internal/runtime/sink.go\n@@ -3,4 +3,5 @@\n import (\n \t\"sync/atomic\"\n+\t\"time\"\n \n \t\"github.com/vorsar/cep/internal/event\"\n@@ -58,3 +59,4 @@\n \t}()\n+\ttime.Sleep(25 * time.Millisecond)\n \tif err := q.sink(e); err != nil {\n \t\tq.errors.Add(1)\n",
+    "test": "TestARecordingThatFallsBehindStops",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "red",
+      "new": "green"
+    },
+    "note": "K2c slowdown: 20 deliveries x 25 ms past the 300 ms drain deadline"
+  },
+  {
+    "id": "G2-97-control",
+    "control": true,
+    "test": "TestARecordingThatFallsBehindStops",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-99",
+    "file": "internal/runtime/recorder.go",
+    "find": "detection goes on\",\n\t\t\tq.queued))",
+    "replace": "detection goes on\",\n\t\t\tq.queued-1))",
+    "test": "TestARecordingThatOverflowsStaysReadable",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-99-control",
+    "control": true,
+    "test": "TestARecordingThatOverflowsStaysReadable",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-104a",
+    "file": "internal/clock/clock.go",
+    "find": "\tfor i := range r.streams {\n\t\ts := &r.streams[i]\n\t\tfn(\"stream\"",
+    "replace": "\tfor i := range r.streams[:0] {\n\t\ts := &r.streams[i]\n\t\tfn(\"stream\"",
+    "test": "TestDriverStreamLateMovesNothing",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-104a-control",
+    "control": true,
+    "test": "TestDriverStreamLateMovesNothing",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  },
+  {
+    "id": "G2-104b",
+    "file": "internal/clock/clock.go",
+    "find": "\tfor i := range r.streams {\n\t\ts := &r.streams[i]\n\t\tfn(\"stream\"",
+    "replace": "\tfor i := range r.streams[:0] {\n\t\ts := &r.streams[i]\n\t\tfn(\"stream\"",
+    "test": "TestRecordingArrivalStreamTsIsItsArrival",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "red"
+    }
+  },
+  {
+    "id": "G2-104b-control",
+    "control": true,
+    "test": "TestRecordingArrivalStreamTsIsItsArrival",
+    "pkg": "./internal/playback",
+    "old_rev": "576b0f0219234fe81f10b5cebba876e358af1d2d",
+    "new_rev": "0e2b630e18879620fdb8233a4d390ac6039ba372",
+    "expect": {
+      "old": "green",
+      "new": "green"
+    }
+  }
+]

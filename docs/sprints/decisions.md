@@ -129,6 +129,12 @@
 | 2026-11-21 | [S1.1's pull requests](#owner-decisions-2026-11-21--s11s-pull-requests) |
 | 2026-11-21 | [S1.1c-7's PR 1 review](#owner-decisions-2026-11-21--s11c-7s-pr-1-review) |
 | 2026-11-21 | [main's red nightly and PR 1's CI](#owner-decisions-2026-11-21--mains-red-nightly-and-pr-1s-ci) |
+| 2026-11-21 | [after PR #52 and #53 merged](#owner-decisions-2026-11-21--after-pr-52-and-53-merged) |
+| 2026-11-22 | [CI coverage](#owner-decisions-2026-11-22--ci-coverage) |
+| 2026-11-22 | [G2-24's code lists](#owner-decisions-2026-11-22--g2-24s-code-lists) |
+| 2026-11-22 | [the recorder's starvation and C7's timing](#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing) |
+| 2026-11-22 | [PR 2's remaining steps](#owner-decisions-2026-11-22--pr-2s-remaining-steps) |
+| 2026-11-22 | [the MVP-first re-plan](#owner-decisions-2026-11-22--the-mvp-first-re-plan) |
 
 ## The decisions
 
@@ -1344,3 +1350,96 @@ The owner reported two failed CI runs: main's scheduled nightly (44896088970, at
    - Rejected: folding it into PR #52, which would keep main red until PR #52 merges and widen PR 1's scope.
 2. **F6 is pushed to PR #52.** PR #52's Linux `test` job failed because `go list -race` needs cgo and the gate pins `CGO_ENABLED=0`. Under `--race`, mutate.py now runs go with cgo on, as the gate's race row does.
    - Rejected: building F6 and asking again before the push.
+
+### Owner decisions, 2026-11-21 — after PR #52 and #53 merged
+
+PR #52 and #53 landed by rebase-merge, so their commits have new ids on main. Three answers, two as recommended.
+
+1. **The integration branch is force-pushed to its rebase onto main,** once the running load checks had finished, with a lease. Nothing on main is rewritten. The old head stays in the local backup branch `s1-1c-7/integration-pre-rebase`. [`commit-map.json`](s1-1c-7-plants/commit-map.json) maps the old commit ids to the new.
+   - Rejected: pushing the rebased branch under a new name, which leaves two integration branches.
+2. **The merged branches are deleted:** `s1-1c-7/pr-1`, local and on GitHub, and the local lane branches `w0-py-a`, `w0-py-b`, `w0-go`, `table-check` and `pr1-fix`. Each was checked against main with `git cherry` first.
+   - Rejected: deleting `pr-1` only, or keeping all of them until the sprint closes.
+3. **PR #53's two later items are fixed in S1.1c-7 now (≠ R),** not put in the backlog:
+   - race.py reads `--repeat` once, in its parse loop (FRT-A-2);
+   - it refuses a count below 1 before go runs (FRT-Q-3).
+
+   The fix is de42f64 on the integration branch. It was built test-first, had a narrow re-check by PR #53's reviewers, and goes in PR 2. The recommendation was the backlog, since neither item gives a wrong verdict.
+
+### Owner decisions, 2026-11-22 — CI coverage
+
+Asked how CI could take over part of PR 2's verification, the owner asked instead for a review of what CI and the nightly cover, and for more coverage. The coordinator's review: [s1-1c-7-ci-coverage-review.md](../reviews/s1-1c-7-ci-coverage-review.md). Three answers.
+
+1. **A CI-coverage sprint with all four packages (C and D ≠ R).** The recommendation was A and B.
+   - **A, test-strength re-checks:**
+     - a nightly row re-runs the committed plant batches against HEAD;
+     - a plant whose code has moved is reported as stale, never as a pass.
+   - **B, deeper concurrency:**
+     - race-stress for `internal/playback`, `internal/partition`, the root package and `io/inmemory`;
+     - a `-cpu 1,4` pass over `internal/...`;
+     - a nightly load row for the tests the sprints flagged as timing-sensitive;
+     - `stress.py` for the gate's threaded Python tests;
+     - the nightly split into parallel jobs.
+   - **C, wider inputs and gate coverage:**
+     - fuzz targets, the playback recording reader first, then the expression and validation inputs;
+     - real fuzzing of archcheck's target;
+     - coverage floors for `tools/` (Go) and `gate/` (Python), set after a measured baseline.
+   - **D, platform and performance:**
+     - a nightly macOS run of the test job;
+     - a nightly benchmark record, kept as an artifact with no pass or fail.
+2. **Its own sprint, right after S1.1c-7 and before S1.1c-8,** as recommended. S1.1c-8 and S1.1c-9 are broad refactors that need the stronger nets first. *(annotated 2026-11-22: re-planned the same day. A, B and D's macOS job run as a short sprint after S1.1c-7; C's fuzz targets go with the sprints that add the inputs; D's benchmark record moves into S10. See [the MVP-first re-plan](#owner-decisions-2026-11-22--the-mvp-first-re-plan).)*
+   - The sprint's id, its row in `gate/sprints.json` and its row in sprint-plan §3 are set at its own plan check.
+   - The reason: inserting a part before S1.1c-8 changes the printed order that `aging` reads.
+3. **Long-running tests run in the nightly; PR CI stays quick** (the owner's principle, stated after the answers).
+   - The nightly holds concurrency stress, load runs, fuzzing, the plant re-checks, the macOS test run and benchmarks, so that opening and merging a pull request stays easy.
+   - **Target:** PR CI's wall time is no longer than today's, about 10 minutes (gate #115 on main: 9m55s).
+   - The sprint's plan check reviews whether any current PR job belongs in the nightly instead.
+
+### Owner decisions, 2026-11-22 — G2-24's code lists
+
+G2-24 (S1.1c-7's plan check, Q10) makes `test_instruments_pin.py` judge every instrument's `code` list in `gate/law.json` against its row module's import closure. Two answers, one as recommended.
+
+1. **The strict rule (≠ R):** an instrument's `code` list is exactly its import closure, with no exceptions.
+   - `gate/runner/pyshim.py` leaves the lists of pyfloor, pytests and proofs. Those rows start it by path; none imports it.
+   - It stays a law path (`gate/runner/` is in `paths`), so LAW Δ still shows any change to it.
+   - The recommendation was to keep it listed, with one named exception in the test for a module a row starts by path. Its cost was a hand-kept list of three rows.
+2. **G2-24 goes in PR 2,** as recommended, so PR 2's spot-check and blind review cover it.
+   - Rejected: holding it for PR 3, which would keep PR 2 exactly W1 and W2 but leave G2-24 waiting a wave.
+
+### Owner decisions, 2026-11-22 — the recorder's starvation and C7's timing
+
+Found while timing E1's C7, and already on main: with one CPU (`GOMAXPROCS=1`), a caller that runs `TableWrite` in a tight loop starves the app's recorder goroutine. The recording stops early with "recording queue full"; detection goes on, but the replay log is cut short. With 2 or more CPUs the recorder keeps up, and `Send`, which does not wait for a reply, is not affected. Evidence in the [sprint record](s1-1c-7-record.md). Two answers, both as recommended.
+
+1. **The starvation is fixed in S1.1c-7, in PR 2,** before PR 2's review.
+   - The full loop applies: a design note that confirms the cause on one CPU, blind reviews, a test that fails first on one CPU, the fix, timings on the per-event path, and load runs.
+   - Rejected: the fix in PR 3, which ships PR 2 with the weakness; a known issue for a later sprint, the default for new work under ground rule 7.
+2. **C7's table-write path is timed with no recorder.** `BenchmarkTableWritePath` runs on an app without a recording, so compare.py judges it at one CPU like every other benchmark. A recorded variant comes with the starvation fix.
+   - Rejected: keeping the recorder and timing on all CPUs, outside compare.py's one-CPU method (S1.1c-6), for a noisier verdict.
+
+### Owner decisions, 2026-11-22 — PR 2's remaining steps
+
+The owner asked whether the remaining steps were worth their time for the MVP. Three answers, two as recommended.
+
+1. **The starvation fix stays in PR 2 (≠ R).** Asked again, the owner kept [the earlier answer](#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing). The recommendation this time was a known issue with a forward, since the weakness is old, narrow and never affects detection.
+2. **W1 and W2 skip their spot-check** (plan check §7.6). *(annotated 2026-11-22, later the same day: the owner asked for the work in hand to go out as pull requests at once. PR 2 opens before its blind review and before the starvation fix; its body lists both as open.)* The coordinator had already re-run every lane proof in full on the integration branch ([the record](s1-1c-7-record.md)), so a sampled re-run adds little. PR 2 keeps its blind architecture and QA review, the fix round, T2 and T4.
+   - Rejected: keeping both; T2 and T4 only, which breaks [one review per pull request](#owner-decisions-2026-11-21--s11s-pull-requests).
+3. **The coordinator drafts an MVP-first re-plan** of what follows PR 2 (W3, the CI-coverage sprint, S1.1c-8 to -10), for the owner to decide on. Nothing changes until then.
+
+### Owner decisions, 2026-11-22 — the MVP-first re-plan
+
+The owner asked whether the work ahead of the MVP's features was worth its time. The plan then put five blocks before S4.1: the rest of S1.1c-7, the CI-coverage sprint, and S1.1c-8, -9 and -10. The coordinator drafted a re-plan. Two answers, both as recommended.
+
+1. **MVP first.** After PR 2, the order is:
+   1. S1.1c-7's W3 (lanes E2 and CD), whole, then PR 3 and the close. W3 holds five behaviour defects and makes 43 tests truthful in the packages the pattern engine changes next.
+   2. A short nightly-nets sprint: the CI-coverage sprint's packages A and B, and D's macOS job.
+   3. S4.1 and S4.2, the pattern engine.
+   4. The MVP's later sprints, S5.1 to S12, with the debt slices of decision 2 between them.
+
+   C's fuzz targets go with the sprints that add the inputs, and D's benchmark record moves into S10, which owns benchmarks.
+   - Rejected: the same without the nets sprint; the plan as it stood, about 5 to 7 weeks before any MVP feature; stopping S1.1c-7 after PR 2, which leaves five known behaviour defects open.
+2. **The survey's technical debt is all fixed before v0.1.0, in slices.** Each package's findings are fixed right after the MVP sprints that reshape it, so the cleanup lands on final code:
+   - after S4.2: the size limits (S1.1c-9's scope, before its exemptions expire on 2027-02-11), the survey's findings in the pattern engine's packages, and the behaviour leftovers S1.1c-7 forwards to S1.1c-10;
+   - before S6.1, the Go API sprint: the public names, approved one by one;
+   - before S12: the test renames (S1.1c-8's scope) and whatever is left.
+   - Rejected: one debt block before S12; all of it before S4.1.
+
+**The re-cut is not made yet.** `gate/sprints.json`, sprint-plan §3, the known issues' forwards and the parts' bound move in one commit at a plan check after PR 2, as at S1.1c-7's G0. Until then the printed order stands.

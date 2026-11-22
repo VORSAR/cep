@@ -1,0 +1,15 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "red"
+    },
+    "file": "gate/toolchain/treehash.py",
+    "find": "    if len(argv) < 2:\n        print(USAGE_LINE, file=sys.stderr, flush=True)\n        return USAGE\n",
+    "id": "G10-14",
+    "new_rev": "c669865629cdb4853e0a3695ee511626b3a31a8d",
+    "old_rev": "c669865629cdb4853e0a3695ee511626b3a31a8d",
+    "py": "gate.toolchain.tests.test_treehash.TreeChild.test_no_argument_prints_the_usage_line_and_exits_2",
+    "replace": ""
+  }
+]

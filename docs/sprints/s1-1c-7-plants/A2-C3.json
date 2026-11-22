@@ -1,0 +1,26 @@
+[
+  {
+    "expect": {
+      "new": "red",
+      "old": "green"
+    },
+    "file": "gate/canary/candidate.py",
+    "find": "f\"canary: {name} moved: position",
+    "id": "G2-9",
+    "new_rev": "bb85a475da99b3a729fcec5619d11a3f69dff58c",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.canary.tests.test_candidate.Structural.test_tool_moved_is_named",
+    "replace": "f\"canary: {name} reordered: position"
+  },
+  {
+    "control": true,
+    "expect": {
+      "new": "green",
+      "old": "green"
+    },
+    "id": "G2-9-control",
+    "new_rev": "bb85a475da99b3a729fcec5619d11a3f69dff58c",
+    "old_rev": "873440f32142192041eaca0a3e373c8ba480dffa",
+    "py": "gate.canary.tests.test_candidate.Structural.test_tool_moved_is_named"
+  }
+]

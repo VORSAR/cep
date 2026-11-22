@@ -1,0 +1,47 @@
+[
+ {
+  "id": "g10-1-apply-revert",
+  "note": "G10-1 K1h: the activation step no longer puts the starting rows (App.Loads, TableLoad, applyLoads, applyWrite and checkLoads kept)",
+  "file": "internal/runtime/transitions.go",
+  "find": "\t\tif err := rt.applyLoads(a); err != nil { // checked at Add: only a broken invariant reaches here\n\t\t\tit.reply <- reply{err: err}\n\t\t\treturn\n\t\t}\n",
+  "replace": "",
+  "test": "TestActivateAppliesTheStartingRowsInItsStep",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "g10-1-apply-revert-recording",
+  "note": "G10-1 K1h: the same plant as g10-1-apply-revert, read on the recording test",
+  "file": "internal/runtime/transitions.go",
+  "find": "\t\tif err := rt.applyLoads(a); err != nil { // checked at Add: only a broken invariant reaches here\n\t\t\tit.reply <- reply{err: err}\n\t\t\treturn\n\t\t}\n",
+  "replace": "",
+  "test": "TestStartingRowsBeyondRecordQueueRecordInFull",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "g10-1-size-revert",
+  "note": "G10-1 K1h (DA-S1): the recording queue is the configured size again, with no slot per starting row",
+  "file": "internal/runtime/app.go",
+  "find": "newRecQ(app.Recorder, recordQueueFor(r.cfg.RecordQueue, app.Loads))",
+  "replace": "newRecQ(app.Recorder, r.cfg.RecordQueue)",
+  "test": "TestStartingRowsBeyondRecordQueueRecordInFull",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "g10-1-check-revert",
+  "note": "G10-1 K1h (Condition A): Add no longer checks the starting rows",
+  "file": "internal/runtime/build.go",
+  "find": "\treturn checkLoads(i, a)\n",
+  "replace": "\treturn nil\n",
+  "test": "TestAddRefusesStartingRowsItCouldNotApply",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "g10-1-build-revert",
+  "note": "G10-1 K1h (Condition B): build no longer refuses an app with starting rows",
+  "file": "internal/runtime/build.go",
+  "find": "\t\tif len(apps[i].Loads) > 0 { // applied by the activation step, which a built app never takes\n",
+  "replace": "\t\tif false {\n",
+  "test": "TestABuiltAppTakesNoStartingRows",
+  "pkg": "./internal/runtime"
+ }
+]

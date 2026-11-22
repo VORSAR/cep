@@ -1,0 +1,27 @@
+[
+ {
+  "expect": {
+   "new": "red",
+   "old": "green"
+  },
+  "file": "gate/law.json",
+  "find": "\"gate/runner/rows/__init__.py\",\n        \"gate/runner/rows/gofmt.py\"",
+  "id": "G2-24",
+  "new_rev": "bd413f305c598329eaa9d0602737423c605bffe1",
+  "note": "G2-24 K2a: gofmt's code loses its row module; the old pin skipped gofmt, the new one judges it",
+  "old_rev": "e0f0e13ed8d3d3ac7f9d9064b9ea9d9262efede0",
+  "py": "gate.runner.tests.test_instruments_pin.CodeClosure.test_each_instruments_code_is_its_import_closure",
+  "replace": "\"gate/runner/rows/__init__.py\""
+ },
+ {
+  "control": true,
+  "expect": {
+   "new": "green",
+   "old": "green"
+  },
+  "id": "G2-24-control",
+  "new_rev": "bd413f305c598329eaa9d0602737423c605bffe1",
+  "old_rev": "e0f0e13ed8d3d3ac7f9d9064b9ea9d9262efede0",
+  "py": "gate.runner.tests.test_instruments_pin.CodeClosure.test_each_instruments_code_is_its_import_closure"
+ }
+]
