@@ -10,8 +10,8 @@ import (
 	"github.com/vorsar/cep/internal/event"
 )
 
-// build validates the apps and builds their state and every shard's rules; it starts nothing (Start and NewSync
-// share it, design s3-2b-1 v2 §4).
+// build validates the apps and builds their state and every shard's rules; it starts nothing. New, with no apps,
+// and NewSync share it (design s3-2b-1 v2 §4); Start is New, then Add and Activate, so its apps never come here.
 func build(cfg Config, apps []App) (*Runtime, error) {
 	cfg = withDefaults(cfg)
 	for i := range apps {
