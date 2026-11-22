@@ -5,7 +5,9 @@ package runtime
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"unicode/utf8"
 
@@ -138,5 +140,95 @@ func TestStartingRowsBeyondRecordQueueRecordInFull(t *testing.T) {
 	}
 	if na, nb := ta.Snapshot().Len(), tb.Snapshot().Len(); na != 3 || nb != 3 {
 		t.Errorf("rows in A %d, B %d; want 3 and 3", na, nb)
+	}
+}
+
+// startingRowsRecord is one record a startingRowsRecorder was given: its kind and, for a table record's row, the
+// table, the operation and the row's k and v.
+type startingRowsRecord struct {
+	kind  string
+	table int
+	op    TableOp
+	k     string
+	v     int64
+}
+
+// startingRowsRecorder is a Recorder that notes each record it is given, in the order given; a table record is noted
+// row by row.
+type startingRowsRecorder struct {
+	mu    sync.Mutex
+	given []startingRowsRecord
+}
+
+func (s *startingRowsRecorder) note(recs ...startingRowsRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.given = append(s.given, recs...)
+	return nil
+}
+
+// records is every record noted so far.
+func (s *startingRowsRecorder) records() []startingRowsRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.given)
+}
+
+func (s *startingRowsRecorder) Header(int64) error { return s.note(startingRowsRecord{kind: "header"}) }
+func (s *startingRowsRecorder) Tick(int64) error   { return s.note(startingRowsRecord{kind: "tick"}) }
+func (s *startingRowsRecorder) Stop() error        { return s.note(startingRowsRecord{kind: "stop"}) }
+func (s *startingRowsRecorder) Event(*event.Event, int64, []byte) error {
+	return s.note(startingRowsRecord{kind: "event"})
+}
+
+func (s *startingRowsRecorder) Rejected(int, int64, *event.DecodeError) error {
+	return s.note(startingRowsRecord{kind: "rejected"})
+}
+
+func (s *startingRowsRecorder) BatchEnd(int, string) error {
+	return s.note(startingRowsRecord{kind: "batch end"})
+}
+
+func (s *startingRowsRecorder) Table(tableID int, op TableOp, rows [][]event.Value) error {
+	recs := make([]startingRowsRecord, len(rows))
+	for i, row := range rows {
+		recs[i] = startingRowsRecord{kind: "table", table: tableID, op: op, k: row[0].Str, v: row[1].I}
+	}
+	return s.note(recs...)
+}
+
+// The starting rows are put and recorded in load order (App.Loads: "put table by table in load order"): of two loads
+// of the same key the later one's row is the row after Activate, and the recording is the header, each load's row as
+// a table put in that order, then the stop. The stop is the witness that every record before it was given.
+func TestStartingRowsAreAppliedAndRecordedInLoadOrder(t *testing.T) {
+	t.Parallel()
+	ctx := cgCtx(t)
+	r := ldRuntime(t)
+	t.Cleanup(func() { ldClose(t, r) })
+	tb := startingRowsTable(t, "T")
+	rec := &startingRowsRecorder{}
+	app := cgApp(t, func(event.Event) error { return nil })
+	app.Recorder = rec
+	app.Tables = table.NewSet([]*table.Table{tb})
+	k := event.Value{Kind: event.TString, Str: "k"}
+	app.Loads = []TableLoad{
+		{Table: 0, Rows: [][]event.Value{{k, {Kind: event.TInt, I: 1}}}},
+		{Table: 0, Rows: [][]event.Value{{k, {Kind: event.TInt, I: 2}}}},
+	}
+	id := ldStarted(t, ctx, r, app)
+	if row, ok := tb.Snapshot().Get([]event.Value{k}); !ok || row[1].I != 2 {
+		t.Errorf("T's row k after Activate: %v, %v; want [k 2] (the later load's row)", row, ok)
+	}
+	if _, err := r.Drain(ctx, id); err != nil { // waits for the recording: the stop and all before it are given
+		t.Fatalf("Drain: %v", err)
+	}
+	want := []startingRowsRecord{
+		{kind: "header"},
+		{kind: "table", table: 0, op: TablePut, k: "k", v: 1},
+		{kind: "table", table: 0, op: TablePut, k: "k", v: 2},
+		{kind: "stop"},
+	}
+	if got := rec.records(); !slices.Equal(got, want) {
+		t.Errorf("the records given: %+v; want %+v (the header, the loads' rows in load order, the stop)", got, want)
 	}
 }
