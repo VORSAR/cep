@@ -12,6 +12,11 @@ import (
 // that did not return makes Drain return the stuck count wrapped in ctx.Err() without the barrier (the input is
 // refused from here; a repeated Drain runs the barrier without waiting again). A never-activated app is drained at
 // once: nothing was delivered, nothing is recorded. A second Drain of a drained app returns the same result.
+//
+// The app's phase is draining while any Drain of it is in flight, and for good once one has queued an item (the
+// quiet item or the drain item). A Drain that returns an error having queued nothing leaves the app as it is without
+// that Drain: draining if another Drain is in flight or has queued an item, else taking input if the router has
+// activated it, else inactive.
 func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	a, err := r.appOf(app)
 	if err != nil {
@@ -20,16 +25,16 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	if appPhase(a.phase.Load()) == phaseRemoved {
 		return DrainResult{}, ErrRemoved
 	}
-	was := a.markDraining()
+	a.holdDraining()
 	var runs []error
 	if a.started.Load() {
 		runs, err = r.awaitRuns(ctx, a)
 		if err != nil {
-			a.revertUnlessQuieted(was) // the quiet item was never queued: live, as before this Drain
+			a.releaseDraining() // a no-op once the quiet item is queued: the app stays draining
 			return DrainResult{Runs: runs}, err
 		}
 	}
-	ch, err := r.queueDrain(ctx, a, app, was)
+	ch, err := r.queueDrain(ctx, a, app)
 	if err != nil {
 		return DrainResult{Runs: runs}, err
 	}
@@ -45,48 +50,63 @@ func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	return DrainResult{Pending: rep.pending, Runs: runs}, nil
 }
 
-// markDraining moves the app to phaseDraining and returns the phase it moved from.
-func (a *appState) markDraining() appPhase {
-	// was is the phase this Drain moved from — taken from the CAS that succeeded, so a revert never restores a phase
-	// another call changed meanwhile (review B1); phaseDraining: this Drain moved nothing, so it reverts nothing.
-	was := phaseDraining
-	switch {
-	case a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseDraining)):
-		was = phaseInactive
-	case a.phase.CompareAndSwap(int32(phaseActive), int32(phaseDraining)):
-		was = phaseActive
-	}
-	return was
-}
-
-// revertDrain moves the app back to was, the phase markDraining moved it from: nothing was queued, so the app is not
-// drained (QA Q15; break-it R1).
-func (a *appState) revertDrain(was appPhase) {
-	if was != phaseDraining {
-		a.phase.CompareAndSwap(int32(phaseDraining), int32(was))
+// markDraining moves an inactive or active app to phaseDraining; a removed app stays removed.
+func (a *appState) markDraining() {
+	if !a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseDraining)) {
+		a.phase.CompareAndSwap(int32(phaseActive), int32(phaseDraining))
 	}
 }
 
-// revertUnlessQuieted moves the app back to was unless a Drain has queued the quiet item. It reads waited under
-// runMu, which awaitRuns holds while it queues that item and sets waited, so the read and the revert never race it.
-func (a *appState) revertUnlessQuieted(was appPhase) {
+// holdDraining begins a Drain: the phase moves to draining at once, before any lock, so the input is refused from
+// here; then the Drain is counted in a.holds under runMu and the phase is moved again, because a releaseDraining
+// that ran between the first move and the lock may have put it back. The wait on runMu is bounded by another
+// Drain's own deadline (awaitRuns holds the lock while it waits for the runs).
+func (a *appState) holdDraining() {
+	a.markDraining()
 	a.runMu.Lock()
 	defer a.runMu.Unlock()
-	if !a.waited {
-		a.revertDrain(was)
+	a.holds++
+	a.markDraining()
+}
+
+// releaseDraining ends a Drain that queued nothing (QA Q15; break-it R1). Once a Drain has queued the quiet item
+// the app is quieted and stays draining. Otherwise this Drain's hold is given up, and when it was the last one the
+// drain flag is cleared and the phase restored. A Drain that queued its drain item never calls this, so its hold
+// keeps the app draining. It reads waited under runMu, which awaitRuns holds while it queues the quiet item and
+// sets waited.
+func (a *appState) releaseDraining() {
+	a.runMu.Lock()
+	defer a.runMu.Unlock()
+	if a.waited {
+		return
+	}
+	a.holds--
+	if a.holds > 0 {
+		return // another Drain is in flight, or queued its drain item: the phase is its to keep
+	}
+	a.draining.Store(false)
+	a.restorePhase()
+}
+
+// restorePhase moves a draining app back to what the router holds it as, read now and not when the Drain began:
+// to inactive, then on to active once the router has activated it (a.started). The read comes after the move, so an
+// Activate whose own move to active met phaseDraining is finished here. An active app reads inactive for an instant
+// on the way: a call landing in it is refused as not activated, as it was refused as drained just before. The
+// caller holds runMu.
+func (a *appState) restorePhase() {
+	a.phase.CompareAndSwap(int32(phaseDraining), int32(phaseInactive))
+	if a.started.Load() {
+		a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))
 	}
 }
 
 // queueDrain sets the drain flag, then queues the drain item and returns its reply channel. When nothing was queued
-// and no earlier Drain set the flag, it clears the flag and, if the quiet item was never queued, reverts the phase.
-func (r *Runtime) queueDrain(ctx context.Context, a *appState, app AppID, was appPhase) (chan reply, error) {
-	set := !a.draining.Swap(true)
+// it gives up this Drain's hold, which clears the flag and restores the phase once no Drain holds the app.
+func (r *Runtime) queueDrain(ctx context.Context, a *appState, app AppID) (chan reply, error) {
+	a.draining.Store(true)
 	it := item{kind: iDrain, app: app, reply: make(chan reply, 1)}
 	if err := r.enqueue(ctx, it); err != nil {
-		if set { // nothing was queued, and no earlier Drain set the flag: the app is not drained (QA Q15; break-it R1)
-			a.draining.Store(false)
-			a.revertUnlessQuieted(was)
-		}
+		a.releaseDraining() // nothing was queued by this Drain (QA Q15; break-it R1)
 		return nil, err
 	}
 	return it.reply, nil

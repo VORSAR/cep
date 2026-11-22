@@ -32,7 +32,7 @@ type appState struct {
 	start     int64              // the router's stamp when it installed the app: the Ingest's and the header's
 	srcCtx    context.Context    // the source context, made at Add; Drain cancels it
 	cancelSrc context.CancelFunc //
-	runMu     sync.Mutex         // guards runs and waited
+	runMu     sync.Mutex         // guards runs, waited and holds
 	runs      []*runState        // Run's goroutines
 	waited    bool               // Drain's caller side: the runs were awaited once
 	quiet     bool               // the router's: ticks skip the app (S3.1-1's D3)
@@ -41,6 +41,7 @@ type appState struct {
 	removed   sync.Once          // onRemoved runs once
 	activated bool               // the router's: the app was activated (iActivate); ticks reach it, its drain records
 	removing  bool               // the router's: a removal was accepted; a later Activate or Remove is refused
+	holds     int                // under runMu: the Drains holding the phase at draining (in flight, or drain item queued)
 }
 
 // runState is one Run goroutine: err is written before done is closed.
