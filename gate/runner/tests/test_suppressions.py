@@ -503,15 +503,17 @@ SHAPE = "ruff.toml: lint.{key} is not a table of code lists"
 
 class RuffWaiverTableOfTheWrongShape(support.GateTest):
     """lint.per-file-ignores is left out of the whole-document pin (ruff.json checks it both ways), so its shape is
-    checked on its own: a table of string lists, or one named fault and no both-ways comparison."""
+    checked on its own: a table of string lists, or one named fault and no both-ways comparison. A case that passes
+    no list has no pair to compare, so the last case passes the committed ruff.json: only there would a comparison
+    made after the shape fault show."""
 
-    def pin(self, lines: str) -> list[str]:
+    def pin(self, lines: str, lists: dict[str, allowlists.AllowList] | None = None) -> list[str]:
         text = pinned_ruff_toml().replace("[lint]\n", f"[lint]\n{lines}", 1)
         self.assertNotEqual(text, pinned_ruff_toml())  # witness: the edit applied
         self.write("ruff.toml", text)
         with contextlib.chdir(self.repo):
             try:
-                return row.ruff_pin({})
+                return row.ruff_pin(lists or {})
             except (AttributeError, TypeError) as e:  # the row died with a traceback and no named fault
                 self.fail(f"ruff_pin raised {e!r}")
 
@@ -534,6 +536,12 @@ class RuffWaiverTableOfTheWrongShape(support.GateTest):
                 SHAPE.format(key="extend-per-file-ignores"),
             ],
         )
+
+    def test_a_table_of_the_wrong_shape_is_not_compared_with_the_committed_list(self):
+        with open(os.path.join(support.REPO, "tools", "allowlists", "ruff.json"), encoding="utf-8") as f:
+            lists = {"ruff": allowlists.load(f.read(), "ruff")}
+        self.assertTrue(lists["ruff"].entries)  # witness: a both-ways comparison would have pairs to name
+        self.assertEqual(self.pin('per-file-ignores = ["E501"]\n', lists), [SHAPE.format(key="per-file-ignores")])
 
 
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
