@@ -139,7 +139,7 @@ func BenchmarkCompactAndValid(b *testing.B) {
 var leafEscaped = [][]byte{
 	[]byte(`a\"b\\c\/d\n\t\r\b\f`),
 	[]byte("é"),
-	[]byte(`😀`),
+	[]byte(`\ud83d\ude00`),
 	[]byte(`\ud800x`),
 	[]byte("\xffab"),
 	[]byte(`abcdefghijklmnopqrst\nuvwxyzABCDEFGHIJKL`),
@@ -156,6 +156,18 @@ func BenchmarkAppendUnescaped(b *testing.B) {
 		}
 	}
 	_ = n
+}
+
+// TestTheSurrogatePairInputIsWrittenAsTwoEscapes: leafEscaped[2] is the pair's two backslash-u escapes as text (12
+// bytes), so BenchmarkAppendUnescaped and the appendUnescaped pin reach the pair's branch; it decodes to U+1F600.
+func TestTheSurrogatePairInputIsWrittenAsTwoEscapes(t *testing.T) {
+	t.Parallel()
+	if in := string(leafEscaped[2]); in != `\ud83d\ude00` {
+		t.Fatalf("leafEscaped[2] = %q; want the pair's two escapes as text", in)
+	}
+	if got := string(appendUnescaped(nil, leafEscaped[2])); got != string(rune(0x1F600)) {
+		t.Fatalf("appendUnescaped(%q) = %q; want U+1F600", leafEscaped[2], got)
+	}
 }
 
 // leafJSONValues are (*scanner).value's inputs, each accepted whole: nested objects and arrays with every literal,
