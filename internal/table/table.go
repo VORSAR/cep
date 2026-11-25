@@ -47,19 +47,13 @@ type key struct {
 	rest string
 }
 
-var (
-	errEmptyName = errors.New("empty table name")
-	errNoAttrs   = errors.New("no attributes declared")
-	errNoKey     = errors.New("no primary key")
-)
-
 // New validates a table declaration and returns the table with an empty current Version. It rejects an empty
 // name; no attributes; an empty or duplicate attribute name (case-sensitive); a type outside TString…TObject; an
 // empty key; and a key column that is not declared, is named twice, or is an object. An optional key column is
 // accepted; a null key value is refused when written (owner D3: the deploy error for both is S3.3's).
 func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 	if name == "" {
-		return nil, fmt.Errorf("table: %w", errEmptyName)
+		return nil, errors.New("table: empty table name")
 	}
 	own := slices.Clone(attrs)
 	at, err := indexAttrs(name, own)
@@ -67,7 +61,7 @@ func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 		return nil, err
 	}
 	if len(keyCols) == 0 {
-		return nil, fmt.Errorf("table %s: %w", name, errNoKey)
+		return nil, fmt.Errorf("table %s: no primary key", name)
 	}
 	t := &Table{name: name, attrs: own, isKey: make([]bool, len(own))}
 	if err := t.markKey(at, keyCols); err != nil {
@@ -81,7 +75,7 @@ func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 // type outside TString…TObject.
 func indexAttrs(name string, attrs []event.Attr) (map[string]int, error) {
 	if len(attrs) == 0 {
-		return nil, fmt.Errorf("table %s: %w", name, errNoAttrs)
+		return nil, fmt.Errorf("table %s: no attributes declared", name)
 	}
 	at := make(map[string]int, len(attrs))
 	for i, a := range attrs {
