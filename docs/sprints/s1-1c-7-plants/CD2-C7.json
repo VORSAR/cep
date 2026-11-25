@@ -1,0 +1,32 @@
+[
+ {
+  "id": "G2-133",
+  "note": "G2-133 K2a: every second fresh Set.Snapshot returns the first snapshot ever taken",
+  "file": "internal/table/table.go",
+  "find": "\ts.last = &Snapshot{versions: versions}\n\treturn s.last\n}\n",
+  "replace": "\ts.last = &Snapshot{versions: versions}\n\tif plantOld == nil {\n\t\tplantOld = s.last\n\t}\n\tif plantN++; plantN%2 == 0 {\n\t\treturn plantOld\n\t}\n\treturn s.last\n}\n\nvar (\n\tplantOld *Snapshot\n\tplantN   int\n)\n",
+  "test": "TestBreakitGuardSnapshotUnderConcurrentWriters",
+  "pkg": "internal/table",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "482b11e072ec787dfa7455f4e629fa808eee0e9a",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-133:control",
+  "note": "G2-133 control: the real code",
+  "control": true,
+  "test": "TestBreakitGuardSnapshotUnderConcurrentWriters",
+  "pkg": "internal/table",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "482b11e072ec787dfa7455f4e629fa808eee0e9a",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]

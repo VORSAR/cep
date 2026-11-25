@@ -1,0 +1,82 @@
+[
+ {
+  "id": "G2-144",
+  "file": "tools/apipartition/main.go",
+  "find": "if len(m.Names) == 0 {",
+  "replace": "if len(m.Names) < 0 {",
+  "old_test": "TestEmbeddedFieldIsRefused",
+  "new_test": "TestEmbeddedInterfaceIsRefused",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a5930bf6f67b322bb0a35a6bec01db1608d430bc"
+ },
+ {
+  "id": "G2-144-control",
+  "control": true,
+  "old_test": "TestEmbeddedFieldIsRefused",
+  "new_test": "TestEmbeddedInterfaceIsRefused",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a5930bf6f67b322bb0a35a6bec01db1608d430bc"
+ },
+ {
+  "id": "G2-145",
+  "file": "tools/apipartition/main.go",
+  "find": "fmt.Printf(\"failed: %v\\n\", err)",
+  "replace": "_ = os.WriteFile(golden, []byte(\"x\"), 0o644); fmt.Printf(\"failed: %v\\n\", err)",
+  "test": "TestEmbeddedFieldIsRefused",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a5930bf6f67b322bb0a35a6bec01db1608d430bc"
+ },
+ {
+  "id": "G2-145-control",
+  "control": true,
+  "test": "TestEmbeddedFieldIsRefused",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a5930bf6f67b322bb0a35a6bec01db1608d430bc"
+ },
+ {
+  "id": "G2-146",
+  "file": "tools/apipartition/main.go",
+  "find": "sig += fmt.Sprintf(\" // iota %d\", specIndex)",
+  "replace": "sig += fmt.Sprintf(\" // iota %d\", specIndex+1)",
+  "test": "TestBreakitIotaRepetitionKeepsTypeAndValue",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a5930bf6f67b322bb0a35a6bec01db1608d430bc"
+ },
+ {
+  "id": "G2-146-control",
+  "control": true,
+  "test": "TestBreakitIotaRepetitionKeepsTypeAndValue",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a5930bf6f67b322bb0a35a6bec01db1608d430bc"
+ }
+]

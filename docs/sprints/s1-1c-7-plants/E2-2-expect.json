@@ -1,0 +1,191 @@
+[
+ {
+  "id": "G2-1",
+  "file": "sink.go",
+  "find": "canon, err := playback.AppendEvent(nil, sch, e)",
+  "replace": "canon, err := playback.AppendEvent(nil, sch, e); if err == nil { return nil }",
+  "test": "TestRowReaderNullsAndTypes",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-1-control",
+  "control": true,
+  "test": "TestRowReaderNullsAndTypes",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-2-type",
+  "file": "row.go",
+  "find": "fmt.Errorf(\"cep: attribute %q is declared %v; %s was called\", a.Name, a.Type, what)",
+  "replace": "fmt.Errorf(\"cep: an attribute is declared %v; %s was called\", a.Type, what)",
+  "test": "TestSendRowChecks",
+  "subtest": "wrong type",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-2-unset",
+  "file": "row.go",
+  "find": "fmt.Errorf(\"cep: attribute %q is not optional and was not set\", a.Name)",
+  "replace": "fmt.Errorf(\"cep: an attribute is not optional and was not set\")",
+  "test": "TestSendRowChecks",
+  "subtest": "s unset",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-2-time",
+  "file": "row.go",
+  "find": "fmt.Errorf(\"cep: the time attribute %q was not set\", a.Name)",
+  "replace": "fmt.Errorf(\"cep: the time attribute was not set\")",
+  "test": "TestSendRowChecks",
+  "subtest": "t unset",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-2-null",
+  "file": "row.go",
+  "find": "fmt.Errorf(\"cep: attribute %q is not optional; SetNull was called\", a.Name)",
+  "replace": "fmt.Errorf(\"cep: an attribute is not optional; SetNull was called\")",
+  "test": "TestSendRowChecks",
+  "subtest": "SetNull on a non-optional attribute",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-2-control",
+  "control": true,
+  "test": "TestSendRowChecks",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-3",
+  "file": "diagnostic.go",
+  "find": "%d finding(s):\", e.Name, len(e.Diagnostics))",
+  "replace": "%d finding(s):\", e.Name, len(e.Diagnostics)+1)",
+  "test": "TestDeployReportsEveryDiagnosticAtOnce",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-3-control",
+  "control": true,
+  "test": "TestDeployReportsEveryDiagnosticAtOnce",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-4-table",
+  "file": "row.go",
+  "find": "fmt.Errorf(\"cep: attribute %q is not optional and was not set\", a.Name)",
+  "replace": "fmt.Errorf(\"cep: a key attribute is not optional and was not set\")",
+  "test": "TestTableRowsAreCheckedAsTableWriteChecksThem",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-4-deploy",
+  "file": "row.go",
+  "find": "fmt.Errorf(\"cep: attribute %q is not optional and was not set\", a.Name)",
+  "replace": "fmt.Errorf(\"cep: a key attribute is not optional and was not set\")",
+  "test": "TestWithTableRowsAreVisibleToTheFirstEvent",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-4-table-control",
+  "control": true,
+  "test": "TestTableRowsAreCheckedAsTableWriteChecksThem",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ },
+ {
+  "id": "G2-4-deploy-control",
+  "control": true,
+  "test": "TestWithTableRowsAreVisibleToTheFirstEvent",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8"
+ }
+]

@@ -1,0 +1,12 @@
+[
+ {
+  "id": "g10-17-revert",
+  "note": "G10-17 K1: value's refusal back to \"a %s literal is not a %s\" (the pins read the new text)",
+  "file": "internal/plan/expect.go",
+  "find": "fmt.Errorf(\"a literal of kind %s is not of type %s\", l.Kind, t)",
+  "replace": "fmt.Errorf(\"a %s literal is not a %s\", l.Kind, t)",
+  "test": "TestValueEveryKindAndType",
+  "pkg": "internal/plan",
+  "timeout": "180s"
+ }
+]

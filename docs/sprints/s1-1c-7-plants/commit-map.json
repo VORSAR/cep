@@ -1,5 +1,5 @@
 {
- "about": "S1.1c-7's commit ids before and after a rewrite of history. pr-52: the integration branch's commits as the record's G0 and W0 rows name them -> the same commits on main after PR #52's rebase-merge (and the later docs commits on the integration branch). lanes: each lane branch's commit -> its pick on the integration branch after the rebase onto main (06f17b5).",
+ "about": "S1.1c-7's commit ids before and after a rewrite of history. pr-52: the integration branch's commits as the record's G0 and W0 rows name them -> the same commits on main after PR #52's rebase-merge (and the later docs commits on the integration branch). lanes: each lane branch's commit -> its pick on the integration branch after the rebase onto main (06f17b5). w3: each W3 lane commit (lanes E2, CD1, CD2 and the recording-queue fix, branched from main at cc2c2c1) to its pick on the integration branch for PR 3.",
  "lanes": {
   "074b48dc0d7800d96cb773b2c8bc32d1519c4b7b": "95c96f9907675ecaeccd7f4a7b2182d581746c44",
   "13ef6556896515a2b43ba9d167321e2686019099": "262ae0d3e0e754342ae5206eb8be7793811fa330",
@@ -60,5 +60,32 @@
   "e23b6dce0ae586072bbac0bccb9f4492dca51869": "fac41c9a4a6d714036c907e148dbf180430a60fa",
   "e417f515d6bbe6cc0cf5f30925899ad769eddf25": "ceacd9ac555eb2887b8d731880b7a62c67691cb4",
   "f65a3a9281261a273402ce45bd0d9fc737e81733": "80f267adf7a761d89240c80787f04339c39bb6ce"
+ },
+ "w3": {
+  "0b35652c8cc8333f4a67474afabc8cb4b7009931": "b9218d914aecf267aacd1158fe7e5f83932b3157",
+  "0cdf77c632e6f9835f9890e0ce7b599ef83ab9a1": "60a1a574a4a35b4459f26b78f715cf33977cec09",
+  "0f62245f6992a94f5146f5f38d8e2e0f642a35f4": "47c140617700df59316555c3b6428212cc17cde5",
+  "1f7e85b0aad026659b2e19beb9d0265f8bc91f9c": "da0d1a37621c8589e515ee609393567d30babf6c",
+  "348b2ff7b4b2328c5b41f5754c64b7e71352e0e8": "1bb97615be039f5d8afb6c90143df55bb36df5c8",
+  "482b11e072ec787dfa7455f4e629fa808eee0e9a": "6a22a470a856cc9df8181dbbeb3a45a24f2d47a4",
+  "4cb8c86a75be95d52b95ddae9e029f3da5b2f2cc": "153cf5e7ce96b196090d42f060c3a50e41d812a0",
+  "4f3cf19967937908ae6ecab2416d44e481a163e0": "f788400d3c283ab692a2033245f8e3cf7f566a9e",
+  "50290faf63ee0bdedc2c4cd4f7aae7443c70fc83": "a30808c5127b65de5c8fb3ceb222c029826cc5d1",
+  "6adf09a0a5e915d94d885ad50a19e7bdd8bbbaa3": "a4beb9300bedaa82cfc0ead7a928c7ef0b62ff6e",
+  "6b76fb112a25075c8dac50c85154e2901a05b2dd": "f937d9b385686667d32b9c558049ea913e162188",
+  "72129c204efd557f07aee4afd69a95be5a8007e7": "8f3e6ddd008a75c2d5ba3f3638a79ee19c9aa432",
+  "772de20e93db9e38221aed319a79e7564aefc2a5": "21bbc2407b04a0b16ea899027ee05b9272590419",
+  "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb": "5b783dfaf61ac975f68a723f066c1897b5731479",
+  "92b0e62569718626e22507ea99cf7cb36de4fcb0": "99f3072860a828d1201678a1c80e6342346fda24",
+  "a0781b11ce85102cd8029b12034ff9daeb15267e": "0d42ddacf194ad0061d2ee56e516581ad189bbb8",
+  "a5930bf6f67b322bb0a35a6bec01db1608d430bc": "28774dec2904a3a5be5755b80faaa70ef14bd4bb",
+  "b8bc0c63ae6c4dd05e703fe2c9a4250e64fbc475": "1cfad34da18a8030d67a46468a19337cf5616000",
+  "c0f23b70f95fef529e8d6c749ece9940fab775f2": "7bde86df1ed20b58ce8220c57a6278de239113db",
+  "d365804acae082e53714801a3cf71f00838882b8": "13bc0860c2cdadf6d1b9aae83f2734cc70dae342",
+  "d73bb98881432d2a92ab7333dfd096c1cde473a2": "d0fad16af87923985d4cc0d7398c9706cf6cb711",
+  "e30890284e45b39a8bc8c5f6cf3248c5e85203c7": "173940b380899e6386683d70d0d7917c26aa1f2f",
+  "f4c055225531138169ea1bda614a0104b6921388": "16357392d4f736940c33e7950ebb5d0c2d2ba1a5",
+  "f8e4c6c37479bce10677d5445527bef6a3dec229": "ce348a4889da5602721c3bfb7f0270b35981c58e",
+  "ffd93bcb92e730f48f4f7344dbd02cc578176c00": "2d01f522c793861d47b1008444f955dec164770f"
  }
 }

@@ -1,0 +1,6 @@
+[
+{"id": "PR2A-3-queue-revert", "file": "internal/runtime/recorder.go", "find": "\t\t\tq.q = nil\n", "replace": "", "test": "TestARemovedAppsRecordingQueueIsReleasedOnceItsRecorderReturns", "pkg": "./internal/runtime", "note": "revert plant: the recorder goroutine keeps the queue on the Remove path"},
+{"id": "PR2A-3-loads-revert", "file": "internal/runtime/transitions.go", "find": "\ta.app.Loads = nil\n", "replace": "", "test": "TestARemovedAppsStartingRowsAreReleased", "pkg": "./internal/runtime", "note": "revert plant: the remove step keeps the starting rows"},
+{"id": "PR2A-3-loads-revert-never-activated", "file": "internal/runtime/transitions.go", "find": "\ta.app.Loads = nil\n", "replace": "", "test": "TestRemovingANeverActivatedRecordedAppReturnsAndStatsAnswers", "pkg": "./internal/runtime", "note": "revert plant: the remove step keeps a never-activated app's starting rows"},
+{"id": "PR2A-3-queue-revert-never-activated", "file": "internal/runtime/transitions.go", "find": "\t\ta.rec.q = nil\n", "replace": "", "test": "TestRemovingANeverActivatedRecordedAppReturnsAndStatsAnswers", "pkg": "./internal/runtime", "note": "revert plant: the remove step keeps a never-activated app's queue"}
+]

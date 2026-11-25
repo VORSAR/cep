@@ -1,0 +1,124 @@
+[
+ {
+  "id": "G2-135",
+  "note": "G2-135 K2a: the negative bound reported as E-DUR-002, not E-DUR-003",
+  "file": "internal/validate/bounds.go",
+  "find": "c.report(\"E-DUR-003\", d.Pos, \"a bound slot of rule %s is %s\"",
+  "replace": "c.report(\"E-DUR-002\", d.Pos, \"a bound slot of rule %s is %s\"",
+  "test": "TestBreakitANegativeDurationOverrideInABoundSlotIsRefused",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-135:control",
+  "note": "G2-135 control: the real code",
+  "control": true,
+  "test": "TestBreakitANegativeDurationOverrideInABoundSlotIsRefused",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-136",
+  "note": "G2-136 K2b: the absence branch reports E-NULL-002 in place of E-NULL-001",
+  "file": "internal/validate/nulls.go",
+  "find": "c.report(\"E-NULL-001\", n.Pos, \"comparison over the optional attribute",
+  "replace": "c.report(\"E-NULL-002\", n.Pos, \"comparison over the optional attribute",
+  "test": "TestOneFindingPerDefect",
+  "subtest": "!= over an optional attribute in an absence: no E-NULL-002",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-136:control",
+  "note": "G2-136 control: the real code",
+  "control": true,
+  "test": "TestOneFindingPerDefect",
+  "subtest": "!= over an optional attribute in an absence: no E-NULL-002",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-138",
+  "note": "G2-138 K2a: a bad param default reported at no position",
+  "file": "internal/validate/resolve.go",
+  "find": "c.report(\"E-PARAM-001\", p.Pos, \"param %s is declared",
+  "replace": "c.report(\"E-PARAM-001\", model.Pos{}, \"param %s is declared",
+  "test": "TestOneFindingPerDefect",
+  "subtest": "a bad param default: reported once, at the declaration",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-138:control",
+  "note": "G2-138 control: the real code",
+  "control": true,
+  "test": "TestOneFindingPerDefect",
+  "subtest": "a bad param default: reported once, at the declaration",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-139",
+  "note": "G2-139 K2a: the lint's code becomes E-NULL-001 and the lint rule covers it",
+  "patch": "--- a/internal/validate/nulls.go\n+++ b/internal/validate/nulls.go\n@@ -67,3 +67,3 @@\n \tdefault:\n-\t\tc.report(\"E-NULL-002\", n.Pos, \"%s is optional, and `%s` is false when it is null; wrap it in coalesce(...) \"+\n+\t\tc.report(\"E-NULL-001\", n.Pos, \"%s is optional, and `%s` is false when it is null; wrap it in coalesce(...) \"+\n \t\t\t\"or test `is null` explicitly\", strings.Join(offenders, \", \"), opName(n))\n--- a/internal/validate/validate.go\n+++ b/internal/validate/validate.go\n@@ -132,3 +132,3 @@\n \t\tCode: code, Line: at.Line, Col: at.Col, Msg: fmt.Sprintf(format, args...),\n-\t\tFix: catalog[code].Fix, Lint: code == \"E-NULL-002\",\n+\t\tFix: catalog[code].Fix, Lint: code == \"E-NULL-001\" || code == \"E-NULL-002\",\n \t})\n",
+  "test": "TestALintDoesNotRefuse",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-139:control",
+  "note": "G2-139 control: the real code",
+  "control": true,
+  "test": "TestALintDoesNotRefuse",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]

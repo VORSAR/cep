@@ -140,6 +140,8 @@
 | 2026-11-22 | [the Drain fix's design](#owner-decisions-2026-11-22--the-drain-fixs-design) |
 | 2026-11-22 | [the starvation fix under load](#owner-decisions-2026-11-22--the-starvation-fix-under-load) |
 | 2026-11-25 | [PR 2's re-check](#owner-decisions-2026-11-25--pr-2s-re-check) |
+| 2026-11-25 | [the Python builds 20261124](#owner-decisions-2026-11-25--the-python-builds-20261124) |
+| 2026-11-25 | [W3's start](#owner-decisions-2026-11-25--w3s-start) |
 
 ## The decisions
 
@@ -1525,3 +1527,36 @@ Fresh blind reviewers re-checked the fix round, 730fa8e..86aea25 ([architecture]
    - Rejected:
      - fixing RCQ-1 and the comments, and forwarding the two hanging tests;
      - fixing RCQ-1 alone.
+
+### Owner decisions, 2026-11-25 — the Python builds 20261124
+
+#54's canary went red on the pin test alone. python-build-standalone had published new builds of both pinned Pythons:
+- the same versions, CPython 3.15.2 and 3.12.16;
+- libffi, sqlite, zstd and expat updated;
+- no security fix listed.
+
+One answer, as recommended.
+
+1. **A small pull request now, like #55.** #56 moved both Pythons from build 20261110 to 20261124 by the method of 71eb0fd8:
+   - each archive's sha256 checked against GitHub's published digest;
+   - the tree and executable hashes taken with the installer's own code;
+   - the census rows re-taken.
+
+   Merged 2026-11-25 (cc2c2c1).
+   - Rejected:
+     - keeping the old builds, which leaves the canary red wherever it runs;
+     - taking the upgrade into PR 3.
+
+### Owner decisions, 2026-11-25 — W3's start
+
+W3 (lanes E2, CD1 and CD2) started from main at cc2c2c1 after #54 and #56 merged, three lanes at once. Two answers, one as recommended.
+
+1. **The recording queue's cost per starting row is fixed in PR 3: the queue is released at Undeploy (≠ R).**
+   - PR 2's review measured it (PR2A-3, PR2Q-10): 208 bytes per starting row, reserved at Deploy for a recorded app and kept for the app's life, and after Remove until Close, because the tombstone keeps the recorder's queue. About 198 MiB per million starting rows.
+   - The fix: a coordinator commit in PR 3, by a fresh builder, test-first, with its load run; PR 3's blind reviews cover it. The reservation at Deploy stays.
+   - The recommendation was a sentence on `Config.RecordQueue`'s doc now and a known issue for the debt slice after S4.2, with no engine change in W3's wave.
+   - Rejected: nothing now.
+2. **W3's spot-check is skipped, as W1's and W2's were,** as recommended. The coordinator re-runs every lane proof at the combined head, and PR 3's blind architecture and QA reviews are the independent check.
+   - Rejected: keeping it, about an hour and one agent.
+
+Also settled by the coordinator from the design, not a decision: PR2A-2 and PR2Q-5 (who owns the starting rows after Add) are met by E2-1's construction. Deploy builds the rows, hands them to Add and keeps no reference; `AppHandle.tableRows` goes.

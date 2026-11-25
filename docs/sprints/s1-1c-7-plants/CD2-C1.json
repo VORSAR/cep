@@ -1,0 +1,10 @@
+[
+ {
+  "id": "g10-15-revert",
+  "note": "G10-15 K1: Register accepts a nil Factory and MinArgs above MaxArgs again (the two refusals and the Factory doc reverted)",
+  "patch": "diff --git a/internal/expr/registry.go b/internal/expr/registry.go\nindex 497f4671..51505d67 100644\n--- a/internal/expr/registry.go\n+++ b/internal/expr/registry.go\n@@ -37,8 +37,8 @@ type Descriptor struct {\n \tMinArgs int\n \tMaxArgs int\n \tNull    NullRule\n-\t// Factory types the built arguments and gives the node; it reports E-TYPE-001 or E-FN-001. It is nil only for a\n-\t// pattern-only callable, whose call Build types itself; Register refuses a nil Factory for any other kind.\n+\t// Factory types the built arguments and gives the node; it reports E-TYPE-001 or E-FN-001 (nil for the\n+\t// kinds that are typed here and built in a later sprint).\n \tFactory func(args []Expr, call model.Expr) (Expr, error)\n }\n \n@@ -63,15 +63,8 @@ type Registry struct {\n // NewRegistry gives an empty registry.\n func NewRegistry() *Registry { return &Registry{descriptors: map[string]*Descriptor{}} }\n \n-// Register adds d. It refuses a descriptor Build could not call (a nil Factory for any kind but PatternOnly, or\n-// MinArgs above MaxArgs) and a second registration of a name.\n+// Register adds d; a second registration of a name is an error.\n func (r *Registry) Register(d Descriptor) error {\n-\tswitch {\n-\tcase d.Factory == nil && d.Kind != PatternOnly:\n-\t\treturn fmt.Errorf(\"expr: %s: a nil Factory; only a %s callable has none\", d.Name, PatternOnly)\n-\tcase d.MinArgs > d.MaxArgs:\n-\t\treturn fmt.Errorf(\"expr: %s: MinArgs %d is above MaxArgs %d\", d.Name, d.MinArgs, d.MaxArgs)\n-\t}\n \tif _, dup := r.descriptors[d.Name]; dup {\n \t\treturn fmt.Errorf(\"expr: %s is already registered\", d.Name)\n \t}\n",
+  "test": "TestRegisterRefusesADescriptorBuildCannotCall",
+  "pkg": "internal/expr",
+  "timeout": "180s"
+ }
+]

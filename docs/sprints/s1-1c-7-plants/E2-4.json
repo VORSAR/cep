@@ -1,0 +1,9 @@
+[
+ {
+  "id": "G7a-4-revert",
+  "note": "K1 revert plant: the old two-line format string with the owner D7 / S3.2a-1 tail back",
+  "patch": "diff --git a/internal/partition/partition.go b/internal/partition/partition.go\nindex 9ceb49af..d7b8261a 100644\n--- a/internal/partition/partition.go\n+++ b/internal/partition/partition.go\n@@ -235,7 +235,9 @@ func NewRule(cfg Config) (*Rule, error) {\n \tcase len(cfg.KeyTypes) == 0:\n \t\treturn nil, errNoKeyTypes\n \tcase slices.ContainsFunc(cfg.KeyTypes, func(t event.Type) bool { return t < event.TString || t >= event.TObject }):\n-\t\treturn nil, fmt.Errorf(\"partition: key types %v: a part of these types cannot key a partition\", cfg.KeyTypes)\n+\t\treturn nil, fmt.Errorf(\n+\t\t\t\"partition: key types %v: a part of these types cannot key a partition (owner D7 of S3.2a-1: object keys are a \"+\n+\t\t\t\t\"deploy error from S3.3)\", cfg.KeyTypes)\n \tcase cfg.TTL < 0:\n \t\treturn nil, errNegTTL\n \tcase cfg.Body == nil:\n",
+  "test": "TestNewRuleRefusesAnObjectKey",
+  "pkg": "./internal/partition"
+ }
+]

@@ -418,7 +418,54 @@ Its new later items:
       - P6b, one more slot per queue, shows the test failing at once.
     - **At 57d329d:** `go test ./...`, 21 packages ok; `go test -race -count=3 ./internal/runtime/...` ok, 0 DATA RACE lines.
     - **Load:** the 15 tests of the two changed test files, `-race`, 50 runs under load: every test 50 of 50.
-- **The gate at PR 2's final head:** named in #54's description; this record takes it with PR 3.
+- **The gate at PR 2's final head, 1c93c9b.** It ran on battery; no row judges timing.
+  - T2: exit 0, run 20261125T142028Z-792f4f, 251 s.
+  - T4 lint: exit 0, run 20261125T142440Z-9eb373.
+  - T4 proofs: exit 0, run 20261125T142501Z-063632, 337 s.
+- **#54's CI at 1c93c9b:** the `gate` workflow green on all seven jobs. The `canary` workflow was red on the pin test alone, from the new Python builds, which #56 took ([decision](decisions.md#owner-decisions-2026-11-25--the-python-builds-20261124)).
+- **Merged** by the owner on 2026-11-25, by rebase-merge: 61908cb. The lane branches, their worktrees and the remote PR branches were deleted with the owner's OK.
+
+**W3: lanes E2, CD1 and CD2, and the recording queue's release** (the coordinator, 2026-11-25 to 2026-11-26; [decisions](decisions.md#owner-decisions-2026-11-25--w3s-start)):
+- **Base:** main at cc2c2c1, after #54 and #56 merged; the integration branch was made from it. Four agents at once, each in its own worktree: lanes E2, CD1 and CD2, and the queue's release.
+- **The commits**, each lane commit mapped to its pick in [`commit-map.json`](s1-1c-7-plants/commit-map.json)'s `w3`:
+  - **CD1, 7:** da0d1a3 to f788400: the parser's K1 and K2, the event package's bench input and K2, then the clock, text and model K2s.
+  - **CD2, 9:** d0fad16 to 153cf5e, the eight lane commits and the G7a-3 coupling commit a30808c. The lane made the coupling commit on the coordinator's authority, because the design puts its three files in one commit.
+  - **E2, 8:** 13bc086 to 99f3072.
+  - **The recording queue's release, 1:** 1cfad34 (owner, 2026-11-25; PR 2's review, PR2A-3 and PR2Q-10).
+- **Every stage was verified by the coordinator before its pick:**
+  - Each plain and `--expect` batch was re-run. The CD2 `--expect` batches were regenerated at the final commits, because the lane amended its messages after its runs; the trees are identical.
+  - The packages' tests ran plain and under `-race`.
+  - Each escape-bearing line was byte-checked; each K2b coverage block and each K2e check was re-taken; the naming tool showed no new hit.
+  - **Batch counts, as re-run:**
+    - CD1: parser-K1 red 2; event-K2 19 of 19; clock-K2 6 of 6; model-K2 2 of 2.
+    - CD2: C1 red 1; C2 red 2; C3 red 1; C4 9 of 9; C5 red 1 at its own commit; C7 2 of 2; C8 8 of 8; C9 2 of 2.
+    - E2: E2-1 red 2 and 2 of 2; E2-2 13 of 13; E2-4 red 1; E2-5 13 of 13; E2-6 3 of 3; E2-7 6 of 6; E2-8 2 of 2.
+    - The queue's release: red 4.
+- **Load runs** (`load.py`, 28 hogs, `-race -count=50`), each test 50/50 with no DATA RACE line:
+  - the queue's release, its three tests;
+  - E2-2's four tests;
+  - the event package's three tests (G2-68, G2-70, G2-73);
+  - G2-133's snapshot test;
+  - G2-143's test.
+
+  G2-143's plant under `mutate.py --repeat 50 --load`: the old test caught 0 of 50, the new test 50 of 50.
+- **T2 at each of the seven picks:** exit 0 every time (runs 20261125T154915Z-324199, 155801Z-c4a35b, 160253Z-a0b354, 160718Z-552291, 161248Z-e292e5, 161730Z-4134cd, 162235Z-d9ae7f).
+  - The proofs row alone at T4, after the FUZZ_FILE and `notbuilt.json` edits: exit 0, run 20261125T155258Z-57be18.
+- **Where the design and the code differed.** Each was reported by its lane and none changes a design's behaviour:
+  - E2-1: `bind` returns the starting rows as a fourth result; the design left that plumbing open.
+  - E2-3: two rendered sites beyond the design's list, apphandle.go:12 and io/cepio.go:40, inside G7a-2's widening (coordination item 24).
+  - CD1: gen_test.go needed the `testing` import, so the design's line numbers there are one higher.
+  - CD2:
+    - C4: gofmt rewrote the design's one-line closure;
+    - C7: `wg.Go` in place of `Add` and `Done`, with the same semantics;
+    - C8: G2-140's grep needs `-P` or `[[:space:]]` on Apple's git.
+  - E2-6 and E2-7:
+    - G2-144's control takes the old_test/new_test green/green shape, the rule the second QA pass gave for a new test (DQ2-L2);
+    - G2-143's coverage block is keyed by the branch body's first statement (plan check §7.2).
+  - The queue's release: a never-activated app's queue is released in the router's remove step, so Remove releases the queue in every case.
+- **Incident:** CD1's stage 2 ran about 20 minutes past its box. Two escape-transport slips were caught by the byte checks before any proof and repaired from a clean tree. Every escape afterwards was written from Python by bytes.
+- **No spot-check for W3** (owner, 2026-11-25).
+- **The final gate at PR 3's head:** named in PR 3's description; this record takes it at the close (G5).
 
 ## The finding ledger
 
@@ -519,7 +566,7 @@ Its new later items:
 | G2-92 | fixed | 576b0f0 | K2a (risk named): `B-K2a.json` G2-92 green → red, control green/green; load 50/50 at 06f17b5 | |
 | G2-94 | fixed | 576b0f0 | K2a: `B-K2a.json` G2-94 green → red, control green/green | |
 | G2-103 | fixed | 576b0f0 | K2a: `B-K2a.json` G2-103 green → red, control green/green | |
-| G2-106 | fixed in part | 576b0f0 | K2e: `b_g2_73_check.py` over the 19 pairs, 19 with neither t.Parallel nor a reason → 0; load 50/50 | partition's ttl_test.go and panic_test.go, to lane E2 (W3) |
+| G2-106 | fixed | 576b0f0, 0d42dda | K2e: `b_g2_73_check.py` over the 19 pairs, 19 with neither t.Parallel nor a reason → 0; load 50/50. The partition part (E2-5): `cd1_g2_73_check.py` over the four pairs 4 → 0 | |
 | G2-107 | fixed in part | 576b0f0 | the stop rule fired at pre-check 1 (no seed drops an event construct-late), so the guard is unchanged; the header now says the count is compared but not exercised | a generator that drops an event construct-late, to S1.1c-10 |
 | G2-108 | fixed | 576b0f0 | K2a: `B-K2a.json` G2-108 green → red, control green/green; load 50/50 | |
 | G2-96 | fixed | 0e2b630 | K2a (subtest): `B-K2b.json` G2-96 green → red, control green/green | |
@@ -561,7 +608,60 @@ Its new later items:
 | G2-130 | carried in full to S1.1c-10 | | | a fidelity refactor: no production defect tells the fixture from the real tombstone |
 | G2-24 | fixed | bd413f3, 168d7de | K2a: `G2-24.json` green → red, control green/green; red first: CodeClosure on the old law.json, 27 failures. PR 2's review (PR2Q-13, PR2A-4): 168d7de names each not-judged instrument by id; `PR2Q-13.json` 3 of 3 as expected | |
 | G10-21 | fixed in part | bc23749 | K1h: `E1-C6-G10-21-revert.json` red; red first at lifecycle_test.go:755 and :770; load 50/50; timing no cost on the confirming re-run | the counting rule (a drained batch end counted, a drained Send not) to S3.3-1-3's fix at S8 (owner, G1) |
-| G10-1 | fixed in part | c52933a, e0f0e13 | K1: `table.Check`'s revert plant red (W0). K1h: `E1-C7-G10-1-reverts.json` red 5; loads 50/50; Send and SendPayload timing no cost; the table-write timing with no recorder (4f17618's benchmark on both trees) no cost | the facade half to lane E2 (W3) |
+| G10-1 | fixed | c52933a, e0f0e13, 13bc086 | K1: `table.Check`'s revert plant red (W0). K1h: `E1-C7-G10-1-reverts.json` red 5; loads 50/50; Send and SendPayload timing no cost; the table-write timing with no recorder (4f17618's benchmark on both trees) no cost. The facade half (E2-1): `E2-1.json` red 2; `E2-1-expect.json` 2 of 2 as expected; red first lifecycle_test.go:448 | the facade builds the rows, hands them to Add and keeps no reference (PR 2's review, PR2A-2, PR2Q-5) |
+| G10-16 | fixed | da0d1a3 | K1: `CD1-parser-K1.json` red 2; red first parseerror_contract_test.go:259, :262, :272 |  |
+| G2-75 | fixed | ce348a4 | K2e: the overlay plant's panic count 1 → 0; the guard red at expect_pos_test.go:47 |  |
+| G2-76 | fixed | ce348a4 | K2e: the live-data plant (`fragmentz` in fragments.json) 14 fault lines → exactly 1 |  |
+| G2-78 | fixed | ce348a4 | K2e: the two seams' grep 2 → 0; FuzzParse kept, body only |  |
+| G2-79 | fixed | ce348a4 | K2e: `var X = []pecRow{` 4 + 1 → 0; `panic(` 1 → 0; `pecEdit(t` 0 → 123; `git diff -w` shows no row line; the PERMANENT forbidigo waiver removed (exemptions −1) |  |
+| G2-77 | rejected |  |  | a listed document with no pin compares 0 = 0 at fragment_test.go:1164, so `got.ruleLike == 0` at :1172 is its only guard (coordination item 32) |
+| G2-80 | rejected |  |  | Parse's doc promises a *Error; the type assertion at vsc_known_issues_test.go:188 pins exactly that (coordination item 32) |
+| G2-69 | fixed | 60a1a57 | K2e (bench input, R4): decode_bench_test.go:142 holds the pair's two escapes (byte check); coverage of `unescape.go:77.5,79.1` 0 → 1; TestDecodeLeafAllocations stays 0 |  |
+| G2-68 | fixed | 5b783df | K2d: `CD1-event-K2.json` old timeout / new red; load 50/50 |  |
+| G2-70 | fixed | 5b783df | K2b: `CD1-event-K2.json` ×6 green/red, six controls green/green; blocks `unescape.go:72`, `:77`, `decode.go:276`, `:114` 0 → 1 |  |
+| G2-71 | fixed | 5b783df | K2a: `CD1-event-K2.json` green/red, control green/green |  |
+| G2-72 | fixed | 5b783df | K2b: `CD1-event-K2.json` ×2 green/red, control green/green; `unescape.go:77.5,79.1` under TestDecodeDifferential 0 → 1 |  |
+| G2-73 | fixed | 5b783df | K2e: `cd1_g2_73_check.py` over the 7 pairs 7 → 0; load 50/50 |  |
+| G2-65 | fixed in part | f937d9b | K2a: `CD1-clock-K2.json` green/red, control green/green; every kind count and the ties ≥ 100 on the real code | the rename to `TestRandomWalkScenariosExerciseEveryCallback` to S1.1c-8 |
+| G2-66 | fixed | f937d9b | K2a: `CD1-clock-K2.json` green/red, control green/green |  |
+| G2-67 | fixed | f937d9b | K2a: `CD1-clock-K2.json` green/red, control green/green |  |
+| G2-134 | fixed | 7bde86d, 8f3e6dd | K2e: `cd1_g2_73_check.py`: the plan half 1 → 0, the text half 7 → 0 |  |
+| G2-74 | fixed | f788400 | K2a: `CD1-model-K2.json` green/red (subtest "every object's keys ascend bytewise"), control green/green |  |
+| G10-15 | fixed | d0fad16 | K1: `CD2-C1.json` red 1 (the revert patch); red first nodes_test.go:236 and :239 in three subtests |  |
+| G7a-3 | fixed | a30808c | K1, the coupling commit (expr, notbuilt.json:17, test_notbuilt.py:20): `CD2-C2.json` red 2 (TestBuildRunnable, TestCorpus); red first runnable_test.go:39 ×5 and corpus_test.go:131; the proofs row alone at T4 PASS |  |
+| G10-17 | fixed | 47c1406 | K1: `CD2-C3.json` red 1; red first on the 72 pins (literalvalue_test.go:143 ×64, expect_test.go:175 ×5, coverage_s3_3_2_test.go:65 ×3) and literalvalue_test.go:17 by hand |  |
+| G2-85 | fixed | 7bde86d | K2a: `CD2-C4.json` ×3 green/red, control green/green |  |
+| G2-86 | fixed | 7bde86d | K2a: `CD2-C4.json` ×2 green/red, control green/green |  |
+| G2-87 | fixed in part | 7bde86d | K2e: the `func itoa` grep 1 → 0 (strconv.FormatInt); the message truthful on the finding's plant (internal_test.go:63) | the file rename to S1.1c-8; the move of TestBuildRefusesAnUncheckedModel to S1.1c-10 |
+| G2-88 | fixed | 7bde86d | K2a: `CD2-C4.json` green/red, control green/green |  |
+| G10-22 | fixed | b9218d9 | K1 (choice A): `CD2-C5.json` red 1, run at its own commit; red first table_test.go:98 ×5; the three texts byte-identical |  |
+| G7a-6 | fixed | a4beb93 | K6: astequal 43 declarations equal; no `// Output:` changed; the sweep red on the removed line, clean on the new |  |
+| G2-133 | fixed in part | 6a22a47 | K2a: `CD2-C7.json` green/red (the new side red at 20000 iterations, no tuning), control green/green; load 50/50 | the rename to `TestSetSnapshotIsStableUnderConcurrentWriters` (naming the never-falls check too) and the move to set_test.go to S1.1c-8 |
+| G2-135 | fixed in part | 173940b | K2a: `CD2-C8.json` green/red, control green/green | the rename ("a negative rate-limit override") to S1.1c-8; the move as a subtest to S1.1c-10 |
+| G2-136 | fixed | 173940b | K2b: `CD2-C8.json` green/red, control green/green; `nulls.go:64.3,66.10` 0 → 1 |  |
+| G2-138 | fixed | 173940b | K2a: `CD2-C8.json` green/red, control green/green |  |
+| G2-139 | fixed | 173940b | K2a: `CD2-C8.json` green/red (the two-file patch), control green/green |  |
+| G2-140 | fixed | 173940b | K2e: the `after, _ := app.MarshalCanonical()` grep 1 → 0 (with `-P`: Apple Git's `-E` has no `⧵s`) |  |
+| G2-137 | fixed | 153cf5e | K2-del: `CD2-C9.json` red/red (the exprs.go plant red on the deleted row's subtest at the parent and on H3 at the commit), control green/green |  |
+| G7a-1 | fixed | 13bc086 | K1: the revert plant in `E2-1.json` red; red first deploy_test.go:247 and coverage_s3_3_1_test.go:85 |  |
+| G2-1 | fixed | 1bb9761 | K2a: `E2-2-expect.json` green/red, control green/green; load 50/50 |  |
+| G2-2 | fixed | 1bb9761 | K2a: `E2-2-expect.json` ×4 subtests green/red, control green/green; load 50/50 |  |
+| G2-3 | fixed | 1bb9761 | K2a: `E2-2-expect.json` green/red, control green/green |  |
+| G2-4 | fixed | 1bb9761 | K2a: `E2-2-expect.json` ×2 green/red, two controls green/green; loads 50/50 ×2 |  |
+| G7a-2 | fixed | 1635739 | K6 (widened, coordination item 24): astequal 10 files, 121 declarations equal; no `// Output:` changed; `e2_jargon_sweep.py` 42 hits → 0 over 22 files |  |
+| G7a-4 | fixed | 2d01f52 | K1: `E2-4.json` red 1; red first objectkey_test.go:34 ×3 |  |
+| G2-81 | fixed | 0d42dda | K2a: `E2-5-expect.json` green/red (the `Purged++` patch), control green/green |  |
+| G2-82 | fixed in part | 0d42dda | K2a: `E2-5-expect.json` green/red, control green/green | the rename to `TestNewRuleRefusesABadConfigAndAcceptsEveryScalarKeyType` to S1.1c-8 |
+| G2-83 | fixed | 0d42dda | K2a: `E2-5-expect.json` both green/red, prefix and negzero red/red by design, control green/green |  |
+| G2-84 | fixed | 0d42dda | K2a: `E2-5-expect.json` message and swap ×3 green/red, control green/green on the four computed CheckTimers texts |  |
+| G2-141 | fixed in part | 21bbc24 | K2a: `E2-6-expect.json` green/red, control green/green | the rename to `TestASecondOpenReturnsErrReopened` to S1.1c-8 |
+| G2-143 | fixed | 21bbc24 | K2b: the plant under `--repeat 50 --load`: the old test caught 0 of 50, the new test 50 of 50; `source.go:58.3,58.19` 0 → 1 in two runs; load 50/50 |  |
+| G2-144 | fixed | 28774de | K2a: `E2-7-expect.json` green/red (old_test TestEmbeddedFieldIsRefused, new_test TestEmbeddedInterfaceIsRefused), control green/green |  |
+| G2-145 | fixed | 28774de | K2a: `E2-7-expect.json` green/red, control green/green |  |
+| G2-146 | fixed | 28774de | K2a: `E2-7-expect.json` green/red, control green/green on the computed iota line |  |
+| G2-156 | fixed | 99f3072 | K2a: `E2-8-expect.json` green/red (old_test TestShapeCorpusGolden, new_test TestJudgeReportsEachLoweringCodeAtTheLoweringStage), control green/green |  |
+| G10-23 | carried in full to S1.1c-10 |  |  | `print`'s error path is unreachable without a seam, so no red test exists today (coordination item 25) |
+| G2-142 | carried in full to S1.1c-8 |  |  | the rename to `TestEndBatchIsCountedByTheStream` is its only fix |
 
 ## Test material
 
@@ -576,6 +676,9 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 - **ruff 0.17.6** in its own pull request, #55 ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--ruff-0176)).
 - **W1 and W2 without their spot-check** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--pr-2s-remaining-steps)).
 - **What follows S1.1c-7 is re-planned** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--the-mvp-first-re-plan)); the re-cut is made at a plan check after PR 2.
+- **The Python builds 20261124** in their own pull request, #56 ([owner, 2026-11-25](decisions.md#owner-decisions-2026-11-25--the-python-builds-20261124)).
+- **The recording queue's release** in PR 3, PR 2's review findings PR2A-3 and PR2Q-10 ([owner, 2026-11-25](decisions.md#owner-decisions-2026-11-25--w3s-start)).
+- **W3 without its spot-check** ([owner, 2026-11-25](decisions.md#owner-decisions-2026-11-25--w3s-start)).
 
 ## Findings
 
@@ -585,8 +688,8 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 |---|---|---|---|
 | PR2A-1 | should-fix, on main | An Activate racing an expired Drain leaves the app activated in the router and refusing all input | fixed: the Drain fix, cd459b7 |
 | PR2Q-1 | should-fix, on main | Known issue S1.1c-7-1 understated: with a stuck run the app keeps taking input after Drain returned its error | fixed: the Drain fix, cd459b7; the known issue is closed |
-| PR2A-2, PR2Q-5 | later | A refused Activate leaves a partial load when rows change after Add, against `App.Loads`' contract | forwarded to lane E2's W3 design: the facade hands over rows it owns, or Add copies them |
-| PR2A-3, PR2Q-10 | later | The recording queue holds 208 bytes per starting row for the app's life: about 198 MiB per million rows | forwarded to lane E2's W3 design and told to the owner |
+| PR2A-2, PR2Q-5 | later | A refused Activate leaves a partial load when rows change after Add, against `App.Loads`' contract | forwarded to lane E2's W3 design: the facade hands over rows it owns, or Add copies them. *(2026-11-26: met by E2-1's construction, 13bc086: Deploy builds the rows, hands them to Add and keeps no reference.)* |
+| PR2A-3, PR2Q-10 | later | The recording queue holds 208 bytes per starting row for the app's life: about 198 MiB per million rows | forwarded to lane E2's W3 design and told to the owner. *(2026-11-26: fixed, 1cfad34: the queue is released at Remove, the owner's decision of 2026-11-25.)* |
 | PR2A-4, PR2Q-13 | should-fix | G2-24's witness shared the rule that decides who is judged, so an instrument could leave the judged set unseen | fixed: 168d7de |
 | PR2A-5 | later | `build`'s comment named Start as a caller | fixed: 8532c4e |
 | PR2Q-2 | should-fix | The playback wrapper's `Unwrap` had no test | fixed: 32b2e97 |
