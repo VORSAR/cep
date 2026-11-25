@@ -12,17 +12,16 @@ import (
 // AppHandle is one deployed app (design s3-3-1 §3): an immutable record of its ids, names and bindings whose
 // methods call the engine, which owns every goroutine, phase and counter. It is safe for concurrent use.
 type AppHandle struct {
-	rt        *runtime.Runtime
-	id        runtime.AppID
-	name      string
-	plan      *plan.App
-	streams   map[string]int // stream name → id
-	tables    map[string]int // table name → id
-	sinkRows  map[string][]int
-	adapters  []func(ctx context.Context) runtime.Sink
-	sources   []boundSource
-	tableRows []tableLoad
-	lints     []Diagnostic
+	rt       *runtime.Runtime
+	id       runtime.AppID
+	name     string
+	plan     *plan.App
+	streams  map[string]int // stream name → id
+	tables   map[string]int // table name → id
+	sinkRows map[string][]int
+	adapters []func(ctx context.Context) runtime.Sink
+	sources  []boundSource
+	lints    []Diagnostic
 }
 
 // StopReport is what Stop found.
@@ -38,16 +37,13 @@ func (a *AppHandle) Name() string { return a.name }
 // Lints are the findings that did not fail the deploy (E-NULL-002).
 func (a *AppHandle) Lints() []Diagnostic { return append([]Diagnostic(nil), a.lints...) }
 
-// Start activates the app (design s3-3-1 §3.5): the sinks' flushers and the recorder (the header first), then each
-// table's starting rows, then the sources last, each on a goroutine the engine starts and stops.
+// Start activates the app: its sinks' flushers, its recorder (the header first) and its tables' starting rows, in one
+// step of the engine; then it opens the sources, each on a goroutine the engine starts and stops. An error before the
+// activation leaves the app as it was, and Start may be called again; once activated, Start fails only when a Stop,
+// Undeploy or Close runs at the same time.
 func (a *AppHandle) Start(ctx context.Context) error {
 	if err := a.rt.Activate(ctx, a.id); err != nil {
 		return mapErr(err)
-	}
-	for _, tl := range a.tableRows {
-		if err := a.rt.TableWrite(ctx, a.id, tl.id, runtime.TablePut, tl.rows); err != nil {
-			return mapErr(err)
-		}
 	}
 	runs := make([]func(context.Context) error, len(a.sources))
 	for i, bs := range a.sources {

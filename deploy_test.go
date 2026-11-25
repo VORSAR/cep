@@ -230,7 +230,7 @@ func TestUnknownNames(t *testing.T) {
 }
 
 // TestUnbuiltConnectorAnnotation (T20, as §9 amends it; owner's design 5): example 01's @sink(type = 'http') is
-// refused naming http and S5.1 without a Go sink, and deploys with WithSink on that stream.
+// refused without a Go sink, naming http as not available in this release, and deploys with WithSink on that stream.
 func TestUnbuiltConnectorAnnotation(t *testing.T) {
 	t.Parallel()
 	ctx := fcCeiling(t)
@@ -243,8 +243,8 @@ func TestUnbuiltConnectorAnnotation(t *testing.T) {
 		"stream O (k string, ts timestamp);\n" +
 		"rule F intent 'Forward.' from S select k insert into O;\n"
 	_, err := r.Deploy(ctx, "ann", src)
-	if !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), "http") || !strings.Contains(err.Error(), "S5.1") {
-		t.Errorf("an @sink(type = 'http') program without a Go sink: %v; want ErrConnectorNotBuilt naming http and S5.1", err)
+	if want := `@sink(type = "http") is not available in this release; bind a Go sink with WithSink`; !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), want) {
+		t.Errorf("an @sink(type = 'http') program without a Go sink: %v; want ErrConnectorNotBuilt with %q", err, want)
 	}
 	if _, err := r.Deploy(ctx, "ann", src, cep.WithSink("O", &inmemory.Sink{})); err != nil {
 		t.Errorf("the same program with WithSink(O): %v; want a handle (owner, design 5)", err)
@@ -314,5 +314,24 @@ func TestWithTableRowsAreVisibleToTheFirstEvent(t *testing.T) {
 	bad := func(w cepio.RowWriter) error { w.SetInt(w.AttrIndex("v"), 1); return nil }
 	if _, err := r.Deploy(ctx, "tbl", fcTableSrc, bind, cep.WithTableRows("T", bad)); err == nil || !strings.Contains(err.Error(), "k") {
 		t.Errorf("WithTableRows with the key unset: %v; want a deploy error naming k", err)
+	}
+}
+
+// TestAStartingRowWithANullKeyFailsDeployWithTheFacadesText: a null key in a starting row is refused by Deploy, in
+// the facade's WithTableRows wording, before the engine sees the row.
+func TestAStartingRowWithANullKeyFailsDeployWithTheFacadesText(t *testing.T) {
+	t.Parallel()
+	ctx := fcCeiling(t)
+	r := fcNew(t, cep.Config{})
+	_, bind := fcSink("O")
+	nullKey := func(w cepio.RowWriter) error {
+		w.SetNull(w.AttrIndex("k"))
+		w.SetInt(w.AttrIndex("v"), 1)
+		return nil
+	}
+	_, err := r.Deploy(ctx, "tbl", fcTableSrc, bind, cep.WithTableRows("T", nullKey))
+	want := `cep: deploy tbl: WithTableRows("T"): cep: attribute "k" is not optional; SetNull was called`
+	if err == nil || err.Error() != want {
+		t.Errorf("Deploy with a null key in a starting row: %v; want %q", err, want)
 	}
 }
