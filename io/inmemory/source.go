@@ -1,5 +1,5 @@
-// Package inmemory is the programmatic connector (ADR-0008 §4; design s3-3-1 §5.5): a channel-fed source and a
-// collecting sink for Go programs and tests. It imports the facade and the contracts only.
+// Package inmemory is the programmatic connector: a channel-fed source and a collecting sink for Go programs and
+// tests. It imports the facade and the contracts only.
 package inmemory
 
 import (
@@ -25,7 +25,7 @@ type item struct {
 // Source is a channel-fed source for one Open (a redeploy takes a new Source). Push hands one row to the pump; the
 // row's fill runs on the pump's goroutine (the one that called Open), so fill must not touch the pusher's state
 // without synchronisation. The channel is never closed: Close signals quit, so no send can panic and no Push holds
-// Close (S3.3-1's break-it S6).
+// Close.
 type Source struct {
 	ch      chan item
 	quit    chan struct{} // closed by Close
@@ -76,8 +76,8 @@ func (s *Source) EndBatch(ctx context.Context, batchID string) error {
 }
 
 // Close ends the pushes (a parked Push returns ErrClosed) and, once Open is running, returns only when the pump has
-// emitted everything pushed before it or Open has returned — so "Close, then Stop" delivers every row (design s3-3-1
-// §5.5). Before Open it returns at once (Open then drains what is buffered and returns nil).
+// emitted everything pushed before it or Open has returned — so "Close, then Stop" delivers every row. Before Open
+// it returns at once (Open then drains what is buffered and returns nil).
 func (s *Source) Close() {
 	s.once.Do(func() { close(s.quit) })
 	if s.opened.Load() {

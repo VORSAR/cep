@@ -2,7 +2,7 @@ package cep
 
 import "github.com/vorsar/cep/internal/runtime"
 
-// Stats is one app's counters, keyed by name (design s3-3-1 §3.1).
+// Stats is one app's counters, keyed by name.
 type Stats struct {
 	Streams   map[string]StreamStats // per source stream
 	Rules     map[string]RuleStats

@@ -1,5 +1,5 @@
-// Package cepio holds the connector contracts (ADR-0008 §1; design s3-3-1 §5): what a source, a sink or a mapper
-// implements, and the row boundary values cross. It imports nothing of the module and starts no goroutine.
+// Package cepio holds the connector contracts: what a source, a sink or a mapper implements, and the row boundary
+// values cross. It imports nothing of the module and starts no goroutine.
 package cepio
 
 import "context"
@@ -37,7 +37,7 @@ type RowWriter interface {
 	SetBool(attr int, v bool)
 	SetTimestamp(attr int, unixMs int64)
 	SetDuration(attr int, ms int64)
-	SetObject(attr int, jsonText string) // an object enters as its JSON text (S3.1-2's B5)
+	SetObject(attr int, jsonText string) // an object enters as its JSON text
 	SetNull(attr int)
 	AttrIndex(name string) int // -1 if unknown
 	AttrType(attr int) Type    // Invalid outside the schema
@@ -76,9 +76,9 @@ type Source interface {
 }
 
 // Sink receives one derived stream's outputs. Write is called from the engine's flusher goroutine only, one call at a
-// time, in output order. A non-nil return is counted and the output is dropped: the engine never retries (owner,
-// 2026-11-07); a sink that promises delivery retries itself. ctx is cancelled when the app is undeployed or the
-// runtime's Close gives up at its deadline: Write MUST return then, and MUST NOT call the lifecycle.
+// time, in output order. A non-nil return is counted and the output is dropped: the engine never retries; a sink
+// that promises delivery retries itself. ctx is cancelled when the app is undeployed or the runtime's Close gives up
+// at its deadline: Write MUST return then, and MUST NOT call the lifecycle.
 type Sink interface {
 	Accepts() Mode
 	Write(ctx context.Context, e OutEvent) error
@@ -89,13 +89,13 @@ type Writer interface {
 	Write(p []byte) (int, error)
 }
 
-// Mapper decodes one payload into a row (the http and stdin sources' mappers, S5.1).
+// Mapper decodes one payload into a row.
 type Mapper interface {
 	Decode(b []byte, w RowWriter) error
 }
 
-// OutEvent is one output. Row is valid until Write returns. Canonical is the output's canonical JSON (ADR-0003/0005;
-// the log sink prints exactly this text), a fresh slice per output the sink may keep (owner, 2026-11-07).
+// OutEvent is one output. Row is valid until Write returns. Canonical is the output's canonical JSON, a fresh slice
+// per output the sink may keep.
 type OutEvent struct {
 	Stream    string
 	Timestamp int64 // unix ms

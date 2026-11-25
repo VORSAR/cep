@@ -9,8 +9,8 @@ import (
 	"github.com/vorsar/cep/internal/runtime"
 )
 
-// AppHandle is one deployed app (design s3-3-1 §3): an immutable record of its ids, names and bindings whose
-// methods call the engine, which owns every goroutine, phase and counter. It is safe for concurrent use.
+// AppHandle is one deployed app: an immutable record of its ids, names and bindings whose methods call the engine,
+// which owns every goroutine, phase and counter. It is safe for concurrent use.
 type AppHandle struct {
 	rt       *runtime.Runtime
 	id       runtime.AppID
@@ -59,8 +59,8 @@ func (a *AppHandle) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop quiets the app's ticks, closes its sources, drains it and reports (design s3-3-1 §3.5). A stopped app stays
-// stopped (owner, 2026-11-07, design 1): a restart is a new Deploy. Stop on a stopped app returns the same report.
+// Stop quiets the app's ticks, closes its sources, drains it and reports. A stopped app stays stopped: a restart is
+// a new Deploy. Stop on a stopped app returns the same report.
 func (a *AppHandle) Stop(ctx context.Context) (StopReport, error) {
 	res, err := a.rt.Drain(ctx, a.id)
 	rep := StopReport{DrainedPending: res.Pending}
@@ -76,8 +76,8 @@ func (a *AppHandle) Stop(ctx context.Context) (StopReport, error) {
 }
 
 // Undeploy stops the app if it is started and removes it; its sinks' context ends at the removal, before the
-// flushers are awaited, so a Write still blocked on its context returns (design s3-3-1 §3.6). A stopped app is
-// removed without a second Stop.
+// flushers are awaited, so a Write still blocked on its context returns. A stopped app is removed without a second
+// Stop.
 func (a *AppHandle) Undeploy(ctx context.Context) error {
 	err := a.rt.Remove(ctx, a.id)
 	if errors.Is(err, runtime.ErrActive) || errors.Is(err, runtime.ErrDrainIncomplete) {

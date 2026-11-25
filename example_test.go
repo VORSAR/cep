@@ -11,8 +11,7 @@ import (
 	"github.com/vorsar/cep/io/inmemory"
 )
 
-// Example_embed is the owner's check (S3.3's card; QA's T40): example 09 deployed, fed two rows and stopped, the
-// one alert printed as its canonical JSON.
+// Example_embed deploys example 09, feeds it two rows, stops it and prints the one alert as its canonical JSON.
 func Example_embed() {
 	ctx := context.Background()
 	src, _ := os.ReadFile("docs/language/examples/09-params-and-quoting.cep")
