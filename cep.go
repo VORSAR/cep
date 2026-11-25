@@ -1,7 +1,6 @@
-// Package cep is the engine's public API (ADR-0001 §2; design s3-3-1 §3): a Runtime that deploys rule programs as
-// apps, starts and stops them, feeds them rows and hands their outputs to sinks. It holds no goroutine, no channel
-// and no shared mutable state: every lifecycle step runs inside the engine, and this package converts, binds and
-// forwards. Stubs until the build's step 5.
+// Package cep is the engine's public API: a Runtime that deploys rule programs as apps, starts and stops them, feeds
+// them rows and hands their outputs to sinks. It holds no goroutine, no channel and no shared mutable state: every
+// lifecycle step runs inside the engine, and this package converts, binds and forwards.
 package cep
 
 import (

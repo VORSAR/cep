@@ -26,9 +26,8 @@ func newInputHandler(rt *runtime.Runtime, app runtime.AppID, stream int, sch eve
 	return &InputHandler{rt: rt, app: app, stream: stream, attrs: attrs, names: names(sch), timeAttr: sch.TimeAttr()}
 }
 
-// SendRow allocates the row, calls fill, checks it (design s3-3-1 §4.3) and hands it to the engine, which keeps it
-// (MUST 14). It blocks for backpressure and respects ctx. batchID names the source batch the row belongs to; "" for
-// none.
+// SendRow allocates the row, calls fill, checks it and hands it to the engine, which keeps it. It blocks for
+// backpressure and respects ctx. batchID names the source batch the row belongs to; "" for none.
 func (h *InputHandler) SendRow(ctx context.Context, batchID string, fill func(cepio.RowWriter) error) error {
 	w := newStreamRow(h.attrs, h.names, h.timeAttr)
 	if err := w.run(fill); err != nil {
@@ -41,7 +40,7 @@ func (h *InputHandler) SendRow(ctx context.Context, batchID string, fill func(ce
 	return mapErr(h.rt.Send(ctx, h.app, e))
 }
 
-// EndBatch is the batch-close signal (design s3-3-1 §5.3): recorded and counted; batchID must not be empty.
+// EndBatch is the batch-close signal: recorded and counted; batchID must not be empty.
 func (h *InputHandler) EndBatch(ctx context.Context, batchID string) error {
 	return mapErr(h.rt.BatchEnd(ctx, h.app, h.stream, batchID))
 }

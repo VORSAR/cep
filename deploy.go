@@ -16,10 +16,9 @@ import (
 )
 
 // Deploy parses, validates and plans src, runs its expect blocks, binds its connectors and registers the app,
-// inactive (design s3-3-1 §3.2, s3-3-2 §6). Every parse or static defect is returned at once as a *DeployError, and
-// so is every failing expect block (E-EXP-001, one per block); lints are on the handle. A construct this release
-// cannot run yet is refused with an error wrapping errors.ErrUnsupported. The facade never holds the model: the plan
-// does.
+// inactive. Every parse or static defect is returned at once as a *DeployError, and so is every failing expect block
+// (E-EXP-001, one per block); lints are on the handle. A construct this release cannot run yet is refused with an
+// error wrapping errors.ErrUnsupported. The facade never holds the model: the plan does.
 func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOption) (*AppHandle, error) {
 	if r.rt.Closed() { // §3.7: Deploy after Close is ErrClosed, whatever the program (review, later)
 		return nil, ErrClosed

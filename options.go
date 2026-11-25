@@ -7,8 +7,7 @@ import (
 )
 
 // DeployOption configures one Deploy. A repeated WithParam for one name, WithSource for one stream, WithRecording
-// or WithConnectors is an error wrapping ErrRepeatedOption (design s3-3-1 §3.2); WithSink and WithTableRows may
-// repeat.
+// or WithConnectors is an error wrapping ErrRepeatedOption; WithSink and WithTableRows may repeat.
 type DeployOption func(*deployOptions) error
 
 type deployOptions struct {
@@ -69,7 +68,7 @@ func WithSink(stream string, s cepio.Sink) DeployOption {
 }
 
 // WithTableRows gives a table its starting rows, written at Start after the recording's header and before any
-// source opens (owner, 2026-11-07, design 2). The fills run at Deploy.
+// source opens. The fills run at Deploy.
 func WithTableRows(table string, rows ...func(cepio.RowWriter) error) DeployOption {
 	return func(o *deployOptions) error {
 		o.tableRows[table] = append(o.tableRows[table], rows...)
@@ -77,7 +76,7 @@ func WithTableRows(table string, rows ...func(cepio.RowWriter) error) DeployOpti
 	}
 }
 
-// WithRecording turns the app's recording on, written to w (off unless given: owner D4 of S3.2b-2).
+// WithRecording turns the app's recording on, written to w. Recording is off unless this option is given.
 func WithRecording(w cepio.Writer) DeployOption {
 	return func(o *deployOptions) error {
 		if o.recorded {
@@ -91,7 +90,7 @@ func WithRecording(w cepio.Writer) DeployOption {
 	}
 }
 
-// WithConnectors binds the program's @source and @sink annotations through f (design s3-3-1 §3.4).
+// WithConnectors binds the program's @source and @sink annotations through f.
 func WithConnectors(f ConnectorFactory) DeployOption {
 	return func(o *deployOptions) error {
 		if o.connectors != nil {

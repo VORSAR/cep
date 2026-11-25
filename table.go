@@ -8,8 +8,8 @@ import (
 	cepio "github.com/vorsar/cep/io"
 )
 
-// Table writes a declared table (design s3-3-1 §3.1, §4.4). Each call is one write: one intake item, one table
-// version, one record; rows are checked as the engine's TableWrite checks them.
+// Table writes a declared table. Each call is one write: one intake item, one table version, one record; rows are
+// checked as the engine's TableWrite checks them.
 type Table struct {
 	rt     *runtime.Runtime
 	app    runtime.AppID
@@ -80,7 +80,7 @@ func (t *Table) Delete(ctx context.Context, keys ...func(cepio.RowWriter) error)
 	return mapErr(t.rt.TableWrite(ctx, t.app, t.id, runtime.TableDelete, rows))
 }
 
-// Load is a multi-row Upsert (a replace-all is S3.3-2's given table).
+// Load is a multi-row Upsert.
 func (t *Table) Load(ctx context.Context, fills []func(cepio.RowWriter) error) error {
 	return t.Upsert(ctx, fills...)
 }
