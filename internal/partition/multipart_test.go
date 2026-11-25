@@ -41,10 +41,12 @@ func TestMultiPartKeysAreOneInstancePerTuple(t *testing.T) {
 	if r.Len() != 3 {
 		t.Errorf("%d instances, want 3: (k, a+K, c, 1), (k, a, K+c, 1), (k, a+K, c, 0)", r.Len())
 	}
+	// births only at offers 1, 2 and 4: a lost length prefix merges offers 1 and 2; an unfolded -0.0 splits 4 and 5
+	oaWant(t, b, "new k", "ev k @1", "new k", "ev k @2", "ev k @3", "new k", "ev k @4", "ev k @5")
 }
 
 // TestMultiPartOfferPanicsOnAMalformedKey (design s3-2b-2 §2.6): the router checks first, so Offer panics on a part
-// count other than the rule's and on a null part, as on a single null key.
+// count other than the rule's, on a null part (as on a single null key) and on a part of a type other than the rule's.
 func TestMultiPartOfferPanicsOnAMalformedKey(t *testing.T) {
 	t.Parallel()
 	for name, key := range map[string]partition.Key{

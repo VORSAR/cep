@@ -10,7 +10,6 @@ import (
 	"math/rand/v2"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/vorsar/cep/internal/clock"
@@ -216,6 +215,8 @@ func TestNewRuleRefuses(t *testing.T) {
 	}{
 		{"nil inputs", func(c *partition.Config) { c.Inputs = nil }},
 		{"empty inputs", func(c *partition.Config) { c.Inputs = []int{} }},
+		{"nil key types", func(c *partition.Config) { c.KeyTypes = nil }},
+		{"empty key types", func(c *partition.Config) { c.KeyTypes = []event.Type{} }},
 		{"KeyType invalid", func(c *partition.Config) { c.KeyTypes = []event.Type{event.TInvalid} }},
 		{"KeyType object", func(c *partition.Config) { c.KeyTypes = []event.Type{event.TObject} }},
 		{"negative TTL", func(c *partition.Config) { c.TTL = -1 }},
@@ -240,7 +241,7 @@ func TestNewRuleRefuses(t *testing.T) {
 
 // The invariant, planted faults (design v2 §3 CheckTimers; QA A6). Keys a, b, c are honest; key d (ordinal 3)
 // breaks it. d's event at 0:03 is released by the advance to 0:04 (D1); each fault is then found, and the error
-// begins "partition: instance 3: ".
+// names the fault exactly.
 func TestCheckTimers_PlantedFaults(t *testing.T) {
 	t.Parallel()
 	completion := func(in *partition.Instance, e event.Event) []clock.Timer {
@@ -250,19 +251,23 @@ func TestCheckTimers_PlantedFaults(t *testing.T) {
 		name     string
 		schedule func(in *partition.Instance, e event.Event) []clock.Timer
 		plant    func(st *state)
+		want     string
 	}{
 		// scheduled a Completion its state does not report
-		{"hidden timer", completion, func(st *state) { st.hide = true }},
+		{"hidden timer", completion, func(st *state) { st.hide = true },
+			"partition: instance 3: pending timers [{63000 1 1} {303000 5 0}], but its state implies [{303000 5 0}]"},
 		// reports a DelayDue it never scheduled
-		{"phantom timer", nil, func(st *state) { st.extra = []clock.Timer{{Due: 9 * minute, Kind: clock.DelayDue, Ref: 2}} }},
+		{"phantom timer", nil, func(st *state) { st.extra = []clock.Timer{{Due: 9 * minute, Kind: clock.DelayDue, Ref: 2}} },
+			"partition: instance 3: pending timers [{303000 5 0}], but its state implies [{540000 3 2} {303000 5 0}]"},
 		// a body scheduling TTLPurge (MUST NOT), at the same due as the real one and reporting it
 		{"body TTLPurge, reported", func(in *partition.Instance, e event.Event) []clock.Timer {
 			return []clock.Timer{{Due: e.Ts + 5*minute, Kind: clock.TTLPurge}}
-		}, nil},
+		}, nil, "partition: instance 3: its state implies a TTLPurge, which only partition schedules"},
 		// a body re-scheduling TTLPurge at another due, unreported: the TTL is no longer LastActivity + TTL
 		{"body TTLPurge, moved", func(in *partition.Instance, e event.Event) []clock.Timer {
 			return []clock.Timer{{Due: e.Ts + 9*minute, Kind: clock.TTLPurge}}
-		}, func(st *state) { st.hide = true }},
+		}, func(st *state) { st.hide = true },
+			"partition: instance 3: pending timers [{543000 5 0}], but its state implies [{303000 5 0}]"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b := &body{}
@@ -290,8 +295,8 @@ func TestCheckTimers_PlantedFaults(t *testing.T) {
 			if err == nil {
 				t.Fatal("CheckTimers: nil, want an error naming instance 3")
 			}
-			if !strings.HasPrefix(err.Error(), "partition: instance 3: ") {
-				t.Errorf("CheckTimers: %q, want the prefix %q", err, "partition: instance 3: ")
+			if err.Error() != c.want {
+				t.Errorf("CheckTimers: %q, want %q", err, c.want)
 			}
 		})
 	}

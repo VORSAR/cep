@@ -119,6 +119,7 @@ func (q *quiet) OnPurge(*partition.Instance)                      {}
 // Exit 4, the budget (design §3 MUST, ADR-0010 §1): Apply, Offer and Advance on a resident, born key allocate
 // nothing. Each run moves the clock 1 s, buffers one event and releases the previous one (D1), whose release
 // re-arms the TTL in place (§4.3: a replacing Schedule MUST NOT allocate).
+// Not parallel: testing.AllocsPerRun counts the whole process's allocations.
 func TestOneTTLTimerPerInstance_ReArmAllocatesNothing(t *testing.T) {
 	const ttlMs = 5 * minute
 	r, err := partition.NewRule(partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString}, TTL: ttlMs, Body: &quiet{}})
