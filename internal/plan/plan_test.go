@@ -18,7 +18,7 @@ import (
 type pqWantStream struct {
 	name     string
 	attrs    []event.Attr
-	timeAttr int // event.ArrivalTime, or the index; -2: not asserted (a derived stream: the design is silent, gap G2)
+	timeAttr int // the time attribute's index, or event.ArrivalTime: a `time arrival` source, or a derived stream (plan.Stream's doc)
 	delay    int64
 	idle     int64
 	derived  bool
@@ -42,7 +42,7 @@ func pqCheckStreams(t *testing.T, p *plan.App, want []pqWantStream) {
 		if !slices.Equal(got, w.attrs) {
 			t.Errorf("stream %s: attributes %+v, want %+v", w.name, got, w.attrs)
 		}
-		if w.timeAttr != -2 && s.Schema.TimeAttr() != w.timeAttr {
+		if s.Schema.TimeAttr() != w.timeAttr {
 			t.Errorf("stream %s: TimeAttr %d, want %d", w.name, s.Schema.TimeAttr(), w.timeAttr)
 		}
 		if s.Delay != w.delay || s.IdleAfter != w.idle || s.Derived != w.derived {
@@ -63,7 +63,7 @@ func TestBuildExample07(t *testing.T) {
 	p := pqBuild(t, "07-consent-gate.cep", pqExample(t, "07-consent-gate.cep"))
 	pqCheckStreams(t, p, []pqWantStream{
 		{"ConsentGrants", []event.Attr{pqA("tenantId", event.TString), pqOpt("appId", event.TString), pqA("grantedBy", event.TString), pqA("ts", event.TTimestamp)}, 3, pqMin, 0, false},
-		{"ConsentAlerts", []event.Attr{pqA("tenantId", event.TString), pqA("appId", event.TString), pqA("ts", event.TTimestamp)}, -2, 0, 0, true},
+		{"ConsentAlerts", []event.Attr{pqA("tenantId", event.TString), pqA("appId", event.TString), pqA("ts", event.TTimestamp)}, event.ArrivalTime, 0, 0, true},
 	})
 	if len(p.Tables) != 1 {
 		t.Fatalf("%d tables, want 1", len(p.Tables))
@@ -96,7 +96,7 @@ func TestBuildExample09(t *testing.T) {
 	p := pqBuild(t, "09-params-and-quoting.cep", pqExample(t, "09-params-and-quoting.cep"))
 	pqCheckStreams(t, p, []pqWantStream{
 		{"agent-events", []event.Attr{pqA("agentId", event.TString), pqA("risk", event.TFloat), pqA("env", event.TString), pqA("ts", event.TTimestamp)}, 3, 2 * pqMin, 0, false},
-		{"RiskAlerts", []event.Attr{pqA("agentId", event.TString), pqA("scaled", event.TFloat), pqA("ts", event.TTimestamp)}, -2, 0, 0, true},
+		{"RiskAlerts", []event.Attr{pqA("agentId", event.TString), pqA("scaled", event.TFloat), pqA("ts", event.TTimestamp)}, event.ArrivalTime, 0, 0, true},
 	})
 	if len(p.Tables) != 0 {
 		t.Errorf("%d tables, want 0", len(p.Tables))
@@ -171,8 +171,8 @@ func TestBuildPartitionedAndTimeClauses(t *testing.T) {
 		{"S", []event.Attr{pqA("k", event.TString), pqA("n", event.TInt), pqA("ts", event.TTimestamp)}, 2, 15 * pqMin, 2 * pqMin, false},
 		{"Ordered", []event.Attr{pqA("k", event.TString), pqA("ts", event.TTimestamp)}, 1, 0, 0, false},
 		{"Arr", []event.Attr{pqA("k", event.TString), pqA("n", event.TInt)}, event.ArrivalTime, 0, 0, false},
-		{"O", []event.Attr{pqA("k", event.TString), pqA("n", event.TInt), pqA("ts", event.TTimestamp)}, -2, 0, 0, true},
-		{"P", []event.Attr{pqA("k", event.TString), pqA("n", event.TInt), pqA("ts", event.TTimestamp)}, -2, 0, 0, true},
+		{"O", []event.Attr{pqA("k", event.TString), pqA("n", event.TInt), pqA("ts", event.TTimestamp)}, event.ArrivalTime, 0, 0, true},
+		{"P", []event.Attr{pqA("k", event.TString), pqA("n", event.TInt), pqA("ts", event.TTimestamp)}, event.ArrivalTime, 0, 0, true},
 	})
 	if len(p.Rules) != 2 {
 		t.Fatalf("%d rules, want 2", len(p.Rules))
@@ -194,8 +194,8 @@ func TestBuildRefusesNotBuilt(t *testing.T) {
 	for _, file := range []string{"01-agent-kill-switch.cep", "02-cron-digest.cep", "05-text-operators.cep"} {
 		app := pqChecked(t, file, pqExample(t, file))
 		p, err := pqTryBuild(t, app)
-		if !errors.Is(err, plan.ErrNotBuilt) {
-			t.Errorf("Build(%s) = %v, %v; want ErrNotBuilt", file, p, err)
+		if !errors.Is(err, plan.ErrNotBuilt) || p != nil {
+			t.Errorf("Build(%s) = %v, %v; want nil and ErrNotBuilt", file, p, err)
 		}
 	}
 }
