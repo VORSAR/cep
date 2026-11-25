@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/vorsar/cep/internal/model"
+	"github.com/vorsar/cep/internal/parser"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/corpus.golden from the engine side")
@@ -183,5 +184,36 @@ func TestRunExitCodes(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.cep")
 	if code := run([]string{good, missing}, &out, &errs); code != 2 || !strings.Contains(errs.String(), "missing.cep") {
 		t.Fatalf("run with a missing file = %d, stderr %q; want 2 naming it", code, errs.String())
+	}
+}
+
+// TestJudgeReportsEachLoweringCodeAtTheLoweringStage: a grammar-valid file the lowering refuses is a reject at the
+// "lowering" stage with its code, one row per parser.LoweringCodes code (inputs as the parser's TestLoweringCodes).
+func TestJudgeReportsEachLoweringCodeAtTheLoweringStage(t *testing.T) {
+	t.Parallel()
+	const head = "language cep/0.1;\n" +
+		"stream S (k string, n int, ts timestamp) time ts watermark bounded 1 min idle after 1 min;\n" +
+		"stream Out (k string, ts timestamp);\n" +
+		"rule R intent 'x' partition by k of S ttl 1 hour from S"
+	rows := []struct{ code, src string }{
+		{"E-DUR-002", head + " select k output first every 1.5 min insert into Out;\n"},
+		{"E-STR-002", head + "[k has_cs 'C:\\q'] select k insert into Out;\n"},
+		{"E-TYPE-001", head + "[n > 99999999999999999999] select k insert into Out;\n"},
+		{"E-WIN-004", head + " window sort(0, n, desc) emit on change late events drop select k insert into Out;\n"},
+	}
+	if !strings.Contains(rows[1].src, "'C:\\q'") {
+		t.Fatal("test setup: the E-STR-002 input must hold a backslash before q")
+	}
+	var codes []string
+	for _, row := range rows {
+		codes = append(codes, row.code)
+		r := judge("lowering.cep", row.src)
+		if r.Verdict != "reject" || r.Code != row.code || r.Stage != "lowering" {
+			t.Errorf("judge(the %s input): verdict %q, code %q, stage %q; want reject, %s, lowering", row.code, r.Verdict,
+				r.Code, r.Stage, row.code)
+		}
+	}
+	if !slices.Equal(codes, parser.LoweringCodes) {
+		t.Errorf("the rows cover %v; want one per parser.LoweringCodes %v, in its order", codes, parser.LoweringCodes)
 	}
 }
