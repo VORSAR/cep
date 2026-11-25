@@ -30,8 +30,8 @@ func TestBreakitIotaRepetitionKeepsTypeAndValue(t *testing.T) {
 	if before == after {
 		t.Errorf("swapping B and C (B 1→2, C 2→1) left the surface unchanged:\n%s\nwant B's and C's lines to carry their type and value", before)
 	}
-	if !strings.Contains(before, "p B const const B T") {
-		t.Errorf("surface:\n%s\nwant B printed with its type T (and its value), not a bare `const B`", before)
+	if want := "\np B const const B T = iota // iota 1\n"; !strings.Contains(before, want) {
+		t.Errorf("surface:\n%s\nwant B's line %q: its type T and its value, iota 1", before, want)
 	}
 }
 
