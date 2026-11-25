@@ -50,7 +50,8 @@ type key struct {
 // New validates a table declaration and returns the table with an empty current Version. It rejects an empty
 // name; no attributes; an empty or duplicate attribute name (case-sensitive); a type outside TString…TObject; an
 // empty key; and a key column that is not declared, is named twice, or is an object. An optional key column is
-// accepted; a null key value is refused when written (owner D3: the deploy error for both is S3.3's).
+// accepted; a null key value is refused when written. At deploy the validator refuses an optional or an object key
+// column (E-TBL-002, SPEC §4.3).
 func New(name string, attrs []event.Attr, keyCols []string) (*Table, error) {
 	if name == "" {
 		return nil, errors.New("table: empty table name")
