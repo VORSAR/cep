@@ -121,6 +121,7 @@ func pnInstance(r *partition.Rule, key string) *partition.Instance {
 // boom is unborn with nothing buffered, so it is freed: 2 resident keys (ok1, ok2). ok1's and ok2's Completion
 // (@6 s, @8 s) are not yet due.
 func TestBodyPanicResetsTheKey(t *testing.T) {
+	t.Parallel()
 	b := &pnBody{panicOn: "boom", sched: func(e event.Event) []clock.Timer {
 		return []clock.Timer{{Due: e.Ts + 5*pnSec, Kind: clock.Completion, Ref: 1}}
 	}}
@@ -168,9 +169,10 @@ func TestBodyPanicResetsTheKey(t *testing.T) {
 // TestPanicInOnPurgeStillPurges: key a (TTL 5 s; no body timers) is released at 0 s (Apply 0.5 s), its TTL purge
 // due 5 s; Apply 6 s fires it; OnPurge panics. The purge still completes (design v2 §1b, review F10): a is reset and,
 // holding nothing, freed — never left born without a TTL timer. Panics 1; CheckTimers holds. Then b @7 s is offered
-// and Apply 8 s releases it: the walk works after the panic. (Purged is not asserted: v2 does not say whether a purge
-// whose OnPurge panicked counts as one; gap Q12.)
+// and Apply 8 s releases it: the walk works after the panic. Purged is 1: the purge completed, and its OnPurge panic
+// counts in Panics as well.
 func TestPanicInOnPurgeStillPurges(t *testing.T) {
+	t.Parallel()
 	b := &pnBody{purgePanicOn: "a"}
 	r := pnRule(t, 5*pnSec, b)
 	r.Offer(partition.Single(pnKey("a")), pnEv(0, 1))
@@ -181,6 +183,9 @@ func TestPanicInOnPurgeStillPurges(t *testing.T) {
 	}
 	if st := r.Stats(); st.Panics != 1 {
 		t.Errorf("Panics %d, want 1", st.Panics)
+	}
+	if st := r.Stats(); st.Purged != 1 {
+		t.Errorf("Purged %d, want 1: a purge whose OnPurge panicked still completed", st.Purged)
 	}
 	if a := pnInstance(r, "a"); a != nil {
 		t.Errorf("a resident after its purge (Op %v, timers %v), want freed", a.Op, a.Clock.Timers(nil))
@@ -202,6 +207,7 @@ func TestPanicInOnPurgeStillPurges(t *testing.T) {
 //   - Apply 3 s: releases b@1 s (TTL @6 s, C @3 s, D @101 s); fires a's C @2 s (2 < 3) → a: D; b: C, D → Pending 3.
 //   - Apply 5.5 s: fires b's C @3 s; a's TTL @5 s purges a (CancelAll: its D goes) → b: D → Pending 1.
 func TestPendingExcludesTTL(t *testing.T) {
+	t.Parallel()
 	b := &pnBody{sched: func(e event.Event) []clock.Timer {
 		return []clock.Timer{{Due: e.Ts + 2*pnSec, Kind: clock.Completion, Ref: 1}, {Due: e.Ts + 100*pnSec, Kind: clock.DelayDue, Ref: 2}}
 	}}
