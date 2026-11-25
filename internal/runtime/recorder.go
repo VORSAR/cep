@@ -201,6 +201,11 @@ func (q *recQ) run(r *Runtime) {
 		case <-q.stop: // Remove: every record queued before it is in q (the router put them first): write, flush, return
 			q.drainQueue()
 			q.flush()
+			// The queue is released here, on the Remove path only (owner, 2026-11-25; PR 2's review PR2A-3, PR2Q-10):
+			// the router's last write to it came before its close(stop), which came before this receive, and the
+			// tombstone keeps q for Stats, which reads the counters under mu and never the queue. Not on the Close
+			// path below: there the router may still be running.
+			q.q = nil
 			return
 		case <-q.overflow: // every record queued before the overflow is in q: write them, then flush (review C3)
 			q.drainQueue()

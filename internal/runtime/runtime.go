@@ -89,6 +89,7 @@ type Config struct {
 	// 65,536. At a full queue the router first gives up the processor, at most twice, and offers the record again; if
 	// the queue is still full, the recording ends (owner D2 of S3.2b-2's design). The queue must be large enough to
 	// cover the recorder's wake-up, and values far below the default can end a recording under bursts at any CPU count.
+	// The queue is allocated at Add and released when the app is removed (Remove), once its recorder has returned.
 	RecordQueue int
 }
 
