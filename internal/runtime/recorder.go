@@ -68,11 +68,14 @@ type recQ struct {
 	cutOff  bool // a drain's deadline cut the recording off while it still had writes to make (cut, once)
 }
 
-// recTurns is how many times the router gives the processor away at one full queue, whatever the recorder goroutine
-// is doing (design s1-1c-7-design-starvation §1.3; owner, 2026-11-22, the starvation fix under load): one yield can be
-// handed straight back by the scheduler's fairness check, the second reaches the run queue. So detection's pause at a
-// full queue is bounded by two yields (owner D2 of S3.2b-2's design): a runnable recorder gets at most two turns, and a
-// Recorder blocked on I/O is not runnable, so the yields return at once and the recording ends.
+// recTurns is how many times the router gives the processor away at one full queue for one record, whatever the
+// recorder goroutine is doing (design s1-1c-7-design-starvation §1.3; owner, 2026-11-22, the starvation fix under
+// load): one yield can be handed straight back by the scheduler's fairness check, the second reaches the run queue.
+// The bound is two yields per record (owner D2 of S3.2b-2's design), not per call: a TableWrite of k rows puts k
+// records (applyWrite), so it can yield up to 2k times. A yield is not brief under load: it lets every runnable
+// goroutine run, not only the recorder, and a runnable CPU-bound recorder can keep the processor up to the
+// scheduler's time slice. A Recorder blocked on disk or network is not runnable, so a yield frees nothing for it and
+// the recording ends after the two yields.
 const recTurns = 2
 
 func newRecQ(rec Recorder, capacity int) *recQ {
@@ -123,9 +126,10 @@ func (q *recQ) put(it recItem) bool {
 }
 
 // turn is put's step at a full queue: the router yields the processor and offers the record again, at most recTurns
-// times, whatever the recorder goroutine is doing, so detection's pause is bounded (owner D2 of S3.2b-2's design). A
-// runnable recorder (preempted, or slow because it computes) gets at most two turns to make room; a Recorder blocked
-// on I/O is not runnable, so the yields return at once, no room is made, and the recording ends.
+// times for this record, whatever the recorder goroutine is doing (owner D2 of S3.2b-2's design). Each yield lets
+// every runnable goroutine run, so under load it can last up to the scheduler's time slice: a runnable recorder
+// (preempted, or slow because it computes) gets at most two turns to make room for this record. A Recorder blocked on
+// disk or network is not runnable, so no room is made, and the recording ends after the two yields.
 func (q *recQ) turn(it recItem) bool {
 	for range recTurns {
 		q.turns++
