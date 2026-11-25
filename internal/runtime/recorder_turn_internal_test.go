@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	goruntime "runtime"
+	"strings"
 	"testing"
 
 	"github.com/vorsar/cep/internal/event"
@@ -163,5 +164,26 @@ func TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns(t *testing.T
 	}
 	if got := r.appList()[id].rec.turns; got != turns {
 		t.Fatalf("the router yielded %d times at a full queue behind a blocked Recorder, want %d", got, turns)
+	}
+}
+
+// TestATurnThatQueuesTheRecordCountsIt: a record turn queues is counted as put's own are, so the queue-full text that
+// ends the recording names the records queued before it. Run on the caller's goroutine with no recorder goroutine: the
+// one-slot queue is empty for the first offer and stays full for the second, whose overflow signal has its one slot.
+func TestATurnThatQueuesTheRecordCountsIt(t *testing.T) {
+	t.Parallel()
+	q := newRecQ(igRec{}, 1)
+	if !q.turn(recItem{}) {
+		t.Fatal("turn at an empty one-slot queue: false; want true")
+	}
+	if q.queued != 1 || q.turns != 1 {
+		t.Fatalf("after turn queued the record: queued %d, turns %d; want 1 and 1", q.queued, q.turns)
+	}
+	if q.put(recItem{}) {
+		t.Fatal("put at a full queue with no recorder goroutine: true; want false")
+	}
+	if st := q.stats(); !st.Failed || !strings.Contains(st.Err, "after record 1:") {
+		t.Fatalf("the recording after a full queue: failed %v, %q; want true and the text naming record 1", st.Failed,
+			st.Err)
 	}
 }

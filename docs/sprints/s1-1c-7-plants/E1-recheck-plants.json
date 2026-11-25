@@ -25,5 +25,14 @@
   "replace": "\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n\tif r.openHold != nil { // the package's tests only\n\t\tr.openHold()\n\t}\n\ta.opened.Store(true)\n",
   "test": "TestAnEndedDrainAfterActivatesMarkStillLeavesTheAppActive",
   "pkg": "./internal/runtime"
+ },
+ {
+  "id": "recheck-P4",
+  "note": "P4: a record turn queues is not counted (turn's q.queued++ dropped)",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tcase q.q <- it:\n\t\t\tq.queued++\n\t\t\treturn true\n\t\tdefault:\n\t\t}\n\t}\n\treturn false\n",
+  "replace": "\t\tcase q.q <- it:\n\t\t\treturn true\n\t\tdefault:\n\t\t}\n\t}\n\treturn false\n",
+  "test": "TestATurnThatQueuesTheRecordCountsIt",
+  "pkg": "./internal/runtime"
  }
 ]
