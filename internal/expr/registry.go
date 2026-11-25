@@ -192,5 +192,5 @@ func buildIfThenElse(args []Expr, _ model.Expr) (Expr, error) {
 }
 
 func buildCount(_ []Expr, _ model.Expr) (Expr, error) {
-	return &later{typ: event.TInt, what: "count (S8)"}, nil
+	return &later{typ: event.TInt, what: "count()"}, nil
 }

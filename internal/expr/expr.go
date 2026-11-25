@@ -111,7 +111,7 @@ func (r *Registry) Build(node model.Expr, scope Scope) (Expr, error) {
 }
 
 // NotRunnableError is an expression that types but cannot be evaluated by this release: it holds a construct whose
-// Eval always errors until its sprint (What names both, e.g. "text operators (S7)").
+// Eval always errors (What names the construct, e.g. "a text operator").
 type NotRunnableError struct{ What string }
 
 func (e *NotRunnableError) Error() string { return "expr: " + e.What + " is not executable yet" }
@@ -246,7 +246,7 @@ func (b *builder) node(n model.Expr) (Expr, error) {
 				return nil, at(nameErr("table", n.Operand.Table), n.Operand.Pos.Line, n.Operand.Pos.Col)
 			}
 		}
-		return &later{typ: event.TBool, what: "text operators (S7)"}, nil
+		return &later{typ: event.TBool, what: "a text operator"}, nil
 	case model.ExprCall:
 		return b.call(n)
 	}
@@ -301,7 +301,7 @@ func (b *builder) chain(d *Descriptor, n model.Expr) (Expr, error) {
 			return nil, at(nameErr("capture", a.Name), a.Pos.Line, a.Pos.Col)
 		}
 	}
-	return &later{typ: event.TObject, what: "chain (S4.1)"}, nil
+	return &later{typ: event.TObject, what: "chain()"}, nil
 }
 
 // at places err at line:col.
