@@ -52,32 +52,55 @@ func TestBreakitGuardFailedWritePublishesNothing(t *testing.T) {
 
 // TestBreakitGuardSnapshotUnderConcurrentWriters: writers on other goroutines (Upsert, Delete, Load) against
 // Set.Snapshot on one goroutine; run with -race. Every snapshot is internally stable: a version read twice from one
-// snapshot is the same, and a later snapshot never shows an older version of a table than an earlier one did.
+// snapshot is the same, and a later snapshot never shows an older version of a table than an earlier one did. Each
+// table's one stamping writer puts its own rising count in row "g" with every Upsert and Load, so a table's "g"
+// never falls from one version to a later one; A's second writer upserts and deletes only row "k".
 func TestBreakitGuardSnapshotUnderConcurrentWriters(t *testing.T) {
 	a, b := bkTable(t, "A"), bkTable(t, "B")
 	set := table.NewSet([]*table.Table{a, b})
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
-	for w, tb := range []*table.Table{a, b, a} {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	defer func() { // a failed check stops the writers before the test returns
+		close(stop)
+		wg.Wait()
+	}()
+	stamp := func(tb *table.Table, w int64) func(int64) {
+		return func(i int64) {
+			switch (i + w) % 3 {
+			case 0:
+				_ = tb.Upsert([][]event.Value{bkRow("g", i), bkRow("k", i)})
+			case 1:
+				_ = tb.Delete([][]event.Value{{{Kind: event.TString, Str: "k"}}})
+			default:
+				_ = tb.Load([][]event.Value{bkRow("g", i), bkRow("k", i), bkRow("j", i)})
+			}
+		}
+	}
+	keyOnly := func(i int64) {
+		if i%2 == 0 {
+			_ = a.Upsert([][]event.Value{bkRow("k", i)})
+		} else {
+			_ = a.Delete([][]event.Value{{{Kind: event.TString, Str: "k"}}})
+		}
+	}
+	for _, write := range []func(int64){stamp(a, 0), stamp(b, 1), keyOnly} {
+		wg.Go(func() {
 			for i := int64(0); ; i++ {
 				select {
 				case <-stop:
 					return
 				default:
 				}
-				switch (i + int64(w)) % 3 {
-				case 0:
-					_ = tb.Upsert([][]event.Value{bkRow("k", i)})
-				case 1:
-					_ = tb.Delete([][]event.Value{{{Kind: event.TString, Str: "k"}}})
-				default:
-					_ = tb.Load([][]event.Value{bkRow("k", i), bkRow("j", i)})
-				}
+				write(i)
 			}
-		}()
+		})
+	}
+	gen := func(v *table.Version) int64 { // the stamp in row "g"; -1 before the first stamped write
+		row, ok := v.Get([]event.Value{{Kind: event.TString, Str: "g"}})
+		if !ok {
+			return -1
+		}
+		return row[1].I
 	}
 	prev := set.Snapshot()
 	for range 20000 {
@@ -87,11 +110,10 @@ func TestBreakitGuardSnapshotUnderConcurrentWriters(t *testing.T) {
 			if v != s.Table(id) {
 				t.Fatal("a snapshot's version changed")
 			}
-			_, _ = v.Get([]event.Value{{Kind: event.TString, Str: "k"}})
+			if now, was := gen(v), gen(prev.Table(id)); now < was {
+				t.Fatalf("table %d: a later snapshot shows stamp %d after an earlier one showed %d", id, now, was)
+			}
 		}
 		prev = s
 	}
-	_ = prev
-	close(stop)
-	wg.Wait()
 }
