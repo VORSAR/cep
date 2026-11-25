@@ -44,15 +44,15 @@ func TestBuildRefusesABlockACheckedModelNeverHolds(t *testing.T) {
 	const at = "timestamp '2026-01-01T10:00:00Z'"
 	for _, c := range []struct{ name, from, block, want string }{
 		{"an unknown table", "S", "given table U [ {k: 'a'} ] given S [ ] then Out [ ]", "unknown table U"},
-		{"a table row's wrong type", "S", "given table T [ {k: 1} ] given S [ ] then Out [ ]", "k: a int literal is not a string"},
+		{"a table row's wrong type", "S", "given table T [ {k: 1} ] given S [ ] then Out [ ]", "k: a literal of kind int is not of type string"},
 		{"an unknown stream", "S", "given Q [ ] then Out [ ]", "unknown stream Q"},
 		{"a stream stamped on arrival", "A", "given A [ {k: 'a'} ] then Out [ ]", "stream A has no time attribute"},
 		{"an unknown field", "S", "given S [ {k: 'a', m: 1, ts: " + at + "} ] then Out [ ]", "no attribute m"},
-		{"a given value's wrong type", "S", "given S [ {k: 'a', n: 'x', ts: " + at + "} ] then Out [ ]", "n: a string literal is not a int"},
+		{"a given value's wrong type", "S", "given S [ {k: 'a', n: 'x', ts: " + at + "} ] then Out [ ]", "n: a literal of kind string is not of type int"},
 		{"a null time attribute", "S", "given S [ {k: 'a'} ] then Out [ ]", "the time attribute ts is null"},
 		{"a then on another stream", "S", "given S [ ] then Other [ ]", "then names Other, not the rule's target Out"},
 		{"an unknown then attribute", "S", "given S [ ] then Out [ {q: 1} ]", "Out has no attribute q"},
-		{"a then value's wrong type", "S", "given S [ ] then Out [ {k: 1} ]", "Out.k: a int literal is not a string"},
+		{"a then value's wrong type", "S", "given S [ ] then Out [ {k: 1} ]", "Out.k: a literal of kind int is not of type string"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

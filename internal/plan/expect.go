@@ -236,5 +236,5 @@ func value(l model.Literal, t event.Type) (event.Value, error) {
 	if v, ok := model.LitValue(l, t); ok {
 		return v, nil
 	}
-	return event.Value{}, fmt.Errorf("a %s literal is not a %s", l.Kind, t)
+	return event.Value{}, fmt.Errorf("a literal of kind %s is not of type %s", l.Kind, t)
 }

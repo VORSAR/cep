@@ -155,20 +155,20 @@ func TestBuildNamesABlocksFirstFault(t *testing.T) {
 	for _, c := range []struct{ name, block, want string }{
 		{"an unknown table before a later table's row", "given table U [ ] given table T [ {k: 1} ] then Out [ ]", "unknown table U"},
 		{"a table's row before a later unknown stream", "given table T [ {k: 1} ] given Q [ ] then Out [ ]",
-			"k: a int literal is not a string"},
+			"k: a literal of kind int is not of type string"},
 		{"an unknown stream before a later timeless stream", "given Q [ ] given A [ ] then Out [ ]", "unknown stream Q"},
 		{"a timeless stream before a later stream's record", "given A [ ] given S [ {k: 1, ts: " + peAt + "} ] then Out [ ]",
 			"stream A has no time attribute a block can give"},
 		{"a stream's record before the then's target", "given S [ {k: 1, ts: " + peAt + "} ] then Other [ ]",
-			"k: a int literal is not a string"},
+			"k: a literal of kind int is not of type string"},
 		{"the then's target before its records", "given S [ ] then Other [ {q: 1} ]", "then names Other, not the rule's target Out"},
 		{"an unknown table before a wrong then", "given table U [ ] then Other [ ]", "unknown table U"},
 		{"a stream given before a table given", "given S [ {k: 1, ts: " + peAt + "} ] given table U [ ] then Out [ ]",
-			"k: a int literal is not a string"},
+			"k: a literal of kind int is not of type string"},
 		{"a record before a later record", "given S [ {k: 1, ts: " + peAt + "}, {q: 1, ts: " + peAt + "} ] then Out [ ]",
-			"k: a int literal is not a string"},
+			"k: a literal of kind int is not of type string"},
 		{"a then-record before a later one", "given S [ ] then Out [ {q: 1}, {k: 1} ]", "Out has no attribute q"},
-		{"a then field before a later one", "given S [ ] then Out [ {k: 1, q: 1} ]", "Out.k: a int literal is not a string"},
+		{"a then field before a later one", "given S [ ] then Out [ {k: 1, q: 1} ]", "Out.k: a literal of kind int is not of type string"},
 	} {
 		p, err := peBuildBlock(t, c.block)
 		if want := peWant(c.want); err == nil || err.Error() != want || p != nil {
