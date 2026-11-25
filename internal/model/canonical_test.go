@@ -3,6 +3,8 @@ package model_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"math"
 	"os"
 	"reflect"
@@ -760,8 +762,11 @@ func assertKeysAscend(t *testing.T, enc []byte) {
 	var stack []frame
 	for {
 		tok, err := dec.Token()
-		if err != nil {
+		if errors.Is(err, io.EOF) {
 			break
+		}
+		if err != nil {
+			t.Fatalf("the encoding is not one JSON value: %v: %s", err, enc)
 		}
 		if n := len(stack); n > 0 && stack[n-1].object && stack[n-1].wantKey {
 			if k, ok := tok.(string); ok {
