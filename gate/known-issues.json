@@ -83,12 +83,20 @@
       "opened": "2026-11-19"
     },
     {
-      "id": "S1.1c-7-1",
+      "id": "S1.1c-7-2",
       "first_seen": "S1.1c-7",
       "forward": "S1.1c-10",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-20--s11c-7s-design-g1",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-22--pr-2s-review",
       "correctness": false,
-      "opened": "2026-11-20"
+      "opened": "2026-11-22"
+    },
+    {
+      "id": "S1.1c-7-3",
+      "first_seen": "S1.1c-7",
+      "forward": "S1.1c-10",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-22--the-drain-fixs-design",
+      "correctness": false,
+      "opened": "2026-11-22"
     }
   ]
 }

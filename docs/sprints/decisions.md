@@ -135,6 +135,11 @@
 | 2026-11-22 | [the recorder's starvation and C7's timing](#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing) |
 | 2026-11-22 | [PR 2's remaining steps](#owner-decisions-2026-11-22--pr-2s-remaining-steps) |
 | 2026-11-22 | [the MVP-first re-plan](#owner-decisions-2026-11-22--the-mvp-first-re-plan) |
+| 2026-11-22 | [ruff 0.17.6](#owner-decisions-2026-11-22--ruff-0176) |
+| 2026-11-22 | [PR 2's review](#owner-decisions-2026-11-22--pr-2s-review) |
+| 2026-11-22 | [the Drain fix's design](#owner-decisions-2026-11-22--the-drain-fixs-design) |
+| 2026-11-22 | [the starvation fix under load](#owner-decisions-2026-11-22--the-starvation-fix-under-load) |
+| 2026-11-25 | [PR 2's re-check](#owner-decisions-2026-11-25--pr-2s-re-check) |
 
 ## The decisions
 
@@ -1296,7 +1301,7 @@ After [the plan check](s1-1c-7-plan-check.md) v1 to v3 and three rounds of blind
 After the nine design notes ([the coordination record](s1-1c-7-design-coordination.md) lists them), their blind reviews ([architecture](../reviews/s1-1c-7-design-architecture.md) in two parts, with the-fool; [QA](../reviews/s1-1c-7-design-qa.md) in two passes) and two pre-checks of their plants against the code. Five answers, all as recommended except the first, which the owner gave unasked.
 
 1. **Up to six agents at once for every S1.1 job, until S1.1 closes** (the owner's instruction, given while the design notes were written; earlier the same day six were allowed for the design notes only). Ground rule 17's two return when the S1.1 row closes. One owner per file, a fresh agent per job, the coordinator's check of every hand-back, and one heavy gate run at a time all stay.
-2. **G10-20's leftover logic window becomes known issue S1.1c-7-1** (correctness: no), forwarded to S1.1c-10. Fixing the data race (the unlocked read of `waited`) leaves a window where a Drain whose quiet step failed can put the app's phase back to active after another Drain has begun draining; the draining flag still refuses input, so nothing is lost. Rejected: the backlog; fixing it now in lane E1, which is at its commit ceiling.
+2. **G10-20's leftover logic window becomes known issue S1.1c-7-1** (correctness: no), forwarded to S1.1c-10. Fixing the data race (the unlocked read of `waited`) leaves a window where a Drain whose quiet step failed can put the app's phase back to active after another Drain has begun draining; the draining flag still refuses input, so nothing is lost. Rejected: the backlog; fixing it now in lane E1, which is at its commit ceiling. *(annotated 2026-11-22: closed in S1.1c-7 by the Drain fix, [the Drain fix's design](#owner-decisions-2026-11-22--the-drain-fixs-design). The claim that the draining flag still refuses input was wrong once the live Drain met its deadline on a stuck run: the app then kept taking input, PR 2's review finding PR2Q-1.)*
 3. **Known issue S3.3-1-3 stays at S8**; E1's design recommends one rule for all input after a drain (no drained batch end queued) as its fix, and that recommendation is recorded in its row. S1.1c-7 fixes only the part no design decides: a derived stream's batch end after the drain no longer reaches the recording. Rejected: pulling S3.3-1-3 into S1.1c-7.
 4. **G10-1 is fixed with option B**: an app's starting rows travel in `runtime.App.Loads` and are applied in the router's activation step, so a Start that fails before the activation changes nothing and may be retried. Its cost, accepted: three commits across three lanes (E1's runtime seam with `App.Loads` and `TableLoad`, a new `(*table.Table).Check` in its own commit before wave 2, E2's facade half), each app's recording queue sized at its RecordQueue plus its starting rows, and the starting rows checked at Add. Rejected: option F (the facade alone), which leaves a concurrent Send able to see a table before its starting rows and lets Start block past its deadline.
 5. **The build runs W0 with four agents** (mutate.py's contract and the bench fixes; the naming tool; W0-go's tool tests; `table.Check`), **then lanes A1, B, E1 and A2 together, then E2 and CD**, with the stratified spot-check after each wave. Rejected: the plan's five waves of two.
@@ -1443,3 +1448,80 @@ The owner asked whether the work ahead of the MVP's features was worth its time.
    - Rejected: one debt block before S12; all of it before S4.1.
 
 **The re-cut is not made yet.** `gate/sprints.json`, sprint-plan §3, the known issues' forwards and the parts' bound move in one commit at a plan check after PR 2, as at S1.1c-7's G0. Until then the printed order stands.
+
+### Owner decisions, 2026-11-22 — ruff 0.17.6
+
+PR #54's `canary` workflow went red on pins only: ruff 0.17.6 was released on 2026-11-19, and the one failing test pins `tools.json`'s versions. The `ruff` row itself passed on 0.17.6. One answer, as recommended.
+
+1. **The upgrade is taken now, in its own small pull request (#55, merged the same day),** by the method of [2026-11-14](#owner-decisions-2026-11-14--s11c-4s-close-out): the candidate's pins, each archive's sha256 checked against GitHub's published digest, the tree and executable hashes re-taken with the installer's own code, the pin test red first.
+   - Rejected: after PR #54 merges, or not yet. Either leaves main's Monday canary red.
+
+### Owner decisions, 2026-11-22 — PR 2's review
+
+PR #54's blind reviews ([architecture](../reviews/s1-1c-7-pr2-architecture.md), [QA](../reviews/s1-1c-7-pr2-qa.md)) found no blocker in the pull request's own changes. They found two more race windows in `Drain`'s revert, both already on main, and two tests missing on new code. The starvation fix's [design note](s1-1c-7-design-starvation.md) was ready the same hour. Three answers, all as recommended.
+
+1. **`Drain`'s three race windows are fixed in PR 2, together.** They share one cause: a failed Drain puts the app's phase back from a stale snapshot.
+   - The windows:
+     - known issue S1.1c-7-1;
+     - PR2A-1: a Start that succeeds while the app then refuses all input;
+     - PR2Q-1: a Stop that fails while the app keeps taking input. The known issue's text, "nothing is lost", is wrong for this case.
+   - One rule for the phase after a failed Drain, designed with a prototype, then built test-first from the reviewers' failing tests.
+   - Rejected: fixing PR2A-1 alone; forwarding all three with the known issue's text corrected.
+2. **The starvation fix's design is approved as recommended.** *(annotated 2026-11-22: its waiting flag dropped after the load runs, [the starvation fix under load](#owner-decisions-2026-11-22--the-starvation-fix-under-load).)*
+   - At a full queue whose recorder goroutine is waiting for the processor, the router yields at most twice and offers the record again. A recorder that is behind still ends the recording at once, so detection never waits for the recording.
+   - The old defect the note found, one `TableWrite` with more rows than the queue ending the recording at any CPU count, becomes known issue S1.1c-7-2, for the debt slice after S4.2.
+   - `Config.RecordQueue`'s doc says that a very small queue can end a recording under bursts.
+   - Rejected: yielding until the recorder has run, which makes detection wait; yielding at any full queue with no flag, which lets a slow recorder pace the router.
+3. **One short QA pass covers the lanes the reviews did not reach:** A1, A2, B and G2-24. The first QA review was cut at 16 of its 45 minutes by the owner's deadline.
+   - Rejected: accepting those lanes on the coordinator's re-runs and green CI alone.
+
+### Owner decisions, 2026-11-22 — the Drain fix's design
+
+The [design note](s1-1c-7-design-drain.md) for `Drain`'s race windows came with a prototype. It found two more windows of the same cause, so the fix closes five. Its rule: a Drain holds the app's phase at draining, the holds are counted, and when the last Drain that queued nothing gives up, the phase is put back to what the router holds the app as at that moment, not to a snapshot. *(annotated 2026-11-25: the restore now reads what Activate has finished, not the router's mark, so the input never opens before the app's goroutines run, [PR 2's re-check](#owner-decisions-2026-11-25--pr-2s-re-check).)* Two answers, both as recommended.
+
+1. **The simpler form of the restore.** When a failed Drain puts a running app back, the phase may read inactive for an instant before it reads active. A `Send` landing in that instant is refused with `ErrInactive` where it would have been `ErrDrained`; it was refused in that window before the fix too. Every line of this form is pinned by a test that fails when the line is broken.
+   - Rejected: the form with a second read, whose extra branch no test can turn red.
+2. **An Activate that arrives while a doomed Drain is in flight keeps answering `ErrDrained`,** recorded as known issue S1.1c-7-3 for the debt slice after S4.2. It is older than the fix, and a repeated Activate succeeds.
+   - Rejected: fixing it now, which adds a wait inside Activate and needs its own design.
+
+### Owner decisions, 2026-11-22 — the starvation fix under load
+
+The fix as approved yields only when the recorder goroutine's `waiting` flag says it has not had the processor. Under CPU load, with 28 hog processes, its one-CPU test passed 34 to 37 of 50 runs, and 18 of 50 under `-race`. The flag reads a recorder paused in the middle of a record as busy, so the router ends the recording instead of giving it a turn.
+- Raising the yield bound to 4, 8, 16 or 32 did not help, nor did turning Go's signal-based preemption off.
+- With the flag's condition removed and the bound at 2: 50 of 50, with and without `-race`.
+
+Two answers, one as recommended.
+
+1. **The flag is dropped: at a full queue the router yields at most twice and offers the record again, whatever the recorder is doing.**
+   - A Recorder blocked on disk or network is not runnable, so the two yields return at once and the recording ends, as before.
+   - A runnable recorder, paused or slow because it computes, gets at most two turns per full queue. On one CPU detection then shares the processor with it instead of the recording ending; on two or more, the router's extra wait is at most two brief yields per record.
+   - Rejected: taking the fix out of PR 2 and recording the weakness as a known issue. Keeping the flag was not offered: its test fails under load, which ground rule 11 does not allow.
+2. **The bound stays at 2 (≠ R).**
+   - The load runs of the one-CPU test with 28 hog processes:
+     - at 2, built as committed in 86aea25: one failure in about 850 runs. It came in a run of 50 on battery (49 of 50), then 50 of 50 under `-race`, 150 of 150 and 600 of 600.
+     - at 8: none in about 800.
+     - The difference is not significant either way.
+   - A yield costs only at a full queue and stops as soon as the record fits. A Recorder blocked on disk or network makes each yield return at once.
+   - The residual risk, stated in the [sprint record](s1-1c-7-record.md): under extreme load on one CPU, a recording can still, very rarely, end at a full queue, as it could on main before the fix. Detection never waits.
+   - The recommendation was 8, for more turns when other goroutines (GC workers, the sink's flusher) queue ahead of the recorder. Its cost: the guard test and the plants move to 8, and a load re-check.
+
+### Owner decisions, 2026-11-25 — PR 2's re-check
+
+Fresh blind reviewers re-checked the fix round, 730fa8e..86aea25 ([architecture](../reviews/s1-1c-7-pr2-architecture.md#re-check-of-the-fix-round-2026-11-25), [QA](../reviews/s1-1c-7-pr2-qa.md#re-check-of-the-fix-round-2026-11-25)). They found no blocker, and one new gap in the Drain fix itself. The coordinator reproduced it: 3 of 3 at 86aea25, absent at 730fa8e. Two answers, both as recommended.
+
+1. **RCA-1 is fixed in PR 2: a failed Drain opens an app's input only once Activate has started the app's goroutines.**
+   - The gap: Activate is between the router's yes and its last step, which starts the sink flushers and the recorder. A Drain whose deadline had passed gives up in that instant. `restorePhase` read the router's `started`, so input opened before the goroutines ran.
+     - Usually the events wait and are delivered a moment later.
+     - If Close gives up at its deadline in that instant, outputs of Sends that returned nil are never delivered.
+     - A burst bigger than the recording queue in that instant ends the recording.
+   - The fix: Activate marks the app once its goroutines run, and the restore reads that mark. Activate's documented order, "starts … then opens its input", holds again.
+   - Rejected:
+     - keeping the code, with Activate's doc reworded and the two edges as a known issue;
+     - forwarding it whole as a known issue.
+2. **The six small findings are fixed now.**
+   - RCQ-1: a test for the record count in the queue-full text.
+   - RCA-2, RCA-3 (also RCQ-4): three comments that overstated the bounds on the yields and on a Drain's lock wait.
+   - RCQ-2, RCQ-3: two tests that hung instead of failing when the code they guard breaks.
+   - Rejected:
+     - fixing RCQ-1 and the comments, and forwarding the two hanging tests;
+     - fixing RCQ-1 alone.
