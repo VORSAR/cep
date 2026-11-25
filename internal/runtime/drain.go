@@ -59,8 +59,9 @@ func (a *appState) markDraining() {
 
 // holdDraining begins a Drain: the phase moves to draining at once, before any lock, so the input is refused from
 // here; then the Drain is counted in a.holds under runMu and the phase is moved again, because a releaseDraining
-// that ran between the first move and the lock may have put it back. The wait on runMu is bounded by another
-// Drain's own deadline (awaitRuns holds the lock while it waits for the runs).
+// that ran between the first move and the lock may have put it back. The wait on runMu lasts while another Drain
+// holds it in awaitRuns, waiting for the runs: until that Drain's deadline, or with no limit for a Drain whose ctx
+// has none. The phase is already draining, so the input is refused meanwhile.
 func (a *appState) holdDraining() {
 	a.markDraining()
 	a.runMu.Lock()
