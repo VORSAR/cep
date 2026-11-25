@@ -1135,7 +1135,7 @@ func TestEveryQuotedRuleFragmentParses(t *testing.T) {
 	var invalid []invalidExample
 	entries, err := readRegister(filepath.FromSlash(registerPath))
 	if err != nil {
-		t.Errorf("the register tools/allowlists/fragments.json: %v", err)
+		t.Fatalf("the register tools/allowlists/fragments.json: %v", err)
 	}
 	for _, e := range entries {
 		invalid = append(invalid, e.invalidExample)

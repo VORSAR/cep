@@ -42,8 +42,9 @@ func TestExpectPositions(t *testing.T) {
 			t.Fatal(err)
 		}
 		e := epExpect(t, "07-consent-gate.cep", string(src))
-		if len(e.Givens) != 2 || len(e.Givens[0].Records) != 1 || len(e.Givens[1].Records) != 1 || len(e.Then.Records) != 1 {
-			t.Fatalf("07 block 1: %+v; want two givens and a then, one record each", e)
+		if len(e.Givens) != 2 || len(e.Givens[0].Records) != 1 || len(e.Givens[1].Records) != 1 || len(e.Then.Records) != 1 ||
+			len(e.Givens[0].Records[0].Fields) != 1 || len(e.Givens[1].Records[0].Fields) != 4 || len(e.Then.Records[0].Fields) != 3 {
+			t.Fatalf("07 block 1: %+v; want two givens and a then, one record each, of 1, 4 and 3 fields", e)
 		}
 		epCheck(t, "expect", e.Pos, epPos{Line: 17, Col: 3})
 		g0, g1 := e.Givens[0], e.Givens[1]
@@ -81,8 +82,8 @@ rule R
   insert into Out;
 `
 		e := epExpect(t, "hand.cep", src)
-		if len(e.Givens) != 1 || len(e.Givens[0].Records) != 1 || len(e.Givens[0].Records[0].Fields) != 3 || len(e.Then.Records) != 1 {
-			t.Fatalf("the block: %+v; want one given of one record of three fields, a then of one record", e)
+		if len(e.Givens) != 1 || len(e.Givens[0].Records) != 1 || len(e.Givens[0].Records[0].Fields) != 3 || len(e.Then.Records) != 1 || len(e.Then.Records[0].Fields) != 1 {
+			t.Fatalf("the block: %+v; want one given of one record of three fields, a then of one record of one field", e)
 		}
 		f := e.Givens[0].Records[0].Fields
 		epCheck(t, "expect", e.Pos, epPos{Line: 11, Col: 3})
