@@ -181,8 +181,24 @@ func TestEmbeddedFieldIsRefused(t *testing.T) {
 	if !strings.HasSuffix(out, "GATE_COVERED 1\n") {
 		t.Errorf("stdout does not end in GATE_COVERED 1:\n%s", out)
 	}
-	if _, err := os.Stat(golden); err != nil {
-		t.Errorf("the golden was touched by a refused run: %v", err)
+	if b, err := os.ReadFile(golden); err != nil || string(b) != "" {
+		t.Errorf("the golden after a refused run: %q, %v; want it still empty", b, err)
+	}
+}
+
+// TestEmbeddedInterfaceIsRefused: exit 2, the failed: line naming the type and the fix, and the golden untouched.
+func TestEmbeddedInterfaceIsRefused(t *testing.T) {
+	t.Parallel()
+	golden := write(t, "")
+	code, out := run(t, golden, pkgDir(t, "package p\n\ntype R interface{ Read() }\n\ntype W interface {\n\tR\n\tWrite()\n}\n"))
+	if code != 2 {
+		t.Errorf("exit %d, want 2 (refused):\n%s", code, out)
+	}
+	line := failedLine(t, out)
+	for _, want := range []string{"type W", "embeds an interface", "list the methods instead"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("failed: line %q lacks %q", line, want)
+		}
 	}
 }
 
