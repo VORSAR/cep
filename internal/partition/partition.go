@@ -235,9 +235,7 @@ func NewRule(cfg Config) (*Rule, error) {
 	case len(cfg.KeyTypes) == 0:
 		return nil, errNoKeyTypes
 	case slices.ContainsFunc(cfg.KeyTypes, func(t event.Type) bool { return t < event.TString || t >= event.TObject }):
-		return nil, fmt.Errorf(
-			"partition: key types %v: a part of these types cannot key a partition (owner D7 of S3.2a-1: object keys are a "+
-				"deploy error from S3.3)", cfg.KeyTypes)
+		return nil, fmt.Errorf("partition: key types %v: a part of these types cannot key a partition", cfg.KeyTypes)
 	case cfg.TTL < 0:
 		return nil, errNegTTL
 	case cfg.Body == nil:

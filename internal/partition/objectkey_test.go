@@ -30,6 +30,9 @@ func TestNewRuleRefusesAnObjectKey(t *testing.T) {
 		if !strings.Contains(err.Error(), "partition") || !strings.Contains(err.Error(), "key") {
 			t.Errorf("NewRule(%s): %q does not say which key is refused", c.name, err)
 		}
+		if !strings.HasSuffix(err.Error(), ": a part of these types cannot key a partition") {
+			t.Errorf("NewRule(%s): %q; want it to end in the refusal, with no process reference", c.name, err)
+		}
 	}
 	scalar := partition.Config{Inputs: []int{0}, KeyTypes: []event.Type{event.TString, event.TInt}, TTL: 60_000, Body: &body{t: t}}
 	if _, err := partition.NewRule(scalar); err != nil {
