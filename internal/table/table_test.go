@@ -1,6 +1,7 @@
 package table_test
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -92,6 +93,9 @@ func TestNewRejects(t *testing.T) {
 			}
 			if tb != nil {
 				t.Fatalf("New returned a table with its error %v", err)
+			}
+			if inner := errors.Unwrap(err); inner != nil {
+				t.Errorf("New's refusal %q wraps %v; every refusal of New is a plain error naming its fault", err, inner)
 			}
 		})
 	}
