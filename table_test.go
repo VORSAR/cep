@@ -32,8 +32,8 @@ func TestTableRowsAreCheckedAsTableWriteChecksThem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Table(T): %v", err)
 	}
-	if err := tb.Upsert(ctx, func(w cepio.RowWriter) error { w.SetInt(w.AttrIndex("v"), 1); return nil }); err == nil || !strings.Contains(err.Error(), "k") {
-		t.Errorf("Upsert with k unset: %v; want an error naming k", err)
+	if err := tb.Upsert(ctx, func(w cepio.RowWriter) error { w.SetInt(w.AttrIndex("v"), 1); return nil }); err == nil || !strings.Contains(err.Error(), "\"k\"") {
+		t.Errorf("Upsert with k unset: %v; want an error naming \"k\"", err)
 	}
 	if err := tb.Upsert(ctx, func(w cepio.RowWriter) error {
 		w.SetString(w.AttrIndex("k"), "a")

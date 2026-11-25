@@ -42,25 +42,25 @@ func TestSendRowChecks(t *testing.T) {
 		fill func(cepio.RowWriter) error
 		want string // in the error's text
 	}{
-		{"index out of range", afterGood(func(w cepio.RowWriter) { w.SetString(99, "x") }), "99"},
-		{"wrong type", afterGood(func(w cepio.RowWriter) { w.SetInt(w.AttrIndex("s"), 1) }), "s"},
-		{"NaN", afterGood(func(w cepio.RowWriter) { w.SetFloat(w.AttrIndex("f"), math.NaN()) }), "f"},
-		{"+Inf", afterGood(func(w cepio.RowWriter) { w.SetFloat(w.AttrIndex("f"), math.Inf(1)) }), "f"},
-		{"malformed UTF-8", afterGood(func(w cepio.RowWriter) { w.SetString(w.AttrIndex("s"), "\xff") }), "s"},
-		{"object not compact", afterGood(func(w cepio.RowWriter) { w.SetObject(w.AttrIndex("o"), "{ \"a\": 1 }") }), "o"},
-		{"object not JSON", afterGood(func(w cepio.RowWriter) { w.SetObject(w.AttrIndex("o"), "[1,") }), "o"},
-		{"timestamp out of range", afterGood(func(w cepio.RowWriter) { w.SetTimestamp(w.AttrIndex("t"), 253402300800001) }), "t"},
+		{"index out of range", afterGood(func(w cepio.RowWriter) { w.SetString(99, "x") }), "index 99"},
+		{"wrong type", afterGood(func(w cepio.RowWriter) { w.SetInt(w.AttrIndex("s"), 1) }), "\"s\""},
+		{"NaN", afterGood(func(w cepio.RowWriter) { w.SetFloat(w.AttrIndex("f"), math.NaN()) }), "\"f\""},
+		{"+Inf", afterGood(func(w cepio.RowWriter) { w.SetFloat(w.AttrIndex("f"), math.Inf(1)) }), "\"f\""},
+		{"malformed UTF-8", afterGood(func(w cepio.RowWriter) { w.SetString(w.AttrIndex("s"), "\xff") }), "\"s\""},
+		{"object not compact", afterGood(func(w cepio.RowWriter) { w.SetObject(w.AttrIndex("o"), "{ \"a\": 1 }") }), "\"o\""},
+		{"object not JSON", afterGood(func(w cepio.RowWriter) { w.SetObject(w.AttrIndex("o"), "[1,") }), "\"o\""},
+		{"timestamp out of range", afterGood(func(w cepio.RowWriter) { w.SetTimestamp(w.AttrIndex("t"), 253402300800001) }), "\"t\""},
 		{"s unset", func(w cepio.RowWriter) error {
 			w.SetInt(w.AttrIndex("i"), 1)
 			w.SetTimestamp(w.AttrIndex("t"), fcAt(1))
 			return nil
-		}, "s"},
+		}, "\"s\""},
 		{"t unset", func(w cepio.RowWriter) error {
 			w.SetString(w.AttrIndex("s"), "x")
 			w.SetInt(w.AttrIndex("i"), 1)
 			return nil
-		}, "t"},
-		{"SetNull on a non-optional attribute", afterGood(func(w cepio.RowWriter) { w.SetNull(w.AttrIndex("s")) }), "s"},
+		}, "\"t\""},
+		{"SetNull on a non-optional attribute", afterGood(func(w cepio.RowWriter) { w.SetNull(w.AttrIndex("s")) }), "\"s\""},
 		{"fill's error", func(w cepio.RowWriter) error {
 			if err := good(w); err != nil {
 				return err
@@ -178,9 +178,11 @@ func TestRowReaderNullsAndTypes(t *testing.T) {
 	r := fcNew(t, cep.Config{})
 	var mu sync.Mutex
 	var fails []string
+	var writes int
 	sink := &fcFuncSink{mode: cepio.Append, write: func(_ context.Context, e cepio.OutEvent) error {
 		mu.Lock()
 		defer mu.Unlock()
+		writes++
 		row := e.Row
 		f, s, i := row.AttrIndex("f"), row.AttrIndex("s"), row.AttrIndex("i")
 		if v, ok := row.Float(f); v != 0 || ok {
@@ -221,6 +223,9 @@ func TestRowReaderNullsAndTypes(t *testing.T) {
 	fcStop(t, ctx, h)
 	mu.Lock()
 	defer mu.Unlock()
+	if writes != 1 {
+		t.Errorf("the sink's Write ran %d times; want 1 (every check runs inside it)", writes)
+	}
 	for _, f := range fails {
 		t.Error(f)
 	}
