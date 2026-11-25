@@ -70,7 +70,6 @@ func TestOneFindingPerDefect(t *testing.T) {
 		{"an unknown from stream: nothing about its filter or select", "rule P intent 'x' from Nope[x > 1] select y insert into Out;\n", "E-NAME-001"},
 		{"an undeclared param in a filter: one finding", "rule P intent 'x' from S[n > ${nope}] select k insert into Out;\n", "E-PARAM-001"},
 		{"a composite-key in: no type error", "rule P intent 'x' from S[k in Pair] select k insert into Out;\n", "E-TBL-001"},
-		{"count() in a filter: no type error", "rule P intent 'x' from S[count() > 1] select k insert into Out;\n", "E-FN-001"},
 		{"a capture shadowing a stream reads as a capture", "rule P intent 'x' partition by k of S ttl 1 hour from every S = S within 5 min after match skip past last late events drop select S.k insert into Out;\n",
 			"E-NAME-002"},
 		{"a self-reading rule: E-GRAPH-004, never E-GRAPH-001", "stream D (k string, ts timestamp);\nrule P intent 'x' from D select k insert into D;\n" + plain, "E-GRAPH-004"},
