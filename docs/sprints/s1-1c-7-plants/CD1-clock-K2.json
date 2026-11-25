@@ -1,0 +1,80 @@
+[
+ {
+  "id": "G2-65",
+  "pkg": "internal/clock",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "6b76fb112a25075c8dac50c85154e2901a05b2dd",
+  "file": "internal/clock/rule.go",
+  "find": "\t\t\trc.fires = append(rc.fires, Timer{Due: t.due, Kind: t.kind, Ref: t.ref})",
+  "replace": "\t\t\tk := t.kind\n\t\t\tif k == BatchClose {\n\t\t\t\tk = DelayDue\n\t\t\t}\n\t\t\trc.fires = append(rc.fires, Timer{Due: t.due, Kind: k, Ref: t.ref})",
+  "test": "TestBreakit_GranularityScenariosAreNonTrivial",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-65-control",
+  "pkg": "internal/clock",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "6b76fb112a25075c8dac50c85154e2901a05b2dd",
+  "control": true,
+  "test": "TestBreakit_GranularityScenariosAreNonTrivial",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-66",
+  "pkg": "internal/clock",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "6b76fb112a25075c8dac50c85154e2901a05b2dd",
+  "file": "internal/clock/clock.go",
+  "find": "func (k TimerKind) strict() bool { return k == TTLPurge || k == Discard }",
+  "replace": "func (k TimerKind) strict() bool { return k == TTLPurge }",
+  "test": "TestBreakit_D1_GranularityRandom",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-66-control",
+  "pkg": "internal/clock",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "6b76fb112a25075c8dac50c85154e2901a05b2dd",
+  "control": true,
+  "test": "TestBreakit_D1_GranularityRandom",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-67",
+  "pkg": "internal/clock",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "6b76fb112a25075c8dac50c85154e2901a05b2dd",
+  "file": "internal/clock/clock.go",
+  "find": "to := add(m, 1)",
+  "replace": "to := m",
+  "test": "TestBreakit_RegistryMatchesTheModel",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-67-control",
+  "pkg": "internal/clock",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "6b76fb112a25075c8dac50c85154e2901a05b2dd",
+  "control": true,
+  "test": "TestBreakit_RegistryMatchesTheModel",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]

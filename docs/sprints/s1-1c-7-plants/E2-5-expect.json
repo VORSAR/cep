@@ -1,0 +1,176 @@
+[
+ {
+  "id": "G2-81",
+  "patch": "--- a/internal/partition/partition.go\n+++ b/internal/partition/partition.go\n@@ -352,2 +352,5 @@\n-\t\tr.stats.Purged++\n-\t\tr.onPurge(in)\n+\t\tp := r.stats.Panics\n+\t\tr.onPurge(in)\n+\t\tif r.stats.Panics == p {\n+\t\t\tr.stats.Purged++\n+\t\t}\n",
+  "test": "TestPanicInOnPurgeStillPurges",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-81-control",
+  "control": true,
+  "test": "TestPanicInOnPurgeStillPurges",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-82",
+  "file": "internal/partition/partition.go",
+  "find": "case len(cfg.KeyTypes) == 0:",
+  "replace": "case len(cfg.KeyTypes) < 0:",
+  "test": "TestNewRuleRefuses",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-82-control",
+  "control": true,
+  "test": "TestNewRuleRefuses",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-83-both",
+  "patch": "--- a/internal/partition/partition.go\n+++ b/internal/partition/partition.go\n@@ -167,3 +167,3 @@\n \t\t\tcase event.TString:\n-\t\t\t\tbuf = binary.AppendUvarint(buf, uint64(len(v.Str)))\n+\t\t\t\t_ = len(v.Str)\n \t\t\t\tbuf = append(buf, v.Str...)\n@@ -178,3 +178,3 @@\n \t\t\t\tif f == 0 {\n-\t\t\t\t\tf = 0 // -0.0 is +0.0\n+\t\t\t\t\tf = v.F // -0.0 kept\n \t\t\t\t}\n",
+  "test": "TestMultiPartKeysAreOneInstancePerTuple",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-83-prefix",
+  "file": "internal/partition/partition.go",
+  "find": "buf = binary.AppendUvarint(buf, uint64(len(v.Str)))",
+  "replace": "_ = len(v.Str)",
+  "test": "TestMultiPartKeysAreOneInstancePerTuple",
+  "expect": {
+   "old": "red",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-83-negzero",
+  "file": "internal/partition/partition.go",
+  "find": "f = 0 // -0.0 is +0.0",
+  "replace": "f = v.F // -0.0 kept",
+  "test": "TestMultiPartKeysAreOneInstancePerTuple",
+  "expect": {
+   "old": "red",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-83-control",
+  "control": true,
+  "test": "TestMultiPartKeysAreOneInstancePerTuple",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-84-message",
+  "file": "internal/partition/partition.go",
+  "find": "its state implies a TTLPurge, which only partition schedules\"",
+  "replace": "pending timers differ from what its state implies\"",
+  "test": "TestCheckTimers_PlantedFaults",
+  "subtest": "body TTLPurge, reported",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-84-swap-hidden",
+  "file": "internal/partition/partition.go",
+  "find": "in.Clock.Ordinal(), got,\n\t\t\t\twant)",
+  "replace": "in.Clock.Ordinal(), want,\n\t\t\t\tgot)",
+  "test": "TestCheckTimers_PlantedFaults",
+  "subtest": "hidden timer",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-84-swap-phantom",
+  "file": "internal/partition/partition.go",
+  "find": "in.Clock.Ordinal(), got,\n\t\t\t\twant)",
+  "replace": "in.Clock.Ordinal(), want,\n\t\t\t\tgot)",
+  "test": "TestCheckTimers_PlantedFaults",
+  "subtest": "phantom timer",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-84-swap-moved",
+  "file": "internal/partition/partition.go",
+  "find": "in.Clock.Ordinal(), got,\n\t\t\t\twant)",
+  "replace": "in.Clock.Ordinal(), want,\n\t\t\t\tgot)",
+  "test": "TestCheckTimers_PlantedFaults",
+  "subtest": "body TTLPurge, moved",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ },
+ {
+  "id": "G2-84-control",
+  "control": true,
+  "test": "TestCheckTimers_PlantedFaults",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./internal/partition",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "a0781b11ce85102cd8029b12034ff9daeb15267e"
+ }
+]

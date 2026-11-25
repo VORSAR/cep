@@ -1,0 +1,38 @@
+[
+ {
+  "id": "G2-137",
+  "note": "G2-137 K2-del: the aggregate-placement finding reported as E-FN-002; red on the deleted row at old, red on H3 at new",
+  "file": "internal/validate/exprs.go",
+  "find": "c.report(\"E-FN-001\", n.Pos, \"%s() is an aggregate",
+  "replace": "c.report(\"E-FN-002\", n.Pos, \"%s() is an aggregate",
+  "old_test": "TestOneFindingPerDefect",
+  "old_subtest": "count() in a filter: no type error",
+  "new_test": "TestOneFindingHidesAnother",
+  "new_subtest": "H3 count() in a filter: no type finding for its comparison",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "new_rev": "4cb8c86a75be95d52b95ddae9e029f3da5b2f2cc",
+  "expect": {
+   "old": "red",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-137:control",
+  "note": "G2-137 control: the real code on each side's test",
+  "control": true,
+  "old_test": "TestOneFindingPerDefect",
+  "old_subtest": "count() in a filter: no type error",
+  "new_test": "TestOneFindingHidesAnother",
+  "new_subtest": "H3 count() in a filter: no type finding for its comparison",
+  "pkg": "internal/validate",
+  "timeout": "180s",
+  "old_rev": "e30890284e45b39a8bc8c5f6cf3248c5e85203c7",
+  "new_rev": "4cb8c86a75be95d52b95ddae9e029f3da5b2f2cc",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]

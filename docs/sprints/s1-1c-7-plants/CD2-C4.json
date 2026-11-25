@@ -1,0 +1,140 @@
+[
+ {
+  "id": "G2-85:07",
+  "note": "G2-85 K2a: a derived stream's TimeAttr becomes its last timestamp attribute",
+  "file": "internal/plan/plan.go",
+  "find": "\ttimeAttr := event.ArrivalTime\n",
+  "replace": "\ttimeAttr := event.ArrivalTime\n\tif s.Time.Kind == model.TimeNone {\n\t\tfor i, a := range s.Attrs {\n\t\t\tif a.Type == event.TTimestamp {\n\t\t\t\ttimeAttr = i\n\t\t\t}\n\t\t}\n\t}\n",
+  "test": "TestBuildExample07",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-85:09",
+  "note": "G2-85 K2a: the same plant",
+  "file": "internal/plan/plan.go",
+  "find": "\ttimeAttr := event.ArrivalTime\n",
+  "replace": "\ttimeAttr := event.ArrivalTime\n\tif s.Time.Kind == model.TimeNone {\n\t\tfor i, a := range s.Attrs {\n\t\t\tif a.Type == event.TTimestamp {\n\t\t\t\ttimeAttr = i\n\t\t\t}\n\t\t}\n\t}\n",
+  "test": "TestBuildExample09",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-85:clauses",
+  "note": "G2-85 K2a: the same plant",
+  "file": "internal/plan/plan.go",
+  "find": "\ttimeAttr := event.ArrivalTime\n",
+  "replace": "\ttimeAttr := event.ArrivalTime\n\tif s.Time.Kind == model.TimeNone {\n\t\tfor i, a := range s.Attrs {\n\t\t\tif a.Type == event.TTimestamp {\n\t\t\t\ttimeAttr = i\n\t\t\t}\n\t\t}\n\t}\n",
+  "test": "TestBuildPartitionedAndTimeClauses",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-85:control",
+  "note": "G2-85 control: the real code",
+  "control": true,
+  "test": "TestBuildExample07",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-86:time-before-records",
+  "note": "G2-86 K2a: the records are checked before the missing time attribute",
+  "file": "internal/plan/expect.go",
+  "find": "\tif timeIdx < 0 {\n\t\treturn GivenList{}, fmt.Errorf(\"stream %s has no time attribute a block can give\", g.Name)\n\t}\n\tgl := GivenList{Stream: sid}\n",
+  "replace": "\tgl := GivenList{Stream: sid}\n\tfor _, rec := range g.Records {\n\t\tif _, err := values(st.Attrs, rec, timeIdx); err != nil {\n\t\t\treturn GivenList{}, err\n\t\t}\n\t}\n\tif timeIdx < 0 {\n\t\treturn GivenList{}, fmt.Errorf(\"stream %s has no time attribute a block can give\", g.Name)\n\t}\n",
+  "test": "TestBuildNamesABlocksFirstFault",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-86:fields-before-null-time",
+  "note": "G2-86 K2a: a null time is reported before a field fault",
+  "file": "internal/plan/expect.go",
+  "find": "\tfor _, f := range rec.Fields {\n\t\tidx := fieldIndex(attrs, f.Name)\n\t\tif idx < 0 {\n\t\t\treturn nil, fmt.Errorf(\"no attribute %s\", f.Name)\n\t\t}\n\t\tv, err := value(f.Value, attrs[idx].Type)\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"%s: %w\", f.Name, err)\n\t\t}\n\t\tout[idx] = v\n\t}\n\tif timeIdx >= 0 && out[timeIdx].Null {\n\t\treturn nil, fmt.Errorf(\"the time attribute %s is null\", attrs[timeIdx].Name)\n\t}\n\treturn out, nil\n",
+  "replace": "\tvar first error\n\tfor _, f := range rec.Fields {\n\t\tidx := fieldIndex(attrs, f.Name)\n\t\tif idx < 0 {\n\t\t\treturn nil, fmt.Errorf(\"no attribute %s\", f.Name)\n\t\t}\n\t\tv, err := value(f.Value, attrs[idx].Type)\n\t\tif err != nil {\n\t\t\tif first == nil {\n\t\t\t\tfirst = fmt.Errorf(\"%s: %w\", f.Name, err)\n\t\t\t}\n\t\t\tcontinue\n\t\t}\n\t\tout[idx] = v\n\t}\n\tif timeIdx >= 0 && out[timeIdx].Null {\n\t\treturn nil, fmt.Errorf(\"the time attribute %s is null\", attrs[timeIdx].Name)\n\t}\n\tif first != nil {\n\t\treturn nil, first\n\t}\n\treturn out, nil\n",
+  "test": "TestBuildNamesABlocksFirstFault",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-86:control",
+  "note": "G2-86 control: the real code",
+  "control": true,
+  "test": "TestBuildNamesABlocksFirstFault",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-88",
+  "note": "G2-88 K2a: Build returns the partial plan with ErrNotBuilt",
+  "file": "internal/plan/plan.go",
+  "find": "\t\t\treturn nil, fmt.Errorf(\"plan: rule %s: %w\", app.Rules[i].Name, err)\n",
+  "replace": "\t\t\treturn p, fmt.Errorf(\"plan: rule %s: %w\", app.Rules[i].Name, err)\n",
+  "test": "TestBuildRefusesNotBuilt",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-88:control",
+  "note": "G2-88 control: the real code",
+  "control": true,
+  "test": "TestBuildRefusesNotBuilt",
+  "pkg": "internal/plan",
+  "timeout": "180s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "c0f23b70f95fef529e8d6c749ece9940fab775f2",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]

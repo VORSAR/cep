@@ -1,0 +1,30 @@
+[
+ {
+  "id": "G2-156",
+  "file": "tools/shape/main.go",
+  "find": "if slices.Contains(parser.LoweringCodes, r.Code) {",
+  "replace": "if false && slices.Contains(parser.LoweringCodes, r.Code) {",
+  "old_test": "TestShapeCorpusGolden",
+  "new_test": "TestJudgeReportsEachLoweringCodeAtTheLoweringStage",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./tools/shape",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "92b0e62569718626e22507ea99cf7cb36de4fcb0"
+ },
+ {
+  "id": "G2-156-control",
+  "control": true,
+  "old_test": "TestShapeCorpusGolden",
+  "new_test": "TestJudgeReportsEachLoweringCodeAtTheLoweringStage",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./tools/shape",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "92b0e62569718626e22507ea99cf7cb36de4fcb0"
+ }
+]

@@ -1,0 +1,262 @@
+[
+ {
+  "id": "G2-68",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/decode.go",
+  "find": "\t\tvals = append(vals, v)\n",
+  "replace": "\t\tif cap(dst) > 0 {\n\t\t\tv.Null = !v.Null\n\t\t}\n\t\tvals = append(vals, v)\n",
+  "test": "TestBreakitDecoderSharedConcurrently",
+  "expect": {
+   "old": "timeout",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-68-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestBreakitDecoderSharedConcurrently",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-70-u",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/unescape.go",
+  "find": "dst = utf8.AppendRune(dst, r)",
+  "replace": "dst = utf8.AppendRune(dst, utf8.RuneError)",
+  "test": "TestDecodeCases",
+  "subtest": "string/u escapes",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-70-pair",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/unescape.go",
+  "find": "dst = utf8.AppendRune(dst, pair)",
+  "replace": "dst = utf8.AppendRune(dst, utf8.RuneError)",
+  "test": "TestDecodeCases",
+  "subtest": "string/surrogate pair",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-70-ts",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/decode.go",
+  "find": "text = appendUnescaped(buf[:0], text)",
+  "replace": "text = append(buf[:0], text...)",
+  "test": "TestDecodeCases",
+  "subtest": "timestamp/escaped text",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-70-repeat",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/decode.go",
+  "find": "k = appendUnescaped(buf[:0], key)",
+  "replace": "k = append(buf[:0], key...)",
+  "test": "TestDecodeCases",
+  "subtest": "repeat/escaped key repeats the plain one",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-70-unknown",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/decode.go",
+  "find": "k = appendUnescaped(buf[:0], key)",
+  "replace": "k = append(buf[:0], key...)",
+  "test": "TestDecodeCases",
+  "subtest": "unknown/escaped key matches a declared name",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-70-invisibles",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/decode.go",
+  "find": "k = appendUnescaped(buf[:0], key)",
+  "replace": "k = append(buf[:0], key...)",
+  "test": "TestDecodeCases",
+  "subtest": "invisibles/escaped key",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-70-u-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeCases",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "subtest": "string/u escapes"
+ },
+ {
+  "id": "G2-70-pair-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeCases",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "subtest": "string/surrogate pair"
+ },
+ {
+  "id": "G2-70-ts-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeCases",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "subtest": "timestamp/escaped text"
+ },
+ {
+  "id": "G2-70-repeat-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeCases",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "subtest": "repeat/escaped key repeats the plain one"
+ },
+ {
+  "id": "G2-70-unknown-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeCases",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "subtest": "unknown/escaped key matches a declared name"
+ },
+ {
+  "id": "G2-70-invisibles-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeCases",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "subtest": "invisibles/escaped key"
+ },
+ {
+  "id": "G2-71",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/decode.go",
+  "find": "if string(k) == InvisiblesAttr {",
+  "replace": "if string(key) == InvisiblesAttr {",
+  "test": "TestDecodeDifferential",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-71-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeDifferential",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ },
+ {
+  "id": "G2-72-pair",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/unescape.go",
+  "find": "dst = utf8.AppendRune(dst, pair)",
+  "replace": "dst = utf8.AppendRune(dst, utf8.RuneError)",
+  "test": "TestDecodeDifferential",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-72-bmp",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "file": "internal/event/unescape.go",
+  "find": "dst = utf8.AppendRune(dst, r)",
+  "replace": "dst = utf8.AppendRune(dst, min(r, 0x7f)+(utf8.RuneError-0x7f)*min(r>>7, 1))",
+  "test": "TestDecodeDifferential",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-72-control",
+  "pkg": "internal/event",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "7c83e996f2b4a24f2dbf10ffe10b408de2782ceb",
+  "control": true,
+  "test": "TestDecodeDifferential",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]

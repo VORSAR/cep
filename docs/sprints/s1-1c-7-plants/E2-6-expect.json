@@ -1,0 +1,43 @@
+[
+ {
+  "id": "G2-141",
+  "file": "io/inmemory/source.go",
+  "find": "\t\treturn ErrReopened",
+  "replace": "\t\treturn nil",
+  "test": "TestBreakitOpenTwice",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./io/inmemory",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "772de20e93db9e38221aed319a79e7564aefc2a5"
+ },
+ {
+  "id": "G2-141-control",
+  "control": true,
+  "test": "TestBreakitOpenTwice",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./io/inmemory",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "772de20e93db9e38221aed319a79e7564aefc2a5"
+ },
+ {
+  "id": "G2-143-control",
+  "control": true,
+  "test": "TestCviSourceRefusalsAndContexts",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./io/inmemory",
+  "timeout": "300s",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "772de20e93db9e38221aed319a79e7564aefc2a5"
+ }
+]

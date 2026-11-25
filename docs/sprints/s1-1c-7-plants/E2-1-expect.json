@@ -1,0 +1,31 @@
+[
+ {
+  "id": "G10-1-deploy-wording",
+  "file": "row.go",
+  "find": "if v.Null && !a.Optional {",
+  "replace": "if v.Null && !a.Optional && false {",
+  "old_test": "TestWithTableRowsAreVisibleToTheFirstEvent",
+  "new_test": "TestAStartingRowWithANullKeyFailsDeployWithTheFacadesText",
+  "pkg": ".",
+  "timeout": "300s",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "d365804acae082e53714801a3cf71f00838882b8"
+ },
+ {
+  "id": "G10-1-deploy-wording-control",
+  "control": true,
+  "test": "TestAStartingRowWithANullKeyFailsDeployWithTheFacadesText",
+  "pkg": ".",
+  "timeout": "300s",
+  "expect": {
+   "old": "invalid",
+   "new": "green"
+  },
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "d365804acae082e53714801a3cf71f00838882b8"
+ }
+]

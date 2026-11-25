@@ -1,0 +1,30 @@
+[
+ {
+  "id": "G2-74",
+  "file": "internal/model/canonical.go",
+  "find": "buf.WriteByte(':')",
+  "replace": "buf.WriteByte('=')",
+  "test": "TestMarshalCanonicalKeyOrder",
+  "subtest": "every object's keys ascend bytewise",
+  "pkg": "internal/model",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "4f3cf19967937908ae6ecab2416d44e481a163e0",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  }
+ },
+ {
+  "id": "G2-74-control",
+  "control": true,
+  "test": "TestMarshalCanonicalKeyOrder",
+  "subtest": "every object's keys ascend bytewise",
+  "pkg": "internal/model",
+  "old_rev": "cc2c2c1aa749c66ec7ac58c636d33747a4cf8838",
+  "new_rev": "4f3cf19967937908ae6ecab2416d44e481a163e0",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  }
+ }
+]
