@@ -1,0 +1,137 @@
+[
+ {
+  "id": "drain-p1-t2",
+  "note": "P1: the count ignored (a release restores the phase whatever Drains still hold it)",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.holds > 0 {\n",
+  "replace": "\tif false {\n",
+  "test": "TestAnEndedDrainLeavesThePhaseToADrainStillInFlight",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p1-t3",
+  "note": "P1: the count ignored (a release restores the phase whatever Drains still hold it)",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.holds > 0 {\n",
+  "replace": "\tif false {\n",
+  "test": "TestADrainStuckOnARunAfterAnEndedDrainReturnedRefusesInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p2-t1",
+  "note": "P2, on the one-read form: restorePhase leaves the app inactive whatever the router holds it as",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.started.Load() {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "replace": "\tif false {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "test": "TestActivateOvertakenByADrainThatQueuedNothingLeavesTheAppTakingInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p2-t2",
+  "note": "P2, on the one-read form: restorePhase leaves the app inactive whatever the router holds it as",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.started.Load() {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "replace": "\tif false {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "test": "TestAnEndedDrainLeavesThePhaseToADrainStillInFlight",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p2-t4",
+  "note": "P2, on the one-read form: restorePhase leaves the app inactive whatever the router holds it as",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.started.Load() {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "replace": "\tif false {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "test": "TestADrainThatMarkedBeforeAReleaseRestoredThePhaseStillHoldsItAtDraining",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p2-active",
+  "note": "P2, on the one-read form: restorePhase leaves the app inactive whatever the router holds it as",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.started.Load() {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "replace": "\tif false {\n\t\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "test": "TestDrainOfAnActiveAppWithAnExpiredContextLeavesItActive",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p3-t4",
+  "note": "P3: holdDraining's second move, under the lock, removed",
+  "file": "internal/runtime/drain.go",
+  "find": "\ta.holds++\n\ta.markDraining()\n",
+  "replace": "\ta.holds++\n",
+  "test": "TestADrainThatMarkedBeforeAReleaseRestoredThePhaseStillHoldsItAtDraining",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p4-inactive",
+  "note": "P4: queueDrain keeps its hold when nothing was queued",
+  "file": "internal/runtime/drain.go",
+  "find": "\t\ta.releaseDraining() // nothing was queued by this Drain (QA Q15; break-it R1)\n",
+  "replace": "",
+  "test": "TestDrainOfAnInactiveAppWithAnExpiredContextLeavesItInactive",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p5-t1",
+  "note": "P5: Drain keeps its hold when awaitRuns failed",
+  "file": "internal/runtime/drain.go",
+  "find": "\t\t\ta.releaseDraining() // a no-op once the quiet item is queued: the app stays draining\n",
+  "replace": "",
+  "test": "TestActivateOvertakenByADrainThatQueuedNothingLeavesTheAppTakingInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p5-t2",
+  "note": "P5: Drain keeps its hold when awaitRuns failed",
+  "file": "internal/runtime/drain.go",
+  "find": "\t\t\ta.releaseDraining() // a no-op once the quiet item is queued: the app stays draining\n",
+  "replace": "",
+  "test": "TestAnEndedDrainLeavesThePhaseToADrainStillInFlight",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p5-active",
+  "note": "P5: Drain keeps its hold when awaitRuns failed",
+  "file": "internal/runtime/drain.go",
+  "find": "\t\t\ta.releaseDraining() // a no-op once the quiet item is queued: the app stays draining\n",
+  "replace": "",
+  "test": "TestDrainOfAnActiveAppWithAnExpiredContextLeavesItActive",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p6-t3",
+  "note": "P6: releaseDraining ignores waited (a quieted app is put back)",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.waited {\n\t\treturn\n\t}\n",
+  "replace": "",
+  "test": "TestADrainStuckOnARunAfterAnEndedDrainReturnedRefusesInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p6-t5",
+  "note": "P6: releaseDraining ignores waited (a quieted app is put back)",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.waited {\n\t\treturn\n\t}\n",
+  "replace": "",
+  "test": "TestAnEndedDrainOfAQuietedAppLeavesItRefusingInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p6-ignores-cancel",
+  "note": "P6: releaseDraining ignores waited (a quieted app is put back)",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.waited {\n\t\treturn\n\t}\n",
+  "replace": "",
+  "test": "TestDrainWithARunThatIgnoresCancel",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "drain-p7-inactive",
+  "note": "P7: the drain flag is not cleared at the last release",
+  "file": "internal/runtime/drain.go",
+  "find": "\ta.draining.Store(false)\n",
+  "replace": "",
+  "test": "TestDrainOfAnInactiveAppWithAnExpiredContextLeavesItInactive",
+  "pkg": "./internal/runtime"
+ }
+]

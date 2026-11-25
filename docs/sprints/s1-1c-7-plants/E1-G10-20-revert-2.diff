@@ -1,0 +1,16 @@
+--- a/internal/runtime/drain.go
++++ b/internal/runtime/drain.go
+@@ -75,11 +75,11 @@
+ // keeps the app draining. It reads waited under runMu, which awaitRuns holds while it queues the quiet item and
+ // sets waited.
+ func (a *appState) releaseDraining() {
+-	a.runMu.Lock()
+-	defer a.runMu.Unlock()
+ 	if a.waited {
+ 		return
+ 	}
++	a.runMu.Lock()
++	defer a.runMu.Unlock()
+ 	a.holds--
+ 	if a.holds > 0 {
+ 		return // another Drain is in flight, or queued its drain item: the phase is its to keep

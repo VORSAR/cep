@@ -51,7 +51,7 @@ The full plan is [s1-1c-7-plan-check.md](s1-1c-7-plan-check.md) (v3), drafted re
 
 **The design (G1) — the owner, 2026-11-20** ([decisions](decisions.md#owner-decisions-2026-11-20--s11c-7s-design-g1); five answers):
 1. **Up to six agents** for every S1.1 job until S1.1 closes.
-2. **G10-20's leftover window** becomes known issue S1.1c-7-1, forwarded to S1.1c-10.
+2. **G10-20's leftover window** becomes known issue S1.1c-7-1, forwarded to S1.1c-10. *(annotated 2026-11-22: closed in the sprint by the Drain fix, below.)*
 3. **S3.3-1-3 stays at S8,** with E1's recommendation recorded in its row.
 4. **G10-1 is fixed with option B:** starting rows are applied in the activation step, with `table.Check` in its own commit before wave 2.
 5. **The build:** W0 with four agents, then A1, B, E1 and A2, then E2 and CD.
@@ -322,16 +322,16 @@ Its new later items:
   - The coordinator's re-runs at e0f0e13: the five revert plants, `E1-C7-G10-1-reverts.json`, red 5 (apply ×2, size, check, build); `go test` and `go test -race` over `internal/runtime` ok; `go test ./...` exit 0, 21 packages.
   - **Loads** (`TestActivateAppliesTheStartingRowsInItsStep`, `TestAddRefusesStartingRowsItCouldNotApply`, `TestStartingRowsBeyondRecordQueueRecordInFull`): 50/50 each.
   - **Timing, Send and SendPayload,** parent bc23749 with the benchmark file overlaid against e0f0e13: exit 0, `verdict: no cost` (ratios 0.992 to 1.007).
-  - **BenchmarkTableWritePath could not be judged.** At compare.py's `-test.cpu=1` it fails on both binaries, 3 runs of 3 each (`recording queue full after record 67…`); at the default 14 CPUs it passes. The cause is the recorder's starvation, below. **Open:** the table-write timing, on a benchmark with no recorder (the owner's choice).
+  - **BenchmarkTableWritePath could not be judged.** At compare.py's `-test.cpu=1` it fails on both binaries, 3 runs of 3 each (`recording queue full after record 67…`); at the default 14 CPUs it passes. The cause is the recorder's starvation, below. The table-write timing, on a benchmark with no recorder (the owner's choice), is in PR 2's fix round, below.
 - **The recorder's starvation,** found by C7's benchmark and already on main ([decisions](decisions.md#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing)):
   - **What happens:** with one CPU, a caller that waits for each `TableWrite`'s reply and the router hand the processor to each other, and the app's recorder goroutine rarely runs. Its 65,536-record queue fills, and the recording ends with "recording queue full". Detection goes on.
   - **Evidence:** bc23749 with the benchmark file and e0f0e13 both fail the same way, the recorder having written about 1,700 of some 67,000 records.
   - **Send is not affected:** a scratch probe of the recorded Send and SendPayload worlds at one CPU keeps its recording (1,000,839 records for 1,000,000 events, not Failed). So the recorded hot-path benchmarks measure what they claim.
-  - **Open:** the fix, by the owner's choice in S1.1c-7, with its design note, review, red-first test and timings.
+  - The fix is in PR 2's fix round, below.
 - **No spot-check for W1 and W2** (the owner, [decisions](decisions.md#owner-decisions-2026-11-22--pr-2s-remaining-steps)): the coordinator's full re-run above stands in for the sample.
 - **A mistake in the coordinator's timing script, corrected:** the pinned-Go setup file sets a variable the script also used, so four test binaries and two scratch files were written into the gate's tools cache. They were moved out before any gate run; the cache again holds only its tools.
 - **G2-24, the coordinator's coupling commit, bd413f3** (built by a fresh python-engineer, test-first; in PR 2 by the owner's choice, [decisions](decisions.md#owner-decisions-2026-11-22--g2-24s-code-lists)):
-  - `test_instruments_pin.py`'s CodeClosure judges all 31 instruments whose row runs a Python module. It names the two kinds it cannot judge, each with its reason: the Go-test instruments keyed under another row, and the rows with no Python module.
+  - `test_instruments_pin.py`'s CodeClosure judges all 31 instruments whose row runs a Python module. It names the two kinds it cannot judge, each with its reason: the Go-test instruments keyed under another row, and the rows with no Python module. Since 168d7de (PR2Q-13) it names each such instrument by id, so leaving the judged set needs a visible edit.
   - **Red first,** re-run by the coordinator: the new test on the old law.json, `failed: 27 failures, 0 errors`.
   - **law.json:** 65 module entries added over 27 instruments, and `gate/runner/pyshim.py` removed from pyfloor, pytests and proofs (the owner's strict rule). Nothing else in the file changed (checked field by field).
   - **Proof:** `G2-24.json` (gofmt's row module dropped from its list), old green → new red, control green/green: 2 of 2 as expected, re-run on the pick.
@@ -345,6 +345,80 @@ Its new later items:
     - BenchmarkTableWritePath loops on `b.Loop`, which times the same span as the design's `ResetTimer`, `b.N` loop and `StopTimer`. Both timed binaries carry the same file.
   - **E1 C6:** written inline, the design's condition takes BatchEnd's cyclomatic complexity to 11, over the smells row's 10. The refused branch's queuing moved into `queueRefusedBatchEnd`, with the condition word for word and the accepted path byte-unchanged. Accepted: the same behaviour, and no waiver.
 - **Hidden concurrency, found and handled:** the session's own GitNexus re-index hook starts a background re-index of about 23 s after any Bash call that runs git. Timing and load runs now start only when `pgrep -f 'gitnexus.*analyze'` is empty, and no git command runs during them.
+
+**PR 2 (#54): opened, reviewed and fixed** (2026-11-22; decisions: [the remaining steps](decisions.md#owner-decisions-2026-11-22--pr-2s-remaining-steps), [the review](decisions.md#owner-decisions-2026-11-22--pr-2s-review), [the Drain fix's design](decisions.md#owner-decisions-2026-11-22--the-drain-fixs-design)):
+- **Opened at 730fa8e** on the owner's word, with its open items stated in its body.
+  - **The `gate` workflow:** green on all seven jobs.
+  - **The `canary` workflow:** red on the pin test only, because ruff 0.17.6 was out. The `ruff` row itself passed on it.
+- **PR #55 takes ruff 0.17.6** (`fix/ruff-0.17.6`: 7998f23, and 01ad58e for ADR-0015's annotation).
+  - Both archives' sha256 equal the digests GitHub publishes, checked by the coordinator as well as the builder.
+  - The gate at 7998f23: T2 exit 0 (20261122T060146Z-eea942), T4 lint exit 0 (20261122T060511Z-8185ad), T4 proofs exit 0 (20261122T060526Z-5d8b1f, 263 s). Its CI: green on all seven jobs.
+- **The findings, checked by the coordinator before any fix** (the table is under [Findings](#findings)):
+  - PR2A-1's replay: red at 730fa8e and at main's 35588ba.
+  - PR2Q-1's step replay: red (`phase active: true; draining flag: false; Send: <nil>`).
+  - PR2Q-2's and PR2Q-3's plants: every lane test stayed green, so both gaps were real.
+- **The fix round.** Fresh agents, one worktree each; the coordinator verified every commit and then picked it onto the integration branch.
+  - **Two tests and a comment:**
+    - 32b2e97 (PR2Q-2): the plant `Unwrap` → `Inner` red on the new test.
+    - 285cdbd (PR2Q-3): the plant that reverses `applyLoads`' loop red on the new test.
+    - 8532c4e (PR2A-5): astequal, 17 declarations equal.
+  - **The recorder's starvation** ([design](s1-1c-7-design-starvation.md)): e31828f (the tests), 0bd086d (the fix), 4f17618 (the benchmark split), 86aea25 (the flag dropped, after the load runs).
+    - Red at the test commit: all four feeds (`TableWrite`, `BatchEnd`, `Tick`, late `Send`) read `Records:64 Failed:true`.
+    - Green at the fix: 20 of 20 at one CPU; the package with and without `-race`.
+    - `E1-starvation-plants.json`: red 14. Its plant 1 replaces the yield with `_ = goruntime.Gosched`, since deleting the line leaves an unused import.
+    - `BenchmarkTableWritePathRecorded` at one CPU: PASS 3 of 3. Before the fix the recorded benchmark failed 3 of 3.
+    - **Under load the flag failed** (the quiet window below): the one-CPU test passed 34 of 50, and 18 of 50 under `-race`. The `waiting` flag read a recorder paused in the middle of a record as busy, so the router ended the recording instead of yielding. The owner dropped the flag ([decision](decisions.md#owner-decisions-2026-11-22--the-starvation-fix-under-load)).
+    - **86aea25:** at a full queue the router yields at most twice and offers the record again, whatever the recorder is doing. The guard test is renamed `TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns` and asserts two turns.
+      - `E1-starvation-plants-2.json`: red 4. The plants: the yield made a no-op; the bound at 3; the bound at 1; the re-offer removed.
+      - `E1-starvation-plants.json` was written against the flag. It is kept as the proof of 0bd086d.
+  - **Three gate test gaps:**
+    - 4dc13d9 (PR2Q-11): the plant `PR2Q-11-check-before-lock.diff` red.
+    - ec2bb80 (PR2Q-12): the plant `return faults + shape` → `faults += shape` red.
+    - 168d7de (PR2Q-13, PR2A-4): `PR2Q-13.json`, 3 of 3 as expected. Both of the reviewer's silent cases are green before the fix and red after.
+  - **`Drain`'s holds** ([design](s1-1c-7-design-drain.md)): cd459b7, one commit. It closes five windows: known issue S1.1c-7-1, PR2A-1, PR2Q-1, and two the design's own tests found (two Drains of a never-activated app; two failed Drains leaving an app draining for good).
+    - Red on the old `drain.go` and `app.go`, with the committed tests through an overlay, `-race -count=3`: five tests fail 3 of 3; the stuck-run race test fails 1 of 3.
+    - Green at the commit: the ten new tests under `-race -count=3`; the package and the root; 0 DATA RACE lines.
+    - `E1-drain-plants.json`: red 15, each entry on a deterministic test.
+    - **G10-20's plant is re-cut** as `E1-G10-20-revert-2.diff`, since `revertUnlessQuieted` is gone. It is weaker than the first: the builder saw the race in 1 of 20 runs and 3 of 100, because the planted read is followed at once by the same Drain's lock. The coordinator's run under `--race --repeat 50 --load`: caught 3 of 50 (k ≥ 1).
+  - **The combined head, cd459b7:** `go test ./...` exit 0, 21 packages; `go test -race ./internal/runtime/...` ok.
+- **Timings and load runs.** No agent ran during them, and no git command. Each run started only when no GitNexus re-index was running. Load runs use 28 hog processes.
+  - **The quiet window at cd459b7,** on mains power throughout:
+    - **C7's table-write path, with no recorder:** bc23749 against e0f0e13, both built with the fix round's `BenchmarkTableWritePath`: no cost. This is G10-1's timing.
+    - **The fix round's per-event paths:** 730fa8e against cd459b7, on `BenchmarkTableWritePath`, `BenchmarkSendPath` and `BenchmarkSendPayloadPath`: no cost.
+    - **Under load, `-race`, 50 runs each:** the ten Drain tests, G10-20's test and the load-order test, 50 of 50 each.
+    - **The hook's `CheckUnderLock`:** stress 50 of 50.
+    - **The starvation test with the flag:** 34 of 50, and 18 of 50 under `-race`. The flag was dropped (above).
+  - **At 86aea25:**
+    - **The fix round's per-event paths,** 730fa8e against 86aea25, on mains: no cost. An earlier run of this comparison was on battery and is void.
+    - **Under load:** the one-CPU test and the two-turns test under `-race`, 50 of 50 each. The runtime package's 199 tests, every test N of N, under `-race` (one run each) and plain (three runs each).
+    - **The one-CPU test, plain, by yield bound:**
+      - at 2: 49 of 50 in the first run, on battery; then 150 of 150 and 600 of 600, the last on mains;
+      - at 8: 150 of 150 and 600 of 600.
+      - The owner kept 2 ([decision](decisions.md#owner-decisions-2026-11-22--the-starvation-fix-under-load), item 2).
+    - **Residual risk:** under extreme load on one CPU, a recording can still, very rarely, end at a full queue, as it could on main before the fix. That is one failure in about 850 loaded runs at bound 2, and none in the 750 since. Detection never waits for the recording.
+- **The narrow re-check** (2026-11-25; [decision](decisions.md#owner-decisions-2026-11-25--pr-2s-re-check)):
+  - **The reviews:** fresh blind reviewers on 730fa8e..86aea25, 15 minutes each ([architecture](../reviews/s1-1c-7-pr2-architecture.md#re-check-of-the-fix-round-2026-11-25), [QA](../reviews/s1-1c-7-pr2-qa.md#re-check-of-the-fix-round-2026-11-25)).
+    - No blockers.
+    - RCA-1, a gap the Drain fix opened, and six smaller findings. All are fixed on the owner's word; the table is under [Findings](#findings).
+  - **The coordinator's checks before any fix:**
+    - RCA-1: reproduced 3 of 3 at 86aea25, and absent at 730fa8e.
+    - RCQ-1: its plant left the whole of `internal/runtime` and `internal/playback` green.
+  - **The fixes,** by one fresh builder in its own worktree. The coordinator verified them and fast-forwarded the integration branch.
+    - da2885c (RCA-1):
+      - Activate's last step sets `a.opened` once the app's goroutines run, before its move to active, and `restorePhase` reads it.
+      - A test-only hook, `openHold`, sits between the mark and the move.
+      - A built app never reaches the restore, so `build` does not set the mark.
+    - acee0a5 (RCQ-1): a test of a record queued on a turn.
+    - d1201f9 (RCA-2, RCA-3): the comments.
+    - 57d329d (RCQ-2, RCQ-3): the drain-holds spins stop after 5 s, and the blocked-recorder test releases its Recorder in a cleanup.
+  - **Proofs, from the coordinator's runs:**
+    - **Red first:** `TestAnEndedDrainDuringActivateKeepsTheInputClosedUntilTheGoroutinesRun`, with the old `drain.go` and `lifecycle.go` through an overlay, `-race -count=3`: fails 3 of 3 (phase 1, Send nil). Green at da2885c.
+    - **`E1-recheck-plants.json`: red 7.**
+      - P6 makes `turn` claim a record it did not queue, so its cleanup can wait out the 60 s ceiling.
+      - P6b, one more slot per queue, shows the test failing at once.
+    - **At 57d329d:** `go test ./...`, 21 packages ok; `go test -race -count=3 ./internal/runtime/...` ok, 0 DATA RACE lines.
+    - **Load:** the 15 tests of the two changed test files, `-race`, 50 runs under load: every test 50 of 50.
+- **The gate at PR 2's final head:** named in #54's description; this record takes it with PR 3.
 
 ## The finding ledger
 
@@ -374,7 +448,7 @@ Its new later items:
 | G2-153 | fixed | 3c12b2d | K2e: the design's probe file, green → red | |
 | G2-154 | fixed | 64d74ec | K2a: `W0-go.json` G2-154-usage, -git and -parse green → red, control green/green; load 50/50 | |
 | G2-155 | fixed | 64d74ec | K2e: the D-1 grep, `exec.Command(` at astequal_test.go:221 → none | |
-| G10-7 | fixed | 95c96f9 | K1: `A1-1.json`, four revert plants red (the whole batch re-run at 95c96f9: red 10 of 10); red first: RuffWaiverTableOfTheWrongShape, 4 failures | |
+| G10-7 | fixed | 95c96f9, ec2bb80 | K1: `A1-1.json`, four revert plants red (the whole batch re-run at 95c96f9: red 10 of 10); red first: RuffWaiverTableOfTheWrongShape, 4 failures. PR 2's review (PR2Q-12): ec2bb80 pins that a wrong-shaped table is not compared both ways; the plant `return faults + shape` → `faults += shape` red | |
 | G10-8 | fixed | 95c96f9 | K1: `A1-1.json`, three revert plants red; red first: UnreadableCopyFile, 3 failures (IsADirectoryError out of scan) | |
 | G10-9 | fixed | 95c96f9 | K1: `A1-1.json`, revert plant red; red first: TrackedListFailure | |
 | G10-10 | fixed | 95c96f9 | K1: `A1-1.json`, revert plant red; red first: the Race test (`'exit 1' !=` the usage reason) | de42f64 also refuses a count below 1 (PR #53's FRT-Q-3) |
@@ -433,12 +507,12 @@ Its new later items:
 | G2-15 | fixed | fb7f089 | K2e (live data): `A2-C7.json` G2-15 old red → new green, control green/green | |
 | G2-13 | fixed | 0ac6df8 | K2e: a direct run 15 of the loader's 20 → 20 of 20 | |
 | G2-14 | fixed | 0ac6df8 | K2b: `A2-C8.json` G2-14 green → red, control green/green; `a2_linecount.py`, gitnexus_reindex.py:68 runs 0 → 1 times | |
-| G10-5 | fixed in part | 262ae0d | K1c: `A2-C9.json`, the revert plant red/red (the test's hold makes the race deterministic: 1/1); stress 50/50 | the "EPERM means alive" sub-claim rejected (the follow-up runs as the hook's own user); the pid-reuse sub-claim to S1.1c-10 |
+| G10-5 | fixed in part | 262ae0d, 4dc13d9 | K1c: `A2-C9.json`, the revert plant red/red (the test's hold makes the race deterministic: 1/1); stress 50/50. PR 2's review (PR2Q-11): 4dc13d9 pins the pidfile check under the lock; `PR2Q-11-check-before-lock.diff` red; stress 50/50 | the "EPERM means alive" sub-claim rejected (the follow-up runs as the hook's own user); the pid-reuse sub-claim to S1.1c-10 |
 | G2-57 | carried in full to S1.1c-8 | | | rename only |
 | G2-58 | carried in full to S1.1c-8 | | | rename only |
 | G2-62 | carried in full to S1.1c-10 | | | the split to S1.1c-10, its names to S1.1c-8 |
 | G10-18 | fixed | eaaec1c | K1: `B-K1.json` G10-18 revert plant red; red first | |
-| G10-19 | fixed | eaaec1c | K1: `B-K1.json` G10-19 and G10-19-chain revert plants red; red first | |
+| G10-19 | fixed | eaaec1c, 32b2e97 | K1: `B-K1.json` G10-19 and G10-19-chain revert plants red; red first. PR 2's review (PR2Q-2): 32b2e97 reaches the driver's error through `errors.Is`; the plant `Unwrap` → `Inner` red | |
 | G2-89 | fixed | 576b0f0 | K2e: grep `case model.BodyWindow:` and `r.Body.Window.Source` in baseline_test.go, none → 2 lines; TestBaseline green, so no stored key moved | |
 | G2-90 | fixed in part | 576b0f0 | K2a: `B-K2a.json` G2-90a and -90b green → red, control green/green | the move to internal/validate to S1.1c-10; the rename to S1.1c-8 |
 | G2-91 | fixed in part | 576b0f0 | K2a: `B-K2a.json` G2-91 green → red, control green/green | the rename to S1.1c-8 |
@@ -478,16 +552,16 @@ Its new later items:
 | G2-127 | fixed | f618b66 | K2a: `E1-C3.json` G2-127 (time imported as tm) green → red, control green/green; the proofs job exit 0 (nosleep_test.go is a law path) | |
 | G2-132 | fixed | f618b66 | K2d: `E1-C3.json` G2-132 old timeout → new red, control green/green | |
 | G7a-5 | fixed | 4ee80f0 | K1: `E1-G7a-5-revert.diff` red (re-run at 06f17b5); red first: all 11 subtests | |
-| G10-20 | fixed | aeec09c | K1c: `E1-G10-20-revert.diff` under `--race --repeat 50 --load` caught 7 of 50 (k ≥ 1); load 50/50; red first: DATA RACE, drain.go:119 against :28 | the leftover logic window is known issue S1.1c-7-1, to S1.1c-10 (owner, G1) |
+| G10-20 | fixed | aeec09c, cd459b7 | K1c: `E1-G10-20-revert.diff` under `--race --repeat 50 --load` caught 7 of 50 (k ≥ 1); load 50/50; red first: DATA RACE, drain.go:119 against :28. After the Drain fix (cd459b7) the plant is re-cut as `E1-G10-20-revert-2.diff`: caught 3 of 50 under the same flags; load 50/50 | the leftover logic window, known issue S1.1c-7-1, went to S1.1c-10 at G1; closed in PR 2 by the Drain fix (owner, 2026-11-22) |
 | G2-119 | carried in full to S1.1c-8 | | | rename only |
 | G2-121 | carried in full to S1.1c-8 | | | a rename and a doc comment |
 | G2-123 | carried in full to S1.1c-10 | | | a split |
 | G2-124 | carried in full to S1.1c-10 | | | moving three tests onto the gr* helpers changes how they measure, and no plant shows an outcome difference today |
 | G2-126 | carried in full to S1.1c-10 | | | cleanups in ldRuntime and rdOverflowed touch about 20 callers and change no outcome on real code |
 | G2-130 | carried in full to S1.1c-10 | | | a fidelity refactor: no production defect tells the fixture from the real tombstone |
-| G2-24 | fixed | bd413f3 | K2a: `G2-24.json` green → red, control green/green; red first: CodeClosure on the old law.json, 27 failures | |
+| G2-24 | fixed | bd413f3, 168d7de | K2a: `G2-24.json` green → red, control green/green; red first: CodeClosure on the old law.json, 27 failures. PR 2's review (PR2Q-13, PR2A-4): 168d7de names each not-judged instrument by id; `PR2Q-13.json` 3 of 3 as expected | |
 | G10-21 | fixed in part | bc23749 | K1h: `E1-C6-G10-21-revert.json` red; red first at lifecycle_test.go:755 and :770; load 50/50; timing no cost on the confirming re-run | the counting rule (a drained batch end counted, a drained Send not) to S3.3-1-3's fix at S8 (owner, G1) |
-| G10-1 | fixed in part | c52933a, e0f0e13 | K1: `table.Check`'s revert plant red (W0). K1h: `E1-C7-G10-1-reverts.json` red 5; loads 50/50; Send and SendPayload timing no cost | the facade half to lane E2 (W3); the table-write timing waits for the benchmark with no recorder |
+| G10-1 | fixed in part | c52933a, e0f0e13 | K1: `table.Check`'s revert plant red (W0). K1h: `E1-C7-G10-1-reverts.json` red 5; loads 50/50; Send and SendPayload timing no cost; the table-write timing with no recorder (4f17618's benchmark on both trees) no cost | the facade half to lane E2 (W3) |
 
 ## Test material
 
@@ -497,13 +571,51 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 
 - **PR #53's FRT-A-2 and FRT-Q-3 fixed in the sprint** (de42f64), not put in the backlog ([owner, 2026-11-21](decisions.md#owner-decisions-2026-11-21--after-pr-52-and-53-merged)).
 - **G2-24 by the strict rule,** in PR 2 ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--g2-24s-code-lists)).
-- **The recorder's starvation fixed in the sprint** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing)). Not built yet.
+- **The recorder's starvation fixed in the sprint** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--the-recorders-starvation-and-c7s-timing)), by the approved [design](s1-1c-7-design-starvation.md).
+- **`Drain`'s five race windows fixed in the sprint** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--pr-2s-review)), by the approved [design](s1-1c-7-design-drain.md). Known issue S1.1c-7-1 closes; S1.1c-7-2 and S1.1c-7-3 open.
+- **ruff 0.17.6** in its own pull request, #55 ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--ruff-0176)).
 - **W1 and W2 without their spot-check** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--pr-2s-remaining-steps)).
 - **What follows S1.1c-7 is re-planned** ([owner, 2026-11-22](decisions.md#owner-decisions-2026-11-22--the-mvp-first-re-plan)); the re-cut is made at a plan check after PR 2.
 
 ## Findings
 
-*(review and break-it findings, with their dispositions)*
+**PR 2 (#54), the blind reviews at 730fa8e** ([architecture](../reviews/s1-1c-7-pr2-architecture.md); [QA](../reviews/s1-1c-7-pr2-qa.md), two passes). No finding is a blocker introduced by the pull request. "Forwarded" means to the survey's debt work, S1.1c-10 as printed today.
+
+| Id | Severity | Finding | Disposition |
+|---|---|---|---|
+| PR2A-1 | should-fix, on main | An Activate racing an expired Drain leaves the app activated in the router and refusing all input | fixed: the Drain fix, cd459b7 |
+| PR2Q-1 | should-fix, on main | Known issue S1.1c-7-1 understated: with a stuck run the app keeps taking input after Drain returned its error | fixed: the Drain fix, cd459b7; the known issue is closed |
+| PR2A-2, PR2Q-5 | later | A refused Activate leaves a partial load when rows change after Add, against `App.Loads`' contract | forwarded to lane E2's W3 design: the facade hands over rows it owns, or Add copies them |
+| PR2A-3, PR2Q-10 | later | The recording queue holds 208 bytes per starting row for the app's life: about 198 MiB per million rows | forwarded to lane E2's W3 design and told to the owner |
+| PR2A-4, PR2Q-13 | should-fix | G2-24's witness shared the rule that decides who is judged, so an instrument could leave the judged set unseen | fixed: 168d7de |
+| PR2A-5 | later | `build`'s comment named Start as a caller | fixed: 8532c4e |
+| PR2Q-2 | should-fix | The playback wrapper's `Unwrap` had no test | fixed: 32b2e97 |
+| PR2Q-3 | should-fix | The starting rows' order was not pinned | fixed: 285cdbd |
+| PR2Q-4 | later | Two router branches could apply loads wrongly with no test red | forwarded |
+| PR2Q-6 | later | One starting-rows test proves "before it answers" only by timing | forwarded |
+| PR2Q-7 | later | A test's name still claims the row G2-129 deleted | forwarded with the renames |
+| PR2Q-8 | later | treehash's `--details` with no root, and an empty root | forwarded |
+| PR2Q-9 | later | The hook's `running()` reads a pidfile of 0 or -1 as a live run | forwarded |
+| PR2Q-11 | should-fix | No test pinned that the hook's pidfile check is made under the lock | fixed: 4dc13d9 |
+| PR2Q-12 | should-fix | G10-7's "no both-ways comparison" was claimed and not tested | fixed: ec2bb80 |
+| PR2Q-14 | later | G2-8's deletion drops one check no production seam can reach today | forwarded |
+| PR2Q-15 | later | G10-9's fault can run to several lines on a multi-line git error | forwarded |
+| PR2Q-16 | later | A `go env` that exits 0 with no output is recorded | forwarded |
+| PR2Q-17 | later | `_methods` walks a lattice of diamonds in exponential time | forwarded |
+| PR2Q-18 | later | A lock file that cannot be opened turns the re-index off in silence | forwarded |
+| PR2Q-19 | later | Seven of nine `LOADER_HOOKS` names have no test | forwarded |
+| PR2Q-20 | later | The closure rule follows named imports only | forwarded |
+
+**PR 2's re-check, at 86aea25** ([architecture](../reviews/s1-1c-7-pr2-architecture.md#re-check-of-the-fix-round-2026-11-25), [QA](../reviews/s1-1c-7-pr2-qa.md#re-check-of-the-fix-round-2026-11-25)). No blockers.
+
+| Id | Severity | Finding | Disposition |
+|---|---|---|---|
+| RCA-1 | should-fix, new in cd459b7 | A Drain that failed during Activate's last step opened the input before the app's flushers and recorder ran | fixed: da2885c |
+| RCQ-1 | should-fix | No test pinned `turn`'s count of a record it queued, named in the queue-full text | fixed: acee0a5 |
+| RCA-2 | later | The recorder's comments bounded the yields per call and called them brief | fixed: d1201f9 |
+| RCA-3, RCQ-4 | later | `holdDraining`'s comment bounded its lock wait by another Drain's deadline | fixed: d1201f9 |
+| RCQ-2 | later | Two drain-holds tests hung instead of failing when the move before the lock was lost | fixed: 57d329d |
+| RCQ-3 | later | The blocked-recorder test waited out the 60 s ceiling on any failure | fixed: 57d329d |
 
 ## Done-done
 

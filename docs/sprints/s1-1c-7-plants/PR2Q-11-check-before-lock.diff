@@ -1,0 +1,18 @@
+--- a/gate/hooks/gitnexus_reindex.py
++++ b/gate/hooks/gitnexus_reindex.py
+@@ -128,12 +128,11 @@
+     if gitnexus is None:
+         return 0
+     try:
++        if running(os.path.join(storage, PIDFILE)):
++            return 0
+         with open(os.path.join(storage, LOCKFILE), "a", encoding="utf-8") as lock:
+-            # flock, not lockf: a POSIX record lock is the process's, so two calls in one process would share it.
+-            # Held by a call between its check and its start, it raises BlockingIOError: that call starts the run.
+             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+-            if not running(os.path.join(storage, PIDFILE)):
+-                start(gitnexus, os.path.realpath(checkout), storage, environ)
++            start(gitnexus, os.path.realpath(checkout), storage, environ)
+     except OSError:
+         return 0
+     return 0

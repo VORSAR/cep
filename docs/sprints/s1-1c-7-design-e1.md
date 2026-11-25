@@ -1215,6 +1215,8 @@ Nothing was run: every expected outcome below is read from the code.
 
 #### G10-20 (replaces item 4's command; adds the bounded wait)
 
+*(annotated 2026-11-22: PR 2's fix round replaced `markDraining`'s snapshot and `revertUnlessQuieted` by `holdDraining` and `releaseDraining`, which still read `waited` under `runMu`: [the Drain design note](s1-1c-7-design-drain.md). G10-20's plant is re-cut as `E1-G10-20-revert-2.diff`.)*
+
 **4. The proof:**
 - **Red** (the revert plant `g10-20-revert` is unchanged):
   `python3.15 -I -B gate/bench/mutate.py --race --repeat 50 --load --patch <g10-20-revert> --test TestTwoDrainsAtOnceOneAlreadyCancelledLeaveTheAppDrained --pkg ./internal/runtime`

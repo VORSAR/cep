@@ -1,0 +1,39 @@
+[
+ {
+  "expect": {
+   "new": "red",
+   "old": "green"
+  },
+  "file": "gate/registry.json",
+  "find": "        \"gate/runner/rows/hooks.py\"\n",
+  "id": "PR2Q-13-hooks-row-names-no-py",
+  "new_rev": "168d7defada7e1e55c3f051ce734729f0b9a4b88",
+  "note": "PR2Q-13 K2a: row hooks's command stops naming its .py; the old witness dropped hooks from the judged set and from the count together",
+  "old_rev": "4f176186776f7b81d344ca51b9448dd75d76444b",
+  "py": "gate.runner.tests.test_instruments_pin.CodeClosure.test_each_instruments_code_is_its_import_closure",
+  "replace": "        \"-m\",\n        \"gate.runner.rows.hooks\"\n"
+ },
+ {
+  "expect": {
+   "new": "red",
+   "old": "green"
+  },
+  "id": "PR2Q-13-ruff-rekeyed-gofmt-twice",
+  "new_rev": "168d7defada7e1e55c3f051ce734729f0b9a4b88",
+  "note": "PR2Q-13 K2a: instrument ruff re-keyed under row archcheck with code [], and a second gofmt instrument that kept the old count",
+  "old_rev": "4f176186776f7b81d344ca51b9448dd75d76444b",
+  "patch": "--- a/gate/law.json\n+++ b/gate/law.json\n@@ -291,6 +291,35 @@\n       ]\n     },\n     {\n+      \"id\": \"gofmt\",\n+      \"row\": \"gofmt\",\n+      \"lands_in\": \"S1.1a-1\",\n+      \"code\": [\n+        \"gate/runner/rows/__init__.py\",\n+        \"gate/runner/rows/gofmt.py\",\n+        \"gate/runner/workers.py\",\n+        \"gate/term.py\"\n+      ],\n+      \"proofs\": [\n+        {\n+          \"path\": \"gate/proofs/drivers/test_hook_commit.py\",\n+          \"cases\": 7\n+        }\n+      ],\n+      \"tiers\": [\n+        \"T0\",\n+        \"T1\",\n+        \"T2\",\n+        \"T3\",\n+        \"T4\"\n+      ],\n+      \"min_wants\": 0,\n+      \"expected_scope\": [\n+        \"git\",\n+        \":(glob)**/*.go\"\n+      ]\n+    },\n+    {\n       \"id\": \"vet\",\n       \"row\": \"vet\",\n       \"lands_in\": \"S1.1a-1\",\n@@ -348,14 +377,9 @@\n     },\n     {\n       \"id\": \"ruff\",\n-      \"row\": \"ruff\",\n+      \"row\": \"archcheck\",\n       \"lands_in\": \"S1.1a-1\",\n-      \"code\": [\n-        \"gate/runner/rows/__init__.py\",\n-        \"gate/runner/rows/ruff.py\",\n-        \"gate/runner/workers.py\",\n-        \"gate/term.py\"\n-      ],\n+      \"code\": [],\n       \"proofs\": [\n         {\n           \"path\": \"gate/proofs/drivers/test_ruff_format.py\",\n",
+  "py": "gate.runner.tests.test_instruments_pin.CodeClosure.test_each_instruments_code_is_its_import_closure"
+ },
+ {
+  "control": true,
+  "expect": {
+   "new": "green",
+   "old": "green"
+  },
+  "id": "PR2Q-13-control",
+  "new_rev": "168d7defada7e1e55c3f051ce734729f0b9a4b88",
+  "old_rev": "4f176186776f7b81d344ca51b9448dd75d76444b",
+  "py": "gate.runner.tests.test_instruments_pin.CodeClosure.test_each_instruments_code_is_its_import_closure"
+ }
+]

@@ -1,0 +1,137 @@
+[
+ {
+  "id": "starve-1",
+  "note": "plant 1: turn makes no yield (the Gosched call replaced by a reference, so the runtime import still compiles)",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tgoruntime.Gosched()\n",
+  "replace": "\t\t_ = goruntime.Gosched\n",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "starve-1-TableWrite",
+  "note": "plant 1: turn makes no yield (the Gosched call replaced by a reference, so the runtime import still compiles)",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tgoruntime.Gosched()\n",
+  "replace": "\t\t_ = goruntime.Gosched\n",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "TableWrite"
+ },
+ {
+  "id": "starve-1-BatchEnd",
+  "note": "plant 1: turn makes no yield (the Gosched call replaced by a reference, so the runtime import still compiles)",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tgoruntime.Gosched()\n",
+  "replace": "\t\t_ = goruntime.Gosched\n",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "BatchEnd"
+ },
+ {
+  "id": "starve-1-Tick",
+  "note": "plant 1: turn makes no yield (the Gosched call replaced by a reference, so the runtime import still compiles)",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tgoruntime.Gosched()\n",
+  "replace": "\t\t_ = goruntime.Gosched\n",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "Tick"
+ },
+ {
+  "id": "starve-1-late_Send",
+  "note": "plant 1: turn makes no yield (the Gosched call replaced by a reference, so the runtime import still compiles)",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tgoruntime.Gosched()\n",
+  "replace": "\t\t_ = goruntime.Gosched\n",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "late Send"
+ },
+ {
+  "id": "starve-2",
+  "note": "plant 2: waiting starts false, so a goroutine that has never run reads as busy",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tq.waiting.Store(true) // not yet started is waiting too: a goroutine that has never run has taken nothing\n",
+  "replace": "",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "starve-2-TableWrite",
+  "note": "plant 2: waiting starts false, so a goroutine that has never run reads as busy",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tq.waiting.Store(true) // not yet started is waiting too: a goroutine that has never run has taken nothing\n",
+  "replace": "",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "TableWrite"
+ },
+ {
+  "id": "starve-2-BatchEnd",
+  "note": "plant 2: waiting starts false, so a goroutine that has never run reads as busy",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tq.waiting.Store(true) // not yet started is waiting too: a goroutine that has never run has taken nothing\n",
+  "replace": "",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "BatchEnd"
+ },
+ {
+  "id": "starve-2-Tick",
+  "note": "plant 2: waiting starts false, so a goroutine that has never run reads as busy",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tq.waiting.Store(true) // not yet started is waiting too: a goroutine that has never run has taken nothing\n",
+  "replace": "",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "Tick"
+ },
+ {
+  "id": "starve-2-late_Send",
+  "note": "plant 2: waiting starts false, so a goroutine that has never run reads as busy",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tq.waiting.Store(true) // not yet started is waiting too: a goroutine that has never run has taken nothing\n",
+  "replace": "",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "late Send"
+ },
+ {
+  "id": "starve-3",
+  "note": "plant 3: one yield, not two (may be red only some of the time: see the 20-run count)",
+  "file": "internal/runtime/recorder.go",
+  "find": "const recTurns = 2",
+  "replace": "const recTurns = 1",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "starve-4-TableWrite",
+  "note": "plant 4: the goroutine never marks itself waiting again after its first record",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tfor {\n\t\tq.waiting.Store(true)\n\t\tselect {",
+  "replace": "\tfor {\n\t\tselect {",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime",
+  "subtest": "TableWrite"
+ },
+ {
+  "id": "starve-4",
+  "note": "plant 4: the goroutine never marks itself waiting again after its first record",
+  "file": "internal/runtime/recorder.go",
+  "find": "\tfor {\n\t\tq.waiting.Store(true)\n\t\tselect {",
+  "replace": "\tfor {\n\t\tselect {",
+  "test": "TestRecorderGetsATurnAtOneCPU",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "starve-5",
+  "note": "plant 5: the goroutine never marks itself busy, so a held Recorder is given turns",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\t\tq.waiting.Store(false)\n",
+  "replace": "",
+  "test": "TestFullQueueWithABusyRecorderGetsNoTurn",
+  "pkg": "./internal/runtime"
+ }
+]
