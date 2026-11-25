@@ -17,7 +17,7 @@ ORDER = sprintid.load_order(
 ENTRIES = [
     ("01-agent-kill-switch.cep", "a pattern body", "S4.1"),
     ("08-session-flow.cep", "a pattern body", "S4.1"),
-    ("05-text-operators.cep", "text operators (S7)", "S7"),
+    ("05-text-operators.cep", "a text operator", "S7"),
     ("06-once-and-group.cep", "a pattern body", "S7"),
     ("03-sort-leaderboard.cep", "a window body", "S8"),
     ("02-cron-digest.cep", "a window body", "S9.1"),

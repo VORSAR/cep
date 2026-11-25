@@ -10,7 +10,7 @@ import (
 )
 
 // TestBuildRunnable: BuildRunnable refuses, with a *NotRunnableError naming the construct, an expression that holds
-// a node this release cannot evaluate — text operators (S7), count (S8), chain (S4.1) — wherever it sits in the tree;
+// a node this release cannot evaluate — a text operator, count(), chain() — wherever it sits in the tree;
 // it builds everything else exactly as Build does (S3.2b-1 design v2 §1, review F1).
 func TestBuildRunnable(t *testing.T) {
 	textOp := text("has_ci", a("s"), model.TextOperand{Strings: []string{"x"}})
@@ -19,11 +19,11 @@ func TestBuildRunnable(t *testing.T) {
 		node model.Expr
 		what string
 	}{
-		{"a text operator", textOp, "text operators (S7)"},
-		{"a text operator under `or`", or(textOp, cmp("==", a("n"), lit(1))), "text operators (S7)"},
-		{"count", call("count"), "count (S8)"},
-		{"count in arithmetic", ar("+", call("count"), lit(1)), "count (S8)"},
-		{"chain", call("chain", a("read"), a("egress")), "chain (S4.1)"},
+		{"a text operator", textOp, "a text operator"},
+		{"a text operator under `or`", or(textOp, cmp("==", a("n"), lit(1))), "a text operator"},
+		{"count", call("count"), "count()"},
+		{"count in arithmetic", ar("+", call("count"), lit(1)), "count()"},
+		{"chain", call("chain", a("read"), a("egress")), "chain()"},
 	}
 	for _, c := range refused {
 		t.Run(c.name, func(t *testing.T) {
