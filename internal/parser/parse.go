@@ -91,7 +91,7 @@ func mk(name, code string, pos Position, msg string) *Error {
 func lexError(name, src string, err error) *Error {
 	var perr participle.Error
 	if !errors.As(err, &perr) {
-		return &Error{Name: name, Code: "E-SYN-001", Line: 1, Col: 1, Msg: err.Error()}
+		return mk(name, "E-SYN-001", Position{Line: 1, Column: 1}, err.Error())
 	}
 	pos := perr.Position()
 	lines := strings.Split(src, "\n")
