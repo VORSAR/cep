@@ -81,8 +81,8 @@ func TestCvConnectorFactory(t *testing.T) {
 		"@sink(type = 'http', url = 'http://x', @map(type = 'json'))\n" +
 		"stream O (k string, ts timestamp);\n" +
 		"rule F intent 'Forward.' from S select k insert into O;\n"
-	if _, err := r.Deploy(ctx, "ann", src); !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), "S5.1") {
-		t.Errorf("default factory: %v; want ErrConnectorNotBuilt naming S5.1", err)
+	if _, err := r.Deploy(ctx, "ann", src); !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), "is not available in this release") {
+		t.Errorf("default factory: %v; want ErrConnectorNotBuilt saying the connector is not available in this release", err)
 	}
 	h, err := r.Deploy(ctx, "ann", src, cep.WithConnectors(cvFactory{}))
 	if err != nil {

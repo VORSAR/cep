@@ -5,6 +5,7 @@ package cep_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -401,5 +402,57 @@ func TestCloseStopsAppsInReverseDeployOrder(t *testing.T) {
 	}
 	if apps[0].lastWrite.Load() == 0 || apps[1].lastWrite.Load() == 0 {
 		t.Errorf("writes app0 %d, app1 %d; want both apps' outputs written before Close returned", apps[0].lastWrite.Load(), apps[1].lastWrite.Load())
+	}
+}
+
+// endsAfterFirstCheck is a context whose first Err returns nil and every later Err context.Canceled; Done closes at
+// the second Err. Inside Start it ends the context after the activation was queued and before anything later.
+type endsAfterFirstCheck struct {
+	context.Context
+	mu     sync.Mutex
+	checks int
+	done   chan struct{}
+}
+
+func (c *endsAfterFirstCheck) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.checks++
+	switch c.checks {
+	case 1:
+		return nil
+	case 2:
+		close(c.done)
+	}
+	return context.Canceled
+}
+
+func (c *endsAfterFirstCheck) Done() <-chan struct{} { return c.done }
+
+// TestAStartWhoseContextEndsMidwayLeavesTheAppStartable: Start either completes, starting rows included, or leaves
+// the app startable; the starting row is in T before the first event either way.
+func TestAStartWhoseContextEndsMidwayLeavesTheAppStartable(t *testing.T) {
+	t.Parallel()
+	ctx := fcCeiling(t)
+	r := fcNew(t, cep.Config{})
+	sink, bind := fcSink("O")
+	row := func(w cepio.RowWriter) error {
+		w.SetString(w.AttrIndex("k"), "a")
+		w.SetInt(w.AttrIndex("v"), 1)
+		return nil
+	}
+	h := fcDeploy(t, ctx, r, "tbl", fcTableSrc, bind, cep.WithTableRows("T", row))
+	sctx := &endsAfterFirstCheck{Context: context.Background(), done: make(chan struct{})}
+	if first := h.Start(sctx); first != nil {
+		if err := h.Start(ctx); err != nil {
+			t.Fatalf("Start after a Start that failed with %v: %v; want nil (a failed Start leaves the app startable)", first, err)
+		}
+	}
+	in := fcInput(t, h, "S")
+	fcSend(t, ctx, in, fcKey("a", fcAt(1)))
+	fcSend(t, ctx, in, fcKey("b", fcAt(2)))
+	fcStop(t, ctx, h)
+	if recs := sink.Drain(); len(recs) != 1 || recs[0].Values[0] != "b" {
+		t.Errorf("outputs %+v; want exactly b (a was in T before the first event)", recs)
 	}
 }

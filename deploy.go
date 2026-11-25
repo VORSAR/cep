@@ -7,7 +7,6 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/vorsar/cep/internal/event"
 	"github.com/vorsar/cep/internal/parser"
 	"github.com/vorsar/cep/internal/plan"
 	"github.com/vorsar/cep/internal/playback"
@@ -93,11 +92,12 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 	if err := ctx.Err(); err != nil { // a cancelled deploy calls no connector factory (design s3-3-2 §6, A9)
 		return nil, err
 	}
-	h, bindings, err := r.bind(name, p, o)
+	h, bindings, loads, err := r.bind(name, p, o)
 	if err != nil {
 		return nil, err
 	}
 	app := runtime.FromPlan(p, nil, bindings)
+	app.Loads = loads // the starting rows, applied by the engine in Activate's step
 	if o.recorded {
 		app.Recorder = playback.NewRecorder(o.recording, p)
 	}
@@ -118,7 +118,8 @@ func (r *Runtime) Deploy(ctx context.Context, name, src string, opts ...DeployOp
 // bind resolves the program's connectors and the Go bindings into the runtime's sink bindings, the sources to run,
 // the tables' starting rows and the handle's name maps (design s3-3-1 §3.4). The runtime.Sink of each binding is
 // filled by Deploy once the app's sink context exists.
-func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, []runtime.SinkBinding, error) {
+func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, []runtime.SinkBinding,
+	[]runtime.TableLoad, error) {
 	h := &AppHandle{rt: r.rt, name: name, plan: p, streams: map[string]int{}, tables: map[string]int{},
 		sinkRows: map[string][]int{}}
 	for sid, st := range p.Streams {
@@ -148,11 +149,11 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 			if _, bound := o.sources[stream]; !bound {
 				s, err := factory.Source(st.Source.Type, st.Source.Keys)
 				if err != nil {
-					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
+					return nil, nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
 				}
 				if s == nil { // the engine would run Open on nil (break-it B3)
-					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no source and no error",
-						name, stream)
+					return nil, nil, nil, fmt.Errorf(
+						"cep: deploy %s: stream %q: the connector factory returned no source and no error", name, stream)
 				}
 				h.sources = append(h.sources, boundSource{stream: stream, id: sid, src: s})
 			}
@@ -161,14 +162,14 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 			if _, bound := o.sinks[stream]; !bound {
 				s, err := factory.Sink(st.Sink.Type, st.Sink.Keys)
 				if err != nil {
-					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
+					return nil, nil, nil, fmt.Errorf("cep: deploy %s: stream %q: %w", name, stream, err)
 				}
 				if s == nil { // Accepts would run on nil (break-it B3)
-					return nil, nil, fmt.Errorf("cep: deploy %s: stream %q: the connector factory returned no sink and no error", name,
-						stream)
+					return nil, nil, nil, fmt.Errorf(
+						"cep: deploy %s: stream %q: the connector factory returned no sink and no error", name, stream)
 				}
 				if err := addSink(stream, sid, s); err != nil {
-					return nil, nil, fmt.Errorf("cep: deploy %s: %w", name, err)
+					return nil, nil, nil, fmt.Errorf("cep: deploy %s: %w", name, err)
 				}
 			}
 		}
@@ -176,10 +177,10 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 	for _, stream := range slices.Sorted(maps.Keys(o.sources)) { // checked in a stable order
 		sid, ok := h.streams[stream]
 		if !ok {
-			return nil, nil, fmt.Errorf("%w: WithSource(%q)", ErrUnknownStream, stream)
+			return nil, nil, nil, fmt.Errorf("%w: WithSource(%q)", ErrUnknownStream, stream)
 		}
 		if p.Streams[sid].Derived {
-			return nil, nil, fmt.Errorf("%w: WithSource(%q)", ErrNotASourceStream, stream)
+			return nil, nil, nil, fmt.Errorf("%w: WithSource(%q)", ErrNotASourceStream, stream)
 		}
 	}
 	for sid, st := range p.Streams { // bound in stream order (design §3.5; break-it B6)
@@ -190,23 +191,24 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 	for _, stream := range o.sinkOrder {
 		sid, ok := h.streams[stream]
 		if !ok {
-			return nil, nil, fmt.Errorf("%w: WithSink(%q)", ErrUnknownStream, stream)
+			return nil, nil, nil, fmt.Errorf("%w: WithSink(%q)", ErrUnknownStream, stream)
 		}
 		if !p.Streams[sid].Derived {
-			return nil, nil, fmt.Errorf("%w: WithSink(%q)", ErrNotADerivedStream, stream)
+			return nil, nil, nil, fmt.Errorf("%w: WithSink(%q)", ErrNotADerivedStream, stream)
 		}
 		for _, s := range o.sinks[stream] {
 			if err := addSink(stream, sid, s); err != nil {
-				return nil, nil, fmt.Errorf("cep: deploy %s: %w", name, err)
+				return nil, nil, nil, fmt.Errorf("cep: deploy %s: %w", name, err)
 			}
 		}
 	}
 	for _, table := range slices.Sorted(maps.Keys(o.tableRows)) {
 		if _, ok := h.tables[table]; !ok {
-			return nil, nil, fmt.Errorf("%w: WithTableRows(%q)", ErrUnknownTable, table)
+			return nil, nil, nil, fmt.Errorf("%w: WithTableRows(%q)", ErrUnknownTable, table)
 		}
 	}
-	for tid, pt := range p.Tables { // written at Start in table order (design §3.5; break-it B6)
+	var loads []runtime.TableLoad
+	for tid, pt := range p.Tables { // put by the engine in Activate's step, in table order (design §3.5; break-it B6)
 		fills, ok := o.tableRows[pt.Name]
 		if !ok {
 			continue
@@ -214,16 +216,17 @@ func (r *Runtime) bind(name string, p *plan.App, o *deployOptions) (*AppHandle, 
 		t := tableFor(h, tid)
 		rows, err := t.rows(fills)
 		if err != nil {
-			return nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, pt.Name, err)
+			return nil, nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, pt.Name, err)
 		}
 		// the engine's own checks, so a row TableWrite would refuse fails the deploy, not the start (design §3.4;
 		// break-it B5)
 		if err := runtime.CheckRows(pt.Name, pt.Attrs, rows); err != nil {
-			return nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, pt.Name, err)
+			return nil, nil, nil, fmt.Errorf("cep: deploy %s: WithTableRows(%q): %w", name, pt.Name, err)
 		}
-		h.tableRows = append(h.tableRows, tableLoad{id: tid, rows: rows})
+		// The rows are handed over to the engine (runtime.App.Loads keeps them) and never written again by the facade.
+		loads = append(loads, runtime.TableLoad{Table: tid, Rows: rows})
 	}
-	return h, bindings, nil
+	return h, bindings, loads, nil
 }
 
 // boundSource is a source the app runs at Start.
@@ -231,10 +234,4 @@ type boundSource struct {
 	stream string
 	id     int
 	src    cepio.Source
-}
-
-// tableLoad is a table's starting rows, written at Start.
-type tableLoad struct {
-	id   int
-	rows [][]event.Value
 }

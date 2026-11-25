@@ -15,26 +15,17 @@ type ConnectorFactory interface {
 	Sink(typ string, keys map[string]string) (cepio.Sink, error)
 }
 
-// defaultFactory refuses every type: no annotation-bound connector is built before S5.1 (design s3-3-1 §3.4). The
-// message names the sprint that builds it.
+// defaultFactory refuses every annotation-bound type: this release builds none; a Go binding (WithSource, WithSink)
+// replaces the annotation.
 type defaultFactory struct{}
-
-var connectorSprint = map[string]string{
-	"http": "S5.1", "stdin": "S5.1", "jsonmap": "S5.1", "json": "S5.1",
-	"smtp": "S5.2", "email": "S5.2", "log": "S5.2", "textmap": "S5.2", "text": "S5.2",
-}
 
 func notBuilt(kind, typ string) error {
 	if typ == "inmemory" {
 		return fmt.Errorf("%w: @%s(type = %q) has no annotation form: bind it in Go with With%s", ErrConnectorNotBuilt, kind,
 			typ, title(kind))
 	}
-	sprint, ok := connectorSprint[typ]
-	if !ok {
-		sprint = "a later sprint"
-	}
-	return fmt.Errorf("%w: @%s(type = %q) arrives in %s; bind a Go %s with With%s for now", ErrConnectorNotBuilt, kind,
-		typ, sprint, kind, title(kind))
+	return fmt.Errorf("%w: @%s(type = %q) is not available in this release; bind a Go %s with With%s",
+		ErrConnectorNotBuilt, kind, typ, kind, title(kind))
 }
 
 func title(kind string) string {
