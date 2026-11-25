@@ -1,0 +1,29 @@
+[
+ {
+  "id": "recheck-P1",
+  "note": "P1: a failed Drain's restore reads the router's mark (a.started) again, not Activate's (a.opened)",
+  "file": "internal/runtime/drain.go",
+  "find": "\tif a.opened.Load() {\n",
+  "replace": "\tif a.started.Load() {\n",
+  "test": "TestAnEndedDrainDuringActivateKeepsTheInputClosedUntilTheGoroutinesRun",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "recheck-P2",
+  "note": "P2: Activate's last step never marks the app's goroutines running",
+  "file": "internal/runtime/lifecycle.go",
+  "find": "\ta.opened.Store(true)\n",
+  "replace": "",
+  "test": "TestActivateOvertakenByADrainThatQueuedNothingLeavesTheAppTakingInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "recheck-P3",
+  "note": "P3: the mark moved below the move to active, the test hook left between them",
+  "file": "internal/runtime/lifecycle.go",
+  "find": "\ta.opened.Store(true)\n\tif r.openHold != nil { // the package's tests only\n\t\tr.openHold()\n\t}\n\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n",
+  "replace": "\ta.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))\n\tif r.openHold != nil { // the package's tests only\n\t\tr.openHold()\n\t}\n\ta.opened.Store(true)\n",
+  "test": "TestAnEndedDrainAfterActivatesMarkStillLeavesTheAppActive",
+  "pkg": "./internal/runtime"
+ }
+]

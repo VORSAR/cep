@@ -180,6 +180,9 @@ type Runtime struct {
 	// activateHold is for the package's tests only: Activate calls it between the router's answer and its tail, so a
 	// test can hold an activation there while Close gives up at its deadline (the combined review's R-S3).
 	activateHold func()
+	// openHold is for the package's tests only: Activate's last step calls it under inflight.mu, between marking the
+	// app's goroutines running (a.opened) and its move to active, so a test can run a Drain there.
+	openHold func()
 	// recordingWait is for the package's tests only: Drain calls it as it begins to wait for the recording, so a test
 	// can release a held Recorder only once Drain waits for it (TestDrainWaitsForAStoppedRecordingsQueuedRecords).
 	recordingWait func()
