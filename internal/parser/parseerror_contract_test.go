@@ -255,6 +255,22 @@ func TestParseErrorContract(t *testing.T) {
 		if e.Code != "E-SYN-001" || e.Line != 1 || e.Col != 1 || e.Msg != "boom" {
 			t.Errorf("parseError gave %s at %d:%d %q; want E-SYN-001 at 1:1 %q", e.Code, e.Line, e.Col, e.Msg, "boom")
 		}
+		if want := fixes["E-SYN-001"]; want == "" || e.Fix != want {
+			t.Errorf("parseError's fix %q; want the catalogue's E-SYN-001 fix %q", e.Fix, want)
+		}
+		if got, want := e.Error(), "t.cep:1:1: E-SYN-001: boom. Fix: "+fixes["E-SYN-001"]; got != want {
+			t.Errorf("parseError's text %q; want %q", got, want)
+		}
+	})
+	// lexError's first branch, the same fallback (not reachable through Parse or ParseLiteral today).
+	t.Run("E-SYN-001/not a participle error from the lexer", func(t *testing.T) {
+		e := lexError("t.cep", "", errors.New("boom"))
+		if e.Code != "E-SYN-001" || e.Line != 1 || e.Col != 1 || e.Msg != "boom" {
+			t.Errorf("lexError gave %s at %d:%d %q; want E-SYN-001 at 1:1 %q", e.Code, e.Line, e.Col, e.Msg, "boom")
+		}
+		if want := fixes["E-SYN-001"]; want == "" || e.Fix != want {
+			t.Errorf("lexError's fix %q; want the catalogue's E-SYN-001 fix %q", e.Fix, want)
+		}
 	})
 }
 

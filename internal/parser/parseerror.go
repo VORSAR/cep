@@ -15,7 +15,7 @@ import (
 func parseError(name string, toks []Token, err error) *Error {
 	var perr participle.Error
 	if !errors.As(err, &perr) {
-		return &Error{Name: name, Code: "E-SYN-001", Line: 1, Col: 1, Msg: err.Error()}
+		return mk(name, "E-SYN-001", Position{Line: 1, Column: 1}, err.Error())
 	}
 	s := newFailSite(toks, perr)
 	if inner := s.filterError(); inner != nil {
