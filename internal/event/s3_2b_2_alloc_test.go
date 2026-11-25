@@ -9,6 +9,7 @@ import (
 // TestDecodeAllocationBudget is S3.1-2's F12, pinned (design s3-2b-2 §8; review F15): a decode into a slice with room
 // allocates once per string value of two or more bytes (one-byte strings are the Go runtime's interned ones) and
 // twice per object value — nothing else.
+// Not parallel: testing.AllocsPerRun counts the whole process's allocations.
 func TestDecodeAllocationBudget(t *testing.T) {
 	s, err := event.NewSchema("S", []event.Attr{
 		{Name: "a", Type: event.TString}, {Name: "b", Type: event.TString}, {Name: "n", Type: event.TInt},

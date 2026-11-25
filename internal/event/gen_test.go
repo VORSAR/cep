@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/vorsar/cep/internal/event"
@@ -24,7 +25,7 @@ type entry struct{ key, val string }
 
 // Valid JSON values per attribute type, before mutation.
 var validFor = map[event.Type][]string{
-	event.TString: {`""`, `"alice"`, `"a\"b\\c\/d\b\f\n\r\t"`, `"é中"`, `"😀"`, "\"é中😀\"",
+	event.TString: {`""`, `"alice"`, `"a\"b\\c\/d\b\f\n\r\t"`, `"\u00e9\u4e2d"`, `"\ud83d\ude00"`, "\"é中😀\"",
 		`"text_invisibles"`, `"null"`, `"5"`, `"​"`, `"{}"`, `"\u0000"`},
 	event.TInt: {`0`, `-0`, `1`, `-1`, `42`, `9223372036854775807`, `-9223372036854775808`, `9007199254740993`,
 		`-9007199254740993`, `9007199254740992`},
@@ -92,8 +93,8 @@ var floatExtremes = []string{`1e400`, `-1e400`, `1e-400`, `-1e-400`, `5e-324`, `
 	`123456789012345678901234567890e-10`, strings.Repeat("9", 800), `-0e0`, `0.30000000000000004`,
 	`9007199254740993`, `9007199254740995`, `1e23`, `8.98846567431158e307`}
 
-var escapedStrings = []string{`"\ud83d"`, `"\ude00x"`, `"\ud83dA"`, `"\ud83d\ud83d"`, `"😀"`,
-	`"\u0000"`, `"\u001F"`, `"￿"`, `"￾"`, `"𐀀"`, `"􏿿"`, `"a\\u0041"`, `"\""`,
+var escapedStrings = []string{`"\ud83d"`, `"\ude00x"`, `"\ud83dA"`, `"\ud83d\ud83d"`, `"\ud83d\ude00"`,
+	`"\u0000"`, `"\u001F"`, `"\uffff"`, `"\ufffe"`, `"\ud800\udc00"`, `"\udbff\udfff"`, `"a\\u0041"`, `"\""`,
 	`"\\"`, `"\"`, `"\ud83d\\ude00"`, `"\udc00\ud800"`, `"\u00"`, `"\uZZZZ"`, `"\ud83d\u12"`, `"\/\/"`}
 
 var badUTF8 = []string{"\xff", "\xfe", "\x80", "\xc0\xaf", "\xe2\x82", "\xed\xa0\x80", "\xf4\x90\x80\x80",
@@ -102,7 +103,7 @@ var badUTF8 = []string{"\xff", "\xfe", "\x80", "\xc0\xaf", "\xe2\x82", "\xed\xa0
 var unknownKeys = []string{"extra", "x", "", "V", "S", "user ", `user2`, `é`, "nested", "a.b",
 	"text_invisible", "TS", `\ud83d`, "k\xff"}
 
-var invisiblesKeys = []string{event.InvisiblesAttr, `text_invisibles`, `text_invisibles`}
+var invisiblesKeys = []string{event.InvisiblesAttr, `\u0074ext_invisibles`, `text_invisible\u0073`}
 
 var nestedValues = []string{`{"a":{"b":[1,2,{"c":null}]}}`, deep(50), deepObj(50), `[{"x":[{"y":[]}]}]`,
 	"{\"\xff\":\"\xfe\"}", `{"a":"\ud83d"}`, `[1e400, 01e0]`}
@@ -119,6 +120,9 @@ var flipBytes = []byte{'"', '\\', '{', '}', '[', ']', ',', ':', ' ', 'n', '0', '
 	0xff, 'u', 't', 'Z'}
 
 var validWS = []string{"", "", "", "", "", " ", "\n", "\t", "\r\n", "  "}
+
+// stringPieces are the pieces gen.value builds a random string value from: raw runes, and escapes written as text.
+var stringPieces = []string{"a", "Z", "0", " ", "é", "中", "😀", `\n`, `\"`, `\\`, `\u00e9`, `\ud83d\ude00`, `​`, "\x7f", `\/`}
 
 // The mutation classes (§4.3), each applied at most once to a valid payload.
 var classes = []string{"valid", "valid", "typeswap", "null", "absent", "repeat-valid-then-invalid",
@@ -139,8 +143,7 @@ func (g *gen) value(t event.Type) string {
 		var sb strings.Builder
 		sb.WriteByte('"')
 		for range g.r.IntN(8) {
-			sb.WriteString(g.pick([]string{"a", "Z", "0", " ", "é", "中", "😀", `\n`, `\"`, `\\`, `é`,
-				`😀`, `​`, "\x7f", `\/`}))
+			sb.WriteString(g.pick(stringPieces))
 		}
 		sb.WriteByte('"')
 		return sb.String()
@@ -435,4 +438,42 @@ func (g *gen) payload() (string, []byte) {
 		b = slices.Insert(b, g.r.IntN(len(b)+1), flipBytes[g.r.IntN(len(flipBytes))])
 	}
 	return class, b
+}
+
+// TestTheGeneratorsEscapedSpellingsHoldTheirEscapes: no list repeats a value (a lost backslash leaves a twin), every
+// escapedStrings entry holds a backslash, and the escaped spellings of é中, 😀 and text_invisibles are written as
+// backslash-u text.
+func TestTheGeneratorsEscapedSpellingsHoldTheirEscapes(t *testing.T) {
+	t.Parallel()
+	lists := map[string][]string{"invisiblesKeys": invisiblesKeys, "validFor[TString]": validFor[event.TString],
+		"escapedStrings": escapedStrings, "stringPieces": stringPieces}
+	for name, list := range lists {
+		seen := map[string]bool{}
+		for _, s := range list {
+			if seen[s] {
+				t.Errorf("%s holds %q twice", name, s)
+			}
+			seen[s] = true
+		}
+	}
+	for _, s := range escapedStrings {
+		if !strings.Contains(s, `\`) {
+			t.Errorf("escapedStrings holds %q, which has no escape", s)
+		}
+	}
+	for _, s := range []string{`"\u00e9\u4e2d"`, `"\ud83d\ude00"`} {
+		if !slices.Contains(validFor[event.TString], s) {
+			t.Errorf("validFor[TString] lacks %s", s)
+		}
+	}
+	for _, s := range []string{`\u00e9`, `\ud83d\ude00`} {
+		if !slices.Contains(stringPieces, s) {
+			t.Errorf("stringPieces lacks %s", s)
+		}
+	}
+	for _, k := range invisiblesKeys[1:] {
+		if !strings.Contains(k, `\u`) {
+			t.Errorf("invisiblesKeys holds %q; want an escaped spelling of %s", k, event.InvisiblesAttr)
+		}
+	}
 }
