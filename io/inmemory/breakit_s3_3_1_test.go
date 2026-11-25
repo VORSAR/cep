@@ -92,12 +92,16 @@ func TestBreakitOpenTwice(t *testing.T) {
 		t.Fatalf("first Open with an ended ctx: %v; want context.Canceled", err)
 	}
 	var p any
+	var err2 error
 	func() {
 		defer func() { p = recover() }()
-		_ = src.Open(cctx, bkNopEmitter{})
+		err2 = src.Open(cctx, bkNopEmitter{})
 	}()
 	if p != nil {
 		t.Errorf("the second Open panicked: %v; want it to return (an error naming the reuse, or nil)", p)
+	}
+	if !errors.Is(err2, inmemory.ErrReopened) {
+		t.Errorf("the second Open: %v; want inmemory.ErrReopened", err2)
 	}
 	src.Close()
 }

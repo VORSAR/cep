@@ -6,11 +6,25 @@ package inmemory_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	cepio "github.com/vorsar/cep/io"
 	"github.com/vorsar/cep/io/inmemory"
 )
+
+// parkSignalCtx is its Context with one change: the first Done read closes parked. Source.push reads Done only in its
+// blocking select, after its expired-context check, so parked means the Push waits there with a live context.
+type parkSignalCtx struct {
+	context.Context
+	once   sync.Once
+	parked chan struct{}
+}
+
+func (c *parkSignalCtx) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.parked) })
+	return c.Context.Done()
+}
 
 // cviRow is an OutEvent row over fixed values of every type, for the sink's per-type copies.
 type cviRow struct{}
@@ -78,8 +92,14 @@ func TestCviSourceRefusalsAndContexts(t *testing.T) {
 		t.Errorf("Push with an expired context: %v; want context.Canceled", err)
 	}
 	short, cancelShort := context.WithCancel(ctx)
+	pctx := &parkSignalCtx{Context: short, parked: make(chan struct{})}
 	done := make(chan error, 1)
-	go func() { done <- s.Push(short, "", imRow("a", 1)) }() // unbuffered, no pump: blocks until short ends
+	go func() { done <- s.Push(pctx, "", imRow("a", 1)) }() // unbuffered, no pump: blocks until short ends
+	select {
+	case <-pctx.parked: // past the expired-context check: the Push waits in its select
+	case <-ctx.Done():
+		t.Fatalf("ceiling hit before the Push reached its select: %v", ctx.Err())
+	}
 	cancelShort()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Errorf("Push while nothing pumps, its context ended: %v; want context.Canceled", err)
