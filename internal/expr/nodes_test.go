@@ -213,6 +213,42 @@ func TestRegistryArityAndLookup(t *testing.T) {
 	}
 }
 
+// TestRegisterRefusesADescriptorBuildCannotCall: Register refuses a nil Factory for a scalar or an aggregate, and
+// MinArgs above MaxArgs, registering nothing; a pattern-only callable needs no Factory (chain has none).
+func TestRegisterRefusesADescriptorBuildCannotCall(t *testing.T) {
+	first := func(args []expr.Expr, _ model.Expr) (expr.Expr, error) { return args[0], nil }
+	refused := []struct {
+		name string
+		d    expr.Descriptor
+		want string
+	}{
+		{"a scalar with no Factory", expr.Descriptor{Name: "s", Kind: expr.Scalar, MinArgs: 1, MaxArgs: 1},
+			"expr: s: a nil Factory; only a pattern-only callable has none"},
+		{"an aggregate with no Factory", expr.Descriptor{Name: "g", Kind: expr.Aggregate},
+			"expr: g: a nil Factory; only a pattern-only callable has none"},
+		{"MinArgs above MaxArgs", expr.Descriptor{Name: "m", Kind: expr.Scalar, MinArgs: 2, MaxArgs: 1, Factory: first},
+			"expr: m: MinArgs 2 is above MaxArgs 1"},
+	}
+	for _, c := range refused {
+		t.Run(c.name, func(t *testing.T) {
+			r := expr.NewRegistry()
+			if err := r.Register(c.d); err == nil || err.Error() != c.want {
+				t.Errorf("Register = %v, want %q", err, c.want)
+			}
+			if _, ok := r.Lookup(c.d.Name); ok {
+				t.Errorf("the refused descriptor %s is registered", c.d.Name)
+			}
+		})
+	}
+	r := expr.NewRegistry()
+	if err := r.Register(expr.Descriptor{Name: "p", Kind: expr.PatternOnly, MinArgs: 1, MaxArgs: 2}); err != nil {
+		t.Errorf("a pattern-only callable with no Factory: %v, want it registered", err)
+	}
+	if err := r.Register(expr.Descriptor{Name: "e", Kind: expr.Scalar, MinArgs: 1, MaxArgs: 1, Factory: first}); err != nil {
+		t.Errorf("MinArgs equal to MaxArgs: %v, want it registered", err)
+	}
+}
+
 // TestErrorsCarryThePosition: an error is placed at the innermost node that failed; an unknown name is structured
 // (S2.2b: the validator reports Line:Col and suggests the nearest name from Name and What).
 func TestErrorsCarryThePosition(t *testing.T) {
