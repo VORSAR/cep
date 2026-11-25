@@ -15,8 +15,8 @@ import (
 //
 // The app's phase is draining while any Drain of it is in flight, and for good once one has queued an item (the
 // quiet item or the drain item). A Drain that returns an error having queued nothing leaves the app as it is without
-// that Drain: draining if another Drain is in flight or has queued an item, else taking input if the router has
-// activated it, else inactive.
+// that Drain: draining if another Drain is in flight or has queued an item, else taking input if Activate has
+// started the app's flushers and recorder, else inactive.
 func (r *Runtime) Drain(ctx context.Context, app AppID) (DrainResult, error) {
 	a, err := r.appOf(app)
 	if err != nil {
@@ -88,14 +88,15 @@ func (a *appState) releaseDraining() {
 	a.restorePhase()
 }
 
-// restorePhase moves a draining app back to what the router holds it as, read now and not when the Drain began:
-// to inactive, then on to active once the router has activated it (a.started). The read comes after the move, so an
-// Activate whose own move to active met phaseDraining is finished here. An active app reads inactive for an instant
-// on the way: a call landing in it is refused as not activated, as it was refused as drained just before. The
-// caller holds runMu.
+// restorePhase moves a draining app back to what Activate has made it, read now and not when the Drain began: to
+// inactive, then on to active once Activate's last step has started the app's flushers and recorder (a.opened), and
+// not merely once the router has activated it (a.started), so the input never opens before they run. The read comes
+// after the move, so an Activate whose own move to active met phaseDraining is finished here. An active app reads
+// inactive for an instant on the way: a call landing in it is refused as not activated, as it was refused as
+// drained just before. The caller holds runMu.
 func (a *appState) restorePhase() {
 	a.phase.CompareAndSwap(int32(phaseDraining), int32(phaseInactive))
-	if a.started.Load() {
+	if a.opened.Load() {
 		a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))
 	}
 }

@@ -137,6 +137,12 @@ func (r *Runtime) startAppGoroutines(a *appState) error {
 		r.wg.Add(1)
 		go rec.run(r)
 	}
+	// The mark comes before the move: when the move meets draining, the Drain's last release reads the mark after its
+	// own move back and finishes the move to active (restorePhase).
+	a.opened.Store(true)
+	if r.openHold != nil { // the package's tests only
+		r.openHold()
+	}
 	a.phase.CompareAndSwap(int32(phaseInactive), int32(phaseActive))
 	return nil
 }

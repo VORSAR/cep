@@ -27,8 +27,11 @@ type appState struct {
 	rec      *recQ            // nil: no recording (owner D4 of S3.2b-2's design: off unless turned on)
 
 	// The per-app lifecycle (design s3-3-1 §2.2).
-	phase     atomic.Int32       // appPhase: the caller-side fast path, read before every entry point
-	started   atomic.Bool        // set by Activate; the router reads it (a drain of a never-activated app)
+	phase   atomic.Int32 // appPhase: the caller-side fast path, read before every entry point
+	started atomic.Bool  // set by Activate; the router reads it (a drain of a never-activated app)
+	// opened is set by Activate's last step (startAppGoroutines) once the app's flushers and recorder run; a failed
+	// Drain's restore reads it, so the input never opens before they run.
+	opened    atomic.Bool
 	start     int64              // the router's stamp when it installed the app: the Ingest's and the header's
 	srcCtx    context.Context    // the source context, made at Add; Drain cancels it
 	cancelSrc context.CancelFunc //

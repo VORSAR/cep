@@ -59,6 +59,72 @@ func TestActivateOvertakenByADrainThatQueuedNothingLeavesTheAppTakingInput(t *te
 	}
 }
 
+// A Drain whose ctx had ended, run between the router's yes to Activate and Activate's last step, which starts the
+// app's flushers and recorder: the input stays closed until they run, then Activate opens it.
+func TestAnEndedDrainDuringActivateKeepsTheInputClosedUntilTheGoroutinesRun(t *testing.T) {
+	t.Parallel()
+	ctx := cgCtx(t)
+	r := ldRuntime(t)
+	t.Cleanup(func() { ldClose(t, r) })
+	id, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := r.appList()[id]
+	var (
+		drained, sent error
+		inside        appPhase
+	)
+	r.activateHold = func() {
+		_, drained = r.Drain(ldExpired(), id)
+		inside, sent = appPhase(a.phase.Load()), r.Send(ctx, id, cgEv(1))
+	}
+	if err := r.Activate(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if drained == nil {
+		t.Fatalf("the expired Drain returned nil")
+	}
+	if inside != phaseInactive || !errors.Is(sent, ErrInactive) {
+		t.Errorf("before Activate started the app's goroutines: phase %d, Send %v; want %d (inactive) and ErrInactive",
+			inside, sent, phaseInactive)
+	}
+	if p := appPhase(a.phase.Load()); p != phaseActive {
+		t.Errorf("phase after Activate returned nil: %d; want %d (active)", p, phaseActive)
+	}
+	if err := r.Send(ctx, id, cgEv(2)); err != nil {
+		t.Errorf("Send after Activate returned nil: %v; want nil", err)
+	}
+}
+
+// A Drain whose ctx had ended, run once Activate has marked the app's goroutines running and before its move to
+// active: the Drain's restore finishes the move, so the app takes input.
+func TestAnEndedDrainAfterActivatesMarkStillLeavesTheAppActive(t *testing.T) {
+	t.Parallel()
+	ctx := cgCtx(t)
+	r := ldRuntime(t)
+	t.Cleanup(func() { ldClose(t, r) })
+	id, err := r.Add(ctx, cgApp(t, func(event.Event) error { return nil }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := r.appList()[id]
+	var drained error
+	r.openHold = func() { _, drained = r.Drain(ldExpired(), id) }
+	if err := r.Activate(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if drained == nil {
+		t.Fatalf("the expired Drain returned nil")
+	}
+	if p := appPhase(a.phase.Load()); p != phaseActive {
+		t.Errorf("phase after Activate returned nil: %d; want %d (active)", p, phaseActive)
+	}
+	if err := r.Send(ctx, id, cgEv(1)); err != nil {
+		t.Errorf("Send after Activate returned nil: %v; want nil", err)
+	}
+}
+
 // A Drain whose ctx had ended, returning while another Drain of the app is still in flight, leaves the phase at
 // draining; when that other Drain then gives up having queued nothing, the app takes input again.
 func TestAnEndedDrainLeavesThePhaseToADrainStillInFlight(t *testing.T) {
