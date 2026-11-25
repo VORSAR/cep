@@ -143,13 +143,22 @@ func (rt *router) completeRemove(w *installWait) {
 			close(a.rec.stop)
 			res.recMarker = a.rec.returned
 		}
+	} else if a.rec != nil {
+		// Never activated: the queue is released here (owner, 2026-11-25; PR 2's review PR2A-3, PR2Q-10), where an
+		// activated app's recorder goroutine releases it at its stop. Safe: no recorder goroutine ever ran
+		// (startAppGoroutines follows the activation step, which refuses a removing app), the header was this
+		// goroutine's own put at Add, and nothing reads a removing app's queue (the drain step refuses it; a.ing is
+		// nil below, so every later put is refused; Stats reads the counters under mu).
+		a.rec.q = nil
 	}
 	// The slot keeps a tombstone: the phase removed, the state dropped, so Stats keeps zero rows of the app's
 	// length and the id is never reused (design s3-3-1 MUST 2).
 	// Only the router's own fields are dropped: a.dec and a.rec stay, because caller goroutines read them past the
-	// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4).
+	// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4). The starting rows go too: only the
+	// activation step read them, and it refuses a removing app (owner, 2026-11-25; PR 2's review PR2A-3, PR2Q-10).
 	a.phase.Store(int32(phaseRemoved))
 	a.ing, a.sinks, a.quiet = nil, nil, true
+	a.app.Loads = nil
 	if w.rollback {
 		res.err = w.err
 	}
