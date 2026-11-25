@@ -129,16 +129,16 @@ class Load(support.ToolchainTest):
             ("lark", "1.3.1", "", ".", "lark-1.3.1"),  # a python-package: one sdist for both platforms
         ]
         darwin_archives = (
-            "6767ca67fdcf",
-            "e956e60bc946",
+            "ca5a25ce3518",
+            "431b99a9c2cd",
             "91a44a2b8a71",
             "d1e409481a8c",
             "72a886253072",
             "b426a7a6d6d5",
         )
         linux_archives = (
-            "182e7adf7e4f",
-            "c2f87d4b4e8d",
+            "9fbcb18c3909",
+            "6774c7f49ee2",
             "7226736c2339",
             "9b7fe6a6bf63",
             "94b33791f48c",

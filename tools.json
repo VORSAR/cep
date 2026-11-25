@@ -7,22 +7,22 @@
       "path_dir": "bin",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "6767ca67fdcfa3a966b6fb77fc3d4dd4020063fce27ac1e9425fab653195cbab",
+          "archive_sha256": "ca5a25ce351817d7c6fcc7c2f2c327ec28c540f728d2a5c8b4e380ed92c68936",
           "exec_sha256": {
-            "bin/python3.15": "7d6ccb6fa89f391994f60eb066c594553e33bcd305dccf6b1892928e142bf16e"
+            "bin/python3.15": "d2836585a8fb8ae6a4f89f2fcaf64431d5e332b6bfd4b4b87b72b5646d34bb35"
           },
           "strip": "python/",
-          "tree_sha256": "9bba8da2a46ff276455faa1ea6eb349df231a14d8f611bfc4bd6f8e52eea9068",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.15.2%2B20261110-aarch64-apple-darwin-install_only.tar.gz"
+          "tree_sha256": "8da1ff0cff2a4310fe4daaf44cead7e13a6f2a8c4da935f548ffeb76890d983f",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.15.2%2B20261124-aarch64-apple-darwin-install_only.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "182e7adf7e4f0e32dafac5143f00d466afd20eef45918ea170f78884e503ac18",
+          "archive_sha256": "9fbcb18c390909c3f30542d097a14443bee7a5c678d4b06b5b63cc7a9af624d3",
           "exec_sha256": {
-            "bin/python3.15": "22e07cccd5b1ecf2375f5162017610fd9886436c9b77837bf6da0a40b1e04d4b"
+            "bin/python3.15": "e38457d14120afbb43e0142b87881f3f02eb224de54ccf3a7827de882f2d1913"
           },
           "strip": "python/",
-          "tree_sha256": "11f83a58f9db8d877585fe074179ed77211c0b20097d6eee501c71f4a120844d",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.15.2%2B20261110-x86_64-unknown-linux-gnu-install_only.tar.gz"
+          "tree_sha256": "c4574c529cf208262591fed5ed3000b38d39aed3febcb2c9880d065ddfa2ff70",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.15.2%2B20261124-x86_64-unknown-linux-gnu-install_only.tar.gz"
         }
       },
       "version": "3.15.2",
@@ -38,22 +38,22 @@
       "path_dir": "bin",
       "platforms": {
         "darwin-arm64": {
-          "archive_sha256": "e956e60bc9465d577ef8062059aa05cd3a2665b4b8678a2ed24e432368330b8f",
+          "archive_sha256": "431b99a9c2cdd37ad9b06e425be0e520d2dbce0552abe454257abef592fe3634",
           "exec_sha256": {
-            "bin/python3.12": "54788b15120aa4f534da3f59b59f46658a9bfdc3d3d9c8b3af1459002e307c90"
+            "bin/python3.12": "5bd5d3ba696e129b7bcbf4cd14ec7bb6a3ffb5f59fcfbbd0f3e3cae417abd436"
           },
           "strip": "python/",
-          "tree_sha256": "0e9167e59ff9231c0fce150c69361dde2eed408daf30721dff438a0494dabe9d",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-aarch64-apple-darwin-install_only.tar.gz"
+          "tree_sha256": "641defb0f3aaf5572b079e076422a405db5350a334bd89a055f1c7fa051303a5",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.12.16%2B20261124-aarch64-apple-darwin-install_only.tar.gz"
         },
         "linux-amd64": {
-          "archive_sha256": "c2f87d4b4e8db3abddb0f116c6ccfc503d0cbdbb9ee8faacddad1b679ec12e99",
+          "archive_sha256": "6774c7f49ee21c1723f7ac91961a5bf9f3ee3ae6e4d82ff58bd358958b546461",
           "exec_sha256": {
-            "bin/python3.12": "138937d12d15e660ae7e687a6e2f3c2a06780ceef6400209d45018630dc1667d"
+            "bin/python3.12": "5d57be9687bd2c6612900d06ab99ec5f1237d866ddfea06bdcb856e4844ce638"
           },
           "strip": "python/",
-          "tree_sha256": "5d75d1f421a2e3f0e1fb313874a951af143d8f87143c3ae420641199b48e5115",
-          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-x86_64-unknown-linux-gnu-install_only.tar.gz"
+          "tree_sha256": "fab56573a1559cee04eab1c1ba7604f3c0d15beec8cd736e7acf51d8ad25a7fe",
+          "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.12.16%2B20261124-x86_64-unknown-linux-gnu-install_only.tar.gz"
         }
       },
       "version": "3.12.16",
