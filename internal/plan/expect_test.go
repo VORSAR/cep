@@ -33,6 +33,7 @@ func peEqual(t *testing.T, what string, got, want plan.Expect) {
 }
 
 func TestBuildCarriesExpects(t *testing.T) {
+	t.Parallel()
 	t.Run("07", func(t *testing.T) {
 		p := peExample(t, "07-consent-gate.cep", 6)
 		at := func(m int64) event.Value { return pqTs(pqT0 + m) }
@@ -149,7 +150,8 @@ func peWant(msg string) string {
 // TestBuildNamesABlocksFirstFault: a block with two faults (a model the validator never saw) is refused for the one
 // met first in the block's order (design s3-3-2 §4, S1.1c-6 Q.2): every given in written order (a table's name, then
 // its rows; a stream's name, its time attribute, then its records), then the then's target, then its records, each
-// record's fields in written order. One row per adjacent pair of that order, each wanting the earlier fault.
+// record's fields in written order, then a given stream record's time value. One row per adjacent pair of that
+// order, each wanting the earlier fault.
 func TestBuildNamesABlocksFirstFault(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, block, want string }{
@@ -159,6 +161,8 @@ func TestBuildNamesABlocksFirstFault(t *testing.T) {
 		{"an unknown stream before a later timeless stream", "given Q [ ] given A [ ] then Out [ ]", "unknown stream Q"},
 		{"a timeless stream before a later stream's record", "given A [ ] given S [ {k: 1, ts: " + peAt + "} ] then Out [ ]",
 			"stream A has no time attribute a block can give"},
+		{"a timeless stream before its own record", "given A [ {k: 1} ] then Out [ ]", "stream A has no time attribute a block can give"},
+		{"a record's field before its own null time", "given S [ {k: 1} ] then Out [ ]", "k: a literal of kind int is not of type string"},
 		{"a stream's record before the then's target", "given S [ {k: 1, ts: " + peAt + "} ] then Other [ ]",
 			"k: a literal of kind int is not of type string"},
 		{"the then's target before its records", "given S [ ] then Other [ {q: 1} ]", "then names Other, not the rule's target Out"},

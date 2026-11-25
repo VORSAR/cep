@@ -2,6 +2,7 @@ package plan
 
 import (
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -49,7 +50,9 @@ func TestStateWalksItsAnchor(t *testing.T) {
 	t.Parallel()
 	s := &state{}
 	var got []string
-	walk := func(component, key string, v any) { got = append(got, component+"/"+key+"="+itoa(v.(int64))) }
+	walk := func(component, key string, v any) {
+		got = append(got, component+"/"+key+"="+strconv.FormatInt(v.(int64), 10))
+	}
 	s.Walk(walk)
 	if len(got) != 0 || len(s.Timers(nil)) != 0 {
 		t.Fatalf("a fresh state walks %v and implies %d timers; want nothing", got, len(s.Timers(nil)))
@@ -59,17 +62,6 @@ func TestStateWalksItsAnchor(t *testing.T) {
 	if len(got) != 1 || got[0] != "anchor/=42" {
 		t.Errorf("walk %v, want [anchor/=42]", got)
 	}
-}
-
-func itoa(i int64) string {
-	if i == 0 {
-		return "0"
-	}
-	var b []byte
-	for ; i > 0; i /= 10 {
-		b = append([]byte{byte('0' + i%10)}, b...)
-	}
-	return string(b)
 }
 
 // TestAddSatSaturates: anchor + D never wraps (review F11): a huge interval suppresses to the end of time.
