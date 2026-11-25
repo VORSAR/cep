@@ -37,8 +37,8 @@ type Descriptor struct {
 	MinArgs int
 	MaxArgs int
 	Null    NullRule
-	// Factory types the built arguments and gives the node; it reports E-TYPE-001 or E-FN-001 (nil for the
-	// kinds that are typed here and built in a later sprint).
+	// Factory types the built arguments and gives the node; it reports E-TYPE-001 or E-FN-001. It is nil only for a
+	// pattern-only callable, whose call Build types itself; Register refuses a nil Factory for any other kind.
 	Factory func(args []Expr, call model.Expr) (Expr, error)
 }
 
@@ -63,8 +63,15 @@ type Registry struct {
 // NewRegistry gives an empty registry.
 func NewRegistry() *Registry { return &Registry{descriptors: map[string]*Descriptor{}} }
 
-// Register adds d; a second registration of a name is an error.
+// Register adds d. It refuses a descriptor Build could not call (a nil Factory for any kind but PatternOnly, or
+// MinArgs above MaxArgs) and a second registration of a name.
 func (r *Registry) Register(d Descriptor) error {
+	switch {
+	case d.Factory == nil && d.Kind != PatternOnly:
+		return fmt.Errorf("expr: %s: a nil Factory; only a %s callable has none", d.Name, PatternOnly)
+	case d.MinArgs > d.MaxArgs:
+		return fmt.Errorf("expr: %s: MinArgs %d is above MaxArgs %d", d.Name, d.MinArgs, d.MaxArgs)
+	}
 	if _, dup := r.descriptors[d.Name]; dup {
 		return fmt.Errorf("expr: %s is already registered", d.Name)
 	}
