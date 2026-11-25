@@ -81,6 +81,7 @@ var objCases = []objCase{
 
 // TestObjectStoredCompact decodes each case through the real Decoder and compares the stored text.
 func TestObjectStoredCompact(t *testing.T) {
+	t.Parallel()
 	s := mustSchema(t, "O", event.ArrivalTime, req("o", event.TObject))
 	d := event.NewDecoder(s)
 	for _, c := range objCases {
@@ -102,6 +103,7 @@ func TestObjectStoredCompact(t *testing.T) {
 // replaces are the bytes an object's string replaces. "a\xffb\xed\xa0\x80\xe2\x82" decodes, as a string attribute,
 // to "a" U+FFFD "b" then five U+FFFD (P8, derived by hand as above), and inside an object to the same runes.
 func TestObjectMalformedUTF8AsString(t *testing.T) {
+	t.Parallel()
 	const bad = "a\xffb\xed\xa0\x80\xe2\x82"
 	const replaced = "a\uFFFDb\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD"
 	s := mustSchema(t, "SO", event.ArrivalTime, req("s", event.TString), req("o", event.TObject))

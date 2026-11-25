@@ -41,6 +41,7 @@ func bkFix(t *testing.T, raw string) string {
 // end and inside keys: the stored text equals the oracle, and the same string attribute read through P8 agrees on
 // every replacement.
 func TestBreakitGuardObjectCompactRandom(t *testing.T) {
+	t.Parallel()
 	sch, err := event.NewSchema("S", []event.Attr{{Name: "o", Type: event.TObject}, {Name: "s", Type: event.TString, Optional: true}}, event.ArrivalTime)
 	if err != nil {
 		t.Fatal(err)

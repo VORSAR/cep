@@ -156,8 +156,8 @@ var handCases = []hcase{
 	ok("string/plain", "S", `{"v":"alice"}`, vStr("alice")),
 	ok("string/empty", "S", `{"v":""}`, vStr("")),
 	ok("string/simple escapes", "S", `{"v":"a\"b\\c\/d\b\f\n\r\t"}`, vStr("a\"b\\c/d\b\f\n\r\t")),
-	ok("string/u escapes", "S", `{"v":"é中A"}`, vStr("é中A")),
-	ok("string/surrogate pair", "S", `{"v":"😀"}`, vStr("😀")),
+	ok("string/u escapes", "S", `{"v":"\u00e9\u4E2D\u0041"}`, vStr("é中A")),
+	ok("string/surrogate pair", "S", `{"v":"\ud83d\ude00"}`, vStr("😀")),
 	ok("string/lone high surrogate", "S", `{"v":"\ud83d"}`, vStr("�")),
 	ok("string/lone low surrogate", "S", `{"v":"\ude00x"}`, vStr("�x")),
 	ok("string/high then a non-surrogate escape", "S", `{"v":"\ud83dA"}`, vStr("�A")),
@@ -239,7 +239,7 @@ var handCases = []hcase{
 	ok("timestamp/leap day", "T", `{"ts":"2024-02-29T00:00:00Z"}`, vTs(ms20240229)).withTs(ms20240229),
 	ok("timestamp/year 1", "T", `{"ts":"0001-01-01T00:00:00Z"}`, vTs(ms00010101)).withTs(ms00010101),
 	ok("timestamp/year 9999", "T", `{"ts":"9999-12-31T23:59:59.999999999Z"}`, vTs(ms99991231)).withTs(ms99991231),
-	ok("timestamp/escaped text", "T", `{"ts":"2026-11-04T10:00:00Z"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
+	ok("timestamp/escaped text", "T", `{"ts":"2026-11-04T10\u003a00:00Z"}`, vTs(ms20261104T10)).withTs(ms20261104T10),
 	ok("timestamp/not the time attribute: Ts 0", "TA", `{"at":"2026-11-04T10:00:00Z"}`, vTs(ms20261104T10)),
 	bad("timestamp/a number is an error", "T", `{"ts":1762243200123}`, typ, "ts", "1762243200123"),
 	bad("timestamp/Feb 30", "T", `{"ts":"2026-02-30T00:00:00Z"}`, typ, "ts", `"2026-02-30`),
@@ -333,7 +333,7 @@ var handCases = []hcase{
 	ok("repeat/invalid then valid", "I", `{"n":"oops","n":5}`, vInt(5)),
 	ok("repeat/null then valid", "I", `{"n":null,"n":5}`, vInt(5)),
 	ok("repeat/nested earlier occurrence", "I", `{"n":{"deep":[1,{"x":null}]},"n":7}`, vInt(7)),
-	ok("repeat/escaped key repeats the plain one", "U", `{"user":"alice","user":"root"}`, vStr("root")),
+	ok("repeat/escaped key repeats the plain one", "U", `{"user":"alice","\u0075ser":"root"}`, vStr("root")),
 	bad("repeat/valid then invalid", "I", `{"n":5,"n":"oops"}`, typ, "n", `"oops"`),
 	bad("repeat/valid then null", "I", `{"n":5,"n":null}`, null, "n", "null"),
 	bad("repeat/an earlier occurrence is still syntax-checked", "I", `{"n":01,"n":5}`, syn, "", `1,"n"`),
@@ -343,14 +343,14 @@ var handCases = []hcase{
 	ok("unknown/counted per occurrence", "S", `{"v":"a","extra":1,"extra":{"x":[1]},"V":true}`, vStr("a")).withUnknown(3),
 	ok("unknown/nested at the limit", "S", `{"x":`+deep(9999)+`,"v":"a"}`, vStr("a")).withUnknown(1),
 	ok("unknown/malformed UTF-8 in the key", "S", "{\"v\":\"a\",\"k\xff\":1}", vStr("a")).withUnknown(1),
-	ok("unknown/escaped key matches a declared name", "S", `{"v":"a"}`, vStr("a")),
+	ok("unknown/escaped key matches a declared name", "S", `{"\u0076":"a"}`, vStr("a")),
 	bad("unknown/nested past the limit", "S", `{"x":`+deep(10000)+`,"v":"a"}`, syn, "", "").withOff(5 + 9999),
 	bad("unknown/names are case-sensitive", "S", `{"V":"a"}`, miss, "v", "}end"),
 
 	// text_invisibles (SPEC §4.2; §4.1 step 2)
 	ok("invisibles/ignored and noted", "S", `{"v":"a","text_invisibles":true}`, vStr("a")).withReserved(),
 	ok("invisibles/any JSON type", "S", `{"text_invisibles":{"x":[1,"y"]},"v":"a"}`, vStr("a")).withReserved(),
-	ok("invisibles/escaped key", "S", `{"v":"a","text_invisibles":1}`, vStr("a")).withReserved(),
+	ok("invisibles/escaped key", "S", `{"v":"a","text\u005finvisibles":1}`, vStr("a")).withReserved(),
 	ok("invisibles/repeated", "S", `{"v":"a","text_invisibles":1,"text_invisibles":2}`, vStr("a")).withReserved(),
 	ok("invisibles/case differs: unknown", "S", `{"v":"a","Text_Invisibles":true}`, vStr("a")).withUnknown(1),
 	ok("invisibles/declared slot absent is false", "Inv", `{"s":"a"}`, vBool(false), vStr("a")),
@@ -432,6 +432,26 @@ func TestDecodeCases(t *testing.T) {
 				t.Errorf("Decode(%s) Decoded = %+v; want %+v", clip(b), got.dec, want)
 			}
 		})
+	}
+}
+
+// TestTheEscapeRowsSpellTheirEscapes: each hand-written row named for an escape holds its backslash-u escapes as
+// text, so it reaches appendUnicodeEscape, record's escaped-key path or timestampOf's unescape.
+func TestTheEscapeRowsSpellTheirEscapes(t *testing.T) {
+	t.Parallel()
+	rows := map[string]int{"string/u escapes": 3, "string/surrogate pair": 2, "timestamp/escaped text": 1,
+		"repeat/escaped key repeats the plain one": 1, "unknown/escaped key matches a declared name": 1,
+		"invisibles/escaped key": 1}
+	for _, c := range handCases {
+		if want, ok := rows[c.name]; ok {
+			if got := strings.Count(c.in, `\u`); got != want {
+				t.Errorf("%s: %q holds %d backslash-u escapes; want %d", c.name, c.in, got, want)
+			}
+			delete(rows, c.name)
+		}
+	}
+	for name := range rows {
+		t.Errorf("no hand-written row %q", name)
 	}
 }
 

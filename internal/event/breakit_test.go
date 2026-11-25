@@ -70,6 +70,7 @@ func breakitPayloads() []string {
 // Guard (held): every edge payload agrees with design note §4.1's oracle on every test schema, and every
 // rejection has §4.3's shape.
 func TestBreakitDecodeEdgesAgreeWithOracle(t *testing.T) {
+	t.Parallel()
 	schemas := testSchemas(t)
 	names := make([]string, 0, len(schemas))
 	for n := range schemas {
@@ -92,6 +93,7 @@ func TestBreakitDecodeEdgesAgreeWithOracle(t *testing.T) {
 // Guard (held): a syntax fault's Offset is the offending byte, or len(b) for empty or cut-off input (§4.3). The
 // differential checks only bounds for DecodeSyntax, so each is written out here.
 func TestBreakitSyntaxOffsets(t *testing.T) {
+	t.Parallel()
 	d := event.NewDecoder(testSchemas(t)["Opt"])
 	for in, want := range map[string]int{
 		``: 0, `   `: 3, `{`: 1, `{"v"`: 4, `{"v":`: 5, `{"v":1`: 6, `{"v":"ab`: 8, `{"v":"a\`: 8, `{"v":"\u12`: 10,
@@ -109,6 +111,7 @@ func TestBreakitSyntaxOffsets(t *testing.T) {
 
 // Guard (held): one Decoder shared by many goroutines under -race agrees with a serial run (§4.4).
 func TestBreakitDecoderSharedConcurrently(t *testing.T) {
+	t.Parallel()
 	s := testSchemas(t)["timed"]
 	d := event.NewDecoder(s)
 	payloads := breakitPayloads()
@@ -133,6 +136,7 @@ func TestBreakitDecoderSharedConcurrently(t *testing.T) {
 				for j := range got.values {
 					if !sameValue(got.values[j], want[i].values[j]) {
 						errs <- p
+						break
 					}
 				}
 			}
