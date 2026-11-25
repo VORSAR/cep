@@ -26,8 +26,8 @@ func TestBreakitANegativeDurationOverrideInABoundSlotIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	app, diags := validate.Check(res.App, validate.Options{Overrides: map[string]model.Literal{"D": {Kind: model.LitDuration, Ms: -5000}}})
-	if len(diags) == 0 {
-		t.Fatalf("no diagnostic; output first every is %+v — want a negative bound refused at deploy, as a zero one is (E-DUR-003)", app.Rules[0].OutputFirstEvery)
+	_, diags := validate.Check(res.App, validate.Options{Overrides: map[string]model.Literal{"D": {Kind: model.LitDuration, Ms: -5000}}})
+	if len(diags) != 1 || diags[0].Code != "E-DUR-003" || diags[0].Lint {
+		t.Fatalf("diagnostics %+v; want exactly one E-DUR-003, a negative bound refused at deploy as a zero one is", diags)
 	}
 }
