@@ -63,11 +63,12 @@ func TestOneFindingPerDefect(t *testing.T) {
 			"E-DUR-003"},
 		{"allow 0: no E-DUR-003", "rule P intent 'x' partition by k of S ttl 1 hour from every a = S within 5 min after match skip past last late events allow 0 ms select a.k insert into Out;\n",
 			"E-LATE-002"},
-		{"!= over an optional attribute in an absence: no E-NULL-002", "rule P intent 'x' partition by k of S, k of R ttl 1 hour from every a = S and not R[k != 'x' and n > 1] for 1 min within 5 min after match skip past last late events drop select a.k insert into Out;\n",
+		{"!= over an optional attribute in an absence: no E-NULL-002", "rule P intent 'x' partition by k of S, k of R ttl 1 hour from every a = R and not S[note != 'x'] for 1 min within 5 min after match skip past last late events drop select a.k insert into Out;\n",
+			"E-NULL-001"},
+		{"an unknown attribute in an absence filter: one E-NAME-001", "rule P intent 'x' partition by k of S, k of R ttl 1 hour from every a = S and not R[k != 'x' and n > 1] for 1 min within 5 min after match skip past last late events drop select a.k insert into Out;\n",
 			"E-NAME-001"},
 		{"an unknown from stream: nothing about its filter or select", "rule P intent 'x' from Nope[x > 1] select y insert into Out;\n", "E-NAME-001"},
 		{"an undeclared param in a filter: one finding", "rule P intent 'x' from S[n > ${nope}] select k insert into Out;\n", "E-PARAM-001"},
-		{"a bad param default: reported once, at the declaration", "param bad int = 'x';\nrule P intent 'x' from S[n > ${bad}] select k insert into Out;\n", "E-PARAM-001"},
 		{"a composite-key in: no type error", "rule P intent 'x' from S[k in Pair] select k insert into Out;\n", "E-TBL-001"},
 		{"count() in a filter: no type error", "rule P intent 'x' from S[count() > 1] select k insert into Out;\n", "E-FN-001"},
 		{"a capture shadowing a stream reads as a capture", "rule P intent 'x' partition by k of S ttl 1 hour from every S = S within 5 min after match skip past last late events drop select S.k insert into Out;\n",
@@ -84,6 +85,14 @@ func TestOneFindingPerDefect(t *testing.T) {
 			}
 		})
 	}
+	t.Run("a bad param default: reported once, at the declaration", func(t *testing.T) {
+		t.Parallel()
+		src := base + "param bad int = 'x';\nrule P intent 'x' from S[n > ${bad}] select k insert into Out;\n"
+		_, diags := Check(parse(t, src), Options{})
+		if g, want := strings.Join(codesAt(diags), " "), "E-PARAM-001@"+posOf(t, src, "param bad", 1, 0); g != want {
+			t.Fatalf("got [%s], want [%s]", g, want)
+		}
+	})
 	t.Run("a version this engine does not read stops the check", func(t *testing.T) {
 		t.Parallel()
 		src := strings.Replace(base, "cep/0.1", "cep/0.2", 1) + "rule P intent 'x' from Nope select k insert into Out;\n"
@@ -254,7 +263,10 @@ func TestOverrides(t *testing.T) {
 	if lit := out.Rules[0].Body.Source.Filter.Args[1].Lit; lit.Kind != model.LitInt || lit.Int != 9 {
 		t.Fatalf("the copy's slot holds %+v, not the override", lit)
 	}
-	after, _ := app.MarshalCanonical()
+	after, err := app.MarshalCanonical()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(before) != string(after) {
 		t.Fatal("Check wrote the App it was given")
 	}
@@ -274,8 +286,8 @@ func TestOverrides(t *testing.T) {
 func TestALintDoesNotRefuse(t *testing.T) {
 	t.Parallel()
 	out, diags := Check(parse(t, base+"rule P intent 'x' from S[note != 'x'] select k insert into Out;\n"), Options{})
-	if len(diags) != 1 || !diags[0].Lint || out == nil {
-		t.Fatalf("got %v, app %v", diags, out != nil)
+	if len(diags) != 1 || diags[0].Code != "E-NULL-002" || !diags[0].Lint || out == nil {
+		t.Fatalf("got %v, app %v; want one finding, the lint E-NULL-002, and the app", diags, out != nil)
 	}
 }
 
