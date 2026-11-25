@@ -4,6 +4,7 @@ import (
 	"context"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/vorsar/cep/internal/event"
@@ -122,6 +123,8 @@ func TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns(t *testing.T
 		t.Fatal(err)
 	}
 	held := &rtHeld{entered: make(chan struct{}), release: make(chan struct{})}
+	release := sync.OnceFunc(func() { close(held.release) })
+	t.Cleanup(release) // registered after the Close cleanup, so it runs first: a failed test does not hold Close
 	app := cgApp(t, func(event.Event) error { return nil })
 	app.Sinks, app.Recorder, app.Tables = nil, held, table.NewSet([]*table.Table{tb})
 	id, err := r.Add(ctx, app)
@@ -158,7 +161,7 @@ func TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns(t *testing.T
 		t.Fatalf("the recording ended at write %d into a queue of %d behind a blocked Recorder, want write %d",
 			writes, queue, queue+1)
 	}
-	close(held.release)
+	release()
 	if err := r.Close(ctx); err != nil { // nil: every goroutine has returned, the router too, so turns is read safely
 		t.Fatalf("Close: %v", err)
 	}

@@ -34,5 +34,32 @@
   "replace": "\t\tcase q.q <- it:\n\t\t\treturn true\n\t\tdefault:\n\t\t}\n\t}\n\treturn false\n",
   "test": "TestATurnThatQueuesTheRecordCountsIt",
   "pkg": "./internal/runtime"
+ },
+ {
+  "id": "recheck-P5",
+  "note": "P5: holdDraining's first move (to draining, before the run lock) dropped: the spin fails at its cap, not at the package timeout",
+  "file": "internal/runtime/drain.go",
+  "find": "\ta.markDraining()\n\ta.runMu.Lock()\n",
+  "replace": "\ta.runMu.Lock()\n",
+  "test": "TestActivateOvertakenByADrainThatQueuedNothingLeavesTheAppTakingInput",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "recheck-P6",
+  "note": "P6: turn reports the record queued when it was not (its final return false made true): the two-turns test red at once; its cleanup's Close can still wait out the 60 s ceiling, on the drain marker this plant drops, not on the held Recorder",
+  "file": "internal/runtime/recorder.go",
+  "find": "\t\tdefault:\n\t\t}\n\t}\n\treturn false\n}\n",
+  "replace": "\t\tdefault:\n\t\t}\n\t}\n\treturn true\n}\n",
+  "test": "TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns",
+  "pkg": "./internal/runtime"
+ },
+ {
+  "id": "recheck-P6b",
+  "note": "P6b: each recording queue one slot larger: the two-turns test fails before its success path releases the held Recorder, and its cleanup releases it, so Close does not wait the 60 s ceiling",
+  "file": "internal/runtime/app.go",
+  "find": "\tn := configured\n",
+  "replace": "\tn := configured + 1\n",
+  "test": "TestARecorderBlockedInItsRecorderEndsTheRecordingAfterTwoTurns",
+  "pkg": "./internal/runtime"
  }
 ]

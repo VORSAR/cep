@@ -3,14 +3,35 @@ package runtime
 import (
 	"context"
 	"errors"
-	goruntime "runtime"
 	"testing"
+	"time"
 
 	"github.com/vorsar/cep/internal/event"
 )
 
 // dhRounds is each black-box race's repetitions within one test.
 const dhRounds = 500
+
+// dhSpin caps the wait for a Drain's first move, which it makes at once: a missing move fails in seconds, not at the
+// package's timeout.
+const dhSpin = 5 * time.Second
+
+// dhAwaitDraining waits, while the test holds a.runMu, for a Drain blocked on that lock to have made its first move
+// (the phase to draining, before the lock), and reports whether it came. If it never comes it unlocks runMu, so the
+// Drain and the cleanup's Close can finish; the caller then fails with dhNoFirstMove.
+func dhAwaitDraining(ctx context.Context, a *appState) bool {
+	wctx, cancel := context.WithTimeout(ctx, dhSpin)
+	defer cancel()
+	if !cgUntil(wctx, func() bool { return appPhase(a.phase.Load()) == phaseDraining }) {
+		a.runMu.Unlock()
+		return false
+	}
+	return true
+}
+
+// dhNoFirstMove is the failure when dhAwaitDraining's move never came.
+const dhNoFirstMove = "a Drain blocked on the run lock never moved the phase to draining (holdDraining's first move, " +
+	"before the lock)"
 
 // dhStuckRun starts one Run on app id that ends ctx's cancel once Drain has cancelled the sources, then stays until
 // release is closed: a Drain with that ctx queues the quiet item and then meets its deadline on a stuck run.
@@ -34,15 +55,17 @@ func TestActivateOvertakenByADrainThatQueuedNothingLeavesTheAppTakingInput(t *te
 	}
 	a := r.appList()[id]
 	drained := make(chan error, 1)
-	r.activateHold = func() {
+	moved := false
+	r.activateHold = func() { // no t.Fatal in here: Activate must reach its last step, or Close waits on its flushers
 		a.runMu.Lock()
 		go func() { _, err := r.Drain(ldExpired(), id); drained <- err }()
-		for appPhase(a.phase.Load()) != phaseDraining {
-			goruntime.Gosched()
-		}
+		moved = dhAwaitDraining(ctx, a)
 	}
 	if err := r.Activate(ctx, id); err != nil {
 		t.Fatal(err)
+	}
+	if !moved {
+		t.Fatal(dhNoFirstMove)
 	}
 	a.runMu.Unlock()
 	if err := <-drained; err == nil {
@@ -197,8 +220,8 @@ func TestADrainThatMarkedBeforeAReleaseRestoredThePhaseStillHoldsItAtDraining(t 
 	a.runMu.Lock()
 	held := make(chan struct{})
 	go func() { a.holdDraining(); close(held) }()
-	for appPhase(a.phase.Load()) != phaseDraining { // the Drain's first move, made before the lock
-		goruntime.Gosched()
+	if !dhAwaitDraining(ctx, a) { // the Drain's first move, made before the lock
+		t.Fatal(dhNoFirstMove)
 	}
 	a.restorePhase() // what a last release does under the lock
 	if p := appPhase(a.phase.Load()); p != phaseActive {
