@@ -15,11 +15,16 @@ import (
 // a hang or a wrong round trip is a crash. The corpus is the seed.
 func FuzzParse(f *testing.F) {
 	for _, pattern := range corpus {
-		files, _ := filepath.Glob(pattern)
+		files, err := filepath.Glob(pattern)
+		if err != nil {
+			f.Fatalf("seed pattern %q: %v", pattern, err)
+		}
 		for _, path := range files {
-			if data, err := os.ReadFile(path); err == nil {
-				f.Add(string(data))
+			data, err := os.ReadFile(path)
+			if err != nil {
+				f.Fatal(err)
 			}
+			f.Add(string(data))
 		}
 	}
 	f.Add("")
