@@ -5,6 +5,7 @@ package cep_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -65,8 +66,8 @@ func TestDeployReportsEveryDiagnosticAtOnce(t *testing.T) {
 			t.Errorf("diagnostic %d: %+v; want %+v", i, d, w)
 		}
 	}
-	if !strings.Contains(de.Error(), "2 finding(s)") && !strings.Contains(de.Error(), "finding(s)") {
-		t.Errorf("Error() %q; want the count", de.Error())
+	if want := fmt.Sprintf(": %d finding(s):", len(nonLint)); !strings.Contains(de.Error(), want) {
+		t.Errorf("Error() %q; want %q", de.Error(), want)
 	}
 	_, perr := parser.Parse("bad", "language cep/0.1;\nstream (")
 	var pe *parser.Error
@@ -312,8 +313,8 @@ func TestWithTableRowsAreVisibleToTheFirstEvent(t *testing.T) {
 		t.Errorf("outputs %+v; want exactly b (a was in T before the first event)", recs)
 	}
 	bad := func(w cepio.RowWriter) error { w.SetInt(w.AttrIndex("v"), 1); return nil }
-	if _, err := r.Deploy(ctx, "tbl", fcTableSrc, bind, cep.WithTableRows("T", bad)); err == nil || !strings.Contains(err.Error(), "k") {
-		t.Errorf("WithTableRows with the key unset: %v; want a deploy error naming k", err)
+	if _, err := r.Deploy(ctx, "tbl", fcTableSrc, bind, cep.WithTableRows("T", bad)); err == nil || !strings.Contains(err.Error(), "\"k\"") {
+		t.Errorf("WithTableRows with the key unset: %v; want a deploy error naming \"k\"", err)
 	}
 }
 
