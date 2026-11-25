@@ -46,13 +46,14 @@ const (
 // purge as a pattern operator would, as a pure function of (key ordinal, item), never of the clock. It records the
 // callback sequence and checks the walk's invariants as it goes.
 type bkOp struct {
-	t       *testing.T
-	rc      *clock.RuleClock
-	log     []string
-	pos     [2]int64 // (instant, phase) of the last item: non-decreasing when no callback schedules into the past
-	posSet  bool
-	nEvents int
-	seen    map[evKey]int
+	t        *testing.T
+	rc       *clock.RuleClock
+	log      []string
+	pos      [2]int64 // (instant, phase) of the last item: non-decreasing when no callback schedules into the past
+	posSet   bool
+	nEvents  int
+	seen     map[evKey]int
+	discards map[[2]uint64]int64 // each pending Discard's due by (key ordinal, ref): its place in the walk
 }
 
 func (o *bkOp) at(instant int64, phase int, what string) {
@@ -63,6 +64,31 @@ func (o *bkOp) at(instant int64, phase int, what string) {
 			what, instant, phase, o.pos[0], o.pos[1])
 	}
 	o.pos, o.posSet = p, true
+}
+
+// schedule schedules a timer on in, noting a Discard's due so OnDiscard can place it in the walk.
+func (o *bkOp) schedule(in *clock.Instance, due int64, k clock.TimerKind, ref uint64) {
+	in.Schedule(due, k, ref)
+	if k == clock.Discard {
+		o.discards[[2]uint64{in.Ordinal(), ref}] = due // a second Schedule replaces it, as the clock does
+	}
+}
+
+// cancelDiscard cancels a pending Discard and forgets its due.
+func (o *bkOp) cancelDiscard(in *clock.Instance, ref uint64) {
+	if in.Cancel(clock.Discard, ref) {
+		delete(o.discards, [2]uint64{in.Ordinal(), ref})
+	}
+}
+
+// cancelAll is the purge's reset: every pending timer of the key goes, its Discards' dues with it.
+func (o *bkOp) cancelAll(in *clock.Instance) {
+	in.CancelAll()
+	for k := range o.discards {
+		if k[0] == in.Ordinal() {
+			delete(o.discards, k)
+		}
+	}
 }
 
 func (o *bkOp) callbacks() clock.Callbacks {
@@ -82,10 +108,10 @@ func (o *bkOp) callbacks() clock.Callbacks {
 			kinds := []clock.TimerKind{clock.Completion, clock.CronClose, clock.DelayDue, clock.BatchClose}
 			in.Schedule(e.Ts+int64((h>>8)%3), kinds[(h>>16)%4], (h>>20)%2)
 			if (h>>24)%2 == 0 {
-				in.Schedule(e.Ts+int64((h>>28)%3), clock.Discard, e.Seq)
+				o.schedule(in, e.Ts+int64((h>>28)%3), clock.Discard, e.Seq)
 			}
 			if (h>>32)%3 == 0 {
-				in.Cancel(clock.Discard, e.Seq-1)
+				o.cancelDiscard(in, e.Seq-1)
 			}
 		},
 		OnTimers: func(in *clock.Instance, fires []clock.Timer) {
@@ -109,11 +135,11 @@ func (o *bkOp) callbacks() clock.Callbacks {
 			for _, tm := range fires {
 				switch {
 				case tm.Kind == clock.TTLPurge:
-					in.CancelAll() // the purge's reset (D1); buffered events stay
+					o.cancelAll(in) // the purge's reset (D1); buffered events stay
 				case tm.Kind == clock.Completion && tm.Ref == 0:
 					in.Schedule(tm.Due+1, clock.CronClose, 7) // a follow-up that joins the walk in order
 				case tm.Kind == clock.CronClose && tm.Ref == 1:
-					in.Cancel(clock.Discard, uint64(tm.Due)) // cancel from inside a group
+					o.cancelDiscard(in, uint64(tm.Due)) // cancel from inside a group
 				}
 			}
 		},
@@ -123,6 +149,16 @@ func (o *bkOp) callbacks() clock.Callbacks {
 			}
 			o.log = append(o.log, fmt.Sprintf("D k%d", in.Ordinal()))
 			for _, r := range refs {
+				key := [2]uint64{in.Ordinal(), r}
+				if due, ok := o.discards[key]; !ok {
+					o.t.Errorf("discard r%d of key %d: no pending Discard with that ref", r, in.Ordinal())
+				} else {
+					if due >= o.rc.Clock() && o.rc.Clock() != math.MaxInt64 { // owner D1: clock > due
+						o.t.Errorf("discard r%d due %d fired with clock %d (needs clock > due, or +∞)", r, due, o.rc.Clock())
+					}
+					o.at(due, bkPhaseStrict, "discard")
+					delete(o.discards, key)
+				}
 				o.log = append(o.log, fmt.Sprintf("  r%d", r))
 			}
 		},
@@ -178,14 +214,14 @@ func bkRun(t *testing.T, sc bkScenario, targets []int64) ([]string, *bkOp, []*cl
 	for i := range ins {
 		ins[i] = rc.NewInstance()
 	}
-	op := &bkOp{t: t, rc: rc, seen: map[evKey]int{}}
+	op := &bkOp{t: t, rc: rc, seen: map[evKey]int{}, discards: map[[2]uint64]int64{}}
 	for _, b := range sc.events {
 		if ins[b.key].Buffer(b.e) {
 			t.Fatalf("event %+v construct-late on a fresh clock at −∞", keyOf(b.e))
 		}
 	}
 	for _, tm := range sc.timers {
-		ins[tm.key].Schedule(tm.due, tm.kind, tm.ref)
+		op.schedule(ins[tm.key], tm.due, tm.kind, tm.ref)
 	}
 	for _, x := range targets {
 		to(rc, x, 0)
@@ -551,27 +587,27 @@ func TestBreakit_StrictTimerAtMaxInt64FiresAtEndOfInput(t *testing.T) {
 // ---- the registry against a direct model of design §1 ----
 
 type bkStreamModel struct {
-	spec                       clock.StreamSpec
-	hasMax                     bool
-	maxTs, lastTs, lastArrival int64
-	floor, vfloor, punct       int64
-	ended                      bool
+	spec                        clock.StreamSpec
+	hasMax                      bool
+	maxTs, lastTs, lastArrival  int64
+	floor, vfloor, punct, drain int64
+	ended                       bool
 }
 
 func (m *bkStreamModel) contrib() int64 {
 	if m.ended {
 		return posInf
 	}
-	c := max(m.floor, m.vfloor, m.punct)
+	c := max(m.floor, m.vfloor, m.punct, m.drain)
 	if m.hasMax {
 		c = max(c, m.maxTs-m.spec.Delay)
 	}
 	return c
 }
 
-// TestBreakit_RegistryMatchesTheModel: random events (out of order, stream-late), ticks, virtual time and
-// punctuations over random specs; after every operation each contribution equals design §1's formulas
-// (admission, quiet floor from the largest event time at wall speed, virtual floor, punctuation), never falls,
+// TestBreakit_RegistryMatchesTheModel: random events (out of order, stream-late), ticks, virtual time,
+// punctuations and drains over random specs; after every operation each contribution equals design §1's formulas
+// (admission, quiet floor from the largest event time at wall speed, virtual floor, punctuation, drain level), never falls,
 // Moved is set exactly when it rose, buffers are appended to and not reset; the rule clock is the clamped min.
 func TestBreakit_RegistryMatchesTheModel(t *testing.T) {
 	for seed := uint64(1); seed <= 2000; seed++ {
@@ -584,7 +620,7 @@ func TestBreakit_RegistryMatchesTheModel(t *testing.T) {
 			specs[i] = clock.StreamSpec{Name: fmt.Sprint(i), Delay: int64(r.intn(4)), IdleAfter: int64(r.intn(4)),
 				Derived: r.intn(6) == 0}
 			ms[i] = &bkStreamModel{spec: specs[i], lastTs: start, lastArrival: start, floor: negInf, vfloor: negInf,
-				punct: negInf}
+				punct: negInf, drain: negInf}
 		}
 		reg := clock.NewStreamRegistry(specs, start)
 		inputs := []int{}
@@ -644,7 +680,7 @@ func TestBreakit_RegistryMatchesTheModel(t *testing.T) {
 		ops := 5 + r.intn(25)
 		for k := 0; k < ops; k++ {
 			wall += int64(r.intn(4))
-			switch op := r.intn(10); {
+			switch op := r.intn(11); {
 			case op < 5:
 				sid := r.intn(n)
 				m := ms[sid]
@@ -693,7 +729,7 @@ func TestBreakit_RegistryMatchesTheModel(t *testing.T) {
 					}
 				}
 				check(reg.ObserveVirtual(v, nil))
-			default:
+			case op < 10:
 				sid := r.intn(n)
 				w := wall - int64(r.intn(10))
 				trace = append(trace, fmt.Sprintf("punct(s%d,%d)", sid, w))
@@ -704,6 +740,20 @@ func TestBreakit_RegistryMatchesTheModel(t *testing.T) {
 					advs = append(advs, adv)
 				}
 				check(advs)
+			default:
+				trace = append(trace, "drain")
+				to, seen := negInf, false
+				for _, m := range ms {
+					if m.hasMax {
+						to, seen = max(to, m.maxTs+1), true
+					}
+				}
+				if seen {
+					for _, m := range ms {
+						m.drain = max(m.drain, to)
+					}
+				}
+				check(reg.Drain(nil))
 			}
 		}
 		trace = append(trace, "eoi")
@@ -725,13 +775,44 @@ func TestBreakit_RegistryMatchesTheModel(t *testing.T) {
 // the walk delivers events, every kind of timer, discards and purges, and same-instant ties across keys.
 func TestBreakit_GranularityScenariosAreNonTrivial(t *testing.T) {
 	counts := map[byte]int{}
+	kinds := map[clock.TimerKind]int{}
+	ties := 0
 	for seed := uint64(0); seed < 3000; seed++ {
 		log, _, _ := bkRun(t, bkGen(seed), []int64{40})
+		var lastAt, lastKey int64
+		have := false
 		for _, l := range log {
 			counts[l[0]]++
+			var k, at, x, y int64
+			switch l[0] {
+			case 'E':
+				if _, err := fmt.Sscanf(l, "E k%d s%d t%d q%d", &k, &x, &at, &y); err != nil {
+					t.Fatalf("seed %d: unreadable log line %q: %v", seed, l, err)
+				}
+			case 'T':
+				var kind int64
+				if _, err := fmt.Sscanf(l, "T k%d d%d K%d r%d", &k, &at, &kind, &y); err != nil {
+					t.Fatalf("seed %d: unreadable log line %q: %v", seed, l, err)
+				}
+				kinds[clock.TimerKind(kind)]++
+			default:
+				continue // a discard's lines carry no instant
+			}
+			if have && at == lastAt && k != lastKey {
+				ties++
+			}
+			lastAt, lastKey, have = at, k, true
 		}
 	}
 	if counts['E'] < 10000 || counts['T'] < 10000 || counts['D'] < 1000 {
 		t.Fatalf("too little exercised: %v", counts)
+	}
+	for _, k := range []clock.TimerKind{clock.Completion, clock.CronClose, clock.DelayDue, clock.BatchClose, clock.TTLPurge} {
+		if kinds[k] < 100 {
+			t.Errorf("timer kind %d fired %d times across the seeds; want at least 100 (kinds %v)", k, kinds[k], kinds)
+		}
+	}
+	if ties < 100 {
+		t.Errorf("%d same-instant walk items from two different keys; want at least 100", ties)
 	}
 }
