@@ -1,4 +1,4 @@
-# cep
+# Vorsar CEP
 
 [![build](https://github.com/VORSAR/cep/actions/workflows/gate.yml/badge.svg?branch=main)](https://github.com/VORSAR/cep/actions/workflows/gate.yml?query=branch%3Amain)
 [![coverage](https://img.shields.io/badge/coverage%20floor-90%25%20per%20package-brightgreen)](docs/development/testing.md)
