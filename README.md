@@ -3,44 +3,28 @@
 [![build](https://github.com/VORSAR/cep/actions/workflows/gate.yml/badge.svg?branch=main)](https://github.com/VORSAR/cep/actions/workflows/gate.yml?query=branch%3Amain)
 [![coverage](https://img.shields.io/badge/coverage%20floor-90%25%20per%20package-brightgreen)](docs/development/testing.md)
 
-cep is a complex event processing engine written in Go. You give it streams of
-events and a set of rules, and it tells you when a pattern you care about shows
-up. Think "this happened, then that happened within five minutes, and this other
-thing never happened in between."
+When an AI agent is attacked or starts behaving badly, it's usually found hours,
+days or even weeks later. By then the data has left and the damage is done.
+cep is built to catch it while it's happening, so you can stop the agent in
+time.
 
-We're building it for one job first: catching attacks on and by AI agents. Most
-guardrails look at one request at a time, but many real attacks are made of
-steps that each look harmless on their own. An agent reads from a sensitive
-store. A few minutes later it sends data somewhere it shouldn't. Nobody approved
-it. Only the sequence gives it away, and watching for sequences over time is
-exactly what a CEP engine does.
+## The gap
+
+Companies now run AI agents at scale, and their guardrails check one request at
+a time. That misses attacks made of steps that each look harmless: an agent
+reads a sensitive file, then minutes later sends data somewhere nobody
+approved. The logs that would show it land in a SIEM, where someone reads them
+after the fact. **Nothing watches what agents do as a sequence, live, close
+enough to step in.**
+
+cep does. It's an event processing engine written in Go that matches patterns
+like "this, then that, within five minutes, and no approval in between" as the
+events arrive, so you can respond right away: pause the agent, revoke its
+token, or hold its next step until a human approves it.
 
 cep is the correlation core of Vorsar's detection and response platform for AI
 agents. The engine itself stays general purpose, and it's Apache-2 licensed.
-
-## Why another CEP engine
-
-The mature CEP engines run on the JVM, which makes them awkward to put where
-agent traffic actually flows: inside gateways, sidecars and collectors. Go has
-stream processors, but we couldn't find a maintained one that can say "A
-followed by B within T, and no C". That's the gap cep is meant to fill.
-
-What we care about:
-
-- **It lives inside your program.** Import the library, deploy rules, push
-  events, get detections back. No server, no cluster, no network hop. A small
-  static binary for people who'd rather not write Go comes later.
-- **Correct before fast or feature-rich.** Event time, late events and
-  out-of-order input are handled on purpose, and replay is deterministic: the
-  same input gives the same output, every time. A security engine that gets a
-  pattern wrong once doesn't get trusted again.
-- **A rule language people already know.** It follows Siddhi's streaming SQL,
-  tidied up, with its known gaps fixed. Anything cep can't run is rejected when
-  you deploy it, with a line and column, rather than quietly doing the wrong
-  thing.
-- **LLMs are optional.** The plan is to let a model judge the few matches the
-  rules have already narrowed down. Everything works without one, and the hot
-  path never waits on a model call.
+It's also early: [Where it stands](#where-it-stands) says what runs today.
 
 ## A worked example: an app nobody registered
 
@@ -124,8 +108,9 @@ events and prints the alert that comes out.
 The consent check above looks at one event at a time. The rule the first
 milestone is built around looks at a sequence. An agent reads something
 sensitive, then sends data to a destination that isn't approved, within five
-minutes, and no human approves it in between. When that happens, cep disables
-the agent through an IAM webhook and emails the security team.
+minutes, and no human approves it in between. When that happens, the plan is
+for cep to disable the agent through an IAM webhook and email the security
+team.
 
 ```
 rule AgentKillSwitch
@@ -143,6 +128,32 @@ This one doesn't run yet. cep refuses it at deploy time with "not built yet",
 because pattern rules (`->`, `not ... for`, `within`) are the next piece of
 work. The full file is
 [docs/language/examples/01-agent-kill-switch.cep](docs/language/examples/01-agent-kill-switch.cep).
+
+## What you get
+
+It runs right next to your agents. To act in milliseconds, the check has to sit where
+agent traffic already flows: inside the gateway, sidecar or collector, in the
+same process, with no extra hop. You can import cep as a Go library, or run it
+as its own small service right beside your agents. Go has stream processors, but we couldn't find a maintained one
+that can say "A followed by B within T, and no C", which is why cep exists.
+
+- **Inside your program, or on its own.** Import the library and cep runs in
+  your process: deploy rules, push events, get detections back, with no server
+  and no network hop. Or run it as a separate deployment: a single small binary
+  that takes your rule files and a config file, and fits in a sidecar, a
+  container or a plain server. You don't need to write any Go for that. The
+  library works today; the standalone binary is coming in the first release.
+- **Correct before fast or feature-rich.** Event time, late events and
+  out-of-order input are handled on purpose, and replay is deterministic: the
+  same input gives the same output, every time. A security engine that gets a
+  pattern wrong once doesn't get trusted again.
+- **A rule language that reads like SQL.** It follows Siddhi's streaming SQL,
+  tidied up, with its known gaps fixed. Anything cep can't run is rejected when
+  you deploy it, with a line and column, rather than quietly doing the wrong
+  thing.
+- **LLMs are optional.** The plan is to let a model judge the few matches the
+  rules have already narrowed down. Everything works without one, and the hot
+  path never waits on a model call.
 
 ## Where it stands
 
