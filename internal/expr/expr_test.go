@@ -492,8 +492,11 @@ func TestRegistryHoldsExactlyAppendixF(t *testing.T) {
 			t.Fatalf("got %v, want %v", got, want)
 		}
 	}
-	if err := expr.Builtins().Register(expr.Descriptor{Name: "abs"}); err == nil {
-		t.Fatal("a second registration of a name was accepted")
+	// A shape Register accepts, so the refusal can only be the duplicate name's.
+	first := func(args []expr.Expr, _ model.Expr) (expr.Expr, error) { return args[0], nil }
+	again := expr.Descriptor{Name: "abs", Kind: expr.Scalar, MinArgs: 1, MaxArgs: 1, Factory: first}
+	if err, want := expr.Builtins().Register(again), "expr: abs is already registered"; err == nil || err.Error() != want {
+		t.Fatalf("a second registration of abs: Register = %v, want %q", err, want)
 	}
 	if d, ok := expr.Builtins().Lookup("count"); !ok || d.Kind != expr.Aggregate {
 		t.Fatalf("count: %+v %v", d, ok)
