@@ -1649,3 +1649,9 @@ After [the plan check](s1-1c-11-plan-check.md) v1 and its blind reviews ([archit
    - Rejected: sharding the nets into many rows, each with a pinned process count.
 6. **Burn-in: three consecutive green dispatched nightlies before each of the sprint's two pull requests merges,** each run's id and job times in the record.
    - Rejected: one.
+
+Then, at G0 (the owner, the same day, three answers, all as recommended): main's CI on 9b62eedf is green (the owner's report).
+7. **Lane C starts now, beside the design note:** it barely depends on the note, and its row budgets are measured inside the lane; lane M and wave 2 wait for the note's blind review.
+   - Rejected: the design note first.
+8. **`s1-1c-11/integration` is pushed as it grows,** without force, after each verified step; no pull request until a wave is done. The dispatched nightlies of the burn-in run on it.
+   - Rejected: asking before each push.
