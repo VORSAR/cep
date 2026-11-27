@@ -58,10 +58,11 @@ func (rt *router) remove(it item) {
 		it.reply <- reply{err: ErrRemoved} // a second removal, or one racing Close (break-it B1)
 		return
 	}
-	// An activated app is removed only once its drain is complete; the remove step's releases rely on it: the
-	// recorder's release of its queue at its stop (every record is queued before the stop), and the release of the
-	// tables' rows (no event, tick or drain walk of the app follows its drain, so no shard is handed a snapshot after
-	// mRemove).
+	// An activated app is removed only once its drain is complete, so no event, tick or drain walk of the app follows
+	// this step. Two releases rely on that: the recorder's release of its queue at its stop (no such walk's record is
+	// queued after the stop), and the tables' rows being unreachable when Remove returns (no snapshot of them is taken
+	// after this step, so every walk that holds one is ahead of mRemove on its shard). Release's safety does not rely
+	// on it (completeRemove says why).
 	if a.activated && !(a.drained && a.drainRes != nil) {
 		it.reply <- reply{err: fmt.Errorf("%w (app %d)", ErrDrainIncomplete, it.app)}
 		return
@@ -161,8 +162,9 @@ func (rt *router) completeRemove(w *installWait) {
 	// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4). The starting rows go too: only the
 	// activation step read them, and it refuses a removing app (owner, 2026-11-25; PR 2's review PR2A-3, PR2Q-10).
 	// The tables' rows go, but not their Set: TableWrite's check reads its declarations past the gate, so Release
-	// empties each table and keeps them (owner, 2026-11-27; PR 3's review PR3A-2). Safe: the router is the tables'
-	// only writer and their only snapshot taker, and every shard dropped the app's walks at mRemove, acked before here.
+	// empties each table and keeps them (owner, 2026-11-27; PR 3's review PR3A-2). Safe: Release runs on the router,
+	// the tables' only writer and only snapshot taker, and Versions are immutable. The rows are unreachable when
+	// Remove returns because every shard dropped the app's walks at mRemove, acked before here.
 	a.phase.Store(int32(phaseRemoved))
 	a.ing, a.sinks, a.quiet = nil, nil, true
 	a.app.Loads = nil
