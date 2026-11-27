@@ -21,6 +21,8 @@ The full plan is [s1-1c-11-plan-check.md](s1-1c-11-plan-check.md) (v2), drafted 
 
 **Before the plan check — the owner, 2026-11-27:** the order stays the nets, then the names (asked why the refactoring had not started; three options, the recommendation kept); the low-hanging fruits first, which became W1's configuration nets.
 
+**At G0 — the owner, 2026-11-27** ([decisions](decisions.md#owner-decisions-2026-11-27--s11c-11s-plan-check), 7–8): main green on 9b62eedf; lane C starts beside the design note; the integration branch pushed as it grows.
+
 **The plan check — the owner, 2026-11-27** ([decisions](decisions.md#owner-decisions-2026-11-27--s11c-11s-plan-check); six answers, all as recommended): the lighter routine with one design note and blind reviews; the nets as a maintained live set with a control run and a T2 anchor check (2026-11-22's package A annotated); the macOS test job by a nightly tier; PR CI accepts the small growth; a bounded exception to testing.md rule 2 for the nets row; three green dispatched nightlies before each PR merges.
 
 ## Done-done
@@ -28,11 +30,11 @@ The full plan is [s1-1c-11-plan-check.md](s1-1c-11-plan-check.md) (v2), drafted 
 ```
 Sprint S1.1c-11 — the nightly nets · routine: lighter, with one design note and blind reviews · SP ≈ 10.5 → 13 · cap 2 weeks
 Entry (G0)   ☑ card complete and approved (the plan check §12; the owner's answers)
-             ☐ dependencies merged, main green (S1.1c-7 and #62 merged; main's CI on 9b62eedf: the owner reports)
+             ☑ dependencies merged, main green (S1.1c-7 and #62 merged; main's CI on 9b62eedf green, the owner's report, 2026-11-27)
              ☑ fits the cap, lanes ≤ 8 days (§1: two waves of two lanes)
              ☑ plan check reviewed (architect, QA) and answered by the owner
              ☑ test material exists, or making it is an item (every proof driver is a lane item, §6–§7)
-             ☐ `gate/current-sprint` set, the first commit
+             ☑ `gate/current-sprint` set, the first commit (643423bb; the record opened after it, f54e3bf0)
 Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
              ☐ owner decisions recorded ☐ ADRs written for lasting decisions
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
