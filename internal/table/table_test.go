@@ -69,21 +69,22 @@ func TestNewRejects(t *testing.T) {
 		tname string
 		attrs []event.Attr
 		key   []string
+		want  string // New's whole refusal text, where a row pins it
 	}{
-		{"an empty name", "", []event.Attr{str}, []string{"a"}},
-		{"no attributes (nil)", "T", nil, []string{"a"}},
-		{"no attributes (empty)", "T", []event.Attr{}, []string{"a"}},
-		{"an empty attribute name", "T", []event.Attr{str, {Name: "", Type: event.TInt}}, []string{"a"}},
-		{"a duplicate attribute name", "T", []event.Attr{str, {Name: "a", Type: event.TInt}}, []string{"a"}},
-		{"type TInvalid", "T", []event.Attr{str, {Name: "b", Type: event.TInvalid}}, []string{"a"}},
-		{"a type above TObject", "T", []event.Attr{str, {Name: "b", Type: event.TObject + 1}}, []string{"a"}},
-		{"a nil key", "T", []event.Attr{str}, nil},
-		{"an empty key", "T", []event.Attr{str}, []string{}},
-		{"an undeclared key column", "T", []event.Attr{str}, []string{"b"}},
-		{"a key column differing only in case", "T", []event.Attr{str}, []string{"A"}},
-		{"a key column named twice", "T", []event.Attr{str, {Name: "b", Type: event.TInt}}, []string{"a", "a"}},
-		{"an object key column", "T", []event.Attr{{Name: "o", Type: event.TObject}}, []string{"o"}},
-		{"an optional object key column", "T", []event.Attr{str, {Name: "o", Type: event.TObject, Optional: true}}, []string{"a", "o"}},
+		{"an empty name", "", []event.Attr{str}, []string{"a"}, "table: empty table name"},
+		{"no attributes (nil)", "T", nil, []string{"a"}, "table T: no attributes declared"},
+		{"no attributes (empty)", "T", []event.Attr{}, []string{"a"}, "table T: no attributes declared"},
+		{"an empty attribute name", "T", []event.Attr{str, {Name: "", Type: event.TInt}}, []string{"a"}, ""},
+		{"a duplicate attribute name", "T", []event.Attr{str, {Name: "a", Type: event.TInt}}, []string{"a"}, ""},
+		{"type TInvalid", "T", []event.Attr{str, {Name: "b", Type: event.TInvalid}}, []string{"a"}, ""},
+		{"a type above TObject", "T", []event.Attr{str, {Name: "b", Type: event.TObject + 1}}, []string{"a"}, ""},
+		{"a nil key", "T", []event.Attr{str}, nil, "table T: no primary key"},
+		{"an empty key", "T", []event.Attr{str}, []string{}, "table T: no primary key"},
+		{"an undeclared key column", "T", []event.Attr{str}, []string{"b"}, ""},
+		{"a key column differing only in case", "T", []event.Attr{str}, []string{"A"}, ""},
+		{"a key column named twice", "T", []event.Attr{str, {Name: "b", Type: event.TInt}}, []string{"a", "a"}, ""},
+		{"an object key column", "T", []event.Attr{{Name: "o", Type: event.TObject}}, []string{"o"}, ""},
+		{"an optional object key column", "T", []event.Attr{str, {Name: "o", Type: event.TObject, Optional: true}}, []string{"a", "o"}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -96,6 +97,9 @@ func TestNewRejects(t *testing.T) {
 			}
 			if inner := errors.Unwrap(err); inner != nil {
 				t.Errorf("New's refusal %q wraps %v; every refusal of New is a plain error naming its fault", err, inner)
+			}
+			if c.want != "" && err.Error() != c.want {
+				t.Errorf("New's refusal %q; want %q", err, c.want)
 			}
 		})
 	}
