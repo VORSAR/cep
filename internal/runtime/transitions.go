@@ -156,9 +156,15 @@ func (rt *router) completeRemove(w *installWait) {
 	// Only the router's own fields are dropped: a.dec and a.rec stay, because caller goroutines read them past the
 	// gate (SendPayload's decoder, Activate's and Drain's recorder) (review S4). The starting rows go too: only the
 	// activation step read them, and it refuses a removing app (owner, 2026-11-25; PR 2's review PR2A-3, PR2Q-10).
+	// The tables' rows go, but not their Set: TableWrite's check reads its declarations past the gate, so Release
+	// empties each table and keeps them (owner, 2026-11-27; PR 3's review PR3A-2). Safe: the router is the tables'
+	// only writer and their only snapshot taker, and every shard dropped the app's walks at mRemove, acked before here.
 	a.phase.Store(int32(phaseRemoved))
 	a.ing, a.sinks, a.quiet = nil, nil, true
 	a.app.Loads = nil
+	if a.app.Tables != nil {
+		a.app.Tables.Release()
+	}
 	if w.rollback {
 		res.err = w.err
 	}

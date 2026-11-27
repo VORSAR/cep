@@ -129,6 +129,7 @@ func (r *Runtime) TableWrite(ctx context.Context, app AppID, tableID int, op Tab
 	if err != nil {
 		return err
 	}
+	// The declarations, read past the gate: Remove keeps the Set and empties it (completeRemove), so they stay valid.
 	if a.app.Tables == nil || tableID < 0 || tableID >= a.app.Tables.Len() || (op != TablePut && op != TableDelete) {
 		return fmt.Errorf("runtime: app %d: no table %d, or an unknown operation", app, tableID)
 	}
