@@ -1,5 +1,7 @@
 # S1.1c-7 design note — CD2 (validate, plan, table, expr)
 
+*Built in W3 (2026-11-25 to 2026-11-26). Where the code differs from this note, the sprint record's W3 section says how and why ([record](s1-1c-7-record.md)).*
+
 *S1.1c-7's design note for chunk CD2 (validate, plan, table, expr), written by a fresh `refactoring-specialist` with GitNexus from [the plan check](s1-1c-7-plan-check.md) §5 and the survey's findings; reviewed blind (architecture with the-fool, QA twice) and pre-checked against the code ([the reviews](../reviews/s1-1c-7-design-architecture.md), [QA](../reviews/s1-1c-7-design-qa.md)); every cross-note ruling and review disposition is in [the coordination record](s1-1c-7-design-coordination.md). **Later parts supersede earlier ones:** each revision replaces the sections it names, and the coordinator's corrections at the end of a part override that part. Escapes written ⧵ stand for one ASCII backslash (agent output passes through JSON, which decodes a single backslash-u); the builder types a backslash and checks the file's bytes.*
 
 
