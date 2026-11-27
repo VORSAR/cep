@@ -200,6 +200,9 @@ func TestEmbeddedInterfaceIsRefused(t *testing.T) {
 			t.Errorf("failed: line %q lacks %q", line, want)
 		}
 	}
+	if b, err := os.ReadFile(golden); err != nil || string(b) != "" {
+		t.Errorf("the golden after a refused run: %q, %v; want it still empty", b, err)
+	}
 }
 
 // TestDeltaMessage: a golden lacking Added and holding Gone (a name the package has not) → exit 1 and the delta
