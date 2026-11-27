@@ -410,6 +410,24 @@ func (s *Set) unchanged(snap *Snapshot) bool {
 	return true
 }
 
+// Release empties every table and drops the cached snapshot, so the rows go once no reader holds a Snapshot or
+// Version taken before it; one taken before it still reads its rows (Versions are immutable). The declarations stay:
+// Len, Table, Name and Attrs answer as before. Like Snapshot, one goroutine only: the tables' writer, which calls it
+// at an app's removal (owner, 2026-11-27; PR 3's review PR3A-2).
+func (s *Set) Release() {
+	for _, t := range s.tables {
+		t.clear()
+	}
+	s.last = nil
+}
+
+// clear publishes an empty Version.
+func (t *Table) clear() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cur.Store(t.cur.Load().empty(0))
+}
+
 // Snapshot is one immutable read view of an app's tables.
 type Snapshot struct {
 	versions []*Version
