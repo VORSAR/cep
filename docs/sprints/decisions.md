@@ -144,6 +144,7 @@
 | 2026-11-25 | [W3's start](#owner-decisions-2026-11-25--w3s-start) |
 | 2026-11-27 | [PR 3's review](#owner-decisions-2026-11-27--pr-3s-review) |
 | 2026-11-27 | [the names before the pattern engine](#owner-decisions-2026-11-27--the-names-before-the-pattern-engine) |
+| 2026-11-27 | [S1.1c-11's plan check](#owner-decisions-2026-11-27--s11c-11s-plan-check) |
 
 ## The decisions
 
@@ -1383,6 +1384,7 @@ Asked how CI could take over part of PR 2's verification, the owner asked instea
    - **A, test-strength re-checks:**
      - a nightly row re-runs the committed plant batches against HEAD;
      - a plant whose code has moved is reported as stale, never as a pass.
+     - *(annotated 2026-11-27: the nightly runs a maintained live set, `gate/nets.json`, seeded from the committed batches, each plant a net or retired with a reason; each test runs once without its plant first; a fast T2 check reds the PR that leaves a net stale — [S1.1c-11's plan check](#owner-decisions-2026-11-27--s11c-11s-plan-check), decision 2.)*
    - **B, deeper concurrency:**
      - race-stress for `internal/playback`, `internal/partition`, the root package and `io/inmemory`;
      - a `-cpu 1,4` pass over `internal/...`;
@@ -1626,3 +1628,24 @@ Then [the plan check](s1-1c-recut-plan-check.md) v1, its blind reviews ([archite
    - Rejected: ending them when S1.1c-13 closes.
 9. **The re-cut lands as its own small pull request now,** after its T2, T4 and counter-proof runs; the marker stays S1.1c-7 until S1.1c-11's G0.
    - Rejected: inside S1.1c-11's G0 commit.
+
+### Owner decisions, 2026-11-27 — S1.1c-11's plan check
+
+After [the plan check](s1-1c-11-plan-check.md) v1 and its blind reviews ([architecture](../reviews/s1-1c-11-plan-check-architecture.md), [QA](../reviews/s1-1c-11-plan-check-qa.md); one blocker shared by both, a net judged caught with no control run; every finding dispositioned in v2's §10). Before the questions, the owner confirmed the order (the nets first, then the names) and asked for the low-hanging fruits first. Six answers, all as recommended.
+
+1. **The lighter routine, with one design note and blind reviews:** the design note on the nets runner reviewed blind before code, and a blind architecture and QA review of each pull request's combined build; no semantics panel, no separate break-it.
+   - Rejected: the full loop.
+2. **The nets are a maintained live set, `gate/nets.json`,** not the committed batches re-run in place. This changes the letter of [2026-11-22's package A](#owner-decisions-2026-11-22--ci-coverage), annotated there.
+   - Each of the 413 committed plants and the four standalone diffs becomes a net or is retired with a reason; a net records its polarity (`caught`, or `passes` for a tolerance plant) and its subtest.
+   - Each test runs once without its plant before its nets are judged; a net counts as caught only after that control is green.
+   - A fast T2 check, with no builds, reds the pull request that leaves a net stale; that pull request re-anchors the net or retires it with a reason. Rename pull requests also run the whole nets row before merge.
+   - Every committed plant is a net or a retirement (a T2 check), and each later sprint's plants join at its close.
+   - Rejected: a per-plant runner over the committed batches in place; each batch pinned to its recorded commit and mapped to HEAD through the ledger.
+3. **The macOS test job is the test job's rows at the nightly tier, run on a macOS runner;** the generator keys its runners by tier and job. No duplicated rows.
+   - Rejected: nine duplicated `*-macos` rows.
+4. **PR CI accepts the small growth:** the T2 anchor check and the new proof drivers, each measured, with no CPU hogs in the proofs world; nothing moves out of PR CI.
+   - Rejected: also moving `determinism-macos` to the nightly.
+5. **The nets row gets a bounded exception** to testing.md rule 2 ([2026-11-12](#owner-decisions-2026-11-12--s11c-2s-close-out)): one worktree, one control run per distinct test, per-net timeouts measured on the CI runner, a loop that stops cleanly when its time budget runs out; it runs nightly and on rename pull requests only.
+   - Rejected: sharding the nets into many rows, each with a pinned process count.
+6. **Burn-in: three consecutive green dispatched nightlies before each of the sprint's two pull requests merges,** each run's id and job times in the record.
+   - Rejected: one.
