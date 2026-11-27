@@ -214,7 +214,7 @@ func TestRegistryArityAndLookup(t *testing.T) {
 }
 
 // TestRegisterRefusesADescriptorBuildCannotCall: Register refuses a nil Factory for a scalar or an aggregate, and
-// MinArgs above MaxArgs, registering nothing; a pattern-only callable needs no Factory (chain has none).
+// MinArgs above MaxArgs for every kind, registering nothing; a pattern-only callable needs no Factory (chain has none).
 func TestRegisterRefusesADescriptorBuildCannotCall(t *testing.T) {
 	first := func(args []expr.Expr, _ model.Expr) (expr.Expr, error) { return args[0], nil }
 	refused := []struct {
@@ -228,6 +228,10 @@ func TestRegisterRefusesADescriptorBuildCannotCall(t *testing.T) {
 			"expr: g: a nil Factory; only a pattern-only callable has none"},
 		{"MinArgs above MaxArgs", expr.Descriptor{Name: "m", Kind: expr.Scalar, MinArgs: 2, MaxArgs: 1, Factory: first},
 			"expr: m: MinArgs 2 is above MaxArgs 1"},
+		{"a pattern-only callable with MinArgs above MaxArgs", expr.Descriptor{Name: "q", Kind: expr.PatternOnly, MinArgs: 2, MaxArgs: 1},
+			"expr: q: MinArgs 2 is above MaxArgs 1"},
+		{"an aggregate with MinArgs above MaxArgs", expr.Descriptor{Name: "h", Kind: expr.Aggregate, MinArgs: 2, MaxArgs: 1, Factory: first},
+			"expr: h: MinArgs 2 is above MaxArgs 1"},
 	}
 	for _, c := range refused {
 		t.Run(c.name, func(t *testing.T) {
