@@ -130,8 +130,10 @@ class TheOrder(unittest.TestCase):
         self.assertTrue(o.reached("S4.1", "S4.1"))
         self.assertTrue(o.reached("S1.1c-2", "S1.1c-1"))  # by row: an entry must name a row, never a part
 
-    def test_first_open(self):
-        self.assertEqual(order().first_open(), "S1.1c")
+    def test_first_open_is_the_first_row_not_closed(self):
+        # A fixture, so a re-cut never edits this test; test_sprints_pin covers the real first open row.
+        rows = (("S3.3", True), ("S1.1c", True), ("S1.1c-11", False), ("S4.1", False))
+        self.assertEqual(sprintid.load_order(table(*rows)).first_open(), "S1.1c-11")
         closed = '{"schema": 1, "note": "x", "rows": [{"id": "S4.1", "closed": true}, {"id": "S4.2", "closed": true}]}'
         with self.assertRaises(ValueError):
             sprintid.load_order(closed).first_open()
@@ -261,16 +263,75 @@ class ThePinHelpers(unittest.TestCase):
 
     def test_the_marker_at_the_first_open_rows_part_matches(self):
         order = sprintid.load_order(table(("S3.3", True), ("S1.1c", False), ("S4.1", False)))
-        self.assertEqual(sprintid.first_open_mismatch(sprintid.parse("S1.1c-1"), order), "")
-        self.assertEqual(sprintid.first_open_mismatch(sprintid.parse("S1.1c"), order), "")
+        self.assertEqual(mismatch("S1.1c-1", order), "")
+        self.assertEqual(mismatch("S1.1c", order), "")
 
-    def test_a_marker_past_or_before_the_first_open_row_is_named(self):
-        order = sprintid.load_order(table(("S3.3", True), ("S1.1c", False), ("S4.1", False)))
-        self.assertEqual(
-            sprintid.first_open_mismatch(sprintid.parse("S4.1"), order),
-            "gate/current-sprint S4.1 is not the first open row S1.1c",
+
+def mismatch(marker: str, order: sprintid.Order, records: tuple[str, ...] = ()) -> str:
+    return sprintid.first_open_mismatch(sprintid.parse(marker), order, records)
+
+
+def not_first(marker: str, first: str) -> str:
+    return f"gate/current-sprint {marker} is not the first open row {first} or the closed row just before it"
+
+
+class TheMarkerRule(unittest.TestCase):
+    """first_open_mismatch's positions, the between-sprints state and its record guard (the re-cut plan check §2 G1;
+    owner 2026-11-27, the names before the pattern engine, decision 6; 2026-11-10, S1.1c's scope, decision 8)."""
+
+    def test_a_marker_at_the_first_open_printed_part_row_matches(self):
+        order = sprintid.load_order(table(("S1.1c", True), ("S1.1c-11", False), ("S4.1", False)))
+        self.assertEqual(mismatch("S1.1c-11", order), "")
+        self.assertEqual(mismatch("S1.1c-11", order, ("s1-1c-11-record.md",)), "")  # its own record opened
+
+    def test_a_marker_between_sprints_matches_until_the_next_record_exists(self):
+        after_s4_1 = sprintid.load_order(table(("S4.1", True), ("S4.2", False)))
+        self.assertEqual(mismatch("S4.1", after_s4_1), "")
+        self.assertEqual(mismatch("S4.1", after_s4_1, ("s4-1-record.md", "s4-21-record.md")), "")  # not S4.2's
+        before_s4_1 = sprintid.load_order(table(("S1.1c", True), ("S1.1c-13", True), ("S4.1", False)))
+        self.assertEqual(mismatch("S1.1c-13", before_s4_1), "")
+
+    def test_a_marker_between_sprints_is_named_once_the_next_record_exists(self):
+        order = sprintid.load_order(table(("S4.1", True), ("S4.2", False)))
+        want = (
+            "gate/current-sprint S4.1 is between sprints, but the first open row S4.2 has its record;"
+            " set gate/current-sprint to S4.2"
         )
+        for record in ("s4-2-record.md", "s4-2-1-record.md"):
+            with self.subTest(record=record):
+                self.assertEqual(mismatch("S4.1", order, (record,)), want)
+
+    def test_a_printed_part_row_behind_an_open_umbrella_is_named(self):
+        # Green under the old row rule (row_of gave S1.1c); the umbrella must close when its parts are rows.
+        rows = (("S3.3", True), ("S1.1c", False), ("S1.1c-5", True), ("S1.1c-7", True), ("S1.1c-8", False))
+        self.assertEqual(mismatch("S1.1c-7", sprintid.load_order(table(*rows))), not_first("S1.1c-7", "S1.1c"))
+
+    def test_an_unprinted_part_of_a_closed_umbrella_is_named(self):
+        order = sprintid.load_order(table(("S3.3", True), ("S1.1c-5", True), ("S1.1c", True), ("S4.1", False)))
+        self.assertEqual(mismatch("S1.1c-99", order), not_first("S1.1c-99", "S4.1"))
+        self.assertEqual(mismatch("S1.1c", order), "")  # witness: the printed row itself matches
+
+    def test_an_unprinted_part_of_a_row_with_no_printed_parts_matches_between_sprints(self):
+        order = sprintid.load_order(table(("S3.3", True), ("S1.1c", False)))
+        self.assertEqual(mismatch("S3.3-2", order), "")
+
+    def test_a_marker_two_rows_behind_or_past_the_first_open_row_is_named(self):
+        order = sprintid.load_order(table(("S3.2c", True), ("S3.3", True), ("S1.1c", False), ("S4.1", False)))
+        self.assertEqual(mismatch("S3.2c", order), not_first("S3.2c", "S1.1c"))
+        self.assertEqual(mismatch("S4.1", order), not_first("S4.1", "S1.1c"))
+
+    def test_a_marker_not_in_the_order_is_named(self):
+        order = sprintid.load_order(table(("S3.3", True), ("S1.1c", False)))
+        self.assertEqual(mismatch("S9.9", order), "gate/current-sprint S9.9 is not a row of gate/sprints.json")
+
+    def test_with_every_row_closed_the_marker_is_the_last_row(self):
+        order = sprintid.load_order(table(("S11", True), ("S12", True)))
+        self.assertEqual(mismatch("S12", order), "")
         self.assertEqual(
-            sprintid.first_open_mismatch(sprintid.parse("S3.3-2"), order),
-            "gate/current-sprint S3.3-2 is not the first open row S1.1c",
+            mismatch("S11", order), "gate/current-sprint S11 is not the last row S12, and every row is closed"
         )
+
+    def test_record_names_follow_the_ids(self):
+        self.assertEqual(sprintid.record_names("S4.2"), ("s4-2-record.md", "s4-2-"))
+        self.assertEqual(sprintid.record_names("S1.1c-11"), ("s1-1c-11-record.md", "s1-1c-11-"))
+        self.assertEqual(sprintid.record_names("S3.2a"), ("s3-2a-record.md", "s3-2a-"))

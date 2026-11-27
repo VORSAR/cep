@@ -10,7 +10,7 @@ and their methods, top-level functions and module-level names. Subtest strings s
 
 With no paths, `main` reads every tracked `*_test.go` and `test_*.py` outside `testdata` (from the working
 directory's git index). It prints one line per hit, sorted, then a count line, and exits 0 with or without hits:
-S1.1c-8 registers the row and adds the failing exit. A file or word list it cannot read, a Python file that does not
+S1.1c-13 registers the row and adds the failing exit. A file or word list it cannot read, a Python file that does not
 parse and a git failure exit 2, with `error: ...` as the last line.
 
 Standard library only and no `gate` import, so it stays a leaf.

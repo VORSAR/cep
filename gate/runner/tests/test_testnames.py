@@ -38,7 +38,7 @@ def golden() -> dict:
 
 
 def run_tool(cwd: str, *args: str) -> tuple[int, str, str]:
-    """The tool as a process of its own, as S1.1c-8's row will start it; (exit code, stdout, stderr)."""
+    """The tool as a process of its own, as S1.1c-13's row will start it; (exit code, stdout, stderr)."""
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         code = subprocess.run(
             [sys.executable, "-I", "-B", TOOL, *args],

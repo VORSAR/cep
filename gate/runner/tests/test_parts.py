@@ -8,6 +8,7 @@ case reads the real tree. ReadBase alone builds fixture git repositories (`git.m
 """
 
 import json
+import os
 import unittest
 from unittest import mock
 
@@ -15,6 +16,7 @@ from gate.runner import aging, allowlists, anchors, parts, sprintid
 from gate.runner.tests import support
 
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 ORDER = sprintid.Order(
     tuple(
         sprintid.Row(id, closed)
@@ -79,8 +81,27 @@ class FixtureBound(unittest.TestCase):
         self.enterContext(mock.patch.object(parts, "LAST_PART", "S1.1c-8"))
 
 
+class TheLiveBound(unittest.TestCase):
+    """The real bound, read live; every other class judges in ORDER's world with a bound of its own, so a re-cut edits
+    only this class."""
+
+    def test_the_bound_is_the_part_that_cleans_the_last_size_issue(self):
+        # S1.1c-14 cleans known issue S1.1c-5-3, the last size issue, after S4.2 (owner 2026-11-27, the names before
+        # the pattern engine, decision 5; S1.1c-9 until then, owner 2026-11-20, S1.1c-7's plan check, decision 1).
+        self.assertEqual(parts.LAST_PART, "S1.1c-14")
+
+    def test_the_bound_is_a_printed_part_of_the_real_order(self):
+        with open(os.path.join(REPO, "gate", "sprints.json"), encoding="utf-8") as f:
+            order = sprintid.load_order(f.read())
+        self.assertIs(order.reached_part(parts.LAST_PART, parts.LAST_PART), True)  # raises when not printed
+
+
 class Rules(unittest.TestCase):
-    """Rules 1-4: the entry's issue, its forward part, the bound on forwards and the marker reaching the part."""
+    """Rules 1-4: the entry's issue, its forward part, the bound on forwards and the marker reaching the part, judged
+    in ORDER's world with its bound S1.1c-9 (the real bound is TheLiveBound's)."""
+
+    def setUp(self) -> None:
+        self.enterContext(mock.patch.object(parts, "LAST_PART", "S1.1c-9"))
 
     def run_rules(self, known, marker="S1.1c-5", tier="T4", entries=None):
         entries = (entry(),) if entries is None else entries
@@ -100,11 +121,6 @@ class Rules(unittest.TestCase):
         self.assertEqual(
             faults, [f"aging: smells.json: {TARGET}: forward S1.1c-4 is not a printed part of gate/sprints.json"]
         )
-
-    def test_the_bound_is_the_part_that_cleans_the_last_size_issue(self):
-        # S1.1c-9 cleans known issue S1.1c-5-3, the last size issue (owner 2026-11-20, S1.1c-7's plan check,
-        # decision 1, after the re-cuts of 2026-11-15).
-        self.assertEqual(parts.LAST_PART, "S1.1c-9")
 
     def test_a_forward_past_the_bound_is_red(self):
         faults, _ = self.run_rules(issues(issue("S1.1c-5-1", "S1.1c-10")))  # printed in ORDER's world

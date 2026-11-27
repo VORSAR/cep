@@ -53,8 +53,8 @@
     {
       "id": "S1.1c-5-3",
       "first_seen": "S1.1c-5",
-      "forward": "S1.1c-9",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-20--s11c-7s-plan-check",
+      "forward": "S1.1c-14",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-27--the-names-before-the-pattern-engine",
       "correctness": false,
       "opened": "2026-11-14"
     },
@@ -85,16 +85,16 @@
     {
       "id": "S1.1c-7-2",
       "first_seen": "S1.1c-7",
-      "forward": "S1.1c-10",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-22--pr-2s-review",
+      "forward": "S1.1c-14",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-27--the-names-before-the-pattern-engine",
       "correctness": false,
       "opened": "2026-11-22"
     },
     {
       "id": "S1.1c-7-3",
       "first_seen": "S1.1c-7",
-      "forward": "S1.1c-10",
-      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-22--the-drain-fixs-design",
+      "forward": "S1.1c-14",
+      "decision": "docs/sprints/decisions.md#owner-decisions-2026-11-27--the-names-before-the-pattern-engine",
       "correctness": false,
       "opened": "2026-11-22"
     }
