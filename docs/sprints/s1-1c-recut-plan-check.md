@@ -96,7 +96,7 @@ def first_open_mismatch(marker: ID, order: Order, records: Collection[str]) -> s
     mismatch, naming both. With every row closed, the marker must be the last row. Pure."""
 ```
 
-The pin (`test_sprints_pin.py`) passes the tracked record basenames (`git ls-files docs/sprints/*-record.md`).
+The pin (`test_sprints_pin.py`) passes the record basenames in `docs/sprints/` (read from disk, as the pin reads the plan; an untracked record arms the guard too). *(As built: a pure `has_record(row, records)` beside `record_names`, and a third pin, `test_every_sprint_record_belongs_to_a_printed_row`, so a record no row claims cannot leave the guard unarmed.)*
 
 Tests (`gate/runner/tests/test_sprintid.py`, fixtures only; each red on main's code unless marked):
 1. `test_a_marker_at_the_first_open_printed_part_row_matches`: (S1.1c ✓, S1.1c-11 open), marker S1.1c-11 → "".

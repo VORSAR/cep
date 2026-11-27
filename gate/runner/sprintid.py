@@ -3,13 +3,15 @@
 A sprint id is S<stage>[.<part>][<letter>][-<n>] (sprint-plan.md §3); a row of the plan's table is an id without
 -<n>, and a part such as S3.3-2 belongs to its row S3.3. The order of rows is the table's printed order, read from
 gate/sprints.json (owner 2026-11-11, S1.1c-1's plan check, 7), never a numeric or string sort: row S3.3 precedes
-row S1.1c, and S9.2 precedes S10. Pure: strings in, values out; the callers read the files.
+row S1.1c, and S9.2 precedes S10. The marker gate/current-sprint sits at the first open row, or between sprints on the
+closed row printed just before it until that row's sprint record exists (owner 2026-11-27, the names before the
+pattern engine, 6). Pure: strings in, values out; the callers read the files.
 """
 
 import dataclasses
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 GRAMMAR = re.compile(r"S(?P<stage>[1-9][0-9]*)(?:\.(?P<part>[1-9][0-9]*))?(?P<letter>[a-z])?(?:-(?P<n>[1-9][0-9]*))?")
@@ -18,6 +20,7 @@ SPRINTS = "gate/sprints.json"
 MARKER = "gate/current-sprint"
 PLAN = "sprint-plan.md"
 TICK = "✓"
+RECORD = "-record.md"
 ORDER_KEYS = frozenset({"schema", "note", "rows"})
 ROW_KEYS = frozenset({"id", "closed"})
 # A plan row's id cell, stripped: struck (skipped), open, closed by a linked tick, closed by a tick and a parenthesis.
@@ -206,8 +209,53 @@ def compare_rows(plan: Sequence[Row], order: Order) -> str:
     return ""
 
 
-def first_open_mismatch(marker: ID, order: Order) -> str:
-    """ "" when the marker's row is the first open row; else the mismatch, naming both."""
-    if row_of(marker) == order.first_open():
+def record_names(row: str) -> tuple[str, str]:
+    """A printed row's sprint record in docs/sprints/ and its parts' prefix: S4.2 → ("s4-2-record.md", "s4-2-"), whose
+    parts' records are s4-2-<n>-record.md; S1.1c-11 → ("s1-1c-11-record.md", "s1-1c-11-")."""
+    slug = row.lower().replace(".", "-")
+    return f"{slug}{RECORD}", f"{slug}-"
+
+
+def has_record(row: str, records: Collection[str]) -> bool:
+    """Whether `records` (basenames) holds the row's record or a record of one of its parts."""
+    whole, prefix = record_names(row)
+    part = re.compile(re.escape(prefix) + r"[1-9][0-9]*" + re.escape(RECORD))
+    return any(name == whole or part.fullmatch(name) for name in records)
+
+
+def _names_its_row(marker: str, ids: Sequence[str]) -> bool:
+    """A printed id, or an unprinted part of a row none of whose parts is printed (S3.3-2 for S3.3, never S1.1c-99
+    when S1.1c-5 is printed as a row of its own)."""
+    if marker in ids:
+        return True
+    row = row_of(parse(marker))
+    return not any(id != row and row_of(parse(id)) == row for id in ids)
+
+
+def first_open_mismatch(marker: ID, order: Order, records: Collection[str]) -> str:
+    """ "" when the marker sits at the first open row, or between sprints: on the closed row printed just before it
+    while the first open row has no sprint record in `records` (the basenames of docs/sprints/*-record.md); else the
+    mismatch, naming both. Positions are `Order.index`'s: a printed part-row is a row of its own, an unprinted part
+    sits at its row. With every row closed, the marker must be the last row (owner 2026-11-27, decision 6)."""
+    named = canonical(marker)
+    ids = [row.id for row in order.rows]
+    try:
+        at = order.index(named)
+    except ValueError:
+        return f"{MARKER} {named} is not a row of {SPRINTS}"
+    open_at = [i for i, row in enumerate(order.rows) if not row.closed]
+    if not open_at:
+        if at == len(ids) - 1:
+            return ""
+        return f"{MARKER} {named} is not the last row {ids[-1]}, and every row is closed"
+    want, first = open_at[0], ids[open_at[0]]
+    if at == want:
         return ""
-    return f"{MARKER} {canonical(marker)} is not the first open row {order.first_open()}"
+    if at == want - 1 and _names_its_row(named, ids):
+        if not has_record(first, records):
+            return ""
+        return (
+            f"{MARKER} {named} is between sprints, but the first open row {first} has its record;"
+            f" set {MARKER} to {first}"
+        )
+    return f"{MARKER} {named} is not the first open row {first} or the closed row just before it"

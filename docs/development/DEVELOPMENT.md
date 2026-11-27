@@ -77,7 +77,7 @@ Tests are exempt from lll, the size family, the `reflect` pattern and the `fmt.P
 
 ## TODO policy
 
-*`todocheck` lands in S1.1c (owner, 2026-11-04). Until then review enforces this.*
+*`todocheck` lands in S1.1c (owner, 2026-11-04). Until then review enforces this.* *(Annotated 2026-11-27: S1.1c closed without it; its basic form waits in the [backlog](../product/backlog.md) for its first subject ([owner](../sprints/decisions.md#owner-decisions-2026-11-27--the-names-before-the-pattern-engine), decision 6).)*
 
 A `TODO` carries an **owner or a sprint or issue id**: `// TODO(S3): …`, `// TODO(ramith): …`, `// TODO(#42): …`. A bare `// TODO` is not allowed. The same rule covers the synonym family `FIXME`/`HACK`/`XXX`; a named sprint must be ≤ current + 2, and a marker naming a closed sprint fails T4 (ADR-0015 §2 `todocheck`).
 

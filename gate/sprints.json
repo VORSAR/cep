@@ -52,7 +52,7 @@
     },
     {
       "id": "S1.1c",
-      "closed": false
+      "closed": true
     },
     {
       "id": "S1.1c-5",
@@ -67,15 +67,15 @@
       "closed": true
     },
     {
-      "id": "S1.1c-8",
+      "id": "S1.1c-11",
       "closed": false
     },
     {
-      "id": "S1.1c-9",
+      "id": "S1.1c-12",
       "closed": false
     },
     {
-      "id": "S1.1c-10",
+      "id": "S1.1c-13",
       "closed": false
     },
     {
@@ -84,6 +84,10 @@
     },
     {
       "id": "S4.2",
+      "closed": false
+    },
+    {
+      "id": "S1.1c-14",
       "closed": false
     },
     {
@@ -124,6 +128,10 @@
     },
     {
       "id": "S11",
+      "closed": false
+    },
+    {
+      "id": "S1.1c-15",
       "closed": false
     },
     {
