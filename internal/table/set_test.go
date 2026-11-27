@@ -134,8 +134,9 @@ func TestSnapshotRangeAndEmptySet(t *testing.T) {
 	}
 }
 
-// Release frees the rows: a row stored before it is unreachable once no Snapshot taken before it is held, the Set's
-// own cached one included. The control: the row is held before Release (the current Version and the cached Snapshot).
+// Release frees the rows of every table: a row stored before it, in T0 or in T1, is unreachable once no Snapshot taken
+// before it is held, the Set's own cached one included. The control: each row is held before Release (by its table's
+// current Version and the cached Snapshot).
 func TestReleaseFreesTheRowsOnceNoEarlierSnapshotIsHeld(t *testing.T) {
 	t.Parallel()
 	t0, t1 := newKeyTable(t, "T0"), newKeyTable(t, "T1")
@@ -143,37 +144,48 @@ func TestReleaseFreesTheRowsOnceNoEarlierSnapshotIsHeld(t *testing.T) {
 	if err := t0.Upsert(keyRows("k1", "k2", "k3")); err != nil {
 		t.Fatal(err)
 	}
-	wp := weakRow(t, set, "k1")
+	if err := t1.Upsert(keyRows("m1", "m2")); err != nil {
+		t.Fatal(err)
+	}
+	wp0, wp1 := weakRow(t, set, 0, "k1"), weakRow(t, set, 1, "m1")
 	runtime.GC()
-	if wp.Value() == nil {
-		t.Fatal("the row k1 before Release: freed; want held (by T0's current Version and the Set's cached Snapshot)")
+	if wp0.Value() == nil || wp1.Value() == nil {
+		t.Fatalf("before Release: T0's row k1 held %v, T1's row m1 held %v; want both held", wp0.Value() != nil,
+			wp1.Value() != nil)
 	}
 	set.Release()
 	runtime.GC()
-	if wp.Value() != nil {
-		t.Error("the row k1 after Release: held; want freed (no Snapshot taken before Release is held)")
+	if wp0.Value() != nil {
+		t.Error("T0's row k1 after Release: held; want freed (no Snapshot taken before Release is held)")
+	}
+	if wp1.Value() != nil {
+		t.Error("T1's row m1 after Release: held; want freed (Release empties every table, not only the first)")
 	}
 	runtime.KeepAlive(set) // the Set itself stays reachable throughout: Release frees the rows, not the Set
 }
 
 // weakRow takes set's Snapshot, which fills the Set's cache, and returns a weak pointer to the stored row k of table
-// 0. It is taken here, so no slot of the test's own frame keeps the row alive.
-func weakRow(t *testing.T, set *table.Set, k string) weak.Pointer[event.Value] {
+// id. It is taken here, so no slot of the test's own frame keeps the row alive.
+func weakRow(t *testing.T, set *table.Set, id int, k string) weak.Pointer[event.Value] {
 	t.Helper()
-	row, ok := set.Snapshot().Table(0).Get([]event.Value{{Kind: event.TString, Str: k}})
+	row, ok := set.Snapshot().Table(id).Get([]event.Value{{Kind: event.TString, Str: k}})
 	if !ok {
-		t.Fatalf("row %s: not stored", k)
+		t.Fatalf("table %d row %s: not stored", id, k)
 	}
 	return weak.Make(&row[0])
 }
 
 // Release changes no declaration and no earlier Snapshot: Len, Table, Name and Attrs answer as before; the current view
-// is a new, empty one; a Snapshot taken before it still reads its three rows; and the table stays writable.
+// is a new one with every table empty; a Snapshot taken before it still reads its rows (3 in T0, 2 in T1); and a table
+// stays writable and keyed: a row put after Release is found by its key.
 func TestReleaseKeepsTheDeclarationsAndAnEarlierSnapshot(t *testing.T) {
 	t.Parallel()
 	t0, t1 := newKeyTable(t, "T0"), newKeyTable(t, "T1")
 	set := table.NewSet([]*table.Table{t0, t1})
 	if err := t0.Upsert(keyRows("k1", "k2", "k3")); err != nil {
+		t.Fatal(err)
+	}
+	if err := t1.Upsert(keyRows("m1", "m2")); err != nil {
 		t.Fatal(err)
 	}
 	before := set.Snapshot()
@@ -196,16 +208,26 @@ func TestReleaseKeepsTheDeclarationsAndAnEarlierSnapshot(t *testing.T) {
 			t.Errorf("table %d after Release: %d rows; want 0", i, n)
 		}
 	}
-	if n := before.Table(0).Len(); n != 3 {
-		t.Errorf("the Snapshot taken before Release: %d rows in T0; want 3", n)
+	for i, want := range []int{3, 2} {
+		if n := before.Table(i).Len(); n != want {
+			t.Errorf("the Snapshot taken before Release: %d rows in table %d; want %d", n, i, want)
+		}
 	}
-	if row, ok := before.Table(0).Get([]event.Value{{Kind: event.TString, Str: "k1"}}); !ok || row[0].Str != "k1" {
-		t.Errorf("the Snapshot taken before Release: Get(k1) = %v, %v; want the row k1", row, ok)
+	for i, k := range []string{"k1", "m1"} {
+		if row, ok := before.Table(i).Get([]event.Value{{Kind: event.TString, Str: k}}); !ok || row[0].Str != k {
+			t.Errorf("the Snapshot taken before Release: table %d Get(%s) = %v, %v; want the row %s", i, k, row, ok, k)
+		}
 	}
 	if err := t0.Upsert(keyRow("k4")); err != nil {
 		t.Fatalf("Upsert after Release: %v; want nil", err)
 	}
-	if n := set.Snapshot().Table(0).Len(); n != 1 {
+	after := set.Snapshot().Table(0)
+	if n := after.Len(); n != 1 {
 		t.Errorf("T0 after Release and one Upsert: %d rows; want 1", n)
+	}
+	k4 := event.Value{Kind: event.TString, Str: "k4"}
+	if row, ok := after.Get([]event.Value{k4}); !ok || row[0].Str != "k4" || !after.Has(k4) {
+		t.Errorf("T0 after Release and one Upsert: Get(k4) = %v, %v, Has(k4) %v; want the row k4 found by its key", row,
+			ok, after.Has(k4))
 	}
 }
