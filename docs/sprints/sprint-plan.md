@@ -363,7 +363,7 @@ The roadmap's MVP strategy (owner, 2026-10-31): one real use case, **the Agent K
 
 ### Status
 
-**Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-6 merged (PRs #1–#49, the last on 2026-11-20). S1.1c-6 is closed — the size limits in runtime, validate, event, parser, plan and playback: 91 findings to 0 with no behaviour change, the big files split by concern, every hot path within its margin after ground rule 13a's six redesigns; S1.1c-5-1 and -2 closed, S1.1c-6-1 and -2 opened → now: S1.1c-7, correctness and truthful tests (G0 2026-11-20; the whole-code survey's 1,442 findings re-cut into four parts: S1.1c-7 correctness, S1.1c-8 the test names, S1.1c-9 the size limits and the exclusion machinery's retirement, S1.1c-10 the rest); then S4.1.**
+**Phase 1 in progress: S1.1a-1 to S3.3-2 and S1.1c-1 to S1.1c-7 merged (PRs #1–#59). S1.1c-7 is closed — correctness and truthful tests: every one of its 186 survey findings answered (fixed, fixed in part with the rest carried to S1.1c-8 or S1.1c-10, or rejected with a reason), plus the recorder's starvation at one CPU, Drain's five race windows, and an undeployed app's recording queue and table rows freed; S1.1c-7-1 closed, S1.1c-7-2 and -3 opened → next: the re-cut plan check (the MVP-first re-plan, owner 2026-11-22), then a short nightly-nets sprint, then S4.1.**
 
 
 

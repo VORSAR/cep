@@ -501,7 +501,12 @@ Its new later items:
   - **Four small items, fixed by the tables' builder:**
     - 5006f95 (RC3Q-1, RC3Q-2): both Release tests hold rows in every table, and a keyed write after Release. `PR3-recheck-table.json` 5 of 5; the two GC tests 20 of 20 under `-race`.
     - 3a8c503 (RC3A-1, RC3A-2): the remove step's comments separate Release's safety from what frees the rows, and `App.Tables` says the Set is the app's own. astequal: 46 declarations equal.
-- **The gate at PR 3's head:** named in PR 3's description; this record takes it at the close (G5).
+- **The gate at PR 3's head, 4fda187,** on battery; no row judges timing:
+  - T2: exit 0, run 20261127T131423Z-d45d4e, 209 s.
+  - T4 lint: exit 0, run 20261127T131752Z-ff2c5f.
+  - T4 proofs: exit 0, run 20261127T131809Z-3c75f8, 362 s.
+- **#59's CI at 4fda187:** green on all seven jobs, strict-gate included.
+- **Merged** by the owner on 2026-11-27, by rebase-merge, as main 0f66b82 ([`commit-map.json`](s1-1c-7-plants/commit-map.json)'s `pr-59`; PR 2's ids are in `pr-54`). The sprint's close docs follow in a docs-only close-out, because they were not ready before the merge.
 
 ## The finding ledger
 
@@ -783,6 +788,46 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 | RC3A-1 | later | The remove step's comments merged Release's safety with what frees the rows | fixed: 3a8c503 |
 | RC3A-2 | later | App.Tables did not say the Set belongs to one app | fixed: 3a8c503 |
 
+## Carried to S1.1c-8: the renames
+
+These are the input to S1.1c-8's plan check (plan check §7.5).
+- 30 ledger rows carry a rename or a file rename to S1.1c-8; 11 of them carry nothing else.
+- No test was renamed in S1.1c-7 (owner, Q8).
+- Each proposed name, and the assertions behind each of its verbs, is in the lane's design note: `docs/sprints/s1-1c-7-design-<lane>.md`.
+
+| Lane | Id | File | What carries |
+|---|---|---|---|
+| A2 | G2-11 | `gate/ci/tests/test_generate.py` | the rename to S1.1c-8 |
+| A1 | G2-21 | `gate/runner/tests/test_breakit_s11c2.py` | two renames, `..._is_pinned` → `..._is_red`, to S1.1c-8 |
+| A1 | G2-27 | `gate/runner/tests/test_run_guard.py` | the rename to `test_dropping_isolation_or_no_bytecode_or_utf8_mode_is_refused`, to S1.1c-8 |
+| A1 | G2-36 | `gate/runner/tests/test_vulns_row.py` | the rename to `test_an_experiment_suffix_is_red_naming_the_version`, to S1.1c-8 |
+| A1 | G2-39 | `gate/runner/tests/test_clock.py` | rename only |
+| A1 | G2-46 | `gate/runner/tests/test_rows_go.py` | rename only |
+| A1 | G2-49 | `gate/runner/tests/test_suppressions.py` | the rename to `test_the_enabled_set_is_the_configs_and_no_enabled_constant_exists`, to S1.1c-8 |
+| A1 | G2-51 | `gate/runner/tests/test_vulndb.py` | rename only: one name covers both assertions, so no split |
+| A1 | G2-52 | `gate/runner/tests/test_vulndb.py` | the rename of `test_the_testdata_holds_exactly_the_real_entries_and_their_notice`, to S1.1c-8 |
+| A2 | G2-55 | `gate/toolchain/tests/test_breakit_s11c3.py` | three renames to S1.1c-8; the duplicate of test_tree_digest to S1.1c-10 |
+| A2 | G2-57 | `gate/toolchain/tests/test_parity_handoff.py` | rename only |
+| A2 | G2-58 | `gate/toolchain/tests/test_tree_digest.py` | rename only |
+| A2 | G2-62 | `gate/toolchain/tests/test_parity_handoff.py` | the split to S1.1c-10, its names to S1.1c-8 |
+| CD | G2-65 | `internal/clock/breakit_test.go` | the rename to `TestRandomWalkScenariosExerciseEveryCallback` to S1.1c-8 |
+| E2 | G2-82 | `internal/partition/rule_test.go` | the rename to `TestNewRuleRefusesABadConfigAndAcceptsEveryScalarKeyType` to S1.1c-8 |
+| CD | G2-87 | `internal/plan/internal_test.go` | the file rename to S1.1c-8; the move of TestBuildRefusesAnUncheckedModel to S1.1c-10 |
+| B | G2-90 | `internal/playback/breakit_s3_2b_1_test.go` | the move to internal/validate to S1.1c-10; the rename to S1.1c-8 |
+| B | G2-91 | `internal/playback/encode_refusals_internal_test.go` | the rename to S1.1c-8 |
+| B | G2-101 | `internal/playback/trace_test.go` | rename only |
+| B | G2-110 | `internal/playback/reader_test.go` | the rename of `d2` to S1.1c-8 |
+| E1 | G2-111 | `internal/runtime/breakit_s3_3_1_test.go` | the renames to S1.1c-8; the merge and delete to S1.1c-10 |
+| E1 | G2-112 | `internal/runtime/breakit_s3_3_2_test.go` | the rename and the file rename to S1.1c-8; the move to S1.1c-10 |
+| E1 | G2-119 | `internal/runtime/router_intake_internal_test.go` | rename only |
+| E1 | G2-121 | `internal/runtime/router_intake_internal_test.go` | a rename and a doc comment |
+| CD | G2-133 | `internal/table/breakit2_test.go` | the rename to `TestSetSnapshotIsStableUnderConcurrentWriters` (naming the never-falls check too) and the move to set_test.go to S1.1c-8 |
+| CD | G2-135 | `internal/validate/s3_2c_breakit_test.go` | the rename ("a negative rate-limit override") to S1.1c-8; the move as a subtest to S1.1c-10 |
+| E2 | G2-141 | `io/inmemory/breakit_s3_3_1_test.go` | the rename to `TestASecondOpenReturnsErrReopened` to S1.1c-8 |
+| E2 | G2-142 | `io/inmemory/inmemory_test.go` | the rename to `TestEndBatchIsCountedByTheStream` is its only fix |
+| W0-go | G2-148 | `tools/archcheck/archcheck_test.go` | rename only |
+| W0-go | G2-152 | `tools/archcheck/archcheck_test.go` | the name "-cases on a missing file" → S1.1c-8 |
+
 ## Done-done
 
 ```
@@ -793,15 +838,39 @@ Entry (G0)   ☑ card complete and approved (owner, 2026-11-20)
              ☑ plan check reviewed (architect, QA; three rounds) and answered by the owner (2026-11-20)
              ☑ test material: each lane's design note, before G1 ☑ `gate/current-sprint` set, the first commit after the plan check's (d521725, with the re-cut)
 Design (G1)  ☑ architecture + the-fool findings resolved (two parts, no blocker; dispositions in the coordination record) ☑ QA testability findings resolved (two passes; DQ-B1 fixed by CD1's byte-exact re-emission)
-             ☑ owner decisions recorded (2026-11-20, five) ☐ ADRs written for lasting decisions (reviewed at G5)
-Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0 ☐ tests on the real code ☐ every breaker's red test committed
-Review (G3)  ☐ architecture review of the combined diff ☐ QA break-it run ☐ every finding fixed, forwarded or rejected with reason
-Verify (G4)  ☐ T4 strict-gate exit 0, run complete ☐ owner's check passed ☐ every acceptance line met by its named proof
-Exit (G5)    ☐ one PR, ≤ 100 commits, merged by the owner ☐ main CI green on the merge commit
-             ☐ sprint record + five-line retro ☐ known issues ☐ sprint-plan §Status line ☐ documents reconciled ☐ memory updated
-             ☐ worktrees removed ☐ points and duration recorded ☐ the row closed in gate/sprints.json as in the plan table
+             ☑ owner decisions recorded (2026-11-20, five; later ones in decisions.md) ☑ ADRs: none needed (reviewed at G5: the lasting rules — the recorder's two yields, Drain's holds, the releases at Remove — are owner decisions in decisions.md and the runtime's documented contracts, inside ADR-0013's and the runtime design's scope)
+Build (G2)   ☑ every lane at T2 (T2 at every pick: W0, W1 and W2 as recorded; W3's seven picks and its fix round) ☑ T3 combine-check: run as T4 (T2, T4 lint and T4 proofs at each PR's head; CI's strict-gate on #52, #54 and #59)
+             ☑ tests on the real code ☑ every breaker's red test committed (the plant batches under docs/sprints/s1-1c-7-plants/)
+Review (G3)  ☑ architecture review of each PR's combined diff (#52, #54, #59; each fix round re-checked blind) ☑ QA break-it run (each PR's blind QA review, by plants; W1/W2/W3 spot-checks skipped by the owner)
+             ☑ every finding fixed, forwarded or rejected with reason (the Findings tables)
+Verify (G4)  ☑ T4 at PR 3's head, exit 0 (T2 20261127T131423Z-d45d4e, T4 lint 20261127T131752Z-ff2c5f, T4 proofs 20261127T131809Z-3c75f8; #59's CI: green on all seven jobs, strict-gate included)
+             ☑ owner's check passed (the owner merged #59, 2026-11-27) ☑ every acceptance line met by its named proof (check_ledger: 186 of 186, 0 faults)
+Exit (G5)    ☑ one PR per wave (owner, 2026-11-21): #52 (W0), #54 (W1, W2), #59 (W3, G5), each ≤ 100 commits; all three merged by the owner, by rebase-merge (#59 as main 0f66b82, 2026-11-27)
+             ☐ main CI green on #59's merge commit, 0f66b82 (the owner reports it)
+             ☑ sprint record + five-line retro ☑ known issues (S1.1c-7-1 closed; S1.1c-7-2 and -3 open, forwarded) ☑ sprint-plan §Status line
+             ☑ documents reconciled (the E1, Drain, starvation and tables notes annotated where built differently; the W3 notes point at the record's W3 section) ☑ memory updated
+             ☐ worktrees removed (the lane worktrees and branches, with the owner's OK) ☑ points and duration recorded (the retro) ☑ the row closed in gate/sprints.json
 ```
 
 ## Retro
 
-*(at G5)*
+### Mini-retro — S1.1c-7
+
+1. **Worked —** every test fix was proven by a plant, and the coordinator re-ran every lane's proof before its pick. Across three pull requests no lane's claim failed on the re-run, and the ledger closed at 186 of 186 under its checker.
+2. **Worked —** blind reviews, and a narrow blind re-check after each fix round. They found:
+   - a new window that the Drain fix itself opened (RCA-1);
+   - eight test gaps in W3 that the lanes' own plants missed;
+   - a `Release` loop pinned for one table only.
+
+   Each was fixed before its merge.
+3. **Missed —** the lanes' plants proved each finding's named defect, but not its neighbours. The reviewers' fresh plants still found unpinned lines in PR 2 and PR 3 (RCQ-1; PR3Q-1, -2, -20, -21, -22; RC3Q-1).
+4. **Friction —**
+   - escape-bearing text was mangled in transport through tool arguments (DQ-B1, W0's GO_SPACES, CD1's stage 2);
+   - an unquoted heredoc ran the backticks in a record edit;
+   - the scratchpad lost the build brief between two days.
+5. **Change next sprint** *(proposals for the owner, ground rule 22)* **—**
+   - briefs ask builders to plant each fix's neighbours (the other tables, rows, kinds and branches), not only the finding's own defect;
+   - escapes are written from Python by bytes from the start;
+   - a binding brief lives in the repository or goes whole into the prompt, never only in the scratchpad.
+
+**Size:** carded at about 39 SP, against a cap of 2 weeks. Built in 8 calendar days, from G0 on 2026-11-20 to PR 3's opening on 2026-11-27, with a three-day pause. The owner added scope at the reviews: the recorder's starvation, Drain's five race windows, and the recording queue and tables freed at Undeploy. No separate point count was kept.
