@@ -278,6 +278,9 @@ func TestParseErrorContract(t *testing.T) {
 		if want := fixes["E-SYN-001"]; want == "" || e.Fix != want {
 			t.Errorf("lexError's fix %q; want the catalogue's E-SYN-001 fix %q", e.Fix, want)
 		}
+		if got, want := e.Error(), "t.cep:1:1: E-SYN-001: boom. Fix: "+fixes["E-SYN-001"]; got != want {
+			t.Errorf("lexError's text %q; want %q", got, want)
+		}
 	})
 }
 
