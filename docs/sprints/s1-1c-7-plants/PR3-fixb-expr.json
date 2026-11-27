@@ -1,0 +1,68 @@
+[
+ {
+  "id": "PR3A-1",
+  "file": "internal/expr/registry.go",
+  "find": "\tif _, dup := r.descriptors[d.Name]; dup {\n\t\treturn fmt.Errorf(\"expr: %s is already registered\", d.Name)\n\t}\n",
+  "replace": "",
+  "test": "TestRegistryHoldsExactlyAppendixF",
+  "pkg": "./internal/expr",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "6af59f5abe52ced2bd726e6efbb3e7c78e948a28"
+ },
+ {
+  "id": "PR3A-1-control",
+  "control": true,
+  "test": "TestRegistryHoldsExactlyAppendixF",
+  "pkg": "./internal/expr",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "6af59f5abe52ced2bd726e6efbb3e7c78e948a28"
+ },
+ {
+  "id": "PR3Q-22a",
+  "file": "internal/expr/registry.go",
+  "find": "\tswitch {\n\tcase d.Factory == nil && d.Kind != PatternOnly:",
+  "replace": "\tswitch {\n\tcase d.Kind == PatternOnly:\n\tcase d.Factory == nil:",
+  "test": "TestRegisterRefusesADescriptorBuildCannotCall",
+  "pkg": "./internal/expr",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "6af59f5abe52ced2bd726e6efbb3e7c78e948a28"
+ },
+ {
+  "id": "PR3Q-22b",
+  "file": "internal/expr/registry.go",
+  "find": "case d.MinArgs > d.MaxArgs:",
+  "replace": "case d.MinArgs > d.MaxArgs && d.Kind == Scalar:",
+  "test": "TestRegisterRefusesADescriptorBuildCannotCall",
+  "pkg": "./internal/expr",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "6af59f5abe52ced2bd726e6efbb3e7c78e948a28"
+ },
+ {
+  "id": "PR3Q-22-control",
+  "control": true,
+  "test": "TestRegisterRefusesADescriptorBuildCannotCall",
+  "pkg": "./internal/expr",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "6af59f5abe52ced2bd726e6efbb3e7c78e948a28"
+ }
+]

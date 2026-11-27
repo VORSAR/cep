@@ -1,0 +1,28 @@
+[
+ {
+  "id": "PR3Q-21",
+  "file": "internal/parser/parse.go",
+  "find": "return mk(name, \"E-SYN-001\", Position{Line: 1, Column: 1}, err.Error())",
+  "replace": "return mk(\"\", \"E-SYN-001\", Position{Line: 1, Column: 1}, err.Error())",
+  "test": "TestParseErrorContract",
+  "pkg": "./internal/parser",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "2e500f00ee8e587a199eb217bba51b6df4e69877"
+ },
+ {
+  "id": "PR3Q-21-control",
+  "control": true,
+  "test": "TestParseErrorContract",
+  "pkg": "./internal/parser",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "2e500f00ee8e587a199eb217bba51b6df4e69877"
+ }
+]

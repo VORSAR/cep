@@ -1,0 +1,22 @@
+[
+ {
+  "id": "PR3A-2-P1",
+  "note": "the remove step does not release the tables",
+  "file": "internal/runtime/transitions.go",
+  "find": "\t\ta.app.Tables.Release()\n",
+  "replace": "\t\t_ = a.app.Tables\n",
+  "test": "TestARemovedAppsTableRowsAreReleased",
+  "pkg": "internal/runtime",
+  "timeout": "180s"
+ },
+ {
+  "id": "PR3A-2-P2",
+  "note": "the remove step drops the Set TableWrite's check reads past the gate",
+  "file": "internal/runtime/transitions.go",
+  "find": "\t\ta.app.Tables.Release()\n",
+  "replace": "\t\ta.app.Tables = nil\n",
+  "test": "TestARemovedAppsTableRowsAreReleased",
+  "pkg": "internal/runtime",
+  "timeout": "180s"
+ }
+]

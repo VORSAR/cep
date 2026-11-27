@@ -1,0 +1,90 @@
+[
+ {
+  "id": "PR3Q-1",
+  "file": "deploy.go",
+  "find": "runtime.TableLoad{Table: tid, Rows: rows}",
+  "replace": "runtime.TableLoad{Table: tid, Rows: rows[:1]}",
+  "old_test": "TestWithTableRowsAreVisibleToTheFirstEvent",
+  "new_test": "TestEveryStartingRowOfATableIsVisibleToTheFirstEvent",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80"
+ },
+ {
+  "id": "PR3Q-1-control",
+  "control": true,
+  "old_test": "TestWithTableRowsAreVisibleToTheFirstEvent",
+  "new_test": "TestEveryStartingRowOfATableIsVisibleToTheFirstEvent",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80"
+ },
+ {
+  "id": "PR3Q-2",
+  "file": "connectors.go",
+  "find": "ErrConnectorNotBuilt, kind, typ, kind, title(kind))",
+  "replace": "ErrConnectorNotBuilt, kind, typ, \"sink\", \"Sink\")",
+  "test": "TestCvConnectorFactory",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80"
+ },
+ {
+  "id": "PR3Q-2-control",
+  "control": true,
+  "test": "TestCvConnectorFactory",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80"
+ },
+ {
+  "id": "PR3Q-5",
+  "file": "apphandle.go",
+  "find": "if err := a.rt.Activate(ctx, a.id); err != nil {",
+  "replace": "if err := a.rt.Activate(ctx, a.id); err != nil { _, _ = a.rt.Drain(context.WithoutCancel(ctx), a.id)",
+  "old_test": "TestAStartWhoseContextEndsMidwayLeavesTheAppStartable",
+  "new_test": "TestAStartWithAnEndedContextLeavesTheAppStartable",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80"
+ },
+ {
+  "id": "PR3Q-5-control",
+  "control": true,
+  "old_test": "TestAStartWhoseContextEndsMidwayLeavesTheAppStartable",
+  "new_test": "TestAStartWithAnEndedContextLeavesTheAppStartable",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": ".",
+  "timeout": "300s",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80"
+ }
+]

@@ -1,0 +1,26 @@
+[
+ {
+  "id": "PR3Q-23",
+  "file": "conformance/notbuilt.json",
+  "find": "\"construct\": \"a text operator\"",
+  "replace": "\"construct\": \"a text operator (S7)\"",
+  "py": "gate.runner.tests.test_notbuilt.LoadEntries.test_todays_nine_load_in_file_order",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "e7c3964d8b4e7290ef0b6ff86db5ba7f5b0fed83"
+ },
+ {
+  "id": "PR3Q-23-control",
+  "control": true,
+  "py": "gate.runner.tests.test_notbuilt.LoadEntries.test_todays_nine_load_in_file_order",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "e7c3964d8b4e7290ef0b6ff86db5ba7f5b0fed83"
+ }
+]

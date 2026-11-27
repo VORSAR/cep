@@ -1,0 +1,28 @@
+[
+ {
+  "id": "PR3Q-3",
+  "file": "tools/apipartition/main.go",
+  "find": "\t\t\tfmt.Printf(\"failed: %v\\n\", err)\n",
+  "replace": "\t\t\t_ = os.WriteFile(golden, []byte(\"x\"), 0o644)\n\t\t\tfmt.Printf(\"failed: %v\\n\", err)\n",
+  "test": "TestEmbeddedInterfaceIsRefused",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "bc3458dccdbd41e978badb459a768db58ba002ea"
+ },
+ {
+  "id": "PR3Q-3-control",
+  "control": true,
+  "test": "TestEmbeddedInterfaceIsRefused",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "./tools/apipartition",
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "bc3458dccdbd41e978badb459a768db58ba002ea"
+ }
+]
