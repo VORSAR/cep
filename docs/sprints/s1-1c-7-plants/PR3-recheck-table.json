@@ -1,0 +1,76 @@
+[
+ {
+  "id": "RC3Q-1-T2",
+  "note": "Release empties table 0 only",
+  "file": "internal/table/table.go",
+  "find": "\tfor _, t := range s.tables {\n\t\tt.clear()",
+  "replace": "\tfor _, t := range s.tables[:min(1, len(s.tables))] {\n\t\tt.clear()",
+  "test": "TestReleaseFreesTheRowsOnceNoEarlierSnapshotIsHeld",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "internal/table",
+  "old_rev": "0b4b5019d81c3ff49468f5cf650b1e43b2e3d019",
+  "new_rev": "90cdd88512e1fe0ac86db8d5aa2f21c7fa5b3bf1",
+  "timeout": "120s"
+ },
+ {
+  "id": "RC3Q-1-T3",
+  "note": "Release empties table 0 only",
+  "file": "internal/table/table.go",
+  "find": "\tfor _, t := range s.tables {\n\t\tt.clear()",
+  "replace": "\tfor _, t := range s.tables[:min(1, len(s.tables))] {\n\t\tt.clear()",
+  "test": "TestReleaseKeepsTheDeclarationsAndAnEarlierSnapshot",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "internal/table",
+  "old_rev": "0b4b5019d81c3ff49468f5cf650b1e43b2e3d019",
+  "new_rev": "90cdd88512e1fe0ac86db8d5aa2f21c7fa5b3bf1",
+  "timeout": "120s"
+ },
+ {
+  "id": "RC3Q-2",
+  "note": "clear's empty Version loses keyKind and nkey",
+  "file": "internal/table/table.go",
+  "find": "t.cur.Store(t.cur.Load().empty(0))",
+  "replace": "t.cur.Store(&Version{rows: map[key][]event.Value{}})",
+  "test": "TestReleaseKeepsTheDeclarationsAndAnEarlierSnapshot",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "pkg": "internal/table",
+  "old_rev": "0b4b5019d81c3ff49468f5cf650b1e43b2e3d019",
+  "new_rev": "90cdd88512e1fe0ac86db8d5aa2f21c7fa5b3bf1",
+  "timeout": "120s"
+ },
+ {
+  "id": "RC3Q-control-T2",
+  "control": true,
+  "test": "TestReleaseFreesTheRowsOnceNoEarlierSnapshotIsHeld",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "internal/table",
+  "old_rev": "0b4b5019d81c3ff49468f5cf650b1e43b2e3d019",
+  "new_rev": "90cdd88512e1fe0ac86db8d5aa2f21c7fa5b3bf1",
+  "timeout": "120s"
+ },
+ {
+  "id": "RC3Q-control-T3",
+  "control": true,
+  "test": "TestReleaseKeepsTheDeclarationsAndAnEarlierSnapshot",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "pkg": "internal/table",
+  "old_rev": "0b4b5019d81c3ff49468f5cf650b1e43b2e3d019",
+  "new_rev": "90cdd88512e1fe0ac86db8d5aa2f21c7fa5b3bf1",
+  "timeout": "120s"
+ }
+]

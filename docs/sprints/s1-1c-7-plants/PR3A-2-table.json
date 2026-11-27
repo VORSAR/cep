@@ -1,0 +1,32 @@
+[
+ {
+  "id": "PR3A-2-P3",
+  "note": "the Set keeps its cached Snapshot: it alone holds every row",
+  "file": "internal/table/table.go",
+  "find": "\ts.last = nil\n",
+  "replace": "\t// s.last = nil\n",
+  "test": "TestReleaseFreesTheRowsOnceNoEarlierSnapshotIsHeld",
+  "pkg": "internal/table",
+  "timeout": "120s"
+ },
+ {
+  "id": "PR3A-2-P4",
+  "note": "Release empties no table",
+  "file": "internal/table/table.go",
+  "find": "\t\tt.clear()\n",
+  "replace": "\t\t_ = t\n",
+  "test": "TestReleaseFreesTheRowsOnceNoEarlierSnapshotIsHeld",
+  "pkg": "internal/table",
+  "timeout": "120s"
+ },
+ {
+  "id": "PR3A-2-T3",
+  "note": "clear stores a nil Version",
+  "file": "internal/table/table.go",
+  "find": "t.cur.Store(t.cur.Load().empty(0))",
+  "replace": "t.cur.Store(nil)",
+  "test": "TestReleaseKeepsTheDeclarationsAndAnEarlierSnapshot",
+  "pkg": "internal/table",
+  "timeout": "120s"
+ }
+]

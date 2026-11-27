@@ -467,6 +467,42 @@ Its new later items:
 - **No spot-check for W3** (owner, 2026-11-25).
 - **The final gate at PR 3's head:** named in PR 3's description; this record takes it at the close (G5).
 
+**PR 3: the blind reviews and the fix round** (2026-11-26 to 2026-11-27; [decisions](decisions.md#owner-decisions-2026-11-27--pr-3s-review)):
+- **The gate before the reviews,** at 4ab0d26b (before the rebase), on battery; no row judges timing.
+  - T2: exit 0, run 20261125T170932Z-91a3d2, 218 s.
+  - T4 lint: exit 0, run 20261125T171310Z-f00538.
+  - T4 proofs: exit 0, run 20261125T171326Z-f0b5e2, 284 s.
+- **The blind reviews,** at 4ab0d26b: architecture ([report](../reviews/s1-1c-7-pr3-architecture.md)) and QA in two halves ([report](../reviews/s1-1c-7-pr3-qa.md)).
+  - No blockers. They found 8 should-fix test gaps, 2 stale test docs, 3 later items and one older leak.
+  - The coordinator confirmed each should-fix with a plant that no test caught. The table is under [Findings](#findings).
+- **The rebase onto main at 5de6ad5** (2026-11-27), described under W3 above.
+- **The fix round,** from 5c87667. Fresh builders worked in one worktree each; the coordinator re-ran every batch and the packages, plain and under `-race`, then picked each commit ([`commit-map.json`](s1-1c-7-plants/commit-map.json)'s `pr3-fix`).
+  - **fixa:**
+    - 9b86cd6 (PR3Q-1, PR3Q-2, PR3Q-4, PR3Q-5): `PR3-fixa-root.json` 6 of 6.
+    - 6c1ca5b (PR3Q-3): `PR3-fixa-apipartition.json` 2 of 2.
+  - **fixb:**
+    - b99df24 (PR3A-1, PR3Q-22): `PR3-fixb-expr.json` 5 of 5.
+    - 87d5412 (PR3Q-20): `PR3-fixb-table.json` 4 of 4.
+    - 1dd917d (PR3Q-21): `PR3-fixb-parser.json` 2 of 2.
+    - 55bd409 (PR3Q-23): `PR3-fixb-gate.json` 2 of 2.
+  - **The tables' release (PR3A-2),** built from its [design note](s1-1c-7-design-tables-release.md):
+    - b5cb898: `table.Set.Release`;
+    - 499af5e: the remove step calls it;
+    - c3a795f: the sentence beside the drain guard that the releases rely on.
+
+    The proofs:
+    - T1, T2 and T3 red first;
+    - `PR3A-2-table.json` red 3; `PR3A-2-runtime.json` red 2;
+    - the three GC tests 20 of 20 under `-race`;
+    - no table Set is handed to two apps, in production or in a test.
+- **The re-check** of the fix round, 5c87667..c3a795f: fresh blind reviewers, architecture and QA, 20 minutes each (re-check sections of the [architecture](../reviews/s1-1c-7-pr3-architecture.md#re-check-of-the-fix-round-2026-11-27) and [QA](../reviews/s1-1c-7-pr3-qa.md#re-check-of-the-fix-round-2026-11-27) reports).
+  - No blockers. Every earlier finding is now pinned: QA's 14 plants went red.
+  - The architecture reviewer's hostile test (four writers and one reader across Send, Drain and Remove) under `-race -count=10`: no DATA RACE, and ErrRemoved after Remove.
+  - **Four small items, fixed by the tables' builder:**
+    - 5006f95 (RC3Q-1, RC3Q-2): both Release tests hold rows in every table, and a keyed write after Release. `PR3-recheck-table.json` 5 of 5; the two GC tests 20 of 20 under `-race`.
+    - 3a8c503 (RC3A-1, RC3A-2): the remove step's comments separate Release's safety from what frees the rows, and `App.Tables` says the Set is the app's own. astequal: 46 declarations equal.
+- **The gate at PR 3's head:** named in PR 3's description; this record takes it at the close (G5).
+
 ## The finding ledger
 
 186 ids: G10's 23, G7a's 6, G2's 156 and G3-72. The ledger is built through the sprint and checked by `docs/sprints/s1-1c-7-plants/check_ledger.py` (plan check §7.5).
@@ -679,6 +715,7 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 - **The Python builds 20261124** in their own pull request, #56 ([owner, 2026-11-25](decisions.md#owner-decisions-2026-11-25--the-python-builds-20261124)).
 - **The recording queue's release** in PR 3, PR 2's review findings PR2A-3 and PR2Q-10 ([owner, 2026-11-25](decisions.md#owner-decisions-2026-11-25--w3s-start)).
 - **W3 without its spot-check** ([owner, 2026-11-25](decisions.md#owner-decisions-2026-11-25--w3s-start)).
+- **The tables' rows released at Remove** in PR 3, PR 3's review finding PR3A-2 ([owner, 2026-11-27](decisions.md#owner-decisions-2026-11-27--pr-3s-review)).
 
 ## Findings
 
@@ -719,6 +756,32 @@ Each lane's design note holds every finding's kind, its exact change and its pro
 | RCA-3, RCQ-4 | later | `holdDraining`'s comment bounded its lock wait by another Drain's deadline | fixed: d1201f9 |
 | RCQ-2 | later | Two drain-holds tests hung instead of failing when the move before the lock was lost | fixed: 57d329d |
 | RCQ-3 | later | The blocked-recorder test waited out the 60 s ceiling on any failure | fixed: 57d329d |
+
+**PR 3's blind reviews, at 4ab0d26b** ([architecture](../reviews/s1-1c-7-pr3-architecture.md), [QA](../reviews/s1-1c-7-pr3-qa.md)). No blockers.
+
+| Id | Severity | Finding | Disposition |
+|---|---|---|---|
+| PR3A-1 | should-fix, made by W3's G10-15 | Register's duplicate-name check was no longer reached by any test | fixed: b99df24 |
+| PR3Q-1 | should-fix | Only a table's first starting row could reach the engine and no test noticed | fixed: 9b86cd6 |
+| PR3Q-2 | should-fix | The @source half of G7a-1's refusal text was not pinned | fixed: 9b86cd6 |
+| PR3Q-3 | should-fix | TestEmbeddedInterfaceIsRefused claimed the golden untouched and never read it | fixed: 6c1ca5b |
+| PR3Q-4, PR3A-3 | should-fix | TestCvConnectorFactory's doc said the default factory names each type's sprint | fixed: 9b86cd6 |
+| PR3Q-20 | should-fix | table.New's three refusal texts were not pinned, though G10-22 rests on them | fixed: 87d5412 |
+| PR3Q-21 | should-fix | lexError's fallback name was not pinned | fixed: 1dd917d |
+| PR3Q-22 | should-fix | Register's MinArgs > MaxArgs refusal was pinned for a scalar only | fixed: b99df24 |
+| PR3Q-5 | later | Start's "an error before the activation leaves the app startable" had no test | fixed: 9b86cd6 |
+| PR3Q-23 | later | test_notbuilt.py's hand copy was never compared with conformance/notbuilt.json | fixed: 55bd409 |
+| PR3A-2 | later, older than PR 3 | After Undeploy the removed app's tables kept their rows until Close | fixed: b5cb898, 499af5e (owner, 2026-11-27) |
+| PR3A pre-mortem | later | The queue's release relies on the drain guard in the remove path, unstated | fixed: c3a795f |
+
+**PR 3's re-check of the fix round, at c3a795f.** No blockers.
+
+| Id | Severity | Finding | Disposition |
+|---|---|---|---|
+| RC3Q-1 | should-fix | Set.Release emptying every table was pinned only for table 0 | fixed: 5006f95 |
+| RC3Q-2 | later | "The table stays writable" was asserted by a count only | fixed: 5006f95 |
+| RC3A-1 | later | The remove step's comments merged Release's safety with what frees the rows | fixed: 3a8c503 |
+| RC3A-2 | later | App.Tables did not say the Set belongs to one app | fixed: 3a8c503 |
 
 ## Done-done
 

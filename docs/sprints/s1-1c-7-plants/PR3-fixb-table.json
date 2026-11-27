@@ -1,0 +1,56 @@
+[
+ {
+  "id": "PR3Q-20a",
+  "file": "internal/table/table.go",
+  "find": "errors.New(\"table: empty table name\")",
+  "replace": "errors.New(\"table: bad declaration\")",
+  "test": "TestNewRejects",
+  "pkg": "./internal/table",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "e42040ce229b81468e6ccca1bd4b7ed026c788e8"
+ },
+ {
+  "id": "PR3Q-20b",
+  "file": "internal/table/table.go",
+  "find": "fmt.Errorf(\"table %s: no primary key\", name)",
+  "replace": "errors.New(\"table: bad declaration\")",
+  "test": "TestNewRejects",
+  "pkg": "./internal/table",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "e42040ce229b81468e6ccca1bd4b7ed026c788e8"
+ },
+ {
+  "id": "PR3Q-20c",
+  "file": "internal/table/table.go",
+  "find": "fmt.Errorf(\"table %s: no attributes declared\", name)",
+  "replace": "errors.New(\"table: bad declaration\")",
+  "test": "TestNewRejects",
+  "pkg": "./internal/table",
+  "expect": {
+   "old": "green",
+   "new": "red"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "e42040ce229b81468e6ccca1bd4b7ed026c788e8"
+ },
+ {
+  "id": "PR3Q-20-control",
+  "control": true,
+  "test": "TestNewRejects",
+  "pkg": "./internal/table",
+  "expect": {
+   "old": "green",
+   "new": "green"
+  },
+  "old_rev": "5c8766740218cc3f09edf2f72340a03aab0eb909",
+  "new_rev": "e42040ce229b81468e6ccca1bd4b7ed026c788e8"
+ }
+]

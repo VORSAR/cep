@@ -1,5 +1,5 @@
 {
- "about": "S1.1c-7's commit ids before and after a rewrite of history. pr-52: the integration branch's commits as the record's G0 and W0 rows name them -> the same commits on main after PR #52's rebase-merge (and the later docs commits on the integration branch). lanes: each lane branch's commit -> its pick on the integration branch after the rebase onto main (06f17b5). w3: each W3 lane commit (lanes E2, CD1, CD2 and the recording-queue fix, branched from main at cc2c2c1) to its pick on the integration branch for PR 3. w3-rebase: each W3 commit on the integration branch (picks and the W3 docs commit) to its id after the rebase onto main at 5de6ad5 (2026-11-27), which dropped the three README commits already merged as #57 and #58; the record names the new ids, and the PR 3 reviews read 4ab0d26b.",
+ "about": "S1.1c-7's commit ids before and after a rewrite of history. pr-52: the integration branch's commits as the record's G0 and W0 rows name them -> the same commits on main after PR #52's rebase-merge (and the later docs commits on the integration branch). lanes: each lane branch's commit -> its pick on the integration branch after the rebase onto main (06f17b5). w3: each W3 lane commit (lanes E2, CD1, CD2 and the recording-queue fix, branched from main at cc2c2c1) to its pick on the integration branch for PR 3. w3-rebase: each W3 commit on the integration branch (picks and the W3 docs commit) to its id after the rebase onto main at 5de6ad5 (2026-11-27), which dropped the three README commits already merged as #57 and #58; the record names the new ids, and the PR 3 reviews read 4ab0d26b. pr3-fix: each commit of PR 3's fix round (lanes fixa, fixb and tables, branched from 5c87667 and 55bd409) to its pick on the integration branch.",
  "lanes": {
   "074b48dc0d7800d96cb773b2c8bc32d1519c4b7b": "95c96f9907675ecaeccd7f4a7b2182d581746c44",
   "13ef6556896515a2b43ba9d167321e2686019099": "262ae0d3e0e754342ae5206eb8be7793811fa330",
@@ -60,6 +60,19 @@
   "e23b6dce0ae586072bbac0bccb9f4492dca51869": "fac41c9a4a6d714036c907e148dbf180430a60fa",
   "e417f515d6bbe6cc0cf5f30925899ad769eddf25": "ceacd9ac555eb2887b8d731880b7a62c67691cb4",
   "f65a3a9281261a273402ce45bd0d9fc737e81733": "80f267adf7a761d89240c80787f04339c39bb6ce"
+ },
+ "pr3-fix": {
+  "0b4b5019d81c3ff49468f5cf650b1e43b2e3d019": "c3a795f3eb939a3b51775ff7e0967ae5b291f9de",
+  "0e5681c1d2050ba9ea29fd5fc5fd81ff2aa0fd80": "9b86cd60fc7f3a6dbccf39e3e3ac2c05bd2ba50c",
+  "2e500f00ee8e587a199eb217bba51b6df4e69877": "1dd917d17ca08583bb5570f5f18c1dce389c6edd",
+  "341cd00d95c632446cd091293b687fe5ff2399fb": "3a8c5038fa466fb605ae759b9235952a7a2d6420",
+  "6af59f5abe52ced2bd726e6efbb3e7c78e948a28": "b99df24700f76b5d32eab2afca4fc0231ca39d73",
+  "90cdd88512e1fe0ac86db8d5aa2f21c7fa5b3bf1": "5006f95cf84ea2dbc3602681dda0b2d6196cb68c",
+  "9aed4144687624835a27c16a9e210164853f3469": "b5cb8988752dcad4eafd63674db3dd2b77a41f73",
+  "bc3458dccdbd41e978badb459a768db58ba002ea": "6c1ca5b3690ecda3345e5a287865a0ed7427ffa0",
+  "e42040ce229b81468e6ccca1bd4b7ed026c788e8": "87d5412054bb548fef21afc86fe207d41c875b87",
+  "e7c3964d8b4e7290ef0b6ff86db5ba7f5b0fed83": "55bd4096ecf0ea9922b840a13a0e2084caaf55b5",
+  "f8c8c474758d4af75c64f451b54fd2f62fe22b2d": "499af5e3d14f6b527ff5e79d4f9d06c6ab948b54"
  },
  "w3": {
   "0b35652c8cc8333f4a67474afabc8cb4b7009931": "b9218d914aecf267aacd1158fe7e5f83932b3157",
