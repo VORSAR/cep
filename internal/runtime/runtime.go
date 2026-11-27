@@ -39,7 +39,7 @@ type SinkBinding struct {
 type App struct {
 	Streams []clock.StreamSpec // declaration order; their index is the stream id
 	Schemas []event.Schema     // aligned with Streams: Send and Start validate against them
-	Tables  *table.Set         // nil: no tables; the router is their only live writer (owner F14)
+	Tables  *table.Set         // nil: no tables; the router is their only live writer (owner F14), and Remove empties them
 	Rules   []Rule
 	Sinks   []SinkBinding
 	// Recorder writes the app's recording (S3.2a-1's D3; S3.2b-2's Q1, Q2) on its own goroutine; nil: none, the
