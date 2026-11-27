@@ -429,6 +429,37 @@ func (c *endsAfterFirstCheck) Err() error {
 
 func (c *endsAfterFirstCheck) Done() <-chan struct{} { return c.done }
 
+// TestAStartWithAnEndedContextLeavesTheAppStartable: a Start whose context has already ended fails with
+// context.Canceled before the activation and leaves the app as it was (Start's doc), so a second Start returns nil
+// and the starting row is in T before the first event.
+func TestAStartWithAnEndedContextLeavesTheAppStartable(t *testing.T) {
+	t.Parallel()
+	ctx := fcCeiling(t)
+	r := fcNew(t, cep.Config{})
+	sink, bind := fcSink("O")
+	row := func(w cepio.RowWriter) error {
+		w.SetString(w.AttrIndex("k"), "a")
+		w.SetInt(w.AttrIndex("v"), 1)
+		return nil
+	}
+	h := fcDeploy(t, ctx, r, "tbl", fcTableSrc, bind, cep.WithTableRows("T", row))
+	ended, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := h.Start(ended); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start with an ended context: %v; want context.Canceled", err)
+	}
+	if err := h.Start(ctx); err != nil {
+		t.Fatalf("Start after a Start refused for its ended context: %v; want nil (the refusal left the app as it was)", err)
+	}
+	in := fcInput(t, h, "S")
+	fcSend(t, ctx, in, fcKey("a", fcAt(1)))
+	fcSend(t, ctx, in, fcKey("b", fcAt(2)))
+	fcStop(t, ctx, h)
+	if recs := sink.Drain(); len(recs) != 1 || recs[0].Values[0] != "b" {
+		t.Errorf("outputs %+v; want exactly b (a was in T before the first event)", recs)
+	}
+}
+
 // TestAStartWhoseContextEndsMidwayLeavesTheAppStartable: Start either completes, starting rows included, or leaves
 // the app startable; the starting row is in T before the first event either way.
 func TestAStartWhoseContextEndsMidwayLeavesTheAppStartable(t *testing.T) {

@@ -318,6 +318,32 @@ func TestWithTableRowsAreVisibleToTheFirstEvent(t *testing.T) {
 	}
 }
 
+// TestEveryStartingRowOfATableIsVisibleToTheFirstEvent: WithTableRows with two rows for one table puts both in it
+// at Start, before the first event. Keys a and b are in T, so of a, b and c the rule NotIn passes only c.
+func TestEveryStartingRowOfATableIsVisibleToTheFirstEvent(t *testing.T) {
+	t.Parallel()
+	ctx := fcCeiling(t)
+	r := fcNew(t, cep.Config{})
+	sink, bind := fcSink("O")
+	row := func(k string) func(cepio.RowWriter) error {
+		return func(w cepio.RowWriter) error {
+			w.SetString(w.AttrIndex("k"), k)
+			w.SetInt(w.AttrIndex("v"), 1)
+			return nil
+		}
+	}
+	h := fcDeploy(t, ctx, r, "tbl", fcTableSrc, bind, cep.WithTableRows("T", row("a"), row("b")))
+	fcStart(t, ctx, h)
+	in := fcInput(t, h, "S")
+	for i, k := range []string{"a", "b", "c"} {
+		fcSend(t, ctx, in, fcKey(k, fcAt(float64(i+1))))
+	}
+	fcStop(t, ctx, h)
+	if recs := sink.Drain(); len(recs) != 1 || recs[0].Values[0] != "c" {
+		t.Errorf("outputs %+v; want exactly c (a and b, both starting rows of T, were in T before the first event)", recs)
+	}
+}
+
 // TestAStartingRowWithANullKeyFailsDeployWithTheFacadesText: a null key in a starting row is refused by Deploy, in
 // the facade's WithTableRows wording, before the engine sees the row.
 func TestAStartingRowWithANullKeyFailsDeployWithTheFacadesText(t *testing.T) {

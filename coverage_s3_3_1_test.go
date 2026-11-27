@@ -70,7 +70,8 @@ func (cvFactory) Sink(typ string, keys map[string]string) (cepio.Sink, error) {
 }
 
 // TestCvConnectorFactory: the program's @source and @sink go through WithConnectors' factory (the keys as the rule
-// language writes them); the default factory names the sprint of every type, and inmemory's annotation form is refused.
+// language writes them); without it the default factory refuses @source(type = 'stdin') as not available in this
+// release, pointing at WithSource; inmemory's annotation form is refused, and an unknown type is E-NAME-001.
 func TestCvConnectorFactory(t *testing.T) {
 	t.Parallel()
 	ctx := fcCeiling(t)
@@ -81,8 +82,9 @@ func TestCvConnectorFactory(t *testing.T) {
 		"@sink(type = 'http', url = 'http://x', @map(type = 'json'))\n" +
 		"stream O (k string, ts timestamp);\n" +
 		"rule F intent 'Forward.' from S select k insert into O;\n"
-	if _, err := r.Deploy(ctx, "ann", src); !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), "is not available in this release") {
-		t.Errorf("default factory: %v; want ErrConnectorNotBuilt saying the connector is not available in this release", err)
+	_, err := r.Deploy(ctx, "ann", src)
+	if want := `@source(type = "stdin") is not available in this release; bind a Go source with WithSource`; !errors.Is(err, cep.ErrConnectorNotBuilt) || !strings.Contains(err.Error(), want) {
+		t.Errorf("default factory: %v; want ErrConnectorNotBuilt with %q", err, want)
 	}
 	h, err := r.Deploy(ctx, "ann", src, cep.WithConnectors(cvFactory{}))
 	if err != nil {
