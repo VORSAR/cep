@@ -1,5 +1,5 @@
 {
- "about": "S1.1c-7's commit ids before and after a rewrite of history. pr-52: the integration branch's commits as the record's G0 and W0 rows name them -> the same commits on main after PR #52's rebase-merge (and the later docs commits on the integration branch). lanes: each lane branch's commit -> its pick on the integration branch after the rebase onto main (06f17b5). w3: each W3 lane commit (lanes E2, CD1, CD2 and the recording-queue fix, branched from main at cc2c2c1) to its pick on the integration branch for PR 3.",
+ "about": "S1.1c-7's commit ids before and after a rewrite of history. pr-52: the integration branch's commits as the record's G0 and W0 rows name them -> the same commits on main after PR #52's rebase-merge (and the later docs commits on the integration branch). lanes: each lane branch's commit -> its pick on the integration branch after the rebase onto main (06f17b5). w3: each W3 lane commit (lanes E2, CD1, CD2 and the recording-queue fix, branched from main at cc2c2c1) to its pick on the integration branch for PR 3. w3-rebase: each W3 commit on the integration branch (picks and the W3 docs commit) to its id after the rebase onto main at 5de6ad5 (2026-11-27), which dropped the three README commits already merged as #57 and #58; the record names the new ids, and the PR 3 reviews read 4ab0d26b.",
  "lanes": {
   "074b48dc0d7800d96cb773b2c8bc32d1519c4b7b": "95c96f9907675ecaeccd7f4a7b2182d581746c44",
   "13ef6556896515a2b43ba9d167321e2686019099": "262ae0d3e0e754342ae5206eb8be7793811fa330",
@@ -87,5 +87,33 @@
   "f4c055225531138169ea1bda614a0104b6921388": "16357392d4f736940c33e7950ebb5d0c2d2ba1a5",
   "f8e4c6c37479bce10677d5445527bef6a3dec229": "ce348a4889da5602721c3bfb7f0270b35981c58e",
   "ffd93bcb92e730f48f4f7344dbd02cc578176c00": "2d01f522c793861d47b1008444f955dec164770f"
+ },
+ "w3-rebase": {
+  "0d42ddacf194ad0061d2ee56e516581ad189bbb8": "ad3e7a22ac4cf6637988ee9b7d602fe16c86120c",
+  "13bc0860c2cdadf6d1b9aae83f2734cc70dae342": "d7ce54d77617abd8269d866d480183597afdb0cb",
+  "153cf5e7ce96b196090d42f060c3a50e41d812a0": "d720f736c4cc8a35e29dbe6bdfeca00b53841ef8",
+  "16357392d4f736940c33e7950ebb5d0c2d2ba1a5": "6b7d7dac1cc470d8267648fd8c91815977a01a47",
+  "173940b380899e6386683d70d0d7917c26aa1f2f": "6c3b7eccdfa65025e5dd05d2db9ef3861cbc809f",
+  "1bb97615be039f5d8afb6c90143df55bb36df5c8": "11ed4303428dd8c7eb7c4587ec08818d9e6f0ddb",
+  "1cfad34da18a8030d67a46468a19337cf5616000": "14e2bb5922cb070a94d5651302eda12e79e3c17a",
+  "21bbc2407b04a0b16ea899027ee05b9272590419": "8192d77ed49a611b0ca76daec3f6bf327c8d16be",
+  "28774dec2904a3a5be5755b80faaa70ef14bd4bb": "ac83064989d6ca477c9bdd9d53028fa038cca65a",
+  "2d01f522c793861d47b1008444f955dec164770f": "44c779c2a39745e91127de35e36cb83ed7be3b82",
+  "47c140617700df59316555c3b6428212cc17cde5": "6b9038e96a58d25de32d1409b984e13b03181b5d",
+  "4ab0d26b23877408b828592f61fd91c46b9b1178": "16c836983f5053ec1ec9f1eeb28e9248b9fd5d87",
+  "5b783dfaf61ac975f68a723f066c1897b5731479": "900dff200fcb8266589fcde93f707e62ed7062ce",
+  "60a1a574a4a35b4459f26b78f715cf33977cec09": "b47a916400981aa67751076910cbf9ace10634dd",
+  "6a22a470a856cc9df8181dbbeb3a45a24f2d47a4": "3dce8da85b7612795f0c017792b4b610225801d9",
+  "7bde86df1ed20b58ce8220c57a6278de239113db": "1cf2a4106e050dd8770cc14bfae772edaa0cfafe",
+  "8f3e6ddd008a75c2d5ba3f3638a79ee19c9aa432": "65de389c5e6a196772c90b8cd1778e5fbeb1891f",
+  "99f3072860a828d1201678a1c80e6342346fda24": "93f9c0634c41b360e2b10463a12e8293a5f58904",
+  "a30808c5127b65de5c8fb3ceb222c029826cc5d1": "6f863162a6c55dc54e43520e9be29c8ea4018b36",
+  "a4beb9300bedaa82cfc0ead7a928c7ef0b62ff6e": "76364b172b23105cdec5eb5afcc36a3e0e11e36f",
+  "b9218d914aecf267aacd1158fe7e5f83932b3157": "e87b7ad75c4e05f6ef4abccf4d008e4faf108763",
+  "ce348a4889da5602721c3bfb7f0270b35981c58e": "64d3b74ab1d80242446f854cb38159a5d4b6996d",
+  "d0fad16af87923985d4cc0d7398c9706cf6cb711": "e89d8d92a586f0c5d285eb4145fc6369855f9bee",
+  "da0d1a37621c8589e515ee609393567d30babf6c": "7126025586a39cf067d90276e96d34d5dceb12e6",
+  "f788400d3c283ab692a2033245f8e3cf7f566a9e": "dab6b6d0d3a4fd1db1195747130543f26bda1042",
+  "f937d9b385686667d32b9c558049ea913e162188": "f891c397946c77e598b6475202270b436bf337a4"
  }
 }

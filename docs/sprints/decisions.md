@@ -142,6 +142,7 @@
 | 2026-11-25 | [PR 2's re-check](#owner-decisions-2026-11-25--pr-2s-re-check) |
 | 2026-11-25 | [the Python builds 20261124](#owner-decisions-2026-11-25--the-python-builds-20261124) |
 | 2026-11-25 | [W3's start](#owner-decisions-2026-11-25--w3s-start) |
+| 2026-11-27 | [PR 3's review](#owner-decisions-2026-11-27--pr-3s-review) |
 
 ## The decisions
 
@@ -1560,3 +1561,27 @@ W3 (lanes E2, CD1 and CD2) started from main at cc2c2c1 after #54 and #56 merged
    - Rejected: keeping it, about an hour and one agent.
 
 Also settled by the coordinator from the design, not a decision: PR2A-2 and PR2Q-5 (who owns the starting rows after Add) are met by E2-1's construction. Deploy builds the rows, hands them to Add and keeps no reference; `AppHandle.tableRows` goes.
+
+### Owner decisions, 2026-11-27 — PR 3's review
+
+Three fresh blind reviewers read W3 at 4ab0d26b: architecture, and QA in two halves by lane. None found a blocker.
+- They found 8 should-fix gaps, all in W3's tests. The coordinator confirmed each one with a plant that no test catches.
+- They found 2 stale test docs and 3 small later items.
+- The architecture review found one older leak.
+
+Three answers, all as recommended.
+
+1. **The fix round covers every finding in W3's own work:**
+   - the 8 should-fix test gaps (PR3Q-1, -2, -3, -20, -21, -22 and PR3A-1), each red first on its plant;
+   - the 2 stale docs (PR3Q-4, the same line as PR3A-3);
+   - the 3 later items: a test for Start's retry after an early failure (PR3Q-5); a check that the gate's not-built copy matches `conformance/notbuilt.json` (PR3Q-23); and a sentence beside the guard that the queue's release relies on (the architecture review's pre-mortem).
+   - Rejected: the should-fix items and the docs only, with the 3 later items forwarded to the debt slice.
+2. **The older leak is fixed in PR 3, design first (PR3A-2).** After Undeploy, the removed app's record keeps its tables, so their rows stay in memory until Close. The fix:
+   - a short design note, because a caller-side table-write check can still read the tables then;
+   - a fresh builder, test-first;
+   - a re-check.
+
+   It matches the queue's release of 2026-11-25.
+   - Rejected: a known issue for the debt slice after S4.2.
+3. **PR 3 is pushed and opened once the fix round is verified and T2, T4 lint and T4 proofs are green.** The new branch is `s1-1c-7/pr-3`, pushed with no force. The sprint-close docs then go onto the same pull request before the owner merges.
+   - Rejected: asking again at that point.
