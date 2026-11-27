@@ -58,6 +58,10 @@ func (rt *router) remove(it item) {
 		it.reply <- reply{err: ErrRemoved} // a second removal, or one racing Close (break-it B1)
 		return
 	}
+	// An activated app is removed only once its drain is complete; the remove step's releases rely on it: the
+	// recorder's release of its queue at its stop (every record is queued before the stop), and the release of the
+	// tables' rows (no event, tick or drain walk of the app follows its drain, so no shard is handed a snapshot after
+	// mRemove).
 	if a.activated && !(a.drained && a.drainRes != nil) {
 		it.reply <- reply{err: fmt.Errorf("%w (app %d)", ErrDrainIncomplete, it.app)}
 		return
