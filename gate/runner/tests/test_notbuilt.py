@@ -2,13 +2,16 @@
 sprint row the marker has reached is expired, named with its construct and the marker; an entry must name a row.
 
 Pure, on fixtures: the order is a fixture table in the plan's printed order, the entries are today's nine as
-listed in conformance/notbuilt.json, copied by hand in file order.
+listed in conformance/notbuilt.json, copied by hand in file order; test_todays_nine_load_in_file_order holds the
+copy to the real file.
 """
 
 import json
+import os
 import unittest
 
 from gate.runner import notbuilt, sprintid
+from gate.runner.tests import support
 
 ROWS = ("S3.3", "S1.1c", "S4.1", "S4.2", "S7", "S8", "S9.1", "S9.2", "S10")
 ORDER = sprintid.load_order(
@@ -40,10 +43,11 @@ def line(file: str, construct: str, sprint: str, current: str) -> str:
 
 class LoadEntries(unittest.TestCase):
     def test_todays_nine_load_in_file_order(self):
-        self.assertEqual(
-            notbuilt.load_entries(listing(*ENTRIES)),
-            tuple(notbuilt.Entry(f, c, s) for f, c, s in ENTRIES),
-        )
+        want = tuple(notbuilt.Entry(f, c, s) for f, c, s in ENTRIES)
+        self.assertEqual(notbuilt.load_entries(listing(*ENTRIES)), want)
+        # The hand copy is the real file's entries: each file, construct and sprint, in the file's order.
+        with open(os.path.join(support.REPO, notbuilt.NOTBUILT), encoding="utf-8") as f:
+            self.assertEqual(notbuilt.load_entries(f.read()), want)
 
     def test_an_empty_list_loads(self):
         self.assertEqual(notbuilt.load_entries(listing()), ())
