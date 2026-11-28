@@ -723,7 +723,7 @@
         "nightly"
       ],
       "blocking": true,
-      "timeout_s": 900,
+      "timeout_s": 1200,
       "needs": [],
       "scope": [
         "tools"
@@ -1289,7 +1289,7 @@
         "nightly"
       ],
       "blocking": true,
-      "timeout_s": 3120,
+      "timeout_s": 3480,
       "needs": [],
       "scope": [
         "prod",
@@ -1310,7 +1310,7 @@
         "utf8",
         "gate/runner/rows/race.py",
         "--repeat=20",
-        "--timeout=49m",
+        "--timeout=55m",
         "./internal/playback"
       ]
     }

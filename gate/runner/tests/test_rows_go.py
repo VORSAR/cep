@@ -7,6 +7,7 @@ run is red, naming both numbers. Each narrowed case has a full control that pass
 import json
 import os
 import sys
+import types
 import unittest
 
 from gate.runner import registry
@@ -27,6 +28,17 @@ GO_KILL_MARGIN_S = 60  # cmd/go kills a test binary a minute after its -timeout 
 # Chosen, not measured on CI: building the race-instrumented test binary comes before both of go's clocks start, and
 # the row judges test.json and writes its record after go exits; two minutes covers a cold build of one package.
 STRESS_HEADROOM_S = 120
+# The slowest recorded CI time of each nightly go row, in seconds, from the burn-in runs 46112427392, 46114653311,
+# 46115572270 and 46116481578 (docs/sprints/s1-1c-11-record.md). cpu's is the row's whole time, an upper bound for
+# each of its two go invocations. Each row's go -timeout must be at least 3 x its entry (RaceStressBudget).
+SLOWEST_CI_S = {
+    "cpu": 37.7,
+    "race-stress": 229.0,
+    "race-stress-inmemory": 17.7,
+    "race-stress-partition": 21.9,
+    "race-stress-playback": 976.4,
+    "race-stress-root": 71.7,
+}
 
 
 def wrapper(name, *args):
@@ -214,7 +226,8 @@ class RaceStressBudget(unittest.TestCase):
     """The real nightly race-stress and cpu rows, read through the gate's registry loader: each row's timeout_s must
     hold go test's timeout, cmd/go's kill margin after it and the build-and-report headroom, and stay within the
     registry's hour (plan check S1.1c-11, counter-example 18: one pin per row). go's -timeout bounds one test binary,
-    so each race-stress row names exactly one package, and the cpu row's two invocations each get their own."""
+    so each race-stress row names exactly one package, and the cpu row's two invocations each get their own. Each
+    row's go timeout is also at least 3 x its slowest recorded CI run (SLOWEST_CI_S)."""
 
     def real_row(self, row_id):
         rows = {r.id: r for r in registry.load(os.path.join(support.GATE, "registry.json"))}
@@ -225,19 +238,32 @@ class RaceStressBudget(unittest.TestCase):
         self.assertLessEqual(need_s, row.timeout_s, f"{row.id}: {why} > timeout_s")
         self.assertLessEqual(row.timeout_s, 3600, f"{row.id}: timeout_s past the registry's hour")
 
+    def stress_timeout_min(self, row):
+        """A race-stress row's go timeout in minutes: its own --timeout, or the stress timeout without one."""
+        named = [a.removeprefix("--timeout=") for a in row.command if a.startswith("--timeout=")]
+        return int(named[0].removesuffix("m")) if named else race_row.STRESS_TIMEOUT_MIN
+
     def assertStressFits(self, row_id, package, *, own_timeout=True):
+        self.assertStressRowFits(self.real_row(row_id), package, own_timeout=own_timeout)
+
+    def assertStressRowFits(self, row, package, *, own_timeout=True):
         """A race-stress row: race.py, --repeat, one package (its expected scope too), and its go timeout — its own
         --timeout, or the stress timeout without one — with both margins inside its timeout_s."""
-        row = self.real_row(row_id)
         self.assertIn("gate/runner/rows/race.py", row.command)
+        after = row.command[row.command.index("gate/runner/rows/race.py") + 1 :]
+        self.assertEqual(
+            [a for a in after if not a.startswith("-")],
+            [package],
+            f"{row.id}: exactly one package, as go's -timeout bounds one test binary",
+        )
         self.assertTrue(any(a.startswith("--repeat=") for a in row.command), row.command)
         self.assertEqual(
             ([a for a in row.command if not a.startswith("-")][-1:], tuple(row.expected_scope)),
             ([package], ("go", package)),
         )
-        named = [a.removeprefix("--timeout=") for a in row.command if a.startswith("--timeout=")]
+        named = [a for a in row.command if a.startswith("--timeout=")]
         self.assertEqual(len(named), 1 if own_timeout else 0, row.command)
-        minutes = int(named[0].removesuffix("m")) if named else race_row.STRESS_TIMEOUT_MIN
+        minutes = self.stress_timeout_min(row)
         need_s = minutes * 60 + GO_KILL_MARGIN_S + STRESS_HEADROOM_S
         self.assertFits(row, need_s, f"go -timeout {minutes}m + {GO_KILL_MARGIN_S} s + {STRESS_HEADROOM_S} s")
 
@@ -257,10 +283,40 @@ class RaceStressBudget(unittest.TestCase):
         self.assertStressFits("race-stress-playback", "./internal/playback")
 
     def test_the_cpu_rows_two_go_timeouts_with_margins_fit_its_timeout_s(self):
+        """go's -timeout bounds each test binary, not the invocation, so this sum does not bound the cpu row's wall
+        when ./internal/... builds several binaries; the row's wall relies on the measured run (at most 38 s,
+        SLOWEST_CI_S) against its 2040 s timeout_s."""
         row = self.real_row("cpu")
         self.assertIn("gate/runner/rows/cpu.py", row.command)
         need_s = 2 * (cpu_row.TIMEOUT_MIN * 60 + GO_KILL_MARGIN_S) + STRESS_HEADROOM_S
-        self.assertFits(row, need_s, f"2 x (go -timeout {cpu_row.TIMEOUT_MIN}m + {GO_KILL_MARGIN_S} s) + headroom")
+        self.assertFits(
+            row,
+            need_s,
+            f"2 x (go -timeout {cpu_row.TIMEOUT_MIN}m, per test binary, + {GO_KILL_MARGIN_S} s) + headroom; the wall"
+            f" relies on the measured run ({SLOWEST_CI_S['cpu']} s)",
+        )
+
+    def test_each_rows_go_timeout_is_at_least_3_x_its_slowest_recorded_ci_run(self):
+        go_s = {
+            row_id: self.stress_timeout_min(self.real_row(row_id)) * 60 for row_id in SLOWEST_CI_S if row_id != "cpu"
+        }
+        go_s["cpu"] = cpu_row.TIMEOUT_MIN * 60
+        for row_id, slowest_s in sorted(SLOWEST_CI_S.items()):
+            with self.subTest(row=row_id):
+                self.assertGreaterEqual(
+                    go_s[row_id], 3 * slowest_s, f"{row_id}: go timeout {go_s[row_id]} s < 3 x slowest CI {slowest_s} s"
+                )
+
+    def test_a_race_stress_row_naming_two_packages_is_refused(self):
+        row = types.SimpleNamespace(
+            id="two-packages",
+            command=("python3.15", "gate/runner/rows/race.py", "--repeat=20", "--timeout=5m", "./a", "./b"),
+            expected_scope=("go", "./b"),
+            timeout_s=480,
+        )
+        with self.assertRaises(AssertionError) as caught:
+            self.assertStressRowFits(row, "./b")
+        self.assertIn("./a", str(caught.exception))
 
 
 class Race(GoRows):
@@ -499,6 +555,11 @@ class Cpu(GoRows):
 
     def test_a_test_failing_only_at_one_proc_fails_naming_cpu_1_and_the_unit_row_passes_it(self):
         # Counter-example 20: the unit row runs at the machine's GOMAXPROCS and passes; the cpu row names -cpu 1.
+        self.assertGreater(
+            os.cpu_count() or 1,
+            1,
+            "the unit-row half needs more than one CPU: on one, GOMAXPROCS is 1 and the unit row fails TestProcs too",
+        )
         self.package("a", self.ONE)
         unit_row = self.row("unit", command=wrapper("unit"), expected_scope=self.SCOPE, job="test")
         self.run_rows([unit_row, self.cpu_row()])
