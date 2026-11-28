@@ -56,3 +56,5 @@ Exit (G5)    ☐ two PRs, ≤ 100 commits each, merged by the owner
 ## Proofs as made
 
 *Each proof goes in as it is made (sprint model §10).*
+
+**Lane C, first commit** (cdd3770e on `s1-1c-11/lane-c`, picked onto the integration branch): `race.py --timeout=Nm` (a per-row go timeout; 25m stays the stress default) and the `cpu` row module (`go test -cpu=1`, then `-cpu=4`, each failure line naming its value), with 15 and 9 tests. Red first: 20 failures with `cpu.py` present and `race.py` unchanged (the 15 timeout tests on the old usage line, 5 budget pins on unregistered rows). Proofs: `test_rows_go` 61 tests OK (coordinator's re-run); T2 exit 0 on cdd3770e (run 20261128T035634Z-a91197), so the unregistered `cpu.py` passes the law checks. The proofs job before lane C: 248.3 s, exit 0 (run 20261128T034643Z-82c747). Stopped at the owner's 10-minute deadline (2026-11-28) with the four new race-stress rows, the cpu row's registry and law entries, the job split and the proof drivers not yet built.
