@@ -9,9 +9,9 @@ the unit `m` alone (S1.1c-11): a race-stress row may name its own, chosen from a
 With --repeat and no --timeout, go test gets -timeout 25m (its 10m default spans all N runs, so 20 overran); with
 neither, go's default stands. Any other value, and any other argument that starts with a dash, is a usage failure
 before go runs. go's -timeout bounds one test binary; test_rows_go pins each race-stress row's go timeout, with
-cmd/go's kill margin and a build-and-report headroom, inside its timeout_s. The nightly job runs race-stress beside
-the two fuzz rows (GATE_FUZZTIME 10m each, as many workers as cores), so its run time depends on the fuzz budget
-and the runner's cores: revisit 25m if either, or --repeat, rises.
+cmd/go's kill margin and a build-and-report headroom, inside its timeout_s. race-stress runs in a nightly job of its
+own (S1.1c-11), not beside the fuzz rows, so its run time depends only on --repeat and the runner: revisit 25m if
+either changes.
 Arguments are package patterns, by default `./...`.
 """
 

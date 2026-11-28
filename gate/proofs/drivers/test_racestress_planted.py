@@ -24,8 +24,8 @@ class RaceStressPlanted(support.DriverTest):
 
         run = self.world.run(registry=self.world.registry(support.registry_row("race-stress")), tier="nightly")
 
-        self.assertParityPassed(run, "nightly")
-        self.assertRed(run, "nightly", "race-stress", REASON)
-        events = [json.loads(line) for line in run.row_file("nightly", "race-stress", "test.json").splitlines()]
+        self.assertParityPassed(run, "race-stress")
+        self.assertRed(run, "race-stress", "race-stress", REASON)
+        events = [json.loads(line) for line in run.row_file("race-stress", "race-stress", "test.json").splitlines()]
         runs = [e for e in events if e.get("Action") == "run" and e.get("Test") == "TestCount"]
         self.assertEqual(len(runs), 20, "the row's --repeat=20 did not reach go test's -count")

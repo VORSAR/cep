@@ -1060,7 +1060,7 @@
     },
     {
       "id": "fuzz-parser",
-      "job": "nightly",
+      "job": "fuzz-parser",
       "tiers": [
         "nightly"
       ],
@@ -1089,7 +1089,7 @@
     },
     {
       "id": "fuzz-decoder",
-      "job": "nightly",
+      "job": "fuzz-decoder",
       "tiers": [
         "nightly"
       ],
@@ -1118,7 +1118,7 @@
     },
     {
       "id": "race-stress",
-      "job": "nightly",
+      "job": "race-stress",
       "tiers": [
         "nightly"
       ],
