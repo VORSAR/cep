@@ -145,6 +145,7 @@
 | 2026-11-27 | [PR 3's review](#owner-decisions-2026-11-27--pr-3s-review) |
 | 2026-11-27 | [the names before the pattern engine](#owner-decisions-2026-11-27--the-names-before-the-pattern-engine) |
 | 2026-11-27 | [S1.1c-11's plan check](#owner-decisions-2026-11-27--s11c-11s-plan-check) |
+| 2026-11-28 | [S1.1c-11's design (G1)](#owner-decisions-2026-11-28--s11c-11s-design-g1) |
 
 ## The decisions
 
@@ -1655,3 +1656,14 @@ Then, at G0 (the owner, the same day, three answers, all as recommended): main's
    - Rejected: the design note first.
 8. **`s1-1c-11/integration` is pushed as it grows,** without force, after each verified step; no pull request until a wave is done. The dispatched nightlies of the burn-in run on it.
    - Rejected: asking before each push.
+
+### Owner decisions, 2026-11-28 — S1.1c-11's design (G1)
+
+The design note ([s1-1c-11-design.md](s1-1c-11-design.md)) was written by a fresh agent and reviewed blind ([architecture](../reviews/s1-1c-11-design-architecture.md), [QA](../reviews/s1-1c-11-design-qa.md)). Both reviews found one blocker: the control ran with its first net's timeout, so a clean run could time out and leave its nets unjudged every night. Every finding is folded into the note's v2. That same day the owner cut every agent's time box to 10 minutes. Three answers, all as recommended.
+
+1. **The seven committed plants that target the removed `waiting` flag are retired** (starve-2 ×5, starve-4 ×2), with the reason "their target, the waiting flag, was removed in 86aea25".
+   - Rejected: writing new plants for the same tests.
+2. **One pure rule is shared by the nightly and the PR check:** `changes_from(spec, read)` is extracted inside `gate/bench/mutate.py`; the nightly reads files at HEAD, the T2 `nets-anchors` row reads the working tree, so the two cannot disagree.
+   - Rejected: making `_occurrences` public and re-implementing the rest; calling `changes_of` from the PR check (about 19 s, and an uncommitted edit read as a refusal).
+3. **The 117 controls are listed under `retired`,** each with the reason "a control: folded into the judge", which keeps [S1.1c-11's plan check](#owner-decisions-2026-11-27--s11c-11s-plan-check), decision 2, to the letter: every committed plant is a net or a retirement, and the inflow check is uniform.
+   - Rejected: leaving the controls out by rule, with decision 2 annotated.
