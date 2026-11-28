@@ -1,5 +1,7 @@
 """The CI workflow, generated from the registry (gate design §12.6)."""
 
+import ast
+import json
 import os
 import re
 import unittest
@@ -83,6 +85,32 @@ class Render(unittest.TestCase):
         lint = text[text.index("  lint:") : text.index("  test:")]
         self.assertIn("          fetch-depth: 0", lint)
         self.assertNotIn("fetch-depth", text[text.index("  test:") :])
+
+    def test_the_history_set_is_the_rows_whose_code_reaches_a_merge_base(self):
+        # PR 1 review (WA-5): NEEDS_HISTORY is derived, not remembered. A row needs main's history when its code
+        # closure (its instrument's `code` list in gate/law.json, which holds every gate module the row imports)
+        # calls merge_base( or read_base(; git.py's own `def merge_base` is a definition, not a call. A row reaching
+        # the call through another module (aging: rows/aging.py -> parts.read_base -> git.merge_base) is caught
+        # because that module is in its closure too.
+        with open(os.path.join(generate.REPO, "gate", "law.json"), encoding="utf-8") as f:
+            instruments = json.load(f)["instruments"]
+
+        def calls_a_merge_base(path: str) -> bool:
+            with open(os.path.join(generate.REPO, path), encoding="utf-8") as f:
+                tree = ast.parse(f.read(), path)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+                    if name in ("merge_base", "read_base"):
+                        return True
+            return False
+
+        scanned = [p for i in instruments for p in i["code"] if p.endswith(".py")]
+        # Positive witness: the scan had its chance, git.py (which defines merge_base) is in some closure.
+        self.assertIn("gate/runner/git.py", scanned)
+        derived = {i["row"] for i in instruments if any(calls_a_merge_base(p) for p in i["code"] if p.endswith(".py"))}
+        self.assertEqual(frozenset(derived), generate.NEEDS_HISTORY, sorted(derived))
 
     def test_the_job_running_deps_downloads_modules(self):
         # owner, 2026-11-11 (design 1): CI warms the module cache by a generated setup step in the deps row's job,
