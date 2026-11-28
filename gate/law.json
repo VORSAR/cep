@@ -1196,7 +1196,7 @@
       "tiers": [
         "T4"
       ],
-      "min_wants": 41,
+      "min_wants": 42,
       "expected_scope": [
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
@@ -1331,6 +1331,33 @@
       "expected_scope": [
         "go",
         "./io/inmemory"
+      ]
+    },
+    {
+      "id": "race-stress-partition",
+      "row": "race-stress-partition",
+      "lands_in": "S1.1c-11",
+      "code": [
+        "gate/runner/jsonstream.py",
+        "gate/runner/rows/__init__.py",
+        "gate/runner/rows/race.py",
+        "gate/runner/rows/unit.py",
+        "gate/runner/workers.py",
+        "gate/term.py"
+      ],
+      "proofs": [
+        {
+          "path": "gate/proofs/drivers/test_racestress_partition_planted.py",
+          "cases": 1
+        }
+      ],
+      "tiers": [
+        "nightly"
+      ],
+      "min_wants": 0,
+      "expected_scope": [
+        "go",
+        "./internal/partition"
       ]
     },
     {
