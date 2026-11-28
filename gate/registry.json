@@ -1045,7 +1045,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 42,
+      "min_wants": 43,
       "lands_in": "S1.1a-1",
       "exclusive": true,
       "command": [
@@ -1239,6 +1239,38 @@
         "--repeat=20",
         "--timeout=5m",
         "./internal/partition"
+      ]
+    },
+    {
+      "id": "race-stress-root",
+      "job": "race-stress-root",
+      "tiers": [
+        "nightly"
+      ],
+      "blocking": true,
+      "timeout_s": 480,
+      "needs": [],
+      "scope": [
+        "prod",
+        "test"
+      ],
+      "expected_scope": [
+        "go",
+        "."
+      ],
+      "min_wants": 0,
+      "lands_in": "S1.1c-11",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/race.py",
+        "--repeat=20",
+        "--timeout=5m",
+        "."
       ]
     }
   ]
