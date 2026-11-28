@@ -2,6 +2,7 @@
 
 import re
 import unittest
+from unittest import mock
 
 from gate.ci import generate
 from gate.runner.registry import Row
@@ -26,6 +27,11 @@ def jobs_of(text: str) -> dict[str, str]:
         m.group(1): text[m.start() : (marks[i + 1].start() if i + 1 < len(marks) else len(text))]
         for i, m in enumerate(marks)
     }
+
+
+def runners_of(text: str) -> dict[str, str]:
+    """Each rendered job's runs-on, by job name."""
+    return dict(re.findall(r"^  ([a-z][a-z0-9-]*):\n    runs-on: (\S+)$", text, re.M))
 
 
 class Render(unittest.TestCase):
@@ -127,9 +133,8 @@ class Render(unittest.TestCase):
                 self.assertEqual(block.count("download-artifact@"), len(jobs))
 
     def test_the_macos_job_runs_on_macos_and_every_other_on_linux(self):
-        # S3.2b-2 (S3.2b's item 8; owner Q5: the second OS of the determinism proof is macOS).
-        text = generate.render([*ROWS, row("determinism-macos", "determinism-macos", ("T4",))])
-        runners = dict(re.findall(r"^  ([a-z][a-z0-9-]*):\n    runs-on: (\S+)$", text, re.M))
+        # S3.2b-2 (S3.2b's item 8; owner Q5: the second OS of the determinism proof is macOS), keyed by (T4, job).
+        runners = runners_of(generate.render([*ROWS, row("determinism-macos", "determinism-macos", ("T4",))], "T4"))
         self.assertEqual(runners["determinism-macos"], "macos-latest")
         self.assertEqual(
             {j: r for j, r in runners.items() if j != "determinism-macos"},
@@ -139,6 +144,26 @@ class Render(unittest.TestCase):
                 "proofs": "ubuntu-latest",
                 "strict-gate": "ubuntu-latest",
             },
+        )
+
+    def test_runners_are_keyed_by_tier_and_job(self):
+        # S1.1c-11 N6.3 case 2: a runner belongs to a (tier, job), so job j's nightly run goes to macOS while its T4
+        # run stays on Linux.
+        rows = [*ROWS, row("jrow", "j", ("T4", "nightly"))]
+        with mock.patch.object(generate, "RUNNERS", {("nightly", "j"): "macos-latest"}):
+            gate, nightly = (runners_of(generate.render(rows, tier)) for tier in ("T4", "nightly"))
+        self.assertEqual(gate["j"], "ubuntu-latest")
+        self.assertEqual(nightly["j"], "macos-latest")
+        self.assertEqual(nightly["strict-gate"], "ubuntu-latest")
+
+    def test_the_nightly_concurrency_group_carries_the_ref(self):
+        # S1.1c-11 N6.3 case 4: a dispatched branch run neither waits for nor replaces main's scheduled run (RA-9).
+        nightly = generate.render(NIGHTLY, "nightly")
+        self.assertIn("concurrency:\n  group: nightly-${{ github.ref }}\n  cancel-in-progress: false\nenv:", nightly)
+        self.assertIn(
+            "concurrency:\n  group: gate-${{ github.ref }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\nenv:",
+            self.text,
         )
 
     def test_without_nightly_rows_there_is_the_gate_and_its_canary(self):
