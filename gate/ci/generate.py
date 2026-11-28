@@ -40,11 +40,19 @@ ACTIONS = {
     "download": ("actions/download-artifact", "9000827ccba6bdab643e8b6fd33ac0654aef8333", "v8.0.2"),
 }
 RUN_ID = "${{ github.run_id }}-${{ github.run_attempt }}"
-# A job's runner when it is not ubuntu-latest: the determinism proof's second OS (S3.2b's item 8; owner Q5: macOS).
-RUNNERS = {"determinism-macos": "macos-latest"}
+# A job's runner when it is not ubuntu-latest, by (tier, job): the determinism proof's second OS at T4 (S3.2b's item
+# 8; owner Q5: macOS) and the test job at the nightly tier (owner, 2026-11-27, S1.1c-11's plan check, decision 3).
+RUNNERS: dict[tuple[str, str], str] = {
+    ("T4", "determinism-macos"): "macos-latest",
+    ("nightly", "test"): "macos-latest",
+}
 # The tool cache stays where a developer has it, outside the checkout: inside it, the project's go.mod would sit
 # above every tool and change what go does (the first CI run, 2026-11-04).
 TOOLS_CACHE = "~/.cache/vorsar/cep/tools"
+
+
+def runner(tier: str, job: str) -> str:
+    return RUNNERS.get((tier, job), "ubuntu-latest")
 
 
 def _uses(name: str, sub: str = "") -> str:
@@ -135,7 +143,7 @@ def _job(
     run_dir = f".gate/ci/{job}"
     return [
         f"  {job}:",
-        f"    runs-on: {RUNNERS.get(job, 'ubuntu-latest')}",
+        f"    runs-on: {runner(tier, job)}",
         f"    timeout-minutes: {timeout_min}",
         *([f"    needs: {CANDIDATE}"] if canary else []),
         "    steps:",
@@ -203,7 +211,7 @@ def render(rows: Sequence[Row], tier: str = TIER) -> str:
         "  contents: read",
         "concurrency:",
         *(
-            ["  group: nightly", "  cancel-in-progress: false"]
+            ["  group: nightly-${{ github.ref }}", "  cancel-in-progress: false"]
             if nightly
             else ["  group: gate-${{ github.ref }}", "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}"]
         ),
