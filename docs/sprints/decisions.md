@@ -146,6 +146,7 @@
 | 2026-11-27 | [the names before the pattern engine](#owner-decisions-2026-11-27--the-names-before-the-pattern-engine) |
 | 2026-11-27 | [S1.1c-11's plan check](#owner-decisions-2026-11-27--s11c-11s-plan-check) |
 | 2026-11-28 | [S1.1c-11's design (G1)](#owner-decisions-2026-11-28--s11c-11s-design-g1) |
+| 2026-11-28 | [S1.1c-11's PR 1 review](#owner-decisions-2026-11-28--s11c-11s-pr-1-review) |
 
 ## The decisions
 
@@ -1667,3 +1668,14 @@ The design note ([s1-1c-11-design.md](s1-1c-11-design.md)) was written by a fres
    - Rejected: making `_occurrences` public and re-implementing the rest; calling `changes_of` from the PR check (about 19 s, and an uncommitted edit read as a refusal).
 3. **The 117 controls are listed under `retired`,** each with the reason "a control: folded into the judge", which keeps [S1.1c-11's plan check](#owner-decisions-2026-11-27--s11c-11s-plan-check), decision 2, to the letter: every committed plant is a net or a retirement, and the inflow check is uniform.
    - Rejected: leaving the controls out by rule, with decision 2 annotated.
+
+### Owner decisions, 2026-11-28 — S1.1c-11's PR 1 review
+
+W1 (lanes C and M, the aging-history fix and the playback budget) passed three consecutive dispatched nightlies; its combined build was reviewed blind ([architecture](../reviews/s1-1c-11-pr1-architecture.md), [QA](../reviews/s1-1c-11-pr1-qa.md); no blocker). Three answers, all as recommended.
+
+1. **A floor pin and more margin:** a T2 test that each new row's go timeout is at least three times its slowest recorded CI run (a table of measured seconds beside the budget pins, from the burn-in runs), and `race-stress-playback` raised to `--timeout=55m`, `timeout_s` 3480 (3.4 × its slowest run, 976.4 s).
+   - Rejected: the floor pin alone at 49m (3.01×); neither, checking budgets by hand at each burn-in.
+2. **`pytests`' `timeout_s` 900 → 1200,** three times its slowest macOS nightly run (400.4 s); the PR watchdog loosens with it (a cap, not a time).
+   - Rejected: a nightly-only budget per row; accepting 2.25×.
+3. **Every finding in W1's own work is fixed before PR 1 opens,** each red first: the package-exists check for every nightly row (WA-1), the record's missing burn-in columns (WQ-1), the `-cpu 4` pass shown green in the cpu driver (WQ-4), the CPU-count precondition (WQ-5), one package per race-stress row (WA-4, WQ-6), the cpu pin's wording (WA-3), the design's test names mapped (WQ-8), the `--timeout` reaching go (WQ-7), and the needs-history set derived from the code (WA-5).
+   - Rejected: the should-fix items only, the later ones to the backlog.
