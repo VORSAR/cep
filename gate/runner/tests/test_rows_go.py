@@ -403,6 +403,17 @@ class Race(GoRows):
             ["test", "-race", "-json", "-count=1", "-timeout", race_row.STRESS_TIMEOUT, "./..."],
         )
 
+    def test_the_race_stress_inmemory_rows_own_repeat_and_timeout_reach_go_test(self):
+        # WQ-7: the real row's flags, read from the registry, reach go test as -count=20 and -timeout 5m. Its one
+        # package, ./io/inmemory, is not in this module, so the row's flags run over ./... here.
+        row = {r.id: r for r in registry.load(os.path.join(support.GATE, "registry.json"))}["race-stress-inmemory"]
+        after = list(row.command[row.command.index("gate/runner/rows/race.py") + 1 :])
+        self.assertEqual(after[-1], "./io/inmemory", row.command)
+        self.assertEqual(
+            self.go_test_argv(*after[:-1], "./..."),
+            ["test", "-race", "-json", "-count=20", "-timeout", "5m", "./..."],
+        )
+
     def test_no_repeat_leaves_go_tests_default_timeout(self):
         self.assertEqual(self.go_test_argv("./..."), ["test", "-race", "-json", "-count=1", "./..."])
 
