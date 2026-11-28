@@ -168,7 +168,7 @@ class Render(unittest.TestCase):
 
     def test_the_nightly_test_job_runs_on_macos_and_the_t4_test_job_on_linux(self):
         # S1.1c-11 N6.2, N6.3 case 1, over the real registry: the nine test rows run at T4 on Linux and at night on
-        # macOS, one job each; the nightly cap is the generator's rule over their 2,640 s: ceil((2640*1.2+60)/60)+10.
+        # macOS, one job each; the nightly cap is the generator's rule over their 2,940 s: ceil((2940*1.2+60)/60)+10.
         nine = ["unit", "coverage-inclusion", "pytests", "differential", "semantics", "conformance", "baseline"]
         nine += ["notbuilt", "tripwire"]
         rows = registry.load(os.path.join(generate.REPO, generate.REGISTRY))
@@ -179,7 +179,7 @@ class Render(unittest.TestCase):
                 self.assertEqual(runners_of(text)["test"], runs_on)
                 self.assertIn(f"--tier {tier} --job test ", jobs_of(text)["test"])
         nightly = jobs_of(generate.render(rows, "nightly"))["test"]
-        self.assertIn("    timeout-minutes: 64\n", nightly)
+        self.assertIn("    timeout-minutes: 70\n", nightly)
 
     def test_the_nightly_concurrency_group_carries_the_ref(self):
         # S1.1c-11 N6.3 case 4: a dispatched branch run neither waits for nor replaces main's scheduled run (RA-9).
