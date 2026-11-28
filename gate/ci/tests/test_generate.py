@@ -1,10 +1,12 @@
 """The CI workflow, generated from the registry (gate design §12.6)."""
 
+import os
 import re
 import unittest
 from unittest import mock
 
 from gate.ci import generate
+from gate.runner import registry
 from gate.runner.registry import Row
 
 
@@ -155,6 +157,21 @@ class Render(unittest.TestCase):
         self.assertEqual(gate["j"], "ubuntu-latest")
         self.assertEqual(nightly["j"], "macos-latest")
         self.assertEqual(nightly["strict-gate"], "ubuntu-latest")
+
+    def test_the_nightly_test_job_runs_on_macos_and_the_t4_test_job_on_linux(self):
+        # S1.1c-11 N6.2, N6.3 case 1, over the real registry: the nine test rows run at T4 on Linux and at night on
+        # macOS, one job each; the nightly cap is the generator's rule over their 2,640 s: ceil((2640*1.2+60)/60)+10.
+        nine = ["unit", "coverage-inclusion", "pytests", "differential", "semantics", "conformance", "baseline"]
+        nine += ["notbuilt", "tripwire"]
+        rows = registry.load(os.path.join(generate.REPO, generate.REGISTRY))
+        for tier, runs_on in (("nightly", "macos-latest"), ("T4", "ubuntu-latest")):
+            with self.subTest(tier):
+                self.assertEqual([r.id for r in registry.select(rows, tier, None) if r.job == "test"], nine)
+                text = generate.render(rows, tier)
+                self.assertEqual(runners_of(text)["test"], runs_on)
+                self.assertIn(f"--tier {tier} --job test ", jobs_of(text)["test"])
+        nightly = jobs_of(generate.render(rows, "nightly"))["test"]
+        self.assertIn("    timeout-minutes: 64\n", nightly)
 
     def test_the_nightly_concurrency_group_carries_the_ref(self):
         # S1.1c-11 N6.3 case 4: a dispatched branch run neither waits for nor replaces main's scheduled run (RA-9).

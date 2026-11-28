@@ -648,7 +648,8 @@
       "tiers": [
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 600,
@@ -680,7 +681,8 @@
       "tiers": [
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 120,
@@ -717,7 +719,8 @@
       "tiers": [
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 900,
@@ -747,7 +750,8 @@
       "id": "differential",
       "job": "test",
       "tiers": [
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 300,
@@ -782,7 +786,8 @@
       "tiers": [
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 120,
@@ -843,7 +848,8 @@
       "tiers": [
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 120,
@@ -877,7 +883,8 @@
       "tiers": [
         "T2",
         "T3",
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 120,
@@ -909,7 +916,8 @@
       "id": "notbuilt",
       "job": "test",
       "tiers": [
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 60,
@@ -937,7 +945,8 @@
       "id": "tripwire",
       "job": "test",
       "tiers": [
-        "T4"
+        "T4",
+        "nightly"
       ],
       "blocking": true,
       "timeout_s": 300,

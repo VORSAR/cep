@@ -34,6 +34,7 @@ class Summarize(support.GateTest):
         self.artifacts = os.path.join(self.root, "artifacts")
         self.blocking = {"gofmt": True, "ruff": False, "unit": True, "parity": True}
         self.clock = 1_000_000
+        self.tier = "T4"
         # artifact directory name -> {"job", "registry_sha256", "records": {(job, id): dict or bytes}}
         self.tree: dict[str, dict] = {}
         for job, ids in (("lint", ("parity", "gofmt", "ruff")), ("test", ("parity", "unit"))):
@@ -57,7 +58,7 @@ class Summarize(support.GateTest):
     def rec(self, job: str, row_id: str, **over: object) -> dict:
         self.clock += 1000
         fields = {
-            "run_id": RUN, "commit": SHA, "tier": "T4", "job": job, "row_id": row_id,
+            "run_id": RUN, "commit": SHA, "tier": self.tier, "job": job, "row_id": row_id,
             "blocking": self.blocking.get(row_id, True), "verdict": "pass", "reason": "covered 1", "exit_code": 0,
             "covered": 1, "expected": 1, "started_ms": self.clock, "ended_ms": self.clock + 400, "duration_ms": 400,
             "scope_sha256": "ab",
@@ -85,7 +86,7 @@ class Summarize(support.GateTest):
                 if isinstance(rec, dict):
                     judged.append(rec)
             run = {
-                "schema": 1, "run_id": RUN, "tier": "T4", "registry_sha256": art["registry_sha256"],
+                "schema": 1, "run_id": RUN, "tier": self.tier, "registry_sha256": art["registry_sha256"],
                 "records": judged, "wall_ms": 0, "summed_ms": 0,
             }  # fmt: skip  # keys packed several per line
             os.makedirs(base, exist_ok=True)
@@ -95,7 +96,7 @@ class Summarize(support.GateTest):
     def summarize(self) -> tuple[int, str]:
         self.materialize()
         argv = [sys.executable, "-I", "-B", "-X", "utf8", RUN_PY, "summarize", "--registry", self.registry]
-        argv += ["--tier", "T4", "--artifacts", self.artifacts, "--run-id", RUN, "--commit", SHA]
+        argv += ["--tier", self.tier, "--artifacts", self.artifacts, "--run-id", RUN, "--commit", SHA]
         argv += ["--attempt", ATTEMPT, "--image", IMAGE]
         code, out, err = support.run_tool(argv, self.repo)
         return code, out.decode("utf-8", errors="replace") + err.decode("utf-8", errors="replace")
@@ -173,6 +174,36 @@ class Summarize(support.GateTest):
     def test_a_missing_artifact_is_red(self):
         del self.tree[f"records-test-{ATTEMPT}"]
         self.assertRed("test", "unit", "missing")
+
+    def test_a_nightly_test_job_that_uploaded_nothing_reads_missing_on_every_test_row(self):
+        # S1.1c-11 N6.4: the nightly test job runs on macOS; a runner that never started uploads no records-test-*
+        # directory, so each of its rows and its parity row reads missing and the summary is red. A green record of
+        # the same row id from another job is an unknown row, never a cover for (test, unit).
+        self.tier = "nightly"
+        self.law([
+            self.row("gofmt", tiers=("T4", "nightly")),
+            self.row("unit", job="test", tiers=("T2", "T3", "T4", "nightly")),
+            self.row("pytests", job="test", tiers=("T2", "T3", "T4", "nightly")),
+        ])  # fmt: skip  # one row per line
+        self.tree = {f"records-lint-{ATTEMPT}": {"job": "lint", "registry_sha256": self.digest, "records": {}}}
+        for row_id in ("parity", "gofmt"):
+            self.set("lint", row_id)
+        self.set("lint", "unit")
+        code, out = self.summarize()
+        self.assertEqual((code, self.tail(out)), (1, ["GATE FAILED", "exit: 1"]), out)
+        self.assertEqual(self.cells(out, "lint", "gofmt")[2], "PASS", out)  # the witness: the lint job was judged
+        for step in ("parity", "unit", "pytests"):
+            with self.subTest(step):
+                self.assertEqual(
+                    self.cells(out, "test", step)[2:3] + self.cells(out, "test", step)[4:],
+                    ["FAIL", "missing: no job recorded it"],
+                    out,
+                )
+        self.assertEqual(
+            self.cells(out, "lint", "unit")[2:3] + self.cells(out, "lint", "unit")[4:],
+            ["FAIL", "unknown row: not in the registry"],
+            out,
+        )
 
     def test_a_duplicate_is_red(self):
         self.set("lint", "gofmt", artifact=f"records-test-{ATTEMPT}")
