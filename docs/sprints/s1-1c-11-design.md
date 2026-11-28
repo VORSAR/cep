@@ -1,4 +1,13 @@
-# S1.1c-11 — design note (the nightly nets)
+# S1.1c-11 — design note v2 (the nightly nets)
+
+**What changed from v1** (the architecture and QA reviews of v1, and the owner's G1 answers of 2026-11-28; `mutate.py` lines are those the reviews cite on 584a8b66, not re-counted for v2 unless marked verified):
+
+1. **Owner Q1** — the seven `waiting`-flag plants are retired (N2.2 rule 5, N2.5); §8 Q1 closed.
+2. **Owner Q2** — one pure rule `changes_from(spec, read)` is extracted inside `mutate.py`; `changes_of` becomes a reader at a rev over it; `nets-anchors` passes a working-tree reader. The `_occurrences` rename is dropped (N1.1, N1.2, N3 check 3, D1).
+3. **Owner Q3** — the 117 controls are listed under `retired` ("a control: folded into the judge"); the inflow check is uniform; D5 reversed (N2.2 rule 1, N2.4, N3 check 6).
+4. **Blocker** — the control ran with `group[0].timeout`; it now runs with the target's control timeout, the largest of its nets' (N1.5), and N4.3 sizes each net's timeout from both walls; two tests pin it.
+5. **Should-fix** — `_need` for a subtest target (a probe and a run); the per-net `broken` verdict; `go list` failure → `unjudged`; `:490` joins the Stale sites; anchor check 4b (subtest literal) and D2 corrected; the Go regex and the Python walk widened; a plant defined and the three non-plant files named; checks 7–8 apply to retirements, `reanchored`; the named tests in `test_nets.py`; proofs of re-anchored and `passes` nets; the flaky rule; lane C's cpu row and lane L's timing list; N6.2/N6.3/N6.5 additions; N5 per-driver budgets; N1.6 commit-before-`make nets`.
+6. **Later** — see §9 (applied ones marked; the rest go to lane A).
 
 *Written against `s1-1c-11/integration` @ 584a8b66 (main 9b62eedf plus the sprint's marker and record). Every code claim cites `file:line` on 584a8b66; "inferred" marks a reading not proven by a run. Callers and imports come from GitNexus `impact` (upstream, tests included) and are confirmed by `git grep`, since the index's commit could not be read from this session. The spec is [the plan check](s1-1c-11-plan-check.md) v2 (§2 S1–S5, §5 N1–N5, §6 counter-examples (1)–(24), §10) and the owner's answers in [decisions.md, 2026-11-27](decisions.md#owner-decisions-2026-11-27--s11c-11s-plan-check) (decisions 2–5 bind this note). Deviations from the plan check are listed in §7.*
 
@@ -24,7 +33,8 @@ No split (plan check §2 S1; RA-3). `nets.py` does `from gate.bench import mutat
 | Name | Signature (584a8b66) | How `nets.py` uses it |
 |---|---|---|
 | `entry` | `entry(spec: Mapping[str, object], timeout: str, expect: bool = False) -> Entry` (`mutate.py:561`) | Builds each net's `Entry` from a plain spec (N1.3's `spec_of(net)`), `expect=False`. It runs every refusal of the mutation and the target, and computes `changes` at HEAD through `changes_of` (`:604`). A net's own `timeout` goes in as the `timeout` argument (a Go duration string, checked by `mutate.seconds` first). |
-| `changes_of` | `changes_of(spec: Mapping[str, object], rev: str \| None = None) -> tuple[Change, ...]` (`:497`) | Called only through `entry` in the nightly half. The static half (N3) does not call it: it calls the pure parts it is made of (`parse_patch` `:372`, `apply` `:466`, and `occurrences`, today `_occurrences` `:286`) on the working tree; see §7 D1. |
+| `changes_of` | `changes_of(spec: Mapping[str, object], rev: str \| None = None) -> tuple[Change, ...]` (`:497`) | Called only through `entry` in the nightly half. After N1.2 it is `changes_from(spec, <reader at rev>)`. |
+| `changes_from` (new, owner Q2) | `changes_from(spec: Mapping[str, object], read: Callable[[str], str]) -> tuple[Change, ...]` | The static half (N3) calls it with a working-tree reader; one rule for both halves. |
 | `Worktrees` | `class Worktrees` with `__enter__`, `__exit__`, `at(rev: str, changes: tuple[Change, ...]) -> str`, `close() -> None` (`:767-816`) | One `with mutate.Worktrees() as trees:` for the whole run. Every run is at HEAD, so there is one worktree, reset per run (`:782-785`), removed when the run ends, a SIGTERM included (`__exit__` → `close`, `:777-778`, `:799-816`). |
 | `run_one` | `run_one(e: Entry, args: argparse.Namespace, scratch: str, trees: Worktrees, head: str) -> tuple[str, gorun.Result, list[str]]` (`:930-935`) | One run of a net's target: with `e.changes` (the plant run) or with `dataclasses.replace(e, changes=())` (the control run: `trees.at(head, ())` checks out clean HEAD, `:780-797`). `args` is `argparse.Namespace(race=False, cpu=None)`: `_go` reads only `args.race` and `args.cpu` (`:889-892`), `run_py` neither (`:916-927`). Returns one of `mutate.OUTCOMES` = `("red", "green", "timeout", "invalid")` (`:106`). |
 | `check_compiled` | `check_compiled(entries: Sequence[Entry], race: bool, trees: Worktrees, head: str, batched: bool) -> None` (`:853`) | The nightly's compile check: once per distinct Go package, over that package's nets (one `go list` per package, cached inside the call, `:857`, `:866-867`). On `Stale` the package's nets are re-checked one by one to name the culprit (the rare path). A plant in a `.go` file the test build never compiles would read "escaped" for a `caught` net and a false pass for a `passes` net. |
@@ -33,7 +43,7 @@ No split (plan check §2 S1; RA-3). `nets.py` does `from gate.bench import mutat
 
 **GitNexus.** `impact(run_one)`: HIGH, 3 direct callers (`batch` `:1054`, `repeat` `:1042`, `single` `:1036`), 4 processes, all inside `mutate.py`; `nets.py` adds a fourth caller and changes none. `impact(entry)`: LOW, callers `read_batch` `:640` and `mutate` `:1095`. `impact(changes_of)`: LOW, one caller, `entry`. `impact(check_compiled)`: LOW, one caller, `mutate`. `impact(Worktrees)` is not needed: `nets.py` only constructs it. No module imports `mutate.py` today (`git grep "from gate.bench import"` lists only `gorun`, `compare`, `escapes`); its tests run it as a subprocess (`gate/bench/tests/test_mutate.py:407-414`).
 
-### N1.2 The one change to `mutate.py`: typed refusals (and one rename, §7 D1)
+### N1.2 The two changes to `mutate.py`: typed refusals and `changes_from` (§7 D1)
 
 Add after `class Refused` (`:167-168`):
 
@@ -52,13 +62,16 @@ Raise sites that become `raise Stale(...)`, same message text:
 | `:488` | `base_text` (at HEAD) | `{path} is not tracked` | `changes_of` |
 | `:524` | `changes_of` | `--find occurs {count} times in {file}, not exactly once` | `entry` |
 | `:586` | `entry` | `--pkg {pkg!r} is not a directory holding tracked files` | `read_batch`, `mutate` |
+| `:490` | `base_text` | `{path} is not a regular file` | `changes_of` (v2: from the reviews; message text inferred) |
 | `:870` | `check_compiled` | `{where}{file} is not compiled by ./{pkg}'s test build` | `mutate` |
 
-Not `Stale`: `:492` (`differs from HEAD`, a dirty tree, an environment fault), every key, type, timeout and patch-format refusal (a malformed net: refused at load), `:830` (`go list` failed: the package does not build, read by the judge as the control's fault).
+Not `Stale`: `:492` (`differs from HEAD`, a dirty tree, an environment fault), every key, type, timeout and patch-format refusal (a malformed net), `:830` (`go list` failed: the package does not build; the judge reads it as `unjudged` for every net of that package, N1.4). The six sites become seven with `:490`; the test below checks all seven.
 
-`main` catches `Refused` (`:1126-1127`), so a `Stale` prints the same `error: refused: …` line with exit 2: mutate.py's output is byte-identical. **Test (red first):** `test_mutate.py` gains `Stale.test_each_stale_refusal_is_typed` — an in-process check that each of the six sites raises `mutate.Stale` (a fake repo as the file's other tests build), red before the class exists. GitNexus `impact(Refused)` returns UNKNOWN (exception classes are not call targets); `git grep` confirms no `except` of it outside `mutate.py`.
+**`changes_from` (owner Q2, 2026-11-28: "Extract one pure rule inside mutate.py: `changes_from(spec, read)`; the nightly reads files at HEAD, the PR check reads the working tree.").** `changes_from(spec: Mapping[str, object], read: Callable[[str], str]) -> tuple[Change, ...]` holds all of `changes_of`'s logic: the path checks, the empty find, find == replace, hunk merging across `---`/`+++` pairs, equal and cancelling hunks. `read(path)` returns the file's text or raises `Stale` (gone, untracked, not a regular file). `changes_of(spec, rev)` becomes `changes_from(spec, <reader at rev>)`, the reader being today's `base_text` bound to `rev` (its dirty-tree check `:492` stays in that reader). `nets-anchors` passes a working-tree reader (UTF-8, `surrogateescape`, as `base_text` reads, `:493-494`; tracked-ness from one `git ls-files -z`). `_occurrences` keeps its name. **Tests (red first):** `test_mutate.py` gains `ChangesFrom` cases that `changes_of` at HEAD and `changes_from` with a working-tree reader return equal `Change` tuples for a find net, a two-file patch and a cancelling-hunk patch; the existing `test_mutate.py` cases stay green unchanged (mutate's output byte-identical). GitNexus `impact(changes_of)` before the edit: LOW, one caller (`entry`).
 
-**The rename** `_occurrences` → `occurrences` (`:286`; one caller, `changes_of` `:522`; `impact`: 1 direct caller): with the GitNexus `rename` tool, dry run first. No net's find text contains `_occurrences` or any of the six raise lines (checked on the seed set), so neither edit stales a net.
+`main` catches `Refused` (`:1126-1127`), so a `Stale` prints the same `error: refused: …` line with exit 2: mutate.py's output is byte-identical. **Test (red first):** `test_mutate.py` gains `Stale.test_each_stale_refusal_is_typed` — an in-process check that each of the seven sites (v2: `:490` added) raises `mutate.Stale` (a fake repo as the file's other tests build), red before the class exists. GitNexus `impact(Refused)` returns UNKNOWN (exception classes are not call targets); `git grep` confirms no `except` of it outside `mutate.py`.
+
+**No rename** (owner Q2 drops v1's `_occurrences` → `occurrences`). No net's find text contains any of the raise lines (checked on the seed set for v1's six; `:490` and the `changes_of` body moved into `changes_from` are inferred, and lane A re-runs `nets-anchors` after the edit, since 55 live nets plant into `mutate.py`).
 
 ### N1.3 `gate/nets.json` — the schema and its loader
 
@@ -136,8 +149,10 @@ Pure function first, runner second: `judge(control: str | None, plant: str | Non
 |---|---|---|---|---|
 | 0. Load | `LoadError` | — | exit 2 | `error: refused: nets.json: <message>` |
 | 1. Entry | `mutate.Stale` from `entry` | `stale` | no | `net <id> stale: <Stale message>` |
-| | other `mutate.Refused` | — (a broken net, exit 2) | exit 2 | `error: refused: net <id>: <message>` |
+| | any other `mutate.Refused` (v2) | `broken` (that net only; the others still run) | no | `net <id> broken: <message>` |
+| | `LoadError` / `mutate.Internal` | — | exit 2 | `error: refused: …` / `error: internal: …` (exit 2 only for these two) |
 | 2. Compile check (Go, once per package) | `mutate.Stale` | `stale` | no | `net <id> stale: <file> is not compiled by ./<pkg>'s test build` |
+| | `go list` failed (`:830`, v2) | `unjudged`, every net of that package | no | `net <id> unjudged: ./<pkg> does not list: <message>` |
 | 3. Control (no plant) | `green` | judge its nets (step 4) | — | `control <target>: green (<wall> s)` |
 | | `red` | `unjudged` | no | `net <id> unjudged: <target> fails without its plant` |
 | | `timeout` | `unjudged` | no | `net <id> unjudged: <target> ran past <timeout> without its plant` |
@@ -162,11 +177,11 @@ control ./internal/runtime TestBreakitActivateRacesRemove: green (4.1 s)
 net g2-111 caught (3.9 s)
 ...
 nets: caught <a>, passes <b>, escaped <c>, tolerance failed <d>, unjudged <e>, stale <f>, timeout <g>, invalid <h>, not run <i>; wall <w> s
-GATE_COVERED <a + b + c + d + e + f + g + h>
+GATE_COVERED <a + b + c + d>                           # v2: caught + passes + escaped + tolerance failed
 failed: net <id> escaped: ...                      # rows.finish (gate/runner/rows/__init__.py:149-153)
 ```
 
-Exit 0 only when every net is `caught` or `passes` (`rows.finish` returns 1 on any `failed:` line). `GATE_COVERED` counts the nets judged (every verdict but `not run`); 0 only if every net was not run.
+Exit 0 only when every net is `caught` or `passes` (`rows.finish` returns 1 on any `failed:` line). v2: `GATE_COVERED` counts the nets whose plant run gave a verdict on the test (caught, passes, escaped, tolerance failed); `broken`, `stale`, `unjudged`, `timeout`, `invalid` and `not run` judged nothing about the test. The summary line gains `broken <j>`.
 
 **Verdicts as they come.** Each verdict line is printed and flushed at once and appended to `$GATE_ROW_DIR/verdicts.txt` (opened with `buffering=1`), so a watchdog kill keeps every earlier verdict — counter-example (11). `failed:` lines are printed only by `rows.finish` at the end; a killed run's record shows the scheduler's timeout and its row directory holds `verdicts.txt`.
 
@@ -184,18 +199,20 @@ def judge_all(nets: Nets, budget_s: float, out: Callable[[str], None]) -> list[s
         entries = {net.id: mutate.entry(net.spec, net.timeout)  (Stale → stale verdict)}
         compile check per Go package (N1.1)
         for target, group in targets(entries):            # group = this target's nets, in nets.json order
-            need = _need(max timeout of group)            # the control's timeout: the group's largest
-            if time.monotonic() + need > deadline: every remaining net "not run"; break
-            control = mutate.run_one(dataclasses.replace(group[0], changes=()), ARGS, scratch, trees, head)
+            ctl_timeout = max(e.timeout for e in group, key=mutate.seconds)   # v2: the target's control timeout
+            if time.monotonic() + _need(target, ctl_timeout) > deadline: every remaining net "not run"; break
+            ctl = dataclasses.replace(group[0], changes=(), timeout=ctl_timeout)   # v2: never group[0].timeout
+            control, result, notes = mutate.run_one(ctl, ARGS, scratch, trees, head)   # the 3-tuple (N1.1)
             for e in group:
                 if control != "green": verdict unjudged; continue
-                need = _need(e.timeout)
-                if time.monotonic() + need > deadline: e and every later net "not run"; stop both loops
-                plant = mutate.run_one(e, ARGS, scratch, trees, head)
+                if time.monotonic() + _need(target, e.timeout) > deadline: e and every later net "not run"; stop both loops
+                plant, result, notes = mutate.run_one(e, ARGS, scratch, trees, head)
                 verdict = judge(control, plant, expect)
 ```
 
-`_need(timeout)` = `mutate.seconds(timeout) + mutate.WALL_EXTRA_S` (120 s, the Go wall clock's own margin, `:895`) + 30 s for the worktree reset and the shim; Python runs need less (`:925`), and the same formula keeps one rule. `ARGS = argparse.Namespace(race=False, cpu=None)`. Every run is sequential: one go or Python test process at a time, one worktree — the bounded exception the owner granted to testing.md rule 2 (decision 5; `docs/development/testing.md:12`). `test_nets.py` pins it: a fake `run_one` counts concurrent calls (at most one) and `Worktrees` constructions (exactly one per run).
+**The blocker fixed (v2).** v1 ran the control with `group[0].timeout`, so a target whose first net carries `10s` and a later net `300s` timed its control out and left every net `unjudged`. The control entry is `dataclasses.replace(group[0], changes=(), timeout=<the target's control timeout>)`, the largest of its nets' timeouts; N4.3 makes each net's timeout cover its control's wall, so a control never times out on a clean run. **Tests:** `test_nets.py::ControlTimeout.test_the_control_runs_with_the_largest_timeout_of_its_nets` — a fake `run_one` records the `Entry.timeout` it gets; nets at `"10s"` and `"300s"` on one target → the control's `seconds(timeout) >= 300`; `Budget.test_no_nets_timeout_is_below_its_controls_measured_wall` — over the committed `nets.json` and the burn-in walls recorded beside it (N4.3), no net's timeout is below its control's measured wall.
+
+`_need(target, timeout)` (v2) = `mutate.seconds(timeout) + mutate.WALL_EXTRA_S` (120 s, the Go wall clock's own margin, `:895`) + 30 s for the worktree reset and the shim, for a plain Go or Python target; for a **subtest** target `2 × (t + 120) + 30`, since `run_go` runs a probe and then the run (`:876-880`, `:895`), each under the wall clock. Python runs need less (`:925`), and the same formula keeps one rule. `ARGS = argparse.Namespace(race=False, cpu=None)`. Every run is sequential: one go or Python test process at a time, one worktree — the bounded exception the owner granted to testing.md rule 2 (decision 5; `docs/development/testing.md:12`). `test_nets.py` pins it: a fake `run_one` counts concurrent calls (at most one) and `Worktrees` constructions (exactly one per run).
 
 **SIGTERM.** `rows.start()` installs `term`'s handler (`gate/term.py:32-44`): the first SIGTERM raises `Terminated` in the main thread; the `with mutate.Worktrees()` block's `__exit__` removes the worktree (`mutate.py:777-778`, `:799-816`); the scheduler's SIGKILL follows only after its grace (`gate/runner/scheduler.py:491-498`). The verdicts written so far stay in stdout and `verdicts.txt`. The budget makes this the rare path: `--budget` is below `timeout_s` (N1.6).
 
@@ -208,11 +225,11 @@ def judge_all(nets: Nets, budget_s: float, out: Callable[[str], None]) -> list[s
  "command": ["python3.15", "-I", "-B", "-X", "utf8", "gate/bench/nets.py", "--judge", "--budget", "3300"]}
 ```
 
-`job: "nets"`, a job of its own (plan check §2 S4); `timeout_s` 3600 is `TIMEOUT_MAX_S` (`gate/runner/registry.py:19`). `--budget 3300` leaves 300 s for setup, the summary lines and cleanup. **Pin** `test_nets.py::Budget.test_the_nets_rows_budget_and_its_largest_need_fit_its_timeout_s`: reads the real row through `registry.load`, asserts `budget + 300 <= timeout_s` and `budget >= _need(largest net timeout)` (a row whose one net cannot fit is red at T2, not at night). `expected_scope` mirrors `lawdelta`'s `["git", "gate/law.json"]`, `min_wants 1` (`gate/registry.json`, row `lawdelta`).
+`job: "nets"`, a job of its own (plan check §2 S4); `timeout_s` 3600 is `TIMEOUT_MAX_S` (`gate/runner/registry.py:19`). `--budget 3300` leaves 300 s for setup, the summary lines and cleanup. **Pin** `test_nets.py::Budget.test_the_nets_rows_budget_and_its_largest_need_fit_its_timeout_s`: reads the real row through `registry.load`, asserts `budget + 300 <= timeout_s` and, for the largest group (a subtest net included), `budget >= _need(control) + _need(net)` (a row whose one net cannot fit is red at T2, not at night). **Commit first (v2):** a rename PR commits its change before running `make nets`, since every run is at HEAD. `expected_scope` mirrors `lawdelta`'s `["git", "gate/law.json"]`, `min_wants 1` (`gate/registry.json`, row `lawdelta`).
 
 **Makefile** (coordinator): `nets: tools` / `\tpython3 -I -B gate/bootstrap.py exec -- --tier nightly --job nets`, as `check` runs `--tier T2` (`Makefile:19-20`). Rename pull requests run it before merge (decision 2).
 
-**Instrument** in `gate/law.json`: `{"id": "nets", "row": "nets", "lands_in": "S1.1c-11", "code": <the import closure of gate/bench/nets.py>, "proofs": [{"path": "gate/proofs/drivers/test_nets_planted.py", "cases": 5}], "tiers": ["nightly"], "min_wants": 1, "expected_scope": ["git", "gate/nets.json"]}`. The closure is computed, not typed: `gate/runner/tests/test_instruments_pin.py`'s `CodeClosure` names it (`:218-295`); it includes `gate/bench/mutate.py`, `gate/bench/gorun.py`, `gate/runner/jsonstream.py`, `gate/runner/rows/__init__.py`, `gate/runner/stress.py`, `gate/term.py` (mutate's imports, `mutate.py:98-100`) and theirs. Lane L changes `stress.py` in W2, so the coordinator applies the closure at the wave's end (plan check §4).
+**Instrument** in `gate/law.json`: `{"id": "nets", "row": "nets", "lands_in": "S1.1c-11", "code": <the import closure of gate/bench/nets.py>, "proofs": [{"path": "gate/proofs/drivers/test_nets_planted.py", "cases": 6}], "tiers": ["nightly"], "min_wants": 1, "expected_scope": ["git", "gate/nets.json"]}`. The closure is computed, not typed: `gate/runner/tests/test_instruments_pin.py`'s `CodeClosure` names it (`:218-295`); it includes `gate/bench/mutate.py`, `gate/bench/gorun.py`, `gate/runner/jsonstream.py`, `gate/runner/rows/__init__.py`, `gate/runner/stress.py`, `gate/term.py` (mutate's imports, `mutate.py:98-100`) and theirs. Lane L changes `stress.py` in W2, so the coordinator applies the closure at the wave's end (plan check §4).
 
 **Proof driver** `gate/proofs/drivers/test_nets_planted.py` (one world each, a tiny Go package and a `gate/nets.json` of one or two nets written by the driver; `support.registry_row("nets")` with `--budget` lowered in the copied row where a case needs it):
 
@@ -222,9 +239,16 @@ def judge_all(nets: Nets, budget_s: float, out: Callable[[str], None]) -> list[s
 | `test_a_test_red_without_its_plant_leaves_its_nets_unjudged` | the test fails at HEAD | red `net n1 unjudged: ./p TestX fails without its plant`; never `caught` |
 | `test_a_stale_net_is_red_and_the_others_still_run` | one find text absent, one live net | red `net n1 stale: --find occurs 0 times ...`; `net n2 caught` in the row's log |
 | `test_a_tolerance_net_that_fails_is_red` | `expect: passes`, the test fails with the plant | red `net n1 tolerance failed: ...` |
-| `test_the_budget_running_out_names_the_rest_not_run` | `--budget` below the second net's need | red `net n2 not run: the budget ran out ...`; `net n1 caught` kept in `verdicts.txt` |
+| `test_the_budget_running_out_names_the_rest_not_run` | v2: n1 at `"1s"` and n2 at `"600s"` on different targets, `--budget 400` | red `net n2 not run: the budget ran out ...`; `net n1 caught` kept in `verdicts.txt` |
+| `test_a_sibling_subtest_failing_is_not_caught` (v2) | a subtest net whose plant fails only a sibling subtest | red `net n1 escaped: ...` |
 
 Each case's wall is measured and budgeted in N5.
+
+**Unit tests in `test_nets.py` (v2):** a table-driven `Judge` class over every (control outcome × plant outcome × expect) combination plus `None`; one `Load` test per refusal asserting its exact message; judge cases for a skip, a sibling subtest failing, a compile or import error, a timeout; stale cases for find twice, a gone file, a hunk that does not place, a planted file deleted from the working tree; `Sigterm.test_a_sigterm_keeps_earlier_verdicts_and_leaves_no_worktree` — a fake blocking `run_one`, SIGTERM; earlier verdict lines kept in `verdicts.txt`, no `nets-` worktree and no `go test` process left.
+
+**Proving re-anchored and `passes` nets (v2):** each re-anchored net and each of the three `passes` nets is proven with `nets.py --judge` over a one-net `nets.json` (its control included), both lines (control and net) recorded. A `passes` net's limit, written down: a plant the test never reads still passes, so `passes` proves tolerance only where the test reads the planted code.
+
+**Flaky rule (v2):** a net not `caught`/`passes` in all three burn-in nightlies is retired (`"flaky under the nightly"`) or re-measured, never retried. No live net needs a `cpu` setting: no batch was recorded under `--cpu` (`git grep -- --cpu docs/sprints/s1-1c-7-*`, N2.2 rule 2; inferred for v2, not re-run).
 
 ---
 
@@ -236,12 +260,12 @@ Each case's wall is measured and budgeted in N5.
 
 ### N2.2 The rules, in order (the first that applies decides)
 
-1. **Control** (`"control": true`, no mutation): folded into the judge. It is never listed in `nets.json`; the judge's control step runs its test whenever a live net names that test. The inflow check (N3) skips controls by rule.
+1. **Control** (`"control": true`, no mutation): folded into the judge. Owner Q3 (2026-11-28): "List the 117 controls under `retired` with the reason 'a control: folded into the judge'." Each is a retirement with `reason: "a control: folded into the judge"`; the judge's control step runs its test whenever a live net names that test.
 2. **Caught only some of the time** → retired, `reason: "caught only some of the time (<the record's words>): covered by the race or load rows"`. starve-3 (recorded "may be red only some of the time"), both G10-20 race diffs (7 of 50 and 3 of 50 under `--race --repeat 50 --load`, `docs/sprints/s1-1c-7-record.md:303`, `:382`). No batch was recorded under `--race` or `--cpu` otherwise (`git grep -- --race docs/sprints/s1-1c-7-*`), so the schema needs no race, cpu or repeat key.
 3. **Names no test** → retired: starve-5 (`TestFullQueueWithABusyRecorderGetsNoTurn` is declared in no `_test.go` file).
 4. **Plants into a file the gate edits every sprint** (`gate/current-sprint`, `gate/registry.json`, `gate/law.json`) → retired, `reason: "plants into <file>, a file the gate edits every sprint"`.
-5. **The code it plants into was removed** (not moved) → retired, `reason: "plants into code removed at <commit> (<what>)"`. starve-2 ×5 and starve-4 ×2 plant into `q.waiting`, the flag dropped at 86aea25 ([2026-11-22, the starvation fix](decisions.md#owner-decisions-2026-11-22--the-starvation-fix-under-load)); `git grep "waiting\.\(Store\|Load\)" -- internal` is empty.
-6. **A duplicate** (the same mutation and the same target as an earlier-kept net) → retired, `reason: "the same plant and test as net <id>"`. starve-1 duplicates starve2-a (the later batch, the current proof).
+5. **The code it plants into was removed** (not moved) → retired, `reason: "plants into code removed at <commit> (<what>)"`. starve-2 ×5 and starve-4 ×2 plant into `q.waiting`, the flag dropped at 86aea25 ([2026-11-22, the starvation fix](decisions.md#owner-decisions-2026-11-22--the-starvation-fix-under-load)); `git grep "waiting\.\(Store\|Load\)" -- internal` is empty. Owner Q1 (2026-11-28): "Retire the seven plants that target the removed `waiting` flag (starve-2 ×5, starve-4 ×2), with the reason 'their target, the waiting flag, was removed in 86aea25'." Their `reason` is exactly that text.
+6. **A duplicate** (the same mutation and the same target as an earlier-kept net) → retired, `reason: "the same plant and test as net <id>"`; **the later batch is kept**. starve-1 duplicates starve2-a (the later batch, the current proof), so starve-1 is retired.
 7. **Does not apply at HEAD** (a `Stale` from `entry`, or the target not declared) → **stale: lane A re-anchors it** (shown caught, or passing for a tolerance plant, by one `mutate.py` single run on the re-anchored plant) **or retires it with a reason**, before `nets.json` is committed.
 8. **Otherwise a live net**: `expect: "passes"` when the batch entry's `expect.new` is `"green"` (the tolerance plants), else `"caught"` (`expect.new: "red"`, or a plain batch, where only red counts, `mutate.py:70`). Its target is the new side's (N1.3). Its `timeout` is the entry's (normalised to a duration string), else `"120s"` (mutate's default, `:1008`), until N4.3 replaces it with the measured value.
 
@@ -253,15 +277,15 @@ A stdlib Python script, run with `python3.15 -I -B <script> <worktree> <out.json
 
 | Class | Count |
 |---|---|
-| Controls, folded into the judge | 117 |
+| Controls, listed under `retired` (owner Q3) | 117 |
 | **Live nets** | **264** — 261 `caught`, 3 `passes`; 148 Go, 116 Python; 26 with a `subtest`; 11 from per-side targets (new side) |
-| Retired, with a reason (N2.5) | 16 |
+| Retired plants, with a reason (N2.5) | 16 (`retired` holds 133 with the controls) |
 | Stale, for lane A to re-anchor or retire (N2.6) | 20 |
 | **Total** | **417** (413 + 4 diffs) |
 
 Anchors at HEAD over the 296 batch plants: 267 apply; 21 find texts occur zero times, 1 twice, 7 diffs refused — **29 no longer apply** (the plan check's 28 at 9b62eedf, plus G2-15, whose find text in `gate/current-sprint` went with the sprint marker, 643423bb). Of the four `.diff` files, `E1-G10-20-revert.diff` does not apply (its `revertUnlessQuieted` is gone, `s1-1c-7-record.md:382`); the other three do.
 
-The live set's distinct targets: **225** (116 Go, among 98 distinct top-level Go tests, and 109 Python ids) — the control runs per night. Timeouts carried: 221 none (→ `120s`), 20 at `180s`, 17 at `300s`, 7 at `120s`. Live nets on files this sprint edits: `gate/bench/mutate.py` 55 (all on `gate.bench.tests.test_mutate`; none touches N1.2's lines), `gate/ci/generate.py` 2 (lane M), `gate/bench/load.py` 2 (lane L), `gate/runner/rows/race.py` 1 (lane C). Lane A seeds against the integration head after W1 and runs `nets-anchors` after each wave's merge-in; the coordinator re-anchors any net a W2 lane stales at the wave's end. 9 controls name a test no live net names (their plants are retired or stale): `test_breakit_s11c2.RuffPinReadsEveryWaiver…`, `test_known_issues_fields.Fields…`, `test_proc.Group…`, `test_lawdelta_planted…`, `TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline`, `TestCviSourceRefusalsAndContexts`, `test_instruments_pin.CodeClosure…` (×2), `TestTestsModeRefusesANonTestFile`; nothing runs them, as nothing is planted on them.
+The live set's distinct targets: **225** (116 Go, among 98 distinct top-level Go tests, and 109 Python ids) — the control runs per night. Timeouts carried: 221 none (→ `120s`), 20 at `180s`, 17 at `300s`, 7 at `120s` — v1's buckets sum to 265, one more than the 264 live nets: one bucket is off by one (not re-counted for v2; lane A's seeding prints the true tally, and N4.3 replaces every value anyway). Live nets on files this sprint edits: `gate/bench/mutate.py` 55 (all on `gate.bench.tests.test_mutate`; none touches N1.2's lines), `gate/ci/generate.py` 2 (lane M), `gate/bench/load.py` 2 (lane L), `gate/runner/rows/race.py` 1 (lane C). Lane A seeds against the integration head after W1 and runs `nets-anchors` after each wave's merge-in; the coordinator re-anchors any net a W2 lane stales at the wave's end. 9 controls name a test no live net names (their plants are retired or stale): `test_breakit_s11c2.RuffPinReadsEveryWaiver…`, `test_known_issues_fields.Fields…`, `test_proc.Group…`, `test_lawdelta_planted…`, `TestDrainMarksAStoppedRecordingIncompleteAtItsDeadline`, `TestCviSourceRefusalsAndContexts`, `test_instruments_pin.CodeClosure…` (×2), `TestTestsModeRefusesANonTestFile`; nothing runs them, as nothing is planted on them.
 
 **The five tolerance plants:** G2-47 (`A1-3-G2-47.json#0`, `ruff.toml`) → `passes`; G2-97 (`B-K2b.json#2`, a 25 ms sink slowdown, `TestARecordingThatFallsBehindStops`) → `passes`; G2-151-live (`W0-go.json#4`, `tools/allowlists/purity.json`, `TestListsPurity`) → `passes`; G2-15 (`A2-C7.json#0`, `gate/current-sprint`) → retired by rule 4; g2-117 (`E1-C2.json#4`, a 400 ms drain sleep) → stale (its diff no longer places in `drain.go`): lane A re-anchors it as `passes` or retires it. The QA review ran three of the five tolerance plants with starve-3 at 9b62eedf (`red 1, green 3`, RQ-1); which three it ran is not named, so that the three live `passes` nets are green with their plants is inferred until the first nightly.
 
@@ -280,8 +304,10 @@ The live set's distinct targets: **225** (116 Go, among 98 distinct top-level Go
 | `PR2Q-13.json#0` | PR2Q-13-hooks-row-names-no-py | plants into `gate/registry.json`, a file the gate edits every sprint |
 | `PR2Q-13.json#1` | PR2Q-13-ruff-rekeyed-gofmt-twice | plants into `gate/law.json`, a file the gate edits every sprint |
 | `E1-starvation-plants.json#0` | starve-1 | the same plant and test as net starve2-a |
-| `E1-starvation-plants.json#5`–`#9` | starve-2, -TableWrite, -BatchEnd, -Tick, -late_Send | plants into code removed at 86aea25 (the `waiting` flag dropped) |
-| `E1-starvation-plants.json#11`, `#12` | starve-4-TableWrite, starve-4 | plants into code removed at 86aea25 (the `waiting` flag dropped) |
+| `E1-starvation-plants.json#5`–`#9` | starve-2, -TableWrite, -BatchEnd, -Tick, -late_Send | their target, the waiting flag, was removed in 86aea25 (owner Q1) |
+| `E1-starvation-plants.json#11`, `#12` | starve-4-TableWrite, starve-4 | their target, the waiting flag, was removed in 86aea25 (owner Q1) |
+
+Plus the 117 controls, each `reason: "a control: folded into the judge"` (owner Q3).
 
 ### N2.6 The stale nets for lane A (20)
 
@@ -310,16 +336,17 @@ Every one of their targets is still declared. Each re-anchored net is shown red 
 |---|---|---|---|
 | 1 | `nets.json` loads | `load()` (N1.3) | `error: refused: nets.json: <message>` (exit 2) |
 | 2 | each net's files are tracked | one `git ls-files -z` → a set; for a patch, every path `mutate.parse_patch` names | `net <id> stale: <file> is not tracked` |
-| 3 | the find text occurs exactly once, or every hunk places | the working tree's text (UTF-8, `surrogateescape`, as `base_text` reads it, `mutate.py:493-494`); `mutate.occurrences(text, find) == 1`; for a patch, `mutate.apply(path, text, hunks)` per path, catching `mutate.Stale` | `net <id> stale: --find occurs <n> times in <file>, not exactly once` / `net <id> stale: a hunk of <file> occurs <n> times, not exactly once` |
-| 4 | a Go test is declared | every `*_test.go` directly in the package directory (`pkg`, else the first file's directory, as `entry` does, `:607-610`); the regex `^func (Test[A-Za-z0-9_]*)\(` per line (`re.M`), a top-level function only, since a method has a receiver before its name | `net <id> stale: <test> is declared in no _test.go file of ./<pkg>` |
-| 5 | a Python id resolves | split at `.`; the longest prefix that is a file `<a>/<b>/<c>.py` is the module; the rest is `Class` or `Class.method`; `ast.parse` the module; the class is a top-level `ClassDef`; the method is a `FunctionDef` in it or in a base class named by a plain `Name` and defined in the same module (followed transitively) | `net <id> stale: <py> does not resolve` |
-| 6 | the inflow | every entry with a mutation in every `docs/sprints/*-plants/*.json` (skipping files whose top level is not a list, which takes out `survey-index.json`, `naming-prototype.json` and `commit-map.json`; verified: all 72 plant batches are lists), and every `docs/sprints/*-plants/*.diff`, is one net's `from` or one retirement's `from` | `plants <from>: neither a net nor retired` |
-| 7 | every `from` names an existing entry | the batch's index exists, or the `.diff` file exists | `net <id>: from <from> names no plant` |
-| 8 | a `from` pointing at a control | refused | `net <id>: from <from> is a control, not a plant` |
+| 3 | the find text occurs exactly once, or every hunk places | v2 (owner Q2): `mutate.changes_from(spec_of(net), read)` with a working-tree reader (UTF-8, `surrogateescape`, as `base_text` reads, `mutate.py:493-494`), catching `mutate.Stale` — the very rule `entry` runs at night | `net <id> stale: <the Stale message>` |
+| 4 | a Go test is declared | every `*_test.go` directly in the package directory (`pkg`, else the first file's directory, as `entry` does, `:607-610`); v2 regex `^func (Test(?:[^\Wa-z]\w*)?)\(\w+ \*testing\.T\)` per line (`re.M`): a top-level function, `Test` alone or followed by a non-lower-case letter (go test's own rule), taking `*testing.T` | `net <id> stale: <test> is declared in no _test.go file of ./<pkg>` |
+| 4b | a subtest's first level is written (v2) | the subtest's first `/`-level, with `go_rewrite`'s `_` turned back into spaces, appears as a Go string literal (`"..."` or `` `...` ``) in the package's `_test.go` files; a subtest whose name is built at run time is not caught (inferred: none in the seed set) | `net <id> stale: subtest <name> is written in no _test.go file of ./<pkg>` |
+| 5 | a Python id resolves | split at `.`; the longest prefix that is a file `<a>/<b>/<c>.py` is the module; the rest is `Class` or `Class.method`; `ast.parse` the module; the class is a top-level `ClassDef`; the method is a `FunctionDef`, an `AsyncFunctionDef` or an `Assign` target (v2) in it or in a base class named by a plain `Name` defined in the same module (followed transitively) or imported by `from M import Base` (followed once, v2) | `net <id> stale: <py> does not resolve` |
+| 6 | the inflow (v2, uniform: owner Q3) | **a plant** is a JSON object with `find` or `patch` and no `control`. The three non-plant files `survey-index.json`, `naming-prototype.json`, `commit-map.json` are skipped by name. Every other `docs/sprints/*-plants/*.json` entry (a plant or a `control: true` entry) and every `docs/sprints/*-plants/*.diff` is one net's `from` or one retirement's `from`; any other batch entry, with neither a mutation nor `control: true`, is red | `plants <from>: neither a net nor retired` / `plants <from>: neither a plant nor a control` |
+| 7 | every `from` names an existing entry (nets **and retirements**, v2) | the batch's index exists, or the `.diff` file exists | `net <id>: from <from> names no plant` / `retired <from>: names no entry` |
+| 8 | a net's `from` is a plant, and its mutation is its source's (v2) | a net whose `from` is a control is refused; unless the net carries `"reanchored": true` (a new optional key), its `file`/`find`/`replace` or `patch` equals its `from` entry's; a retirement may name a control | `net <id>: from <from> is a control, not a plant` / `net <id>: its mutation differs from <from>'s and it is not marked reanchored` |
 
 What it cannot see, by design: whether a plant still compiles, whether a test still catches it, a build-tag-excluded test file (`//go:build`) declaring the test (inferred: rare; the nightly's control reads it `invalid`). Those are the nightly's.
 
-**Measured on the real set** (584a8b66, the owner's machine, 14 CPUs): checks 2–3 over all 300 plants through `parse_patch`, `apply` and the occurrence count on the working tree: **0.05 s**, plus 0.29 s to import `mutate`; the same through `mutate.changes_of` took 18.9 s (three `git` processes per file, `base_text` `:487-492`) — hence §7 D1. Checks 4–6 are file reads and `ast.parse`: inferred well under a second. A **pin** in `test_nets.py` runs the real `--anchors` over the committed `nets.json` and asserts it exits 0 within 10 s.
+**Measured on the real set** (584a8b66, the owner's machine, 14 CPUs): checks 2–3 over all 300 plants through `parse_patch`, `apply` and the occurrence count on the working tree: **0.05 s**, plus 0.29 s to import `mutate`; the same through `mutate.changes_of` took 18.9 s (three `git` processes per file, `base_text` `:487-492`) — hence §7 D1. `changes_from` with a working-tree reader does the same pure work as v1's measured path (inferred to stay well under a second; the pin below proves it). Checks 4–6 are file reads and `ast.parse`: inferred well under a second. A **pin** in `test_nets.py` runs the real `--anchors` over the committed `nets.json` and asserts it exits 0 within 10 s.
 
 **Registry row:**
 
@@ -330,7 +357,7 @@ What it cannot see, by design: whether a plant still compiles, whether a test st
  "command": ["python3.15", "-I", "-B", "-X", "utf8", "gate/bench/nets.py", "--anchors"]}
 ```
 
-It prints `nets-anchors: <L> nets, <R> retired, <P> plants, <F> stale; <w> s`, then `GATE_COVERED <L>`, then `failed:` lines. **Instrument:** `{"id": "nets-anchors", "row": "nets-anchors", "lands_in": "S1.1c-11", "code": <closure>, "proofs": [{"path": "gate/proofs/drivers/test_nets_anchors_planted.py", "cases": 4}], "tiers": ["T2", "T3", "T4"], "min_wants": 1, "expected_scope": ["git", "gate/nets.json"]}`.
+It prints `nets-anchors: <L> nets, <R> retired, <P> plants, <F> stale; <w> s`, then `GATE_COVERED <L>`, then `failed:` lines. **Instrument:** `{"id": "nets-anchors", "row": "nets-anchors", "lands_in": "S1.1c-11", "code": <closure>, "proofs": [{"path": "gate/proofs/drivers/test_nets_anchors_planted.py", "cases": 6}], "tiers": ["T2", "T3", "T4"], "min_wants": 1, "expected_scope": ["git", "gate/nets.json"]}`.
 
 **Proof driver** `test_nets_anchors_planted.py` — counter-examples (13)–(17):
 
@@ -340,6 +367,10 @@ It prints `nets-anchors: <L> nets, <R> retired, <P> plants, <F> stale; <w> s`, t
 | `test_a_renamed_test_is_red` | the world renames `TestX` | red `net n1 stale: TestX is declared in no _test.go file of ./p` |
 | `test_a_plant_neither_a_net_nor_retired_is_red` | a plants batch entry added (or a net deleted without a retirement) | red `plants <from>: neither a net nor retired` |
 | `test_a_retirement_without_a_reason_is_refused` | `"reason": ""` | red, `error: refused: nets.json: retired <from>: no reason` |
+| `test_a_renamed_subtest_literal_is_red` (v2) | the world renames a subtest's string literal | red `net n1 stale: subtest <name> is written in no _test.go file of ./p` |
+| `test_a_deleted_net_without_a_retirement_is_red` (v2, (16) apart from (15)) | a net removed from `nets.json`, no retirement added | red `plants <from>: neither a net nor retired` |
+
+The inflow case above is (15) alone: a plants batch entry added. Instrument `cases` becomes 6.
 
 Unit tests in `test_nets.py` cover the rest: a replace-only identifier (a rename of a name only the `replace` text holds never stales the net: the anchor is the find text), a patch net's file renamed, two nets with one id, a `subtest` with `py`.
 
@@ -357,9 +388,9 @@ Unit tests in `test_nets.py` cover the rest: a replace-only identifier (a rename
 | Row (lane) | Measured on the owner's machine (inferred until the burn-in) | Rule |
 |---|---|---|
 | race-stress per package: `internal/playback`, `internal/partition`, root, `io/inmemory` (C) | per package, by lane C | the method; one row each, `job` of its own |
-| `-cpu 1,4` over `internal/...` (C) | about twice `unit`'s go time (two passes) | the method; the row passes `-timeout` explicitly (today `unit` runs go's default 10 m per package) |
+| `-cpu 1,4` over `internal/...` (C) | about twice `unit`'s go time (two passes) | the method; the row passes `-timeout` explicitly (today `unit` runs go's default 10 m per package). v2: the row is `gate/runner/rows/cpu.py` as built (commit c00fb376 on `s1-1c-11/integration`, not re-read for v2): `go test -cpu=1` then `-cpu=4`, each failure line prefixed `-cpu N: `. Driver cases: (19) `test_a_test_failing_only_at_cpu_1_is_red_naming_cpu_1`, (20) `test_a_test_failing_only_at_cpu_4_is_red_naming_cpu_4` |
 | load (L) | `TestLiveEqualsReplay` took about 78 s a run under 28 hogs (`s1-1c-7-record.md:304-308`) | its count small (plan check §5 N4); `load.py --wall` set explicitly, `<= timeout_s - 120` (its default 3600 equals `TIMEOUT_MAX_S`, `gate/bench/load.py:106`) |
-| stress (L) | per listed Python id | `stress.py`'s run count per id; the row's `timeout_s` from the burn-in |
+| stress (L) | per listed Python id | `stress.py`'s run count per id; the row's `timeout_s` from the burn-in. v2: the timing list is `gate/timing.json`, schema `{"schema": 1, "go": [{"pkg", "test", "count"}], "py": [{"id", "runs"}]}`, its loader refusing a wrong schema, an unknown or missing key, a non-positive count, a duplicate; `stress.py` gains test-id selection; red when a listed name selects nothing or ran fewer times than its count. Driver cases (21) `test_a_listed_name_that_selects_nothing_is_red`, (22) `test_a_listed_test_run_fewer_than_its_count_is_red` |
 | nets (A) | N4.3 | N1.6's `--budget` pin |
 | the macOS test job (M) | the T4 test job's rows on darwin | its rows keep their `timeout_s`; the job's cap is the generator's sum (`gate/ci/generate.py:219-230`) |
 
@@ -369,7 +400,7 @@ Every load row's command passes `--wall <s>` with `s <= timeout_s - 120`; a pin 
 
 ### N4.3 The nets row's per-net and per-control timeouts
 
-The row prints each run's wall (`(<wall> s)` on every `control` and `net` line). After the three burn-in nightlies, lane A sets each net's `timeout` to **max(60 s, 3 × the slowest of its three plant walls)**, rounded up to 30 s, and a control's timeout is the largest of its nets' (N1.5). A net whose slowest wall is above 600 s is reported to the coordinator before its timeout is set (G2-92, `TestLiveEqualsReplay`, carries 300 s today). The sum of all `_need` values is printed as `need <s> s` on the first line beside the budget; the plan check's local extrapolation is 10–15 minutes for the whole set (inferred), well inside 3300 s.
+The row prints each run's wall (`(<wall> s)` on every `control` and `net` line). After the three burn-in nightlies, lane A sets each net's `timeout` to **max(60 s, 3 × the slowest of its plant wall and its control wall)** over the three nightlies (v2: the control wall included), rounded up to 30 s, and a control's timeout is the largest of its nets' (N1.5), so a control never times out on a clean run; the walls are kept beside `nets.json` for N1.5's pin (lane A names the file). A net whose slowest wall is above 600 s is reported to the coordinator before its timeout is set (G2-92, `TestLiveEqualsReplay`, carries 300 s today). v2: no `need <s> s` line; the summary prints the sum of the measured walls. The plan check's local extrapolation is 10–15 minutes for the whole set (inferred), well inside 3300 s.
 
 ---
 
@@ -378,7 +409,7 @@ The row prints each run's wall (`(<wall> s)` on every `control` and `net` line).
 Every proof driver runs in the T4 `proofs` row (`gate/registry.json`, row `proofs`: job `proofs`, 600 s, `exclusive: true`), drivers in parallel one per core (`gate/runner/rows/__init__.py:130-146`). Decision 4: the small growth is accepted, each piece measured, no CPU hogs in the proofs world.
 
 1. **Before.** Lane C's first commit records the `proofs` row's wall on the integration branch's PR CI run (the record's "before" line, the run id).
-2. **Per driver budget.** Each new driver case: at most 30 s on the owner's machine, asserted by nothing but measured once per PR from the row's per-driver report and listed in the record. The nets driver's worlds hold one tiny Go package and at most two nets, so a case is two or three `go test` runs.
+2. **Per driver budget.** Each new driver case: at most 30 s on the owner's machine; v2: each new **driver** a budget of its own, at most 60 s, measured on the CI runner in PR 1 and listed in the record. The nets driver's worlds hold one tiny Go package and at most two nets, so a case is two or three `go test` runs. Whether the worlds share `GOCACHE`: inferred that `support` gives each world the runner's `GOCACHE` (shared, so a world's build is cached across cases); lane A confirms it in `gate/proofs/support` before measuring, and states it in the record.
 3. **No hogs.** `load.py` drivers pass `--hogs 0` (`gate/bench/load.py:104`, `:114` accepts 0); `stress.py` drivers pass `--no-hogs` (`gate/runner/stress.py:263`). `stress.hog_count()` is twice the CPU count (`gate/runner/stress.py:60-61`); none starts inside the proofs world.
 4. **Deterministic once-in-N plants.** The load and stress drivers' planted failures read a counter file in the world's temporary directory: run k increments it and fails exactly when the count reaches N (e.g. the 3rd of 5), so the row's k/N verdict is the same on every machine — counter-example (21). Never a random draw.
 5. **After.** Each PR's last commit records the `proofs` row's wall again; exit criterion 9 compares the two. The T2 `nets-anchors` row adds under a second (N3).
@@ -410,9 +441,11 @@ def runner(tier: str, job: str) -> str:
 
 All nine `test` job rows gain `"nightly"` at the end of `tiers`: `unit`, `coverage-inclusion`, `pytests`, `semantics`, `conformance`, `baseline` (`["T2", "T3", "T4", "nightly"]`) and `differential`, `notbuilt`, `tripwire` (`["T4", "nightly"]`). Each row's instrument in `gate/law.json` repeats the same `tiers` (`teeth.pin` compares `tiers`, `gate/runner/teeth.py:484`, `:521-524`). Mixed PR and nightly tiers exist today (`vulns`: `["T4", "nightly"]`). Records stay `(test, <row>)`, so the summary, the instruments' `row`, and the drivers are unchanged. The nightly `test` job's cap follows the generator's rule: the nine `timeout_s` sum to 2,640 s, so `max(10, ceil((2640 × 1.2 + 60) / 60) + 10)` = 64 minutes (`:221-226`).
 
+v2: `fuzz-parser` and `fuzz-decoder` each move to a job of its own (the coordinator's registry edit), with a `test_generate` case asserting each is its own nightly job; the `nightly` job then holds no rows (and is not rendered, inferred from the generator rendering only selected jobs).
+
 ### N6.3 `gate/ci/tests/test_generate.py` cases (red first) — counter-examples (23), (24)
 
-1. `test_the_nightly_test_job_runs_on_macos_and_the_t4_test_job_on_linux` — render the real registry at `nightly` and at `T4`; the `test:` job's `runs-on` is `macos-latest` and `ubuntu-latest` respectively, with the same nine rows selected (the nightly run line holds `--tier nightly --job test`).
+1. `test_the_nightly_test_job_runs_on_macos_and_the_t4_test_job_on_linux` — lands after the coordinator's tier edits (N6.2), or uses a synthetic registry before them (v2); render the registry at `nightly` and at `T4`; the `test:` job's `runs-on` is `macos-latest` and `ubuntu-latest` respectively, with the same nine rows selected (the nightly run line holds `--tier nightly --job test`).
 2. `test_runners_are_keyed_by_tier_and_job` — a registry with a row of job `j` at T4 and nightly and `RUNNERS` patched with `("nightly", "j")`: only the nightly workflow's `j` runs on macOS.
 3. The existing `test_the_macos_job_runs_on_macos_and_every_other_on_linux` (`:129`) is rewritten for the (tier, job) key, every job but `determinism-macos` on ubuntu at T4.
 4. `test_the_nightly_concurrency_group_carries_the_ref` — the nightly's `concurrency:` block is `group: nightly-${{ github.ref }}`, `cancel-in-progress: false`; the gate's block unchanged.
@@ -425,22 +458,27 @@ The summary's expected set is each selected row's `(job, id)` plus each job's pa
 
 1. Lane M, after its generator change is on `s1-1c-11/integration`: a scratch branch `s1-1c-11/darwin-demo` off it, one commit adding `internal/playback/darwin_demo_test.go`: `func TestDarwinDemo(t *testing.T) { if runtime.GOOS == "darwin" { t.Fatal("planted: fails on darwin only") } }`.
 2. The coordinator pushes the scratch branch (ground rule 18: agents never push) and runs `gh workflow run nightly.yml --ref s1-1c-11/darwin-demo`.
-3. Expected: the nightly `test` job red, `unit` naming `TestDarwinDemo`; every ubuntu job green. The run id, its URL and the `unit` line go into the record.
+3. Expected: the nightly `test` job red, `unit` naming `TestDarwinDemo`; every ubuntu job green. The run id, its URL and the `unit` line go into the record. v2: the coordinator also dispatches the gate workflow on the scratch branch, to show the same commit green on Linux; its run id goes into the record beside the nightly's.
 4. The scratch branch is deleted, local and remote; the test file never reaches the integration branch. (The owner's machine is darwin, so the plant would turn local T2 red: it is never run locally.)
 
 ---
 
 ## 7. Deviations from the plan check, and why
 
-- **D1 — the anchor check reads the working tree, not `changes_of`.** The plan check (§2 S2, §3) names `mutate.changes_of` for "find once or hunks place". Measured on the set: 18.9 s through `changes_of` (git processes per file) against 0.05 s through the same pure parts it calls on the working tree; `changes_of` also refuses a file that differs from HEAD (`mutate.py:491-492`), so a developer's uncommitted edit would read as a refusal instead of as the stale net it makes. To call the same occurrence count without importing a private name, `_occurrences` becomes `occurrences` — a second, mechanical change to `mutate.py` beside the typed refusals (`impact`: one caller). The nightly still goes through `entry` → `changes_of`, so both halves share one rule.
-- **D2 — a control that is `invalid` reads `unjudged`, not `stale`.** The plan check's table splits "selects no test" (stale) from "fails" (unjudged); mutate's `invalid` covers no run, a skip, a build failure and a probe miscount (`mutate.py:62-70`) and the judge must not parse output. A test that is declared but selects nothing is the static half's `stale` at T2 (N3 check 4); at night every non-green control is `unjudged`, with mutate's tails printed under it.
+- **D1 — the anchor check reads the working tree through `changes_from`, not `changes_of`** (v2, owner Q2). The plan check (§2 S2, §3) names `mutate.changes_of` for "find once or hunks place". Measured on the set: 18.9 s through `changes_of` (git processes per file) against 0.05 s through the same pure parts on the working tree; `changes_of` also refuses a file that differs from HEAD (`mutate.py:491-492`), so a developer's uncommitted edit would read as a refusal instead of as the stale net it makes. v2 extracts `changes_from(spec, read)` (N1.2) so both halves run one rule with different readers; v1's `_occurrences` rename is dropped.
+- **D2 — a control that is `invalid` reads `unjudged`, not `stale`.** The plan check's table splits "selects no test" (stale) from "fails" (unjudged); mutate's `invalid` covers no run, a skip, a build failure and a probe miscount (`mutate.py:62-70`) and the judge must not parse output. v2 correction: v1 claimed every declared-but-selects-nothing case is caught at T2 by check 4; that holds for a top-level test only. A subtest that selects nothing is caught at T2 only when its literal is gone (check 4b); a subtest named at run time still reads `unjudged` at night. Every non-green control is `unjudged`, with mutate's tails printed under it (every non-green control, not only `invalid`).
 - **D3 — seven more retirements than the plan check names.** Rule 5 (code removed at 86aea25: starve-2 ×5, starve-4 ×2) and rule 6 (starve-1, a duplicate). Both follow from evidence (`git grep` on `waiting`; identical plants), not from preference; lane A may still re-anchor any of them if the reviewers disagree.
 - **D4 — 29 plants no longer apply, not 28.** G2-15's find text left `gate/current-sprint` with this sprint's marker (643423bb); it is retired by rule 4 either way.
-- **D5 — the inflow check skips controls by rule** rather than listing 117 retirements: a control has no plant, and decision 2 speaks of plants.
+- **D5 — reversed in v2 (owner Q3).** v1 skipped controls by rule; v2 lists the 117 controls under `retired` with `reason: "a control: folded into the judge"`, so the inflow check is uniform: every batch entry is a net or a retirement.
 
-## 8. Open questions for the owner
+## 8. The owner's G1 answers (2026-11-28)
 
-- **Q1 — The seven plants into the removed `waiting` flag (D3).** **(a, recommended) Retire them, naming 86aea25:** their defect can no longer be written, and the same test keeps four live plants (starve2-a…d). (b) Lane A writes new plants for the same test in their place: more nets on one test, no new defect class.
-- **Q2 — `_occurrences` made public (D1).** **(a, recommended) Rename it to `occurrences`:** one rule for both halves, the T2 check under a second. (b) Keep mutate.py to the typed refusals and let the static half call `changes_of`: about 19 s at T2 on every PR, and a dirty file reads as a refusal.
+- **Q1 (D3)** — "Retire the seven plants that target the removed `waiting` flag (starve-2 ×5, starve-4 ×2), with the reason 'their target, the waiting flag, was removed in 86aea25'." Applied: N2.2 rule 5, N2.5.
+- **Q2 (D1)** — "Extract one pure rule inside mutate.py: `changes_from(spec, read)`; the nightly reads files at HEAD, the PR check reads the working tree." Applied: N1.1, N1.2, N3 check 3, D1.
+- **Q3 (D5)** — "List the 117 controls under `retired` with the reason 'a control: folded into the judge'." Applied: N2.2 rule 1, N2.4, N2.5, N3 check 6, D5.
 
-*Nothing else in this note needs an owner's word; every other choice follows the plan check v2 and decisions 2–5.*
+*No open question remains in this note; every other choice follows the plan check v2, decisions 2–5 and these answers.*
+
+## 9. Later findings (v2)
+
+Applied: the timeout tally's off-by-one is called out (N2.4); rule 6 states "the later batch is kept"; tails printed for every non-green control (D2); the `need <s> s` line dropped for the sum of measured walls (N4.3); `GATE_COVERED` counts caught + passes + escaped + tolerance failed (N1.4); the sketch unpacks `run_one`'s 3-tuple (N1.5); a `passes` net's limit written down (N1.4's proving paragraph). To lane A: the control gets an empty commit under the same identity as a plant run, so both runs see the same `git` state (inferred need; lane A checks `Worktrees.at`'s commit path, `mutate.py:780-797`).
