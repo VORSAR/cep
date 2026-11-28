@@ -244,6 +244,12 @@ class RaceStressBudget(unittest.TestCase):
     def test_race_stress_repeats_and_its_go_timeout_with_margins_fits_its_timeout_s(self):
         self.assertStressFits("race-stress", "./internal/runtime", own_timeout=False)
 
+    def test_the_cpu_rows_two_go_timeouts_with_margins_fit_its_timeout_s(self):
+        row = self.real_row("cpu")
+        self.assertIn("gate/runner/rows/cpu.py", row.command)
+        need_s = 2 * (cpu_row.TIMEOUT_MIN * 60 + GO_KILL_MARGIN_S) + STRESS_HEADROOM_S
+        self.assertFits(row, need_s, f"2 x (go -timeout {cpu_row.TIMEOUT_MIN}m + {GO_KILL_MARGIN_S} s) + headroom")
+
 
 class Race(GoRows):
     """The race row (owner, 2026-11-05: pulled forward from S3.2b): `go test -race -json -count=1`, with cgo on for

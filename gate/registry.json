@@ -1045,7 +1045,7 @@
         "git",
         ":(glob)gate/proofs/drivers/test_*.py"
       ],
-      "min_wants": 39,
+      "min_wants": 40,
       "lands_in": "S1.1a-1",
       "exclusive": true,
       "command": [
@@ -1145,6 +1145,36 @@
         "gate/runner/rows/race.py",
         "--repeat=20",
         "./internal/runtime"
+      ]
+    },
+    {
+      "id": "cpu",
+      "job": "cpu",
+      "tiers": [
+        "nightly"
+      ],
+      "blocking": true,
+      "timeout_s": 2040,
+      "needs": [],
+      "scope": [
+        "prod",
+        "test"
+      ],
+      "expected_scope": [
+        "go",
+        "./internal/..."
+      ],
+      "min_wants": 0,
+      "lands_in": "S1.1c-11",
+      "exclusive": false,
+      "command": [
+        "python3.15",
+        "-I",
+        "-B",
+        "-X",
+        "utf8",
+        "gate/runner/rows/cpu.py",
+        "./internal/..."
       ]
     }
   ]
