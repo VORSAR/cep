@@ -1679,3 +1679,9 @@ W1 (lanes C and M, the aging-history fix and the playback budget) passed three c
    - Rejected: a nightly-only budget per row; accepting 2.25×.
 3. **Every finding in W1's own work is fixed before PR 1 opens,** each red first: the package-exists check for every nightly row (WA-1), the record's missing burn-in columns (WQ-1), the `-cpu 4` pass shown green in the cpu driver (WQ-4), the CPU-count precondition (WQ-5), one package per race-stress row (WA-4, WQ-6), the cpu pin's wording (WA-3), the design's test names mapped (WQ-8), the `--timeout` reaching go (WQ-7), and the needs-history set derived from the code (WA-5).
    - Rejected: the should-fix items only, the later ones to the backlog.
+
+Then, after the fix round (green on T2, the T4 lint job and the proofs job), two more answers, both as recommended.
+4. **One confirming nightly on the final head, then PR 1** (the fix round had widened two timeouts and changed `nightly.yml`'s caps since the burn-in).
+   - Rejected: opening PR 1 at once; three more consecutive nightlies.
+5. **`pytests`' watchdog to 1320 s, pinned:** the confirming nightly (run 46124883543, green) ran `pytests` on macOS in 418.6 s, a new slowest, so 1200 s was 2.87×; 1320 s is 3.15×, and a T2 pin holds the watchdog at three times the slowest recorded macOS run.
+   - Rejected: opening PR 1 with 1200 s.
