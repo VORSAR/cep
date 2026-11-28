@@ -3,8 +3,11 @@ GOMAXPROCS value).
 
 Planted: internal/clock, a package whose test calls t.Fatal when runtime.GOMAXPROCS(0) is 1, beside the passing
 internal/control. Run through the real cpu row at the nightly tier, it fails naming -cpu 1 and that test, and no
--cpu 4 failure line: the row's two invocations each name the value they ran at.
+-cpu 4 failure line: the row's two invocations each name the value they ran at. The -cpu 4 pass is shown, not
+inferred from a missing line: the row's test.cpu4.json holds a pass for the planted test, test.cpu1.json its fail.
 """
+
+import json
 
 from gate.proofs.drivers import support
 
@@ -31,3 +34,11 @@ class CpuPlanted(support.DriverTest):
         out = run.row_stdout("cpu", "cpu")
         self.assertIn(f"-cpu 1: {PLANTED}", out)
         self.assertNotIn("-cpu 4:", out)
+        self.assertEqual(self.actions(run, 1), ["fail"], "-cpu 1 did not fail the planted test")
+        self.assertEqual(self.actions(run, 4), ["pass"], "-cpu 4 did not run the planted test to a pass")
+
+    def actions(self, run, cpu):
+        """The pass/fail/skip events go test -json gave the planted test in the row's invocation at `cpu`."""
+        events = [json.loads(line) for line in run.row_file("cpu", "cpu", f"test.cpu{cpu}.json").splitlines()]
+        test = PLANTED.rpartition(": ")[2]
+        return [e["Action"] for e in events if e.get("Test") == test and e.get("Action") in ("pass", "fail", "skip")]
