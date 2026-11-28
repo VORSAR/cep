@@ -44,9 +44,9 @@ jobs:
           name: records-lint-${{ github.run_attempt }}
           path: .gate/ci/lint/
           if-no-files-found: ignore
-  nightly:
+  fuzz-parser:
     runs-on: ubuntu-latest
-    timeout-minutes: 83
+    timeout-minutes: 29
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -63,17 +63,69 @@ jobs:
           key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
           restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
       - run: make setup tools
-      - run: python3 -I -B gate/bootstrap.py exec -- --tier nightly --job nightly --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/nightly
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier nightly --job fuzz-parser --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/fuzz-parser
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: always()
         with:
-          name: records-nightly-${{ github.run_attempt }}
-          path: .gate/ci/nightly/
+          name: records-fuzz-parser-${{ github.run_attempt }}
+          path: .gate/ci/fuzz-parser/
+          if-no-files-found: ignore
+  fuzz-decoder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier nightly --job fuzz-decoder --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/fuzz-decoder
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-fuzz-decoder-${{ github.run_attempt }}
+          path: .gate/ci/fuzz-decoder/
+          if-no-files-found: ignore
+  race-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 47
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/vorsar/cep/tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.json') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-${{ github.sha }}
+          restore-keys: go-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum', 'gate/proofs/go.mod', 'gate/proofs/go.sum') }}-
+      - run: make setup tools
+      - run: python3 -I -B gate/bootstrap.py exec -- --tier nightly --job race-stress --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --run-dir .gate/ci/race-stress
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: always()
+        with:
+          name: records-race-stress-${{ github.run_attempt }}
+          path: .gate/ci/race-stress/
           if-no-files-found: ignore
   strict-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [lint, nightly]
+    needs: [lint, fuzz-parser, fuzz-decoder, race-stress]
     if: always()
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -99,7 +151,17 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         continue-on-error: true
         with:
-          name: records-nightly-${{ github.run_attempt }}
-          path: .gate/artifacts/records-nightly-${{ github.run_attempt }}
+          name: records-fuzz-parser-${{ github.run_attempt }}
+          path: .gate/artifacts/records-fuzz-parser-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-fuzz-decoder-${{ github.run_attempt }}
+          path: .gate/artifacts/records-fuzz-decoder-${{ github.run_attempt }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        continue-on-error: true
+        with:
+          name: records-race-stress-${{ github.run_attempt }}
+          path: .gate/artifacts/records-race-stress-${{ github.run_attempt }}
       - if: always()
         run: python3 -I -B gate/bootstrap.py exec -- summarize --registry gate/registry.json --tier nightly --artifacts .gate/artifacts --run-id ${{ github.run_id }}-${{ github.run_attempt }} --commit ${{ github.sha }} --attempt ${{ github.run_attempt }} --image "$ImageOS $ImageVersion"

@@ -39,7 +39,7 @@ class FuzzDecoderPlanted(support.DriverTest):
 
         run = self.world.run(registry=self.world.registry(support.registry_row("fuzz-decoder")), tier="nightly")
 
-        self.assertParityPassed(run, "nightly")
-        self.assertRed(run, "nightly", "fuzz-decoder", f"exit 1: {FUZZ_FILE}: {TARGET} crashed: see crashers/")
-        self.assertIn(f"{TARGET}/planted", run.row_file("nightly", "fuzz-decoder", f"{TARGET}.stdout"))
-        self.assertEqual(run.row_file("nightly", "fuzz-decoder", "crashers", TARGET, "planted"), SEED_TEXT)
+        self.assertParityPassed(run, "fuzz-decoder")
+        self.assertRed(run, "fuzz-decoder", "fuzz-decoder", f"exit 1: {FUZZ_FILE}: {TARGET} crashed: see crashers/")
+        self.assertIn(f"{TARGET}/planted", run.row_file("fuzz-decoder", "fuzz-decoder", f"{TARGET}.stdout"))
+        self.assertEqual(run.row_file("fuzz-decoder", "fuzz-decoder", "crashers", TARGET, "planted"), SEED_TEXT)

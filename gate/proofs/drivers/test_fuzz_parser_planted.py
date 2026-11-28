@@ -39,7 +39,7 @@ class FuzzParserPlanted(support.DriverTest):
 
         run = self.world.run(registry=self.world.registry(support.registry_row("fuzz-parser")), tier="nightly")
 
-        self.assertParityPassed(run, "nightly")
-        self.assertRed(run, "nightly", "fuzz-parser", f"exit 1: {FUZZ_FILE}: {TARGET} crashed: see crashers/")
-        self.assertIn(f"{TARGET}/planted", run.row_file("nightly", "fuzz-parser", f"{TARGET}.stdout"))
-        self.assertEqual(run.row_file("nightly", "fuzz-parser", "crashers", TARGET, "planted"), SEED_TEXT)
+        self.assertParityPassed(run, "fuzz-parser")
+        self.assertRed(run, "fuzz-parser", "fuzz-parser", f"exit 1: {FUZZ_FILE}: {TARGET} crashed: see crashers/")
+        self.assertIn(f"{TARGET}/planted", run.row_file("fuzz-parser", "fuzz-parser", f"{TARGET}.stdout"))
+        self.assertEqual(run.row_file("fuzz-parser", "fuzz-parser", "crashers", TARGET, "planted"), SEED_TEXT)
