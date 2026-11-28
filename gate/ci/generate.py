@@ -67,9 +67,10 @@ def _cache(restore_only: bool) -> str:
 
 
 # Rows that compare against the merge base with main: their job checks out the full history (a shallow checkout has
-# no main, so apidiff would pass with nothing compared; S3.3-1; lawdelta fails outright, S1.1c-1). Every other job
-# keeps the one-commit checkout.
-NEEDS_HISTORY = frozenset({"apidiff", "lawdelta"})
+# no main, so apidiff would pass with nothing compared; S3.3-1; lawdelta fails outright, S1.1c-1; aging's part-level
+# move check is red with no merge base, which a nightly dispatched on a branch met, S1.1c-11's burn-in). Every other
+# job keeps the one-commit checkout.
+NEEDS_HISTORY = frozenset({"aging", "apidiff", "lawdelta"})
 # Rows that read the module cache offline: their job downloads every module of both tracked go.mod files at setup
 # (owner, 2026-11-11, S1.1c-1's design, decision 1), so a cold cache is never a verdict.
 # proofs: the deps driver fingerprints the real modules from the cache; vulns: the scan loads both modules' builds.
