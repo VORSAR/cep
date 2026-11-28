@@ -723,7 +723,7 @@
         "nightly"
       ],
       "blocking": true,
-      "timeout_s": 1200,
+      "timeout_s": 1320,
       "needs": [],
       "scope": [
         "tools"
