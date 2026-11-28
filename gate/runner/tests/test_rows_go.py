@@ -253,6 +253,9 @@ class RaceStressBudget(unittest.TestCase):
     def test_race_stress_root_repeats_and_its_own_go_timeout_with_margins_fits_its_timeout_s(self):
         self.assertStressFits("race-stress-root", ".")
 
+    def test_race_stress_playback_repeats_and_its_own_go_timeout_with_margins_fits_its_timeout_s(self):
+        self.assertStressFits("race-stress-playback", "./internal/playback")
+
     def test_the_cpu_rows_two_go_timeouts_with_margins_fit_its_timeout_s(self):
         row = self.real_row("cpu")
         self.assertIn("gate/runner/rows/cpu.py", row.command)
