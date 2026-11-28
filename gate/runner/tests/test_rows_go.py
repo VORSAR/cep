@@ -39,6 +39,9 @@ SLOWEST_CI_S = {
     "race-stress-playback": 976.4,
     "race-stress-root": 71.7,
 }
+# The pytests row's slowest recorded run in the nightly test job on macOS, in seconds (run 46124883543; the record).
+# It has no go -timeout: its row watchdog (timeout_s) must be at least 3 x this (owner, 2026-11-28, PR 1's review).
+SLOWEST_MACOS_PYTESTS_S = 418.6
 
 
 def wrapper(name, *args):
@@ -306,6 +309,15 @@ class RaceStressBudget(unittest.TestCase):
                 self.assertGreaterEqual(
                     go_s[row_id], 3 * slowest_s, f"{row_id}: go timeout {go_s[row_id]} s < 3 x slowest CI {slowest_s} s"
                 )
+
+    def test_the_pytests_watchdog_is_at_least_3_x_its_slowest_macos_nightly_run(self):
+        row = self.real_row("pytests")
+        self.assertIn("nightly", row.tiers)  # witness: the row runs in the nightly test job, on macOS
+        self.assertGreaterEqual(
+            row.timeout_s,
+            3 * SLOWEST_MACOS_PYTESTS_S,
+            f"pytests: timeout_s {row.timeout_s} < 3 x slowest macOS nightly {SLOWEST_MACOS_PYTESTS_S} s",
+        )
 
     def test_a_race_stress_row_naming_two_packages_is_refused(self):
         row = types.SimpleNamespace(
