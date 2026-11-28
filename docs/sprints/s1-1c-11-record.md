@@ -23,6 +23,8 @@ The full plan is [s1-1c-11-plan-check.md](s1-1c-11-plan-check.md) (v2), drafted 
 
 **At G0 — the owner, 2026-11-27** ([decisions](decisions.md#owner-decisions-2026-11-27--s11c-11s-plan-check), 7–8): main green on 9b62eedf; lane C starts beside the design note; the integration branch pushed as it grows.
 
+
+**The design (G1) — the owner, 2026-11-28** ([decisions](decisions.md#owner-decisions-2026-11-28--s11c-11s-design-g1); three answers, all as recommended): the seven plants on the removed `waiting` flag retired; one pure rule, `changes_from(spec, read)`, shared by the nightly and the PR check; the 117 controls listed under `retired`. The same day the owner cut every agent's time box to 10 minutes.
 **The plan check — the owner, 2026-11-27** ([decisions](decisions.md#owner-decisions-2026-11-27--s11c-11s-plan-check); six answers, all as recommended): the lighter routine with one design note and blind reviews; the nets as a maintained live set with a control run and a T2 anchor check (2026-11-22's package A annotated); the macOS test job by a nightly tier; PR CI accepts the small growth; a bounded exception to testing.md rule 2 for the nets row; three green dispatched nightlies before each PR merges.
 
 ## Done-done
@@ -35,8 +37,8 @@ Entry (G0)   ☑ card complete and approved (the plan check §12; the owner's an
              ☑ plan check reviewed (architect, QA) and answered by the owner
              ☑ test material exists, or making it is an item (every proof driver is a lane item, §6–§7)
              ☑ `gate/current-sprint` set, the first commit (643423bb; the record opened after it, f54e3bf0)
-Design (G1)  ☐ architecture + the-fool findings resolved ☐ QA testability findings resolved
-             ☐ owner decisions recorded ☐ ADRs written for lasting decisions
+Design (G1)  ☑ architecture findings resolved (the 10-minute review ran no the-fool pre-mortem; the plan check's did) ☑ QA testability findings resolved
+             ☑ owner decisions recorded ☑ ADRs written for lasting decisions — none needed at G1 (the nets row's law is decided in decisions.md; ADR-0015 §2.2's instrument table is updated as the rows land)
 Build (G2)   ☐ every lane at T2 ☐ T3 combine-check exit 0
              ☐ conformance cases for every construct shipped or changed — n/a (no construct)
              ☐ tests on the real code ☐ every breaker's red test committed
@@ -56,5 +58,7 @@ Exit (G5)    ☐ two PRs, ≤ 100 commits each, merged by the owner
 ## Proofs as made
 
 *Each proof goes in as it is made (sprint model §10).*
+
+**The design note** ([s1-1c-11-design.md](s1-1c-11-design.md)): v1 (db8521c5) by a fresh `refactoring-specialist` within the owner's 10-minute deadline — 417 entries classified (117 controls, 264 live nets, 16 retired, 20 stale for lane A), the anchor check measured at 0.05 s on the real set; blind reviews ([architecture](../reviews/s1-1c-11-design-architecture.md), [QA](../reviews/s1-1c-11-design-qa.md)), one blocker shared (the control's timeout); v2 (f97d5f9c) folds every finding and the owner's three G1 answers. The coordinator checked v1's `mutate.py` names and lines (`entry` :561, `changes_of` :497, `Worktrees` :767, `check_compiled` :853, `run_one` :930) and G2-15's staleness (its find text `S1.1c-7\n` left `gate/current-sprint` at 643423bb).
 
 **Lane C, first commit** (cdd3770e on `s1-1c-11/lane-c`, picked onto the integration branch): `race.py --timeout=Nm` (a per-row go timeout; 25m stays the stress default) and the `cpu` row module (`go test -cpu=1`, then `-cpu=4`, each failure line naming its value), with 15 and 9 tests. Red first: 20 failures with `cpu.py` present and `race.py` unchanged (the 15 timeout tests on the old usage line, 5 budget pins on unregistered rows). Proofs: `test_rows_go` 61 tests OK (coordinator's re-run); T2 exit 0 on cdd3770e (run 20261128T035634Z-a91197), so the unregistered `cpu.py` passes the law checks. The proofs job before lane C: 248.3 s, exit 0 (run 20261128T034643Z-82c747). Stopped at the owner's 10-minute deadline (2026-11-28) with the four new race-stress rows, the cpu row's registry and law entries, the job split and the proof drivers not yet built.
