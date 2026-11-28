@@ -68,13 +68,21 @@ class Render(unittest.TestCase):
 
     def test_every_merge_base_row_checks_out_history_in_its_job_only(self):
         # S1.1c-1 (review QA-S3): the set is pinned whole, and each member's job pays for the history, no other.
-        self.assertEqual(generate.NEEDS_HISTORY, frozenset({"apidiff", "lawdelta"}))
+        self.assertEqual(generate.NEEDS_HISTORY, frozenset({"aging", "apidiff", "lawdelta"}))
         for row_id in sorted(generate.NEEDS_HISTORY):
             with self.subTest(row_id):
                 text = generate.render([*ROWS, row(row_id, "lint", ("T4",))])
                 lint = text[text.index("  lint:") : text.index("  test:")]
                 self.assertIn("          fetch-depth: 0", lint)
                 self.assertNotIn("fetch-depth", text[text.index("  test:") :])
+
+    def test_the_nightly_job_running_aging_checks_out_mains_history(self):
+        # S1.1c-11's burn-in (run 46112427392): a nightly dispatched on a branch ran aging in a one-commit checkout
+        # with no origin/main, so its part-level move check found no merge base and was red at the nightly tier.
+        text = generate.render([row("aging", "lint", ("nightly",)), row("unit", "test", ("nightly",))], "nightly")
+        lint = text[text.index("  lint:") : text.index("  test:")]
+        self.assertIn("          fetch-depth: 0", lint)
+        self.assertNotIn("fetch-depth", text[text.index("  test:") :])
 
     def test_the_job_running_deps_downloads_modules(self):
         # owner, 2026-11-11 (design 1): CI warms the module cache by a generated setup step in the deps row's job,
